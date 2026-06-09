@@ -1142,7 +1142,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-09T13:29:30.687656012Z",
-  "last_event_at": "2026-06-09T13:40:35.605063712Z",
+  "last_event_at": "2026-06-09T13:40:39.089372828Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1553,9 +1553,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 72,
       "checkpoint": {
-        "timestamp": "2026-06-09T13:40:35.623992391Z",
+        "timestamp": "2026-06-09T13:40:39.034424463Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -1567,37 +1567,41 @@
         ],
         "node_retries": {},
         "context_values": {
-          "graph.rankdir": "LR",
-          "internal.retry_count.dev_check": 0,
-          "internal.thread_id": "collect_implementation_evidence",
-          "last_stage": "claude_review",
-          "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "thread.dev_check.current_node": "collect_implementation_evidence",
-          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
-          "thread.preflight_sandbox.current_node": "dev_check",
-          "thread.collect_implementation_evidence.current_node": "claude_review",
-          "current_node": "claude_review",
-          "internal.retry_count.preflight_sandbox": 0,
-          "failure_signature": "",
-          "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects.",
-          "thread.start.current_node": "read_plan",
-          "thread.read_plan.current_node": "preflight_sandbox",
-          "internal.work_dir": "/workspace/memba",
-          "outcome": "succeeded",
-          "graph.default_fidelity": "summary:high",
-          "internal.node_visit_count": 1,
-          "failure_class": "",
-          "internal.retry_count.read_plan": 0,
           "internal.retry_count.collect_implementation_evidence": 0,
-          "internal.retry_count.claude_review": 0,
+          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
+          "graph.max_node_visits": "160",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
           "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad",
-          "internal.retry_count.start": 0,
-          "internal.fidelity": "summary:high",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.read_plan": 0,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
-          "graph.max_node_visits": "160"
+          "internal.retry_count.start": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "current_node": "claude_review",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.claude_review": 0,
+          "failure_class": "",
+          "failure_signature": "",
+          "internal.retry_count.dev_check": 0,
+          "internal.work_dir": "/workspace/memba",
+          "last_stage": "claude_review",
+          "internal.thread_id": "collect_implementation_evidence",
+          "graph.rankdir": "LR",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.start.current_node": "read_plan",
+          "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects.",
+          "internal.fidelity": "summary:high",
+          "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22"
         },
         "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1636,9 +1640,19 @@
               "active_time_ms": 158850
             }
           },
-          "start": {
+          "dev_check": {
             "status": "succeeded",
-            "usage": null
+            "context_updates": {
+              "command.output": "blob://sha256/f9b8ac0644a5af6a8d8badcdfe023c19777710c19559fb661f4a1c9e9f614913"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 353177,
+              "active_time_ms": 353177
+            }
           },
           "collect_implementation_evidence": {
             "status": "succeeded",
@@ -1654,6 +1668,20 @@
               "active_time_ms": 287
             }
           },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4793930b4217598326170dd9cf375209bf41d279aa8b1b116be2a534c5f6d765"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 136655,
+              "active_time_ms": 136655
+            }
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -1666,6 +1694,182 @@
               "inference_time_ms": 0,
               "tool_time_ms": 227,
               "active_time_ms": 227
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "5198462518994a894ffe8a8ecd8dfce21b668289",
+        "node_visits": {
+          "claude_review": 1,
+          "dev_check": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "start": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-09T13:42:16.180454681Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.rankdir": "LR",
+          "internal.retry_count.dev_check": 0,
+          "response.codex_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** `docs/iterations/031-brand-email-navigation-polish/plan.md`  \n**Commit range:** `f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the ADR-relevant architecture for the touched areas, especially the transactional-email footer direction introduced around this work.\n\nEvidence indicates:\n\n- A reusable transactional footer component exists and is used by the sign-in and rejection emails.\n- The footer uses the shared Memba sprig/logo branding rather than local one-off markup.\n- The footer is tested independently and in-context.\n- The implementation did not replace ADR-directed shared email layout/component infrastructure with local per-template substitutes.\n- The public club-page root-home navigation uses a host-aware URL helper rather than a relative `/` link, preserving correct behaviour from club subdomains.\n\nNo ADR conflict is visible in the collected evidence.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation passed `dev ci`, including the full automated suite and 77 acceptance scenarios. I do not see a behavioural gap or missing safety coverage that should block merge.\n\n## Bounded-safe fixes\n\nNone identified.\n\nThe implementation looks appropriately scoped and does not need a mandatory clean-up pass before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Root-domain derivation is starting to become domain-routing logic**\n\n   - **Files:** `web/lib/club_site_web.ex`\n   - **Smell:** The helper that produces the main Memba root URL from a club-site context appears to rely on host parsing/subdomain stripping.\n   - **Why it may need human judgement:** This is fine for the current iteration, especially with tests proving that club-subdomain pages link back to the main Memba host rather than `/`. If Memba adds more host families later — staff, API, custom club domains, regional domains, staging domains — this logic may want to move into a dedicated URL/domain configuration module rather than accumulating string-shaping rules in the club web layer.\n\n2. **Contextual sender display-name format is inline**\n\n   - **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`\n   - **Smell:** The rejection email sender name uses the product-specific format `<club name> via Memba` directly at the call site.\n   - **Why it may need human judgement:** This is not duplicated enough to justify extraction now. If future transactional emails also use contextual sender names — for example, organizer names, club names, or activity names “via Memba” — a small sender identity helper may avoid inconsistent formatting.\n\n3. **Support contact remains partly hardcoded**\n\n   - **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email content/templates\n   - **Smell:** `support@memba.io` appears to be used as a literal in email-facing copy/component defaults.\n   - **Why it may need human judgement:** This is acceptable for current production behaviour. If support contact details become environment-specific, tenant-specific, or need operational rotation, centralizing the support address in application configuration would reduce future maintenance risk.\n\n4. **Email rendering correctness is covered structurally, not client-realistically**\n\n   - **Files:** email rendering tests for sign-in and rejection emails\n   - **Smell:** Tests verify the generated HTML shape, sprig/footer presence, sender shape, and copy, but do not verify rendering in real email clients.\n   - **Why it may need human judgement:** This is normal for the current automated suite and should not block. If transactional email presentation becomes more business-critical, preview tooling or real-inbox smoke checks could catch issues that DOM assertions cannot, such as client-specific SVG/CSS/footer rendering quirks.\n\n## Suggested fixes\n\nNo required fixes before merge.\n\nFuture optional improvements, if related work touches these areas:\n\n- Centralize public/root host generation if more domain patterns are introduced.\n- Extract a small sender-name builder if more emails use “via Memba” display names.\n- Move support contact details to shared config if the address needs environment or operational flexibility.\n\n## Validation notes\n\nRelevant completed validation:\n\n- `dev ci` passed successfully.\n- Acceptance suite passed: **77 scenarios, 502 steps**.\n- Evidence shows coverage for:\n  - homepage volunteering-first copy;\n  - public club page link back to the main Memba home URL;\n  - prevention of relative `/` links from club subdomains;\n  - sign-in email Memba sprig branding;\n  - sign-in email transactional footer;\n  - inbound rejection email sender display name;\n  - inbound rejection email transactional footer;\n  - reusable transactional footer component behaviour.\n\nOptional manual checks before release, not merge blockers:\n\n- Send a sign-in email to a real inbox and verify the sprig/footer render acceptably.\n- Send a club-message rejection email and verify the provider displays `<club name> via Memba` as intended.\n- Click the public club-page “Memba home” link from a real club subdomain/staging host and confirm it lands on the main Memba homepage.",
+          "internal.thread_id": "claude_review",
+          "last_stage": "codex_review",
+          "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** `docs/iterations/031-brand-email-navigation-polish/plan.md`  \n**Commit range:** `f8dc9335a51468eb9e94b0e2a8637",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.claude_review.current_node": "codex_review",
+          "current_node": "codex_review",
+          "internal.retry_count.preflight_sandbox": 0,
+          "failure_signature": "",
+          "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects.",
+          "thread.start.current_node": "read_plan",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.work_dir": "/workspace/memba",
+          "outcome": "succeeded",
+          "graph.default_fidelity": "summary:high",
+          "internal.node_visit_count": 1,
+          "failure_class": "",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.codex_review": 0,
+          "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad",
+          "internal.retry_count.start": 0,
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "graph.max_node_visits": "160"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2b5a8993c807f2f3a019a7094601070f776d6d97237f1f517b804b9bd2d7084a"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/031-brand-email-navigation-polish/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 227,
+              "active_time_ms": 227
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "response.codex_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** `docs/iterations/031-brand-email-navigation-polish/plan.md`  \n**Commit range:** `f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the ADR-relevant architecture for the touched areas, especially the transactional-email footer direction introduced around this work.\n\nEvidence indicates:\n\n- A reusable transactional footer component exists and is used by the sign-in and rejection emails.\n- The footer uses the shared Memba sprig/logo branding rather than local one-off markup.\n- The footer is tested independently and in-context.\n- The implementation did not replace ADR-directed shared email layout/component infrastructure with local per-template substitutes.\n- The public club-page root-home navigation uses a host-aware URL helper rather than a relative `/` link, preserving correct behaviour from club subdomains.\n\nNo ADR conflict is visible in the collected evidence.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation passed `dev ci`, including the full automated suite and 77 acceptance scenarios. I do not see a behavioural gap or missing safety coverage that should block merge.\n\n## Bounded-safe fixes\n\nNone identified.\n\nThe implementation looks appropriately scoped and does not need a mandatory clean-up pass before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Root-domain derivation is starting to become domain-routing logic**\n\n   - **Files:** `web/lib/club_site_web.ex`\n   - **Smell:** The helper that produces the main Memba root URL from a club-site context appears to rely on host parsing/subdomain stripping.\n   - **Why it may need human judgement:** This is fine for the current iteration, especially with tests proving that club-subdomain pages link back to the main Memba host rather than `/`. If Memba adds more host families later — staff, API, custom club domains, regional domains, staging domains — this logic may want to move into a dedicated URL/domain configuration module rather than accumulating string-shaping rules in the club web layer.\n\n2. **Contextual sender display-name format is inline**\n\n   - **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`\n   - **Smell:** The rejection email sender name uses the product-specific format `<club name> via Memba` directly at the call site.\n   - **Why it may need human judgement:** This is not duplicated enough to justify extraction now. If future transactional emails also use contextual sender names — for example, organizer names, club names, or activity names “via Memba” — a small sender identity helper may avoid inconsistent formatting.\n\n3. **Support contact remains partly hardcoded**\n\n   - **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email content/templates\n   - **Smell:** `support@memba.io` appears to be used as a literal in email-facing copy/component defaults.\n   - **Why it may need human judgement:** This is acceptable for current production behaviour. If support contact details become environment-specific, tenant-specific, or need operational rotation, centralizing the support address in application configuration would reduce future maintenance risk.\n\n4. **Email rendering correctness is covered structurally, not client-realistically**\n\n   - **Files:** email rendering tests for sign-in and rejection emails\n   - **Smell:** Tests verify the generated HTML shape, sprig/footer presence, sender shape, and copy, but do not verify rendering in real email clients.\n   - **Why it may need human judgement:** This is normal for the current automated suite and should not block. If transactional email presentation becomes more business-critical, preview tooling or real-inbox smoke checks could catch issues that DOM assertions cannot, such as client-specific SVG/CSS/footer rendering quirks.\n\n## Suggested fixes\n\nNo required fixes before merge.\n\nFuture optional improvements, if related work touches these areas:\n\n- Centralize public/root host generation if more domain patterns are introduced.\n- Extract a small sender-name builder if more emails use “via Memba” display names.\n- Move support contact details to shared config if the address needs environment or operational flexibility.\n\n## Validation notes\n\nRelevant completed validation:\n\n- `dev ci` passed successfully.\n- Acceptance suite passed: **77 scenarios, 502 steps**.\n- Evidence shows coverage for:\n  - homepage volunteering-first copy;\n  - public club page link back to the main Memba home URL;\n  - prevention of relative `/` links from club subdomains;\n  - sign-in email Memba sprig branding;\n  - sign-in email transactional footer;\n  - inbound rejection email sender display name;\n  - inbound rejection email transactional footer;\n  - reusable transactional footer component behaviour.\n\nOptional manual checks before release, not merge blockers:\n\n- Send a sign-in email to a real inbox and verify the sprig/footer render acceptably.\n- Send a club-message rejection email and verify the provider displays `<club name> via Memba` as intended.\n- Click the public club-page “Memba home” link from a real club subdomain/staging host and confirm it lands on the main Memba homepage.",
+              "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** `docs/iterations/031-brand-email-navigation-polish/plan.md`  \n**Commit range:** `f8dc9335a51468eb9e94b0e2a8637"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7127,
+                    "output_tokens": 1098,
+                    "reasoning_tokens": 1552,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 115135
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 97025,
+              "tool_time_ms": 0,
+              "active_time_ms": 97025
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22",
+              "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6117,
+                    "output_tokens": 8345,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 143526
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 158850,
+              "tool_time_ms": 0,
+              "active_time_ms": 158850
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='f8dc9335a51468eb9e94b0e2a8637d22ea75be8e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 287,
+              "active_time_ms": 287
             }
           },
           "dev_check": {
@@ -1697,10 +1901,11 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "start": 1,
           "collect_implementation_evidence": 1,
+          "codex_review": 1,
           "read_plan": 1,
           "preflight_sandbox": 1,
           "dev_check": 1,
@@ -1730,6 +1935,34 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "codex_review@1": {
+      "first_event_seq": 75,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-09T13:40:39.066703856Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "read_plan@1": {
       "first_event_seq": 25,
       "prompt": null,
@@ -1963,7 +2196,12 @@
       "first_event_seq": 65,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-09T13:40:35.605415464Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -1977,6 +2215,12 @@
       "output": null,
       "started_at": "2026-06-09T13:37:56.681176112Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 158924,
+        "inference_time_ms": 158850,
+        "tool_time_ms": 0,
+        "active_time_ms": 158850
+      },
       "usage": {
         "input_tokens": 6117,
         "output_tokens": 8345,
@@ -1990,7 +2234,7 @@
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
       },
-      "state": "running"
+      "state": "succeeded"
     }
   }
 }
