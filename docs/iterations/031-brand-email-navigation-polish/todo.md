@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
+- [x] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
 - [ ] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
 - [ ] 003 Inspect the transactional email layout/helpers from iteration 024 and identify the canonical footer component or helper.
 - [ ] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
