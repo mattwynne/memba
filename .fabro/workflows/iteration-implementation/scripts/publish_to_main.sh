@@ -43,6 +43,12 @@ run_id="${FABRO_RUN_ID:-${FABRO_RUN:-unknown}}"
 workflow="iteration-implementation"
 validation="dev check passed; plan conformance passed"
 
+# Publishing the implementation is the point at which the iteration's
+# lifecycle metadata should stop blocking later iterations. Include the merged
+# status in the same trunk commit as the implementation so the product artifact
+# and iteration index cannot drift apart.
+.fabro/workflows/scripts/iteration_status.py mark "$PLAN_PATH" merged
+
 git add -A -- . ':!.fabro/tmp' ':!.fabro/tmp/**'
 
 # Collapse Fabro checkpoint commits and any remaining working-tree changes into

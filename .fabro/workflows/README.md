@@ -10,8 +10,8 @@ The helper runs the real workflows directly from the CLI, so approval stays at t
 
 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
 2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
-3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
-4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and marks the iteration `merged` after a successful review.
+3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`.
+4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and leaves already-merged iteration lifecycle metadata unchanged.
 
 Canonical commands:
 
@@ -54,7 +54,7 @@ Prepare steps should reference files through `/workspace/memba/...` or run from 
 
 ## Delivery contract
 
-Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
+Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, marks the plan and iteration index `merged`, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
 
 Acceptance feature files are locked by default. When an iteration genuinely needs to change shared `.feature` files, the plan must include:
 
@@ -68,7 +68,7 @@ Each bullet must name the exact `.feature` path and the allowed kind of change. 
 
 Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
 
-After review publish/no-op succeeds, the review workflow marks the iteration `merged` in the plan, implementation record when present, and `docs/iterations/README.md`, then commits and pushes that status finalization to `main`. If review fails, the iteration remains in its current in-progress state; rerun review with the printed `bin/dev fabro review ...` command after resolving the failure.
+After review publish/no-op succeeds, the review workflow verifies the iteration is marked `merged` in the plan, implementation record when present, and `docs/iterations/README.md`; when implementation already published the merged metadata, this is a no-op. If review fails, the implementation remains merged and the review run can be retried with the printed `bin/dev fabro review ...` command after resolving the failure.
 
 When `bin/dev fabro review` must review `origin/main` while local `main` is checked out, it creates a temporary pushed branch under `review/tmp/` so Fabro can clone a real branch without detaching `main`. These branches are safe to delete only after their foreground review run has finished and their tip is already contained in `origin/main`. Use `bin/dev fabro clean-branches` to dry-run safe cleanup, then `bin/dev fabro clean-branches --force` to delete the listed temporary local and remote branches. The cleanup command also recognises older `review/main-YYYYMMDDHHMMSS` temporary branches.
 
