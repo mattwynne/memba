@@ -1,0 +1,168 @@
+diff --git a/acceptance-tests/features/step_definitions/homepage_steps.js b/acceptance-tests/features/step_definitions/homepage_steps.js
+index 56b6042..ab88f1d 100644
+--- a/acceptance-tests/features/step_definitions/homepage_steps.js
++++ b/acceptance-tests/features/step_definitions/homepage_steps.js
+@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
+   assertHomepageFitsScreen,
+   assertMembaHomepage,
++  assertHomepageVolunteeringPromise,
+   visitHomepage
+ } = require("../support/homepage");
+ 
+@@ -17,6 +18,10 @@ Then("I should see the Memba homepage", async function () {
+   await assertMembaHomepage(this);
+ });
+ 
++Then("I should see that volunteering should not feel like work", async function () {
++  await assertHomepageVolunteeringPromise(this);
++});
++
+ Then("the homepage should fit the screen", async function () {
+   await assertHomepageFitsScreen(this);
+ });
+diff --git a/acceptance-tests/features/support/homepage.js b/acceptance-tests/features/support/homepage.js
+index 25106ca..065d464 100644
+--- a/acceptance-tests/features/support/homepage.js
++++ b/acceptance-tests/features/support/homepage.js
+@@ -1,5 +1,7 @@
+ const { expect: playwrightExpect } = require("@playwright/test");
+ 
++const HOMEPAGE_VOLUNTEERING_PROMISE = /^Volunteering shouldn[’']t feel like work\.$/;
++
+ function escapeRegExp(value) {
+   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+ }
+@@ -21,7 +23,7 @@ async function visitHomepage({ baseUrl, page }) {
+ async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
+   await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
+   await expect(page).toHaveTitle(/Memba/);
+-  await expect(page.getByRole("heading", { name: "A simpler way to keep your group members informed." })).toBeVisible();
++  await assertHomepageVolunteeringPromise({ page }, { expect });
+   const getStartedLink = page.getByRole("link", { name: "Request access for your group" });
+   await expect(getStartedLink.first ? getStartedLink.first() : getStartedLink).toBeVisible();
+ 
+@@ -32,6 +34,10 @@ async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpec
+   }
+ }
+ 
++async function assertHomepageVolunteeringPromise({ page }, { expect = playwrightExpect } = {}) {
++  await expect(page.getByRole("heading", { name: HOMEPAGE_VOLUNTEERING_PROMISE })).toBeVisible();
++}
++
+ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
+   const viewport = page.viewportSize();
+   const overflow = await page.evaluate(() => ({
+@@ -46,8 +52,10 @@ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect }
+ }
+ 
+ module.exports = {
++  HOMEPAGE_VOLUNTEERING_PROMISE,
+   assertHomepageFitsScreen,
+   assertMembaHomepage,
++  assertHomepageVolunteeringPromise,
+   homepageUrl,
+   homepageUrlPattern,
+   visitHomepage
+diff --git a/acceptance-tests/test/homepage_steps.test.js b/acceptance-tests/test/homepage_steps.test.js
+index b73dbd0..dfc16a5 100644
+--- a/acceptance-tests/test/homepage_steps.test.js
++++ b/acceptance-tests/test/homepage_steps.test.js
+@@ -2,8 +2,10 @@ const assert = require("node:assert/strict");
+ const test = require("node:test");
+ 
+ const {
++  HOMEPAGE_VOLUNTEERING_PROMISE,
+   assertHomepageFitsScreen,
+   assertMembaHomepage,
++  assertHomepageVolunteeringPromise,
+   homepageUrl,
+   visitHomepage
+ } = require("../features/support/homepage");
+@@ -62,13 +64,36 @@ test("homepage assertion step checks browser-visible homepage content", async ()
+       .filter((expectation) => expectation.matcher === "toBeVisible")
+       .map((expectation) => expectation.target),
+     [
+-      { role: "heading", options: { name: "Volunteering shouldn’t feel like work." } },
+-      { role: "link", options: { name: "Get started" } },
++      { role: "heading", options: { name: HOMEPAGE_VOLUNTEERING_PROMISE } },
++      { role: "link", options: { name: "Request access for your group" } },
+       { role: "link", options: { name: "Sign in" } }
+     ]
+   );
+ });
+ 
++test("homepage volunteering assertion checks the browser-visible hero promise", async () => {
++  const expectations = [];
++  const page = {
++    getByRole(role, options) {
++      return { role, options };
++    }
++  };
++  const expect = (target) => ({
++    async toBeVisible() {
++      expectations.push({ target, matcher: "toBeVisible" });
++    }
++  });
++
++  await assertHomepageVolunteeringPromise({ page }, { expect });
++
++  assert.deepEqual(expectations, [
++    {
++      target: { role: "heading", options: { name: HOMEPAGE_VOLUNTEERING_PROMISE } },
++      matcher: "toBeVisible"
++    }
++  ]);
++});
++
+ test("homepage fit assertion checks horizontal overflow", async () => {
+   const expectations = [];
+   const page = {
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 0affd92..de7d25f 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
+-- [ ] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
++- [x] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
+ - [ ] 003 Inspect the transactional email layout/helpers from iteration 024 and identify the canonical footer component or helper.
+ - [ ] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
+ - [ ] 005 Ensure the sign-in email uses the standard transactional email footer.
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index b8ebd77..4780dd8 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -158,7 +158,7 @@
+               Private member websites for volunteer-run groups
+             </p>
+             <h1 class="mt-5 max-w-[12ch] text-balance text-5xl font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:max-w-none sm:text-7xl sm:tracking-[-0.055em] lg:text-8xl">
+-              A simpler way to keep your group members informed.
++              Volunteering shouldn’t feel like work.
+             </h1>
+             <p class="mt-7 max-w-3xl text-pretty text-lg leading-8 text-ink-2 sm:text-xl">
+               Memba helps small non-profit groups, clubs, societies, and associations share member messages in one private place.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 16c973f..ff6da6a 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -38,7 +38,7 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     html = LazyHTML.from_fragment(response)
+ 
+-    assert response =~ "A simpler way to keep your group members informed."
++    assert response =~ "Volunteering shouldn’t feel like work."
+     assert response =~ "Kootenay Mountaineering Club"
+     assert response =~ "Request access for your group"
+     assert response =~ "See what members can do"
+@@ -84,7 +84,7 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "You’re a member of 2 clubs"
+     assert response =~ "Alpine Club"
+     assert response =~ "Bridge Club"
+-    refute response =~ "A simpler way to keep your group members informed."
++    refute response =~ "Volunteering shouldn’t feel like work."
+ 
+     for club <- [first_club, second_club] do
+       assert html
