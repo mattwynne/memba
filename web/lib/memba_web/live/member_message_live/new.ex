@@ -14,6 +14,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
   alias Memba.Messaging
+  alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -483,34 +484,27 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp current_member_id(nil), do: nil
   defp current_member_id(current_member), do: current_member.id
 
-  defp club_home_path(nil, route_params) do
-    case Map.get(route_params, "club_id") do
-      nil -> ~p"/"
-      club_id -> ~p"/?club_id=#{club_id}"
-    end
-  end
+  defp club_home_path(nil, _route_params), do: ~p"/"
 
   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
-  defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
+  defp club_home_path(selected_club, _route_params), do: ClubSite.url(selected_club)
 
-  defp compose_path(nil, route_params) do
-    case Map.get(route_params, "club_id") do
-      nil -> ~p"/messages/new"
-      club_id -> ~p"/messages/new?club_id=#{club_id}"
-    end
-  end
+  defp compose_path(nil, _route_params), do: ~p"/messages/new"
 
   defp compose_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/messages/new"
 
   defp compose_path(selected_club, _route_params),
-    do: ~p"/messages/new?club_id=#{selected_club.club_id}"
+    do: ClubSite.url(selected_club, "/messages/new")
 
   defp message_detail_path(message_id, _selected_club, %{"club_id_source" => "host"}) do
     ~p"/messages/#{message_id}"
   end
 
-  defp message_detail_path(message_id, selected_club, route_params) do
-    ~p"/messages/#{message_id}?club_id=#{selected_club_id(selected_club, route_params)}"
+  defp message_detail_path(message_id, selected_club, _route_params) do
+    case selected_club do
+      nil -> ~p"/messages/#{message_id}"
+      club -> ClubSite.url(club, "/messages/#{message_id}")
+    end
   end
 
   defp active_member_count_summary(nil), do: "all current members"

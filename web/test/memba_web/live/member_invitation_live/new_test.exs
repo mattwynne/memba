@@ -8,9 +8,10 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
-  test "routed GET keeps the member invitation URL shape and passes club_id to the LiveView",
+  test "routed GET on the club subdomain passes the selected club to the LiveView",
        %{conn: conn} do
     robin =
       create_active_member(
@@ -23,8 +24,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
-      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
 
     assert has_element?(
              view,
@@ -39,7 +40,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-club-invitation-club-home-link[href='/?club_id=#{robin.club_id}']",
+             "#member-club-invitation-club-home-link[href='/']",
              "Club home"
            )
   end
@@ -93,8 +94,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     {:ok, view, initial_html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
-      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
 
     initial_document = LazyHTML.from_fragment(initial_html)
 
@@ -127,8 +128,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert_raise MembaWeb.ForbiddenError, fn ->
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> get(~p"/members/invitations/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/members/invitations/new")
     end
   end
 
@@ -143,8 +144,8 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert_raise MembaWeb.ForbiddenError, fn ->
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members/invitations/new")
     end
 
     refute Repo.exists?(Memba.Membership.Projections.ClubInvitation)
@@ -177,12 +178,33 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
         club_name: "West Coast Paddlers"
       )
 
-    return_path = ~p"/members/invitations/new?club_id=#{robin.club_id}"
+    %{host: host} =
+      robin.club_id
+      |> Memba.Membership.get_club()
+      |> ClubSite.url("/members/invitations/new")
+      |> URI.parse()
 
-    conn = get(conn, return_path)
+    return_path = "http://#{host}/members/invitations/new"
+
+    conn =
+      conn
+      |> club_host(robin)
+      |> get(~p"/members/invitations/new")
 
     assert redirected_to(conn) == ~p"/auth"
     assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do

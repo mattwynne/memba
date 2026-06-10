@@ -105,7 +105,6 @@ defmodule MembaWeb.AuthGatesTest do
         |> get("/?club_id=#{club.club_id}")
 
       assert redirected_to(conn, 302) == ClubSite.url(club)
-      assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
     test "redirect signed-in staff club_id home requests to the club subdomain", %{conn: conn} do

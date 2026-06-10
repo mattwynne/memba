@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   test "renders a member message compose LiveView shell in the club site layout", %{conn: conn} do
@@ -15,7 +16,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(view, "#member-message-compose[data-live-view='member-message-compose']")
   end
 
-  test "routed GET keeps the compose URL shape and passes club_id to the LiveView", %{conn: conn} do
+  test "routed GET on the club subdomain passes the selected club to the LiveView", %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -25,8 +26,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
 
     assert has_element?(
              view,
@@ -96,8 +97,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
 
     assert has_element?(
              view,
@@ -149,12 +150,12 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
 
     assert has_element?(
              view,
-             "#member-compose-club-home-link[href='/?club_id=#{alice.club_id}']",
+             "#member-compose-club-home-link[href='/']",
              "Club home"
            )
 
@@ -196,7 +197,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-message-cancel-link[href='/?club_id=#{alice.club_id}']",
+             "#member-message-cancel-link[href='/']",
              "Cancel"
            )
 
@@ -215,8 +216,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
 
     assert has_element?(
              view,
@@ -247,9 +248,15 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         club_name: "Climbing Club"
       )
 
-    return_path = ~p"/messages/new?club_id=#{alice.club_id}"
+    %{host: host} =
+      alice.club_id |> Memba.Membership.get_club() |> ClubSite.url("/messages/new") |> URI.parse()
 
-    conn = get(conn, return_path)
+    return_path = "http://#{host}/messages/new"
+
+    conn =
+      conn
+      |> club_host(alice)
+      |> get(~p"/messages/new")
 
     assert redirected_to(conn) == ~p"/auth"
     assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
@@ -283,10 +290,23 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     conn =
       conn
+      |> club_host(alice)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
-      |> get(~p"/messages/new?club_id=#{alice.club_id}")
+      |> get(~p"/messages/new")
 
     assert response(conn, 403) == "Forbidden"
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do

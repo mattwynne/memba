@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   setup :set_swoosh_global
@@ -125,10 +126,8 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
 
     {:ok, view, _html} =
       conn
-      |> Plug.Test.init_test_session(%{
-        IdentityAuth.identity_session_key() => "robin@example.com"
-      })
-      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
 
     view
     |> form("#member-club-invitation-form", invitation: %{email: "dana@example.com"})
@@ -183,10 +182,8 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
 
     {:ok, view, _html} =
       conn
-      |> Plug.Test.init_test_session(%{
-        IdentityAuth.identity_session_key() => "robin@example.com"
-      })
-      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new")
 
     view
     |> form("#member-club-invitation-form", invitation: %{email: " ALICE@example.com "})
@@ -206,6 +203,18 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
            )
 
     assert_no_email_sent()
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do

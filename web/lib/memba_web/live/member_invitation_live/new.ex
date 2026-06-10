@@ -2,9 +2,8 @@ defmodule MembaWeb.MemberInvitationLive.New do
   @moduledoc """
   Member-facing club invitation entry point.
 
-  The route is scoped to the selected club in the same way as member message
-  routes: query-host requests pass `club_id`, while club subdomain requests
-  carry the host-selected club in the LiveView session.
+  The route is scoped to the selected club through the canonical club subdomain,
+  which carries the host-selected club in the LiveView session.
   """
   use MembaWeb, :live_view
 
@@ -13,6 +12,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
   alias Memba.Membership.Authorization
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias MembaWeb.ClubSite
 
   @empty_invitation %{"email" => ""}
   @empty_errors %{email: []}
@@ -342,7 +342,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp current_member_name(current_member), do: current_member.name
 
   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
-  defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
+  defp club_home_path(selected_club, _route_params), do: ClubSite.url(selected_club)
 
   defp member_initials(nil), do: "ME"
 

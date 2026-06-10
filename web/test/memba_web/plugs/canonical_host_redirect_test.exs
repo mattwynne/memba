@@ -24,6 +24,28 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
     assert get_resp_header(conn, "location") == ["http://lvh.me:4002/admin/clubs?sort=name"]
   end
 
+  test "redirects non-club club_id URLs to the club subdomain and removes the club_id query",
+       %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    conn =
+      conn
+      |> Map.put(:host, "localhost")
+      |> get("/messages/new?club_id=#{club.club_id}&draft=1")
+
+    assert response(conn, 302) == ""
+    assert get_resp_header(conn, "location") == ["http://kmc.lvh.me:4002/messages/new?draft=1"]
+  end
+
+  test "leaves root-domain URLs with unknown club_id for route handling", %{conn: conn} do
+    conn =
+      conn
+      |> Map.put(:host, "lvh.me")
+      |> get("/messages/new?club_id=unknown")
+
+    assert redirected_to(conn) == ~p"/auth"
+  end
+
   test "does not redirect member pages from club subdomains", %{conn: conn} do
     conn =
       conn

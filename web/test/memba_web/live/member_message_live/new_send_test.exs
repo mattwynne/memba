@@ -9,6 +9,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   setup do
@@ -35,8 +36,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{club_id}")
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new")
 
     view
     |> element("#member-message-compose-form")
@@ -83,19 +84,19 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "#member-compose-see-receipts-link[href='/messages/#{message.message_id}?club_id=#{club_id}']",
+             "#member-compose-see-receipts-link[href='/messages/#{message.message_id}']",
              "Check delivery"
            )
 
     assert has_element?(
              view,
-             "#member-compose-send-another-link[href='/messages/new?club_id=#{club_id}']",
+             "#member-compose-send-another-link[href='/messages/new']",
              "Send another message"
            )
 
     assert has_element?(
              view,
-             "#member-compose-back-home-link[href='/?club_id=#{club_id}']",
+             "#member-compose-back-home-link[href='/']",
              "Back to club home"
            )
 
@@ -109,8 +110,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{club_id}")
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new")
 
     view
     |> element("#member-message-compose-form")
@@ -139,8 +140,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/new?club_id=#{club_id}")
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new")
 
     log =
       capture_log(fn ->
@@ -183,7 +184,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "#member-compose-back-home-after-error-link[href='/?club_id=#{club_id}']",
+             "#member-compose-back-home-after-error-link[href='/']",
              "Back to club home"
            )
 
@@ -197,6 +198,18 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
     assert has_element?(view, "#member-message-compose-form")
     refute has_element?(view, "#member-compose-error-state")
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(club_id, attrs) do

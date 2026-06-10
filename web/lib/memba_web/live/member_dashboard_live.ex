@@ -2,9 +2,8 @@ defmodule MembaWeb.MemberDashboardLive do
   @moduledoc """
   LiveView-backed member dashboard for signed-in club home requests.
 
-  The public URL remains `GET /?club_id=<club_id>`; the controller keeps the
-  logged-out/public dispatch boundary and renders this LiveView for signed-in
-  active members.
+  Club subdomains are the canonical URL; the router passes the host-selected
+  club into this LiveView session for signed-in active members.
   """
   use MembaWeb, :live_view
 
@@ -29,7 +28,7 @@ defmodule MembaWeb.MemberDashboardLive do
 
         {:ok,
          socket
-         |> assign(:club_id_source, Map.get(session, "club_id_source", "query"))
+         |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->

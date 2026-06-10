@@ -542,8 +542,9 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
+      |> Map.put(:host, URI.parse(ClubSite.url(alice)).host)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> get(~p"/messages/#{message.message_id}")
 
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
@@ -560,7 +561,7 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
+           |> LazyHTML.query("a#back-to-club-home-link[href='/']")
            |> Enum.any?()
 
     assert html

@@ -9,6 +9,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   test "renders a member message detail LiveView shell in the club site layout", %{conn: conn} do
@@ -37,15 +38,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(
              view,
              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
+    assert has_element?(view, "a#back-to-club-home-link[href='/']")
   end
 
   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
@@ -138,8 +139,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(view, "#member-receipt-summary", "Message delivery")
     assert has_element?(view, "#member-receipt-summary-bar")
@@ -240,8 +241,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     delivered_toggle = "#member-receipt-group-toggle-delivered"
     delivered_rows = "#member-receipts-delivered"
@@ -295,8 +296,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(
              view,
@@ -374,8 +375,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     view
     |> element("#member-receipt-group-toggle-delivered")
@@ -442,8 +443,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
 
     html =
       view
@@ -468,6 +469,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute html =~ "Provider reason"
     refute html =~ "Email deliveries"
     refute html =~ ~s(href="/admin/)
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do
