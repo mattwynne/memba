@@ -103,6 +103,10 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :current_identity, :map,
+    default: nil,
+    doc: "the signed-in staff identity shown in the staff chrome"
+
   attr :active, :atom,
     default: nil,
     values: [nil, :clubs, :requests, :people, :messages, :deliveries],
@@ -123,9 +127,9 @@ defmodule MembaWeb.Layouts do
       >
         <div class="flex flex-col gap-6 py-5 lg:min-h-full">
           <a
-            href={~p"/admin/clubs"}
+            href={~p"/"}
             class="inline-flex w-fit items-center gap-2.5 px-1 transition duration-200 hover:opacity-80"
-            aria-label="Memba staff home"
+            aria-label="Memba home"
           >
             <span class="flex size-7 items-center justify-center rounded-lg bg-[#24574d] text-white">
               <.sprig class="size-4 text-white" />
@@ -135,14 +139,6 @@ defmodule MembaWeb.Layouts do
               Staff
             </span>
           </a>
-
-          <div
-            id="admin-global-search"
-            class="flex h-9 items-center rounded-lg bg-white/10 px-3 text-sm text-white/75"
-            aria-hidden="true"
-          >
-            Search everything...
-          </div>
 
           <nav class="space-y-6" aria-label="Memba staff navigation">
             <div class="space-y-2">
@@ -222,11 +218,13 @@ defmodule MembaWeb.Layouts do
             <div class="flex items-center justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
                 <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2f6257] text-xs font-bold text-white">
-                  MS
+                  {staff_identity_initials(@current_identity)}
                 </div>
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-semibold text-white">Memba staff</p>
-                  <p class="truncate text-xs text-white/50">Memba operations</p>
+                  <p class="truncate text-sm font-semibold text-white">
+                    {staff_identity_label(@current_identity)}
+                  </p>
+                  <p class="truncate text-xs text-white/50">Signed in</p>
                 </div>
               </div>
               <.form for={%{}} action={~p"/auth"} method="delete" id="admin-sign-out-form">
@@ -251,6 +249,26 @@ defmodule MembaWeb.Layouts do
     <.flash_group flash={@flash} />
     """
   end
+
+  defp staff_identity_label(%{email: email}) when is_binary(email), do: email
+  defp staff_identity_label(_identity), do: "Memba staff"
+
+  defp staff_identity_initials(%{email: email}) when is_binary(email) do
+    email
+    |> String.split("@", parts: 2)
+    |> List.first()
+    |> String.split(~r/[^a-zA-Z0-9]+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "MS"
+      initials -> initials
+    end
+  end
+
+  defp staff_identity_initials(_identity), do: "MS"
 
   defp admin_nav_class(true) do
     "flex items-center justify-between rounded-lg bg-[#1f574e] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200"

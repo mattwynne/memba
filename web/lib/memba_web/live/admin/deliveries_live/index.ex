@@ -28,7 +28,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:deliveries}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:deliveries}>
       <main
         id="deliveries-overview"
         data-admin-page="deliveries"
@@ -83,7 +83,6 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
 
         <.admin_toolbar
           id="deliveries-toolbar"
-          search_placeholder="Search recipient or message-id..."
           summary_label="All"
           summary_count={@deliveries_count}
           meta="Newest events first"

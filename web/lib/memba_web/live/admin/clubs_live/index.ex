@@ -48,14 +48,10 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:clubs}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:clubs}>
       <main id="clubs-index" data-admin-page="clubs" class="space-y-6 p-6">
         <p class="sr-only">Memba staff operations</p>
-        <.admin_page_header
-          eyebrow="Clubs"
-          title="Clubs"
-          description="Create club records, keep public slugs clear, and open a club to manage people and memberships."
-        >
+        <.admin_page_header title="Clubs">
           <:actions>
             <a
               id="clubs-index-new-club-action"
@@ -67,33 +63,9 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
           </:actions>
         </.admin_page_header>
 
-        <section
-          id="clubs-summary"
-          aria-label="Club operations summary"
-          class="grid gap-4 md:grid-cols-3"
-        >
-          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">Clubs</p>
-            <p id="clubs-summary-total" class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
-              {@club_count}
-            </p>
-            <p class="mt-1 text-sm text-[#4b5a55]">Projected club records.</p>
-          </article>
-
-          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
-              Operations model
-            </p>
-            <p class="mt-3 text-lg font-semibold text-[#15201c]">Clubs stay distinct</p>
-            <p class="mt-1 text-sm text-[#4b5a55]">People can belong to more than one club.</p>
-          </article>
-
-          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">Public slugs</p>
-            <p class="mt-3 text-lg font-semibold text-[#15201c]">Subdomain-ready</p>
-            <p class="mt-1 text-sm text-[#4b5a55]">Each club keeps a unique, readable slug.</p>
-          </article>
-        </section>
+        <p id="clubs-summary-total" class="text-sm font-medium text-[#4b5a55]">
+          Showing {@club_count} {if @club_count == 1, do: "club", else: "clubs"}.
+        </p>
 
         <details
           id="clubs-create-card"
@@ -150,7 +122,6 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
 
         <.admin_toolbar
           id="clubs-toolbar"
-          search_placeholder="Search clubs..."
           summary_label="All"
           summary_count={@club_count}
         />

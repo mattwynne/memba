@@ -16,7 +16,7 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:people}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:people}>
       <main id="admin-people-index" class="space-y-6 p-6">
         <.admin_page_header
           eyebrow="People"
@@ -30,7 +30,6 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
 
         <.admin_toolbar
           id="admin-people-toolbar"
-          search_placeholder="Search people..."
           summary_label="All"
           summary_count={@people_count}
         />

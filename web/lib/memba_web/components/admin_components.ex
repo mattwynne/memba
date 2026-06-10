@@ -7,7 +7,7 @@ defmodule MembaWeb.AdminComponents do
 
   import MembaWeb.CoreComponents
 
-  attr :eyebrow, :string, required: true
+  attr :eyebrow, :string, default: nil
   attr :title, :string, required: true
   attr :description, :string, default: nil
   slot :breadcrumb
@@ -24,7 +24,7 @@ defmodule MembaWeb.AdminComponents do
           >
             {render_slot(@breadcrumb)}
           </div>
-          <p class="text-sm font-medium text-[#15201c]">{@eyebrow}</p>
+          <p :if={@eyebrow} class="text-sm font-medium text-[#15201c]">{@eyebrow}</p>
           <h1 class="text-3xl font-bold tracking-[-0.035em] text-[#15201c]">{@title}</h1>
           <p :if={@description} class="max-w-3xl text-sm leading-6 text-[#4b5a55]">
             {@description}

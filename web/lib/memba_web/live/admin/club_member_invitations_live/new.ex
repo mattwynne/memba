@@ -60,7 +60,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:clubs}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:clubs}>
       <main
         id="club-member-invitation-new"
         data-admin-page="club-member-invitation-new"

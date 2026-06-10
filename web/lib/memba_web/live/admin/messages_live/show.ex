@@ -49,7 +49,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:messages}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:messages}>
       <main
         id="message-show"
         data-admin-page="message-diagnostics"

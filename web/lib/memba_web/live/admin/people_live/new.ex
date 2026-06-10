@@ -70,7 +70,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:people}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:people}>
       <main
         id="person-new"
         data-admin-page="person-new"

@@ -16,7 +16,7 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash} active={:messages}>
+    <Layouts.admin flash={@flash} current_identity={@current_identity} active={:messages}>
       <main id="admin-messages-index" class="space-y-6 p-6">
         <.admin_page_header
           eyebrow="Messages"
@@ -30,7 +30,6 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
 
         <.admin_toolbar
           id="admin-messages-toolbar"
-          search_placeholder="Search messages..."
           summary_label="All"
           summary_count={@message_count}
         />
