@@ -3,6 +3,7 @@ defmodule MembaWeb.AuthGatesTest do
 
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   describe "Memba staff routes" do
@@ -95,23 +96,19 @@ defmodule MembaWeb.AuthGatesTest do
     end
   end
 
-  describe "club_id member routes" do
-    test "allow unauthenticated browsers to see the public public club page" do
+  describe "club home routes" do
+    test "redirect unauthenticated club_id home requests to the club subdomain" do
       club = create_club(name: "Alpine Club")
 
       conn =
         build_conn(:get, "/?club_id=#{club.club_id}")
         |> get("/?club_id=#{club.club_id}")
 
-      response = html_response(conn, 200)
-
-      assert response =~ "Welcome to Alpine Club"
-      assert response =~ "Email me a sign-in link"
-      assert response =~ "Powered by"
+      assert redirected_to(conn, 302) == ClubSite.url(club)
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
-    test "allow signed-in staff to see a club page without active membership", %{conn: conn} do
+    test "redirect signed-in staff club_id home requests to the club subdomain", %{conn: conn} do
       club = create_club(name: "Alpine Club")
 
       conn =
@@ -119,39 +116,41 @@ defmodule MembaWeb.AuthGatesTest do
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
-      response = html_response(conn, 200)
-
-      assert response =~ "Welcome to Alpine Club"
-      assert response =~ "Email me a sign-in link"
+      assert redirected_to(conn, 302) == ClubSite.url(club)
     end
 
-    test "forbid signed-in browsers without active membership in the requested club", %{
+    test "show signed-in browsers without active membership the public club subdomain page", %{
       conn: conn
     } do
       club = create_active_member(email: "alice@example.com")
 
       conn =
         conn
+        |> club_host(club)
         |> init_test_session(%{IdentityAuth.identity_session_key() => "other@example.com"})
-        |> get(~p"/?#{[club_id: club.club_id]}")
+        |> get(~p"/")
 
-      assert response(conn, 403) == "Forbidden"
+      assert html_response(conn, 200) =~ "Welcome to Kootenay Mountaineering Club"
     end
 
-    test "forbid signed-in browsers with only inactive membership in the requested club", %{
-      conn: conn
-    } do
+    test "show signed-in browsers with only inactive membership the public club subdomain page",
+         %{
+           conn: conn
+         } do
       club = create_active_member(email: "alice@example.com", active: false)
 
       conn =
         conn
+        |> club_host(club)
         |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-        |> get(~p"/?#{[club_id: club.club_id]}")
+        |> get(~p"/")
 
-      assert response(conn, 403) == "Forbidden"
+      assert html_response(conn, 200) =~ "Welcome to Kootenay Mountaineering Club"
     end
 
-    test "allow signed-in active members of the requested club", %{conn: conn} do
+    test "redirect signed-in active member club_id home requests to the club subdomain", %{
+      conn: conn
+    } do
       club = create_active_member(email: "alice@example.com")
 
       conn =
@@ -159,17 +158,17 @@ defmodule MembaWeb.AuthGatesTest do
         |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
-      response = html_response(conn, 200)
-
-      assert response =~
-               "Read recent club messages, send a note to all current members, and see who is on the member list."
-
-      assert response =~ club.name
+      assert redirected_to(conn, 302) == ClubSite.url(club)
     end
   end
 
   defp create_club(attrs) do
     insert_membership_club!(attrs)
+  end
+
+  defp club_host(conn, club) do
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do

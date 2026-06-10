@@ -6,6 +6,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Messaging
+  alias MembaWeb.ClubSite
 
   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
@@ -37,6 +38,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     refute has_element?(view, "#memberships-card #add-member-form")
     assert has_element?(view, "#memberships-card #members[aria-label='Members']")
     assert has_element?(view, "#memberships-card #member-#{person.person_id}", "Alice Example")
+    assert has_element?(view, "#staff-club-home-link[href='#{ClubSite.url(club)}']")
+    refute has_element?(view, "#staff-club-home-link[href^='/?club_id=']")
   end
 
   test "club detail does not offer staff-side message composition", %{conn: conn} do

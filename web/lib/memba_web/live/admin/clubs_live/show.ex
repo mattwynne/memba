@@ -3,6 +3,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   alias Memba.Membership
   alias MembaWeb.Admin.ClubSlugForm
+  alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
@@ -115,7 +116,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
             <.link
               id="staff-club-home-link"
-              href={~p"/?#{[club_id: @club.club_id]}"}
+              href={ClubSite.url(@club)}
               aria-label={"Open #{@club.name} home page"}
               class="inline-flex items-center justify-center rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c] hover:shadow-md"
             >

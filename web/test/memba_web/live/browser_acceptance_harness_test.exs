@@ -36,7 +36,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has(
       "#staff-club-home-link[aria-label='Open Kootenay Mountaineering Club home page']"
     )
-    |> assert_has("#staff-club-home-link[href^='/?club_id=']")
+    |> assert_has("#staff-club-home-link[href^='http://']")
     |> assert_has("#new-person-link[aria-label='New person'][href^='/admin/clubs/']")
     |> assert_has("#invite-member-link[aria-label='Invite member'][href^='/admin/clubs/']")
     |> refute_has("#new-person-form")

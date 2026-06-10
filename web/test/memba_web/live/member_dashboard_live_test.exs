@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
   alias MembaWeb.MemberDashboardPresentation
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   test "routed club home renders signed-in active members through the dashboard LiveView", %{
@@ -37,8 +38,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(
              view,
@@ -94,20 +95,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
              "Send club message"
            )
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
+             "#member-message-#{message.message_id} [data-testid='club-message-link'][href='/messages/#{message.message_id}']"
            )
 
     refute has_element?(view, "#member-message-list-empty")
@@ -170,12 +171,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
-      |> live(~p"/?club_id=#{robin.club_id}")
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/")
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link[href='/members/invitations/new?club_id=#{robin.club_id}']",
+             "#club-members #member-invite-member-link[href='/members/invitations/new']",
              "Invite member"
            )
   end
@@ -217,8 +218,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     refute has_element?(view, "#club-members #member-invite-member-link")
   end
@@ -326,8 +327,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     message_selector = "#member-message-#{message.message_id}"
 
@@ -430,8 +431,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(
              view,
@@ -440,7 +441,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']"
+             "#member-send-message-link[href='/messages/new']"
            )
 
     assert has_element?(
@@ -451,7 +452,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "[data-testid='club-message-row'][data-message-id='#{message.message_id}'] " <>
-               "[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
+               "[data-testid='club-message-link'][href='/messages/#{message.message_id}']"
            )
 
     assert has_element?(
@@ -475,12 +476,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
              "Send club message"
            )
 
@@ -504,8 +505,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(
              view,
@@ -537,14 +538,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(view, "#member-message-list-empty", "No club messages yet")
 
     assert has_element?(
              view,
-             "#member-message-empty-send-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "#member-message-empty-send-link[href='/messages/new']",
              "Send the first message"
            )
   end
@@ -560,8 +561,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/?club_id=#{alice.club_id}")
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
 
     assert has_element?(
              view,
@@ -592,7 +593,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   test "logged-out club home still renders the public club page", %{conn: conn} do
     club = create_club(name: "Alpine Club")
 
-    conn = get(conn, ~p"/?club_id=#{club.club_id}")
+    conn =
+      conn
+      |> club_host(club)
+      |> get(~p"/")
+
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
@@ -605,18 +610,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            |> Enum.any?()
   end
 
-  test "signed-in identities outside the selected club are still forbidden", %{conn: conn} do
+  test "signed-in identities outside the selected club see the public club page", %{conn: conn} do
     alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
 
     conn =
       conn
+      |> club_host(alice)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
-      |> get(~p"/?club_id=#{alice.club_id}")
+      |> get(~p"/")
 
-    assert response(conn, 403) == "Forbidden"
+    assert html_response(conn, 200) =~ "Welcome to Alpine Club"
   end
 
-  test "signed-in inactive members of the selected club are still forbidden", %{conn: conn} do
+  test "signed-in inactive members of the selected club see the public club page", %{conn: conn} do
     inactive_alice =
       create_member(
         email: "alice@example.com",
@@ -627,10 +633,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     conn =
       conn
+      |> club_host(inactive_alice)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> get(~p"/?club_id=#{inactive_alice.club_id}")
+      |> get(~p"/")
 
-    assert response(conn, 403) == "Forbidden"
+    assert html_response(conn, 200) =~ "Welcome to Alpine Club"
   end
 
   defp create_club(attrs) do
@@ -733,6 +740,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       status: Keyword.fetch!(attrs, :status),
       reason: Keyword.fetch!(attrs, :reason)
     })
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp dashboard_html(assigns) do

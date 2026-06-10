@@ -21,29 +21,10 @@ defmodule MembaWeb.PageController do
     end
   end
 
-  defp home_for_params(
-         %{assigns: %{current_identity: identity}} = conn,
-         %{"club_id" => club_id}
-       )
-       when not is_nil(identity) do
-    cond do
-      is_nil(Membership.get_club(club_id)) ->
-        not_found(conn)
-
-      Membership.active_member_of_club_by_email?(club_id, identity.email) ->
-        render_member_dashboard(conn, club_id, "query")
-
-      true ->
-        club_id
-        |> Membership.get_club()
-        |> then(&render_public_club_page_or_not_found(conn, &1))
-    end
-  end
-
   defp home_for_params(conn, %{"club_id" => club_id}) do
     case Membership.get_club(club_id) do
       nil -> not_found(conn)
-      club -> render_public_club_page_or_not_found(conn, club)
+      club -> redirect(conn, external: ClubSite.url(club))
     end
   end
 

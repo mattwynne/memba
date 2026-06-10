@@ -115,68 +115,28 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "GET / with a club_id shows a public public club page to logged-out visitors", %{
+  test "GET / with a club_id redirects logged-out visitors to the club subdomain", %{
     conn: conn
   } do
-    club = create_club(name: "Alpine Club")
+    club = create_club(name: "Alpine Club", slug: "alpine")
 
     conn = get(conn, ~p"/?#{[club_id: club.club_id]}")
 
-    response = html_response(conn, 200)
-    html = LazyHTML.from_fragment(response)
-
-    assert response =~ "Welcome to Alpine Club"
-
-    assert response =~
-             "Sign in with the email address Alpine Club has for you to read member messages"
-
-    assert response =~ "Email me a sign-in link"
-
-    assert html
-           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
-           |> Enum.any?()
-
-    assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
-           |> LazyHTML.text() =~ "Visit Memba home"
-
-    assert html
-           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
-           |> LazyHTML.text() =~ "Memba"
-
-    refute response =~ "Send a club message"
-    refute response =~ "Signed in as"
+    assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
-  test "GET / with a club_id shows the public club page to signed-in staff who are not members",
+  test "GET / with a club_id redirects signed-in staff non-members to the club subdomain",
        %{
          conn: conn
        } do
-    club = create_club(name: "Alpine Club")
+    club = create_club(name: "Alpine Club", slug: "alpine")
 
     conn =
       conn
       |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
       |> get(~p"/?#{[club_id: club.club_id]}")
 
-    response = html_response(conn, 200)
-    html = LazyHTML.from_fragment(response)
-
-    assert response =~ "Welcome to Alpine Club"
-
-    assert response =~
-             "Sign in with the email address Alpine Club has for you to read member messages"
-
-    assert response =~ "Email me a sign-in link"
-
-    assert html
-           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
-           |> Enum.any?()
-
-    refute response =~ "Send club message"
-    refute response =~ "Signed in as pat@memba.io"
+    assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
   test "GET / on a public club subdomain shows that club public page", %{conn: conn} do
@@ -237,14 +197,14 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "Email me a sign-in link"
   end
 
-  test "GET / with the smoke-test club_id returns not found for public visitors", %{conn: conn} do
+  test "GET / with the smoke-test club_id redirects to the smoke-test club subdomain", %{
+    conn: conn
+  } do
     club = create_club(name: "Smoke Test Club", slug: "test")
 
     conn = get(conn, ~p"/?#{[club_id: club.club_id]}")
 
-    response = html_response(conn, 404)
-
-    refute response =~ "Welcome to Smoke Test Club"
+    assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
   test "GET / on the smoke-test club subdomain still shows the member dashboard to active members",
@@ -279,109 +239,21 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
+  test "GET / with a member club_id redirects active members to the club subdomain", %{conn: conn} do
     club =
       create_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
         club_name: "Alpine Club",
-        club_id: club.club_id
+        slug: "alpine"
       )
-
-    message =
-      create_message(club_id: club.club_id, sender_id: bob.person_id, subject: "Trip night")
 
     conn =
       conn
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/?#{[club_id: club.club_id]}")
 
-    response = html_response(conn, 200)
-    html = LazyHTML.from_fragment(response)
-
-    assert response =~ "Alpine Club"
-
-    assert response =~
-             "Read recent club messages, send a note to all current members, and see who is on the member list."
-
-    assert response =~ "Send club message"
-    assert response =~ "Recent club messages"
-    assert response =~ "Current members"
-    assert response =~ "2 current members"
-
-    assert html
-           |> LazyHTML.text()
-           |> String.contains?(
-             "Memba sends club-wide messages to everyone with a current membership."
-           )
-
-    assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#club-site-current-identity")
-           |> LazyHTML.text() =~ "Signed in as alice@example.com"
-
-    assert html
-           |> LazyHTML.query("form#club-site-sign-out-form[action='/auth'][method='post']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#club-site-layout header")
-           |> LazyHTML.text()
-           |> then(&(not String.contains?(&1, "Powered by Memba")))
-
-    assert html
-           |> LazyHTML.query("#club-site-layout footer")
-           |> LazyHTML.text()
-           |> normalize_whitespace() =~ "Powered by Memba"
-
-    assert html
-           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query(
-             "section#member-dashboard-cta a#member-send-message-link[href='/messages/new?club_id=#{club.club_id}']"
-           )
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#active-members-card[data-active-member-count='2']")
-           |> Enum.any?()
-
-    refute html |> LazyHTML.query("form#member-message-form") |> Enum.any?()
-    refute html |> LazyHTML.query("select#member-message-sender-select") |> Enum.any?()
-    refute html |> LazyHTML.query("input#member-message-subject-input") |> Enum.any?()
-    refute html |> LazyHTML.query("textarea#member-message-body-input") |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Alice Adams']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Bob Builder']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query(
-             "[data-testid='club-message-row'][data-message-id='#{message.message_id}']"
-           )
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query(
-             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{club.club_id}']"
-           )
-           |> Enum.any?()
-
-    refute response =~ "Your clubs"
+    assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
   test "GET / on a club subdomain shows the member dashboard to active club members", %{
@@ -1387,12 +1259,6 @@ defmodule MembaWeb.PageControllerTest do
       from: "auth@mail.memba.io",
       message_stream: "outbound-authentication"
     )
-  end
-
-  defp normalize_whitespace(text) when is_binary(text) do
-    text
-    |> String.replace(~r/\s+/, " ")
-    |> String.trim()
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
