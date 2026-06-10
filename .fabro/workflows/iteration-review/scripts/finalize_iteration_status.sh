@@ -9,8 +9,15 @@ if [ ! -f "$PLAN_PATH" ]; then
 fi
 
 case "$PLAN_PATH" in
-  */plan.md) ;;
-  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 2 ;;
+  docs/iterations/*/plan.md) ;;
+  */plan.md)
+    echo "Plan path is not under docs/iterations; skipping iteration status finalization: $PLAN_PATH"
+    exit 0
+    ;;
+  *)
+    echo "Plan path is not an iteration plan; skipping iteration status finalization: $PLAN_PATH"
+    exit 0
+    ;;
 esac
 
 git config user.name "Fabro"

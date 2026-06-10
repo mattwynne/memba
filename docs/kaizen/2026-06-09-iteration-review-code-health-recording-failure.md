@@ -148,3 +148,18 @@ Second review repair:
 
 - `.fabro/workflows/iteration-review/workflow.fabro`: replaced the `verify_review_repair` patch comparison from `cmp -s` with `git diff --no-index --quiet`, and made unexpected comparison statuses fail the verification step instead of silently passing.
 - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added guard assertions that the repair verifier no longer depends on `cmp` and includes the checked comparison failure path.
+
+Follow-up sharp-edge repair:
+
+- Observation: running `iteration-review` against this kaizen note published review polish successfully, then failed in `finalize_iteration_status` because the path was not an iteration `*/plan.md` file.
+- Root cause: `finalize_iteration_status.sh` assumed every review target was an iteration plan even though the workflow is useful for kaizen/workflow review targets too.
+- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: now skips iteration-status finalization for non-`docs/iterations/*/plan.md` targets instead of failing after publish.
+- `.fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh`: added a regression test for non-iteration review targets.
+
+Follow-up validation:
+
+- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with expected goal-gate retry warnings.
+- `dev check --quick` — passed: 758 tests, 0 failures.
