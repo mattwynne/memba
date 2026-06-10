@@ -82,4 +82,57 @@ if ! git show "$published:web/lib/example.ex" | grep -q ':after'; then
   exit 1
 fi
 
+# If origin/main moves with an overlapping change after validation, the publish
+# script should preserve the attempted implementation on a rescue branch and
+# report the conflicted files for the workflow's agent-assisted recovery path.
+git reset -q --hard origin/main
+cat > web/lib/example.ex <<'CODE'
+defmodule Example do
+  def value, do: :implementation
+end
+CODE
+git add web/lib/example.ex
+git commit -q -m 'fabro checkpoint conflicting implementation'
+
+other="$workdir/other"
+git clone -q "$workdir/origin.git" "$other"
+(
+  cd "$other"
+  git config user.name Other
+  git config user.email other@example.com
+  cat > web/lib/example.ex <<'CODE'
+defmodule Example do
+  def value, do: :main_moved
+end
+CODE
+  git add web/lib/example.ex
+  git commit -q -m 'main moved with overlapping change'
+  git push -q origin main
+)
+
+set +e
+FABRO_RUN_ID=CONFLICT-RUN "$script_path" docs/iterations/001-example/plan.md >/tmp/publish-conflict.out 2>/tmp/publish-conflict.err
+conflict_status=$?
+set -e
+
+if [ "$conflict_status" -eq 0 ]; then
+  echo "Expected publish conflict to fail for agent-assisted recovery" >&2
+  exit 1
+fi
+if ! grep -q 'Publish rebase conflicted' /tmp/publish-conflict.err; then
+  echo "Expected conflict failure explanation" >&2
+  cat /tmp/publish-conflict.err >&2
+  exit 1
+fi
+if ! grep -q 'web/lib/example.ex' /tmp/publish-conflict.err; then
+  echo "Expected conflicted file in publish failure output" >&2
+  cat /tmp/publish-conflict.err >&2
+  exit 1
+fi
+if ! git ls-remote --exit-code --heads origin fabro/rescue/CONFLICT-RUN-001-publish-conflict >/dev/null 2>&1; then
+  echo "Expected publish conflict rescue branch to be pushed" >&2
+  git ls-remote --heads origin >&2
+  exit 1
+fi
+
 echo "publish_to_main tests passed"

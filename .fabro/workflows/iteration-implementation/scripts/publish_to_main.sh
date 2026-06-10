@@ -74,8 +74,38 @@ commit_msg=$(mktemp)
 git commit -F "$commit_msg"
 rm -f "$commit_msg"
 
+attempted_publish_sha=$(git rev-parse HEAD)
+safe_run_id=$(printf '%s' "$run_id" | tr -c '[:alnum:]_.-' '-')
+rescue_branch="fabro/rescue/${safe_run_id}-${iteration_number}-publish-conflict"
+git branch -f "$rescue_branch" "$attempted_publish_sha"
+
 # Rebase rather than force-push if main moved while this run was executing.
-git pull --rebase origin main
+if ! git pull --rebase origin main; then
+  conflicted_files=$(git diff --name-only --diff-filter=U || true)
+  echo "Publish rebase conflicted while replaying attempted implementation commit onto origin/main." >&2
+  echo "Attempted publish commit: $attempted_publish_sha" >&2
+  echo "Local rescue branch: $rescue_branch" >&2
+  if git push -f origin "$rescue_branch:$rescue_branch"; then
+    echo "Pushed rescue branch: origin/$rescue_branch" >&2
+  else
+    echo "Could not push rescue branch origin/$rescue_branch; local branch still exists in this sandbox." >&2
+  fi
+  if [ -n "$conflicted_files" ]; then
+    echo "Conflicted files:" >&2
+    printf '%s\n' "$conflicted_files" >&2
+  else
+    echo "No unmerged files were reported; inspect git status for the publish failure state." >&2
+  fi
+  cat >&2 <<EOF
+
+The workflow may route this state to resolve_publish_conflict. Conflict resolution
+must produce a new candidate artifact and return through dev_check before push.
+If resolving manually, inspect the rescue branch and current rebase state before
+running git rebase --continue or git rebase --abort.
+EOF
+  exit 2
+fi
+
 git push origin HEAD:main
 
 echo "Published implementation to main: $(git rev-parse HEAD)"

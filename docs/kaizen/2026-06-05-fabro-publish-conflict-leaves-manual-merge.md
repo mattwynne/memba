@@ -56,3 +56,26 @@ Late publish conflicts turn an otherwise validated automated delivery into manua
 - On publish conflicts, automatically preserve the squash commit on a named branch and print exact next steps.
 - Include conflicted file names and recovery branch/commit identifiers in the `publish_failed` summary.
 - Prefer a PR fallback for conflicted publishes so review and conflict resolution happen in a normal GitHub workflow.
+
+## Resolution
+
+Date: 2026-06-09
+
+Root cause: the deterministic publish script treated late rebase conflicts as a terminal shell failure. It created the attempted implementation commit, but did not preserve that commit on a predictable rescue ref, did not surface structured conflict evidence to the workflow graph, and did not provide a bounded path for automatic conflict repair followed by validation.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: preserves every attempted publish commit on a `fabro/rescue/<run>-<iteration>-publish-conflict` branch before rebasing, pushes that branch when a rebase conflict occurs, prints the attempted commit, rescue branch, and conflicted files, and fails with explicit recovery guidance.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: routes publish failures through a recovery gate that only invokes conflict recovery when unmerged files are present, records `.fabro/tmp/publish-conflict-evidence.md`, and sends successful conflict resolutions back through `dev_check` instead of pushing directly.
+- `.fabro/workflows/iteration-implementation/prompts/resolve_publish_conflict.md`: adds a bounded agent prompt for mechanical conflict resolution, with fail-closed rules for product judgement, migrations, event schemas, security/authentication, or unclear behaviour.
+- `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: covers both the happy publish path and the final-rebase-conflict path, including rescue branch publication and conflicted-file output.
+- `.fabro/workflows/README.md`: documents that conflict-resolved publish candidates return through validation before reaching `main`.
+
+Validation:
+
+- `.fabro/workflows/iteration-implementation/scripts/test_final_artifact_gate.sh && .fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh && .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed.
+- `dot -Tsvg .fabro/workflows/iteration-implementation/workflow.fabro >/tmp/iteration-implementation.svg` — passed graph parse/render.
+
+Remaining follow-up:
+
+- Observe the first real conflict-recovery run to tune the prompt and decide whether recurring conflict classes should get deterministic merge helpers.
