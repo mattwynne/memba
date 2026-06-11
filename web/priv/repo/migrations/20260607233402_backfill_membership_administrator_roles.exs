@@ -5,7 +5,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
     now = DateTime.utc_now(:microsecond)
 
     roles =
-      "SELECT club_id FROM membership_clubs"
+      "SELECT club_id::text FROM membership_clubs"
       |> query_rows()
       |> Enum.map(fn [club_id] ->
         %{
@@ -44,9 +44,9 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
     assignments =
       """
       SELECT DISTINCT ON (club_id)
-        club_id,
-        membership_id,
-        person_id
+        club_id::text,
+        membership_id::text,
+        person_id::text
       FROM membership_memberships
       WHERE active = TRUE
       ORDER BY club_id, inserted_at, membership_id
