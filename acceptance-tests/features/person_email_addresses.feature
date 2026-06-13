@@ -7,9 +7,7 @@ Rule: A known alternate email address can identify a member
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
       And Alice's alternate email address is "alice@work.example"
-      When Alice requests a sign-in link for "alice@work.example"
-      Then Alice should receive a sign-in link at "alice@work.example"
-      When Alice follows the sign-in link
+      When Alice signs in with "alice@work.example"
       Then Alice should be signed in
       And Alice should see Kootenay Mountaineering Club in their clubs
 

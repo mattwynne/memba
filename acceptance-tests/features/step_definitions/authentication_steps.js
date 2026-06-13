@@ -28,6 +28,7 @@ const {
   recordSignInEmailProviderAccepted,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
+  signInDirectly,
   signOut,
   tryOpenStaffOnlyArea
 } = require("../support/authentication");
@@ -48,12 +49,30 @@ Given("{word} is not a member of any club", async function (personName) {
   await recordNonMember(this, personName);
 });
 
+Given("{word} is signed in as a member of Kootenay Mountaineering Club", async function (personName) {
+  await ensureMember(this, personName, "Kootenay Mountaineering Club");
+  await signInDirectly(this, personName);
+  await assertSignedIn(this, personName);
+});
+
 When("{word} requests a sign-in link for their email address", async function (personName) {
   await requestSignInLinkForPerson(this, personName);
 });
 
 When("{word} requests a sign-in link for {string}", async function (personName, email) {
   await requestSignInLinkForEmail(this, email, personName);
+});
+
+When("{word} signs in with their email address", async function (personName) {
+  await requestSignInLinkForPerson(this, personName);
+  await assertReceivesSignInLink(this, personName);
+  await followSignInLink(this, personName);
+});
+
+When("{word} signs in with {string}", async function (personName, email) {
+  await requestSignInLinkForEmail(this, email, personName);
+  await assertReceivesSignInLink(this, personName);
+  await followSignInLink(this, personName);
 });
 
 Then("{word} should receive a sign-in link", async function (personName) {

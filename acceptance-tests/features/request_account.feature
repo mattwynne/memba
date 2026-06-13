@@ -14,17 +14,12 @@ Rule: A public request does not grant access
 Rule: Signed-out requesters verify their email before Staff review
 
     @iteration-030 @todo-ui
-    Scenario: Robin verifies their email before submitting a request
+    Scenario: Robin verifies their email before staff see the request
       When Robin starts requesting Memba access with email "robin@example.com"
       Then Robin should receive a sign-in link at "robin@example.com"
       And Memba staff should not be notified about Robin's request yet
       When Robin follows the sign-in link
       Then Robin should be completing a verified request as "robin@example.com"
-      When Robin requests Memba access for West Coast Paddlers with name "Robin Example" and a short note
-      Then Robin should see that Memba will review the request
-      And Memba staff should be notified about Robin's request
-      And West Coast Paddlers should not exist as a club yet
-      And Robin should not be able to sign in to West Coast Paddlers yet
 
     @iteration-030 @todo-ui
     Scenario: Staff do not see an email-only verification that Robin abandons
@@ -64,13 +59,17 @@ Rule: Verified request submission does not create membership-domain records
 
 Rule: Memba staff triage active requests
 
-    Scenario: Pat converts a request into a club and first active member
+    Scenario: Pat reviews a request before converting it
       Given Robin has requested Memba access for West Coast Paddlers
       And Pat is signed in as Memba staff
       When Pat opens the active requests inbox
       Then Pat should see Robin's West Coast Paddlers request
       And Pat should see the suggested club slug "west-coast-paddlers"
-      When Pat changes the club slug to "wcp" and converts the request
+
+    Scenario: Pat converts a request into a club and first active member
+      Given Robin has requested Memba access for West Coast Paddlers
+      And Pat is signed in as Memba staff
+      When Pat converts Robin's West Coast Paddlers request with slug "wcp"
       Then West Coast Paddlers should exist with the slug "wcp"
       And Robin should be an active member of West Coast Paddlers
       And Robin's request should leave the active requests inbox

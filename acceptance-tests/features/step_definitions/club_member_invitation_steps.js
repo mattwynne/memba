@@ -50,6 +50,12 @@ Given("{word} has invited {string} to join {word} {word} {word}", async function
   await assertInvitationReceived(this, email, clubName(word1, word2, word3));
 });
 
+Given(/^(\w+) has invited (\w+) to join (\w+) (\w+) (\w+)$/, async function (actorName, personName, word1, word2, word3) {
+  const targetClubName = clubName(word1, word2, word3);
+  await invitePersonToClub(this, actorName, personName, targetClubName);
+  await assertInvitationReceived(this, personName, targetClubName);
+});
+
 Given("{word} has accepted an invitation to join {word} {word} {word}", async function (personName, word1, word2, word3) {
   const targetClubName = clubName(word1, word2, word3);
   await inviteAndAccept(this, personName, `${personName.toLowerCase()}@example.com`, targetClubName, `${personName} Example`);
@@ -69,6 +75,25 @@ When("{word} invites {string} to join {word} {word} {word} again", async functio
 
 When("{word} follows the invitation link", async function (personName) {
   await followInvitationLink(this, personName, inferredClubName(this));
+});
+
+When("{word} accepts the invitation", async function (personName) {
+  const targetClubName = inferredClubName(this);
+  await followInvitationLink(this, personName, targetClubName);
+});
+
+When("{word} accepts the invitation as {string}", async function (personName, name) {
+  const targetClubName = inferredClubName(this);
+  await followInvitationLink(this, personName, targetClubName);
+  await assertAskedForName(this, personName, targetClubName);
+  await enterInviteeName(this, personName, name, targetClubName);
+});
+
+When("{word} returns to the invitation and completes their profile as {string}", async function (personName, name) {
+  const targetClubName = inferredClubName(this);
+  await followInvitationLink(this, personName, targetClubName, { same: true });
+  await assertAskedForName(this, personName, targetClubName);
+  await enterInviteeName(this, personName, name, targetClubName);
 });
 
 When("{word} follows the same invitation link again", async function (personName) {

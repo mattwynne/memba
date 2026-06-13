@@ -3,7 +3,7 @@ Feature: Homepage
 
 Rule: Visitors see Memba's public volunteering promise
 
-  @not-domain
+  @iteration-031 @not-domain
   Scenario: Robin arrives without signing in
     When Robin visits the homepage
     Then Robin should see that volunteering should not feel like work

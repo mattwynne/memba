@@ -59,6 +59,13 @@ When(
   }
 );
 
+When(
+  /^(\w+) converts (\w+)'s (.+) request with slug "([^"]+)"$/,
+  async function (_staffName, personName, clubName, slug) {
+    await convertRequest(this, personName, clubName, { slug });
+  }
+);
+
 When(/^(\w+) converts (\w+)'s (.+) request$/, async function (_staffName, personName, clubName) {
   await convertRequest(this, personName, clubName);
 });

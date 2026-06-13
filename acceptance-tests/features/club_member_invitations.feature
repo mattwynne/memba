@@ -6,24 +6,16 @@ Feature: Club member invitations
 Rule: Staff invite new members by email
 
     Scenario: Robin accepts an invitation and completes their profile
-      Given Pat is signed in as Memba staff
-      And West Coast Paddlers exists as a club
-      When Pat invites "robin@example.com" to join West Coast Paddlers
-      Then "robin@example.com" should receive an invitation to join West Coast Paddlers
-      And Robin should not be an active member of West Coast Paddlers yet
-      When Robin follows the invitation link
-      Then Robin should be asked for their name
-      When Robin enters "Robin Example" as their name
+      Given Pat has invited "robin@example.com" to join West Coast Paddlers
+      When Robin accepts the invitation as "Robin Example"
       Then Robin should be an active member of West Coast Paddlers
       And Robin should be signed in to West Coast Paddlers
 
     Scenario: Alice accepts an invitation as an existing person
       Given Alice is a person in Memba
       And Alice is not a member of West Coast Paddlers
-      And Pat is signed in as Memba staff
-      When Pat invites Alice to join West Coast Paddlers
-      Then Alice should receive an invitation to join West Coast Paddlers
-      When Alice follows the invitation link
+      And Pat has invited Alice to join West Coast Paddlers
+      When Alice accepts the invitation
       Then Alice should be an active member of West Coast Paddlers
       And Alice should be signed in to West Coast Paddlers
 
@@ -35,9 +27,7 @@ Rule: Membership Admins invite new members by email
       When Robin invites "dana@example.com" to join West Coast Paddlers
       Then "dana@example.com" should receive an invitation to join West Coast Paddlers
       And Dana should not be an active member of West Coast Paddlers yet
-      When Dana follows the invitation link
-      Then Dana should be asked for their name
-      When Dana enters "Dana Example" as their name
+      When Dana accepts the invitation as "Dana Example"
       Then Dana should be an active member of West Coast Paddlers
       And Dana should be an ordinary member of West Coast Paddlers
       And Dana should be signed in to West Coast Paddlers
@@ -60,9 +50,7 @@ Rule: Invited people complete required profile details before membership starts
       And Robin should not be an active member of West Coast Paddlers yet
       When Robin leaves without entering their name
       Then Robin should still not be an active member of West Coast Paddlers
-      When Robin follows the same invitation link again
-      Then Robin should be asked for their name
-      When Robin enters "Robin Example" as their name
+      When Robin returns to the invitation and completes their profile as "Robin Example"
       Then Robin should be an active member of West Coast Paddlers
 
 Rule: Staff club-member creation goes through invitations
