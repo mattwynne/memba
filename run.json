@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-13T23:06:31.767879167Z",
-  "last_event_at": "2026-06-13T23:08:26.259909567Z",
+  "last_event_at": "2026-06-13T23:08:32.836703025Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1067,78 +1067,105 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 103,
       "checkpoint": {
-        "timestamp": "2026-06-13T23:08:27.907976941Z",
-        "current_node": "synthesis_gate",
+        "timestamp": "2026-06-13T23:08:27.906241593Z",
+        "current_node": "synthesize",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize",
-          "synthesis_gate"
+          "synthesize"
         ],
         "node_retries": {},
         "context_values": {
-          "gemini_review_confidence": "High",
-          "internal.retry_count.start": 0,
-          "thread.gemini_review.current_node": "claude_review",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "codex_review_confidence": "High",
-          "claude_review_decision": "READY",
-          "internal.retry_count.codex_review": 0,
-          "codex_review_blocking_gaps": "None",
-          "claude_review_required_edits": "None",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "thread.codex_review.current_node": "synthesize",
-          "codex_review_required_edits": "None",
-          "current_node": "synthesis_gate",
-          "codex_review_blocking_gap_count": 0,
+          "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "thread.claude_review.current_node": "codex_review",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "claude_review_confidence": "High",
           "internal.retry_count.claude_review": 0,
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.run_id": "01KV1KS35DA38X8JZV05ECXKC0",
           "internal.fidelity": "summary:high",
-          "internal.work_dir": "/workspace/memba",
-          "failure_signature": "",
-          "thread.start.current_node": "gemini_review",
-          "gemini_review_required_edits": "None",
-          "internal.node_visit_count": 1,
-          "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "internal.thread_id": "synthesize",
-          "failure_class": "",
-          "claude_review_confidence": "High",
-          "codex_review_decision": "READY",
-          "outcome": "succeeded",
-          "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "internal.retry_count.gemini_review": 0,
-          "gemini_review_blocking_gaps": "None",
-          "graph.default_fidelity": "summary:high",
-          "gemini_review_decision": "READY",
-          "gemini_review_blocking_gap_count": 0,
-          "claude_review_blocking_gap_count": 0,
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "plan_ready": true,
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "plan_needs_fix": false,
-          "internal.retry_count.synthesize": 0,
-          "claude_review_blocking_gaps": "None",
-          "internal.retry_count.synthesis_gate": 0,
           "plan_needs_human": false,
-          "last_stage": "synthesize",
+          "plan_ready": true,
+          "codex_review_confidence": "High",
+          "codex_review_blocking_gap_count": 0,
+          "gemini_review_required_edits": "None",
+          "gemini_review_confidence": "High",
+          "current_node": "synthesize",
+          "thread.codex_review.current_node": "synthesize",
+          "internal.retry_count.codex_review": 0,
+          "failure_class": "",
+          "internal.thread_id": "codex_review",
           "graph.rankdir": "LR",
-          "thread.claude_review.current_node": "codex_review"
+          "claude_review_decision": "READY",
+          "gemini_review_decision": "READY",
+          "claude_review_required_edits": "None",
+          "gemini_review_blocking_gaps": "None",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "claude_review_blocking_gaps": "None",
+          "outcome": "succeeded",
+          "claude_review_blocking_gap_count": 0,
+          "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.synthesize": 0,
+          "codex_review_required_edits": "None",
+          "failure_signature": "",
+          "internal.work_dir": "/workspace/memba",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_decision": "READY",
+          "thread.gemini_review.current_node": "claude_review",
+          "internal.retry_count.gemini_review": 0,
+          "codex_review_blocking_gaps": "None",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01KV1KS35DA38X8JZV05ECXKC0",
+          "graph.default_fidelity": "summary:high",
+          "last_stage": "synthesize",
+          "internal.retry_count.start": 0,
+          "plan_needs_fix": false,
+          "thread.start.current_node": "gemini_review",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        "
         },
         "node_outcomes": {
-          "synthesis_gate": {
+          "synthesize": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
+            "context_updates": {
+              "plan_ready": true,
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_human": false,
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5058,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 161,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31110
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4438,
+              "tool_time_ms": 0,
+              "active_time_ms": 4438
+            }
           },
           "gemini_review": {
             "status": "succeeded",
@@ -1180,6 +1207,506 @@
               "inference_time_ms": 26304,
               "tool_time_ms": 238,
               "active_time_ms": 26542
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "READY",
+              "codex_review_required_edits": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_blocking_gap_count": 0,
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth con",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gaps": "None",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10821,
+                    "output_tokens": 742,
+                    "reasoning_tokens": 564,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 93285
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 26217,
+              "tool_time_ms": 70,
+              "active_time_ms": 26287
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n#",
+              "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_required_edits": "None",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_confidence": "High",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5413,
+                    "output_tokens": 1867,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4521,
+                    "cache_write_tokens": 5787
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 5787,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 67301
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43670,
+              "tool_time_ms": 53,
+              "active_time_ms": 43723
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "292d7865e059406994cbf5991a5acdc5d99774aa",
+        "node_visits": {
+          "gemini_review": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "start": 1,
+          "synthesize": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 111,
+      "checkpoint": {
+        "timestamp": "2026-06-13T23:08:30.913589113Z",
+        "current_node": "synthesis_gate",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "current_node": "synthesis_gate",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.gemini_review": 0,
+          "thread.start.current_node": "gemini_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.synthesize": 0,
+          "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "last_stage": "synthesize",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01KV1KS35DA38X8JZV05ECXKC0",
+          "gemini_review_decision": "READY",
+          "internal.thread_id": "synthesize",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "codex_review_confidence": "High",
+          "codex_review_blocking_gap_count": 0,
+          "outcome": "succeeded",
+          "codex_review_blocking_gaps": "None",
+          "graph.rankdir": "LR",
+          "plan_needs_fix": false,
+          "failure_class": "",
+          "claude_review_blocking_gap_count": 0,
+          "claude_review_decision": "READY",
+          "claude_review_required_edits": "None",
+          "claude_review_confidence": "High",
+          "gemini_review_blocking_gap_count": 0,
+          "codex_review_decision": "READY",
+          "graph.default_fidelity": "summary:high",
+          "gemini_review_blocking_gaps": "None",
+          "gemini_review_required_edits": "None",
+          "internal.fidelity": "summary:high",
+          "plan_ready": true,
+          "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "codex_review_required_edits": "None",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.start": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "plan_needs_human": false,
+          "thread.codex_review.current_node": "synthesize",
+          "failure_signature": "",
+          "gemini_review_confidence": "High",
+          "thread.gemini_review.current_node": "claude_review",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.work_dir": "/workspace/memba",
+          "claude_review_blocking_gaps": "None"
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "READY",
+              "codex_review_required_edits": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_blocking_gap_count": 0,
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth con",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gaps": "None",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10821,
+                    "output_tokens": 742,
+                    "reasoning_tokens": 564,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 93285
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 26217,
+              "tool_time_ms": 70,
+              "active_time_ms": 26287
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_ready": true,
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_human": false,
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5058,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 161,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31110
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4438,
+              "tool_time_ms": 0,
+              "active_time_ms": 4438
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "gemini_review_blocking_gap_count": 0,
+              "last_response": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webho",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gaps": "None",
+              "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_required_edits": "None"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 15227,
+                    "output_tokens": 572,
+                    "reasoning_tokens": 1707,
+                    "cache_read_tokens": 24065,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 69834
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 26304,
+              "tool_time_ms": 238,
+              "active_time_ms": 26542
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n#",
+              "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_required_edits": "None",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_confidence": "High",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5413,
+                    "output_tokens": 1867,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4521,
+                    "cache_write_tokens": 5787
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 5787,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 67301
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43670,
+              "tool_time_ms": 53,
+              "active_time_ms": 43723
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "f56680aa360ec00932726f74c48d29e50c139bcc",
+        "node_visits": {
+          "synthesize": 1,
+          "claude_review": 1,
+          "gemini_review": 1,
+          "codex_review": 1,
+          "start": 1,
+          "synthesis_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-13T23:08:32.845795005Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.publish_ready": 0,
+          "gemini_review_confidence": "High",
+          "internal.retry_count.start": 0,
+          "thread.gemini_review.current_node": "claude_review",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_confidence": "High",
+          "claude_review_decision": "READY",
+          "internal.retry_count.codex_review": 0,
+          "codex_review_blocking_gaps": "None",
+          "claude_review_required_edits": "None",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "thread.codex_review.current_node": "synthesize",
+          "codex_review_required_edits": "None",
+          "current_node": "publish_ready",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "codex_review_blocking_gap_count": 0,
+          "internal.retry_count.claude_review": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.run_id": "01KV1KS35DA38X8JZV05ECXKC0",
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "failure_signature": "",
+          "thread.start.current_node": "gemini_review",
+          "gemini_review_required_edits": "None",
+          "internal.node_visit_count": 1,
+          "response.claude_review": "Now I'll analyze the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: Auth Email Delivery Progress\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Fallback timing clarity**: Step 9 mentions \"fallback timing\" tests but the 60-second threshold for showing fallback guidance is stated in acceptance criteria and UX decisions but not explicitly named in the implementation plan steps. This is clear enough from context, but could be more explicit in implementation step 6.\n\n2. **Backward-compatible handling detail**: Step 5 mentions \"backward-compatible handling for any old route if needed\" but doesn't clarify if the old route exists. This is appropriately cautious but could note whether there is an existing `/auth/check-email` route shape to preserve.\n\n3. **LiveView mount argument**: The implementation mentions adding a request ID to the check-email route but doesn't explicitly state whether this will be a query parameter, path segment, or session data. This is a reasonable implementation detail to leave for coding time.\n\n## Smallest Viable Iteration\n\nThe plan is already at its smallest viable slice. The author has clearly thought through the minimum:\n\n- Cannot remove unknown-email handling without breaking the anti-enumeration requirement\n- Cannot remove live updates without losing the core user benefit\n- Cannot remove webhook handling without getting the delivery state\n- Cannot remove the opaque request record without a correlation point\n\nAny smaller and the iteration would fail to deliver the stated outcome: \"showing neutral, live delivery progress ... including when the recipient mailbox provider has accepted the email, without revealing whether an email address is known to Memba.\"\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe validation plan is comprehensive and concrete:\n\n- **Unit/context testing**: Covers persistence, status transitions, metadata, webhook handling, and LiveView rendering\n- **Integration testing**: Includes Cucumber scenarios with appropriate tags and waiting discipline\n- **Quality gates**: Includes `dev check` requirement\n- **Manual verification**: Provides a concrete 5-step smoke test covering both known and unknown addresses\n- **Stop condition**: Clear success criteria tied to observable behaviour and existing sign-in functionality preservation\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Is the goal clearly articulated?** Yes. \"Make the sign-in-link waiting experience less frustrating by showing neutral, live delivery progress...\"\n\n**Does it state outcome, not just tasks?** Yes. It focuses on the user outcome (less frustrating waiting experience) and the mechanism (neutral, live progress).\n\n**Is the beneficiary clear?** Yes. People waiting for sign-in links.\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome?** Yes. The iteration delivers live auth-email progress tracking with anti-enumeration protection.\n\n**Could it be smaller while still useful?** No. All in-scope items support the core outcome and preserve required security properties.\n\n**Are boundaries clear?** Excellent. The plan explicitly excludes inbox-placement guarantees, Postmark provider changes, staff dashboards, and the separate cross-browser update problem.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n**Acceptance criteria concrete and testable?** Yes. 11 acceptance criteria covering:\n- Known and unknown email request creation and routing (anti-enumeration)\n- Metadata correlation\n- State transitions and timing (60-second fallback, 30-minute expiry, 7-day retention)\n- Exact copy requirements\n- Webhook edge cases\n- Preservation of existing sign-in behavior\n\n**Coverage complete?** Yes. Happy path (known email, provider acceptance), edge cases (unknown email, no webhook, delayed/bounced/spam), permissions (implicit: public auth flow), error states (malformed webhooks, missing correlation), and data/state changes (persistence, expiry, cleanup).\n\n**BDD scenario decision made?** Yes. Explicitly classified as \"Behaviour-facing\" with BDD decision \"Required.\"\n\n**Feature files identified?** Yes. `acceptance-tests/features/authentication.feature` with two named scenarios under `@iteration-032 @todo-domain @todo-ui` tags.\n\n**Gherkin rationale when not used?** N/A. BDD scenarios are planned.\n\n**Business/product decisions resolved?** Yes. Section \"Product / UX Decisions\" provides binding copy states, unknown-email behavior rules, and expiry/retention policy. \"Webhook Edge-Case Policy\" provides binding rules for all webhook event types.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear and ordered?** Yes. 10 numbered steps from inspection through acceptance test completion.\n\n**Likely files/modules/interfaces named?** Yes. References:\n- Existing auth LiveView\n- Auth email module\n- Postmark webhook controller\n- Read-model change publisher\n- Delivery-status LiveViews\n- `/auth/check-email` route\n- `authentication.feature` file\n- ADR 0021 (PubSub/read-model pattern)\n- ADR 0022 (projection barriers)\n\n**Technical changes clear?** Yes. Ecto table (not event-sourced), PubSub/committed-change pattern, LiveView subscription/refresh, Postmark metadata, webhook routing, expiry/cleanup.\n\n**Technical decisions resolved?** Yes. Section \"Technical Decisions\" provides binding choices on:\n- Ecto source-of-truth (not event-sourced)\n- PubSub pattern (follows ADR 0021)\n- No sensitive data in PubSub payloads\n- 30-minute progress expiry\n- 7-day retention\n- Route fallback behavior\n\n### 5. Expected Capability and Validation ✅\n\n**What can we do after?** Clearly stated: \"A person waiting for a sign-in link can see neutral live progress and, when Postmark reports success, know that their mailbox provider accepted the email. Memba gains an auditable correlation point for auth-email delivery latency without compromising account-enumeration protection.\"\n\n**How to prove success?** Comprehensive validation plan with unit tests, integration tests, Cucumber scenarios, `dev check`, and 5-step manual smoke test.\n\n**Clear stop condition?** Yes. All acceptance criteria met, tests pass, `dev check` passes, smoke test confirms both known and unknown address behavior.\n\n---\n\n## Summary\n\nThis iteration plan is exceptionally well-prepared for implementation. It demonstrates:\n\n- Clear user outcome focus with security requirements preserved\n- Comprehensive acceptance criteria covering happy paths and all relevant edge cases\n- Explicit BDD scenario commitment with named feature file\n- Resolved product copy and technical architecture decisions\n- Detailed implementation steps referencing existing patterns (ADR 0021, ADR 0022)\n- Strong validation plan including automated tests, BDD scenarios, quality gates, and manual verification\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "internal.thread_id": "synthesis_gate",
+          "failure_class": "",
+          "claude_review_confidence": "High",
+          "codex_review_decision": "READY",
+          "outcome": "succeeded",
+          "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "internal.retry_count.gemini_review": 0,
+          "gemini_review_blocking_gaps": "None",
+          "graph.default_fidelity": "summary:high",
+          "gemini_review_decision": "READY",
+          "gemini_review_blocking_gap_count": 0,
+          "claude_review_blocking_gap_count": 0,
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely concrete modules/files once confirmed, such as the auth controller/LiveView, Postmark webhook controller, mailer/auth email builder, migration, context module, and LiveView test files.\n2. The legacy `/auth/check-email` behaviour is slightly flexible: “renders existing static neutral guidance or redirects to the sign-in form.” Either is acceptable, but choosing one in the plan would reduce implementation discretion.\n3. The cleanup mechanism for 7-day retention is described as “eligible for cleanup” but not assigned to a job/task. This is acceptable for readiness, but implementation should decide whether cleanup is part of this iteration or a follow-up operational task.\n4. The acceptance scenarios list only two shared Cucumber scenarios. That is probably enough for stakeholder-readable coverage, while lower-level tests cover webhook edge cases, but the author could note that edge cases remain unit/controller/LiveView test coverage rather than Gherkin.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Create an opaque auth-email request/progress record for every submitted address.\n- Preserve anti-enumeration behaviour for known and unknown emails.\n- Send known auth emails with Postmark metadata that correlates to the request.\n- Show a LiveView check-email progress page by opaque request ID.\n- Update the page live when a Postmark delivered/provider-accepted webhook is received.\n- Show neutral fallback copy after 60 seconds and avoid fake provider-accepted states for unknown emails.\n- Prove existing sign-in behaviour still works.\n\nDelayed/bounced/spam-complaint diagnostics, duplicate idempotency, expiry, and retention should still be implemented or safely handled as planned, but the core user value is provider-accepted progress without account enumeration.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/authentication.feature` for:\n   - A known user seeing provider-accepted progress.\n   - An unknown email receiving the same neutral waiting experience without account disclosure.\n2. Run targeted persistence/context tests proving auth-email request creation, expiry, status transitions, and retention eligibility.\n3. Run auth email construction tests proving known recipients receive Postmark metadata that correlates to the opaque auth-email request and uses the auth stream.\n4. Run webhook controller tests for delivered/provider-accepted, delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation events.\n5. Run LiveView tests proving neutral initial state, fallback after 60 seconds, live update after committed provider acceptance, expired guidance after 30 minutes, and privacy-preserving copy for unknown addresses.\n6. Run existing sign-in-link tests to confirm known users can still sign in, unknown users cannot, and tokens remain one-use and expiring.\n7. Run the updated Cucumber scenarios once implementation support exists and remove/narrow the todo tags when passing.\n8. Run `dev check` before completion.\n9. Optionally perform the planned staging/production smoke test with a controlled known address and controlled unknown address.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "plan_ready": true,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "plan_needs_fix": false,
+          "internal.retry_count.synthesize": 0,
+          "claude_review_blocking_gaps": "None",
+          "internal.retry_count.synthesis_gate": 0,
+          "plan_needs_human": false,
+          "last_stage": "synthesize",
+          "command.output": "blob://sha256/a81f12c5de74f894f0457d1688c4ab97bcb0f946ca825e1c5c9abd36532ec48c",
+          "graph.rankdir": "LR",
+          "thread.claude_review.current_node": "codex_review"
+        },
+        "node_outcomes": {
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "gemini_review_blocking_gap_count": 0,
+              "last_response": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webho",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gaps": "None",
+              "response.gemini_review": "## Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n\n**Blocking gaps:**  \nNone. The plan is comprehensive, clearly defines the scope and non-goals, addresses edge cases (e.g., webhooks out of order or missing), and respects privacy and anti-enumeration rules.\n\n**Non-blocking improvements:**  \n1. **Module/Schema Naming:** The implementation plan mentions adding \"a small persistence model for auth-email requests/progress\". Explicitly proposing the Ecto schema and context names (e.g., `Memba.Auth.DeliveryProgress`) could slightly reduce cognitive load during implementation.\n2. **Channel specific topic:** Step 8 mentions publishing updates using \"a narrow auth progress topic\". Specifying the exact topic format (e.g., `\"auth_progress:{request_id}\"`) could help standardize the PubSub implementation.\n\n**Smallest viable iteration:**  \nThe current plan is optimally sliced. Removing the LiveView real-time updates would defeat the UX goal. Removing the unknown-email parity would violate the privacy and security rules. The proposed iteration represents the smallest coherent slice that delivers the UX improvement safely.\n\n**Required plan edits:**  \nNone.\n\n**Validation plan:**  \nThe validation plan outlined in the document is excellent. It covers:\n- Unit and context tests for the new state transitions.\n- Controller tests for the full range of Postmark webhook edge cases (delivered, delayed, bounced, malformed, duplicate, missing correlation).\n- LiveView tests to verify rendering, live UI updates from PubSub, and privacy preservation.\n- Acceptance tests mapped to specific BDD scenarios in `acceptance-tests/features/authentication.feature`.\n- Manual smoke tests in a staging-like environment.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_required_edits": "None"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 15227,
+                    "output_tokens": 572,
+                    "reasoning_tokens": 1707,
+                    "cache_read_tokens": 24065,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 69834
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 26304,
+              "tool_time_ms": 238,
+              "active_time_ms": 26542
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a81f12c5de74f894f0457d1688c4ab97bcb0f946ca825e1c5c9abd36532ec48c"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/032-auth-email-delivery-progress/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1910,
+              "active_time_ms": 1910
             }
           },
           "claude_review": {
@@ -1306,14 +1833,15 @@
             }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "synthesize": 1,
           "codex_review": 1,
           "start": 1,
           "synthesis_gate": 1,
           "gemini_review": 1,
-          "claude_review": 1
+          "claude_review": 1,
+          "publish_ready": 1
         }
       },
       "diff": {}
@@ -2079,6 +2607,77 @@
         "warnings": []
       },
       "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 106,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:08:27.907742056Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-13T23:08:27.906509800Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "publish_ready@1": {
+      "first_event_seq": 114,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/032-auth-email-delivery-progress/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/032-auth-email-delivery-progress/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/a81f12c5de74f894f0457d1688c4ab97bcb0f946ca825e1c5c9abd36532ec48c",
+        "exit_code": 0,
+        "duration_ms": 1910,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:08:30.913872692Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     }
   }
 }
