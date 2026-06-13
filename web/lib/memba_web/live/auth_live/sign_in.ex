@@ -31,7 +31,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   def handle_event("request_sign_in_link", params, socket) do
     params
     |> email_param()
-    |> request_and_deliver_sign_in_link(
+    |> create_request_and_deliver_sign_in_link(
       socket.assigns.auth_callback_base_url,
       Map.get(socket.assigns, :sign_in_email_context, %{})
     )
@@ -129,6 +129,16 @@ defmodule MembaWeb.AuthLive.SignIn do
 
   defp email_param(%{"auth" => %{"email" => email}}), do: email
   defp email_param(_params), do: nil
+
+  defp create_request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+    case Accounts.create_auth_email_request() do
+      {:ok, _request} ->
+        request_and_deliver_sign_in_link(email, callback_base_url, email_context)
+
+      {:error, reason} ->
+        Logger.warning("Could not create auth email progress request: #{inspect(reason)}")
+    end
+  end
 
   defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
     case Accounts.request_sign_in_link(email) do

@@ -6,6 +6,7 @@ defmodule MembaWeb.AuthControllerTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
@@ -92,6 +93,36 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.subject == "Sign in to Memba"
       assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+    end
+
+    test "creates opaque auth-email progress records for known and unknown submissions", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
+               "Check your email for the sign-in link."
+
+      assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
+      assert Memba.ID.valid?(:auth_email_request, known_request.request_id)
+      assert known_request.status == AuthEmailRequest.status_created()
+      assert known_request.recipient_email == nil
+      assert_received {:email, %Swoosh.Email{}}
+
+      assert conn
+             |> Phoenix.ConnTest.recycle()
+             |> submit_sign_in_link_request("unknown@example.com") =~
+               "Check your email for the sign-in link."
+
+      requests = Repo.all(AuthEmailRequest)
+
+      assert length(requests) == 2
+      assert Enum.all?(requests, &Memba.ID.valid?(:auth_email_request, &1.request_id))
+      assert Enum.all?(requests, &(&1.status == AuthEmailRequest.status_created()))
+      assert Enum.all?(requests, &is_nil(&1.recipient_email))
+      assert length(Enum.uniq_by(requests, & &1.request_id)) == 2
+      assert_no_email_sent()
     end
 
     test "creates group-led club-subdomain callback URL emails when sign-in is requested on a known club host",
