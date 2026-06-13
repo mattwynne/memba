@@ -1,0 +1,92 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index 95816db..1acb58e 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the existing auth LiveView, auth email module, Postmark webhook controller, read-model change publisher, and current delivery-status LiveViews that subscribe to read-model changes.
+ - [x] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
+-- [ ] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
++- [x] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
+ - [ ] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
+ - [ ] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
+ - [ ] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
+diff --git a/web/lib/memba_web/live/auth_live/sign_in.ex b/web/lib/memba_web/live/auth_live/sign_in.ex
+index a70e1be..69770b6 100644
+--- a/web/lib/memba_web/live/auth_live/sign_in.ex
++++ b/web/lib/memba_web/live/auth_live/sign_in.ex
+@@ -31,7 +31,7 @@ defmodule MembaWeb.AuthLive.SignIn do
+   def handle_event("request_sign_in_link", params, socket) do
+     params
+     |> email_param()
+-    |> request_and_deliver_sign_in_link(
++    |> create_request_and_deliver_sign_in_link(
+       socket.assigns.auth_callback_base_url,
+       Map.get(socket.assigns, :sign_in_email_context, %{})
+     )
+@@ -130,6 +130,16 @@ defmodule MembaWeb.AuthLive.SignIn do
+   defp email_param(%{"auth" => %{"email" => email}}), do: email
+   defp email_param(_params), do: nil
+ 
++  defp create_request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
++    case Accounts.create_auth_email_request() do
++      {:ok, _request} ->
++        request_and_deliver_sign_in_link(email, callback_base_url, email_context)
++
++      {:error, reason} ->
++        Logger.warning("Could not create auth email progress request: #{inspect(reason)}")
++    end
++  end
++
+   defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+     case Accounts.request_sign_in_link(email) do
+       {:ok, %{email: recipient_email, token: token}} ->
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 04d6144..8754cf0 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -6,6 +6,7 @@ defmodule MembaWeb.AuthControllerTest do
+ 
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmail
++  alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Repo
+@@ -94,6 +95,36 @@ defmodule MembaWeb.AuthControllerTest do
+       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+     end
+ 
++    test "creates opaque auth-email progress records for known and unknown submissions", %{
++      conn: conn
++    } do
++      configure_auth_email()
++      create_active_member(email: "alice@example.com")
++
++      assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
++               "Check your email for the sign-in link."
++
++      assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
++      assert Memba.ID.valid?(:auth_email_request, known_request.request_id)
++      assert known_request.status == AuthEmailRequest.status_created()
++      assert known_request.recipient_email == nil
++      assert_received {:email, %Swoosh.Email{}}
++
++      assert conn
++             |> Phoenix.ConnTest.recycle()
++             |> submit_sign_in_link_request("unknown@example.com") =~
++               "Check your email for the sign-in link."
++
++      requests = Repo.all(AuthEmailRequest)
++
++      assert length(requests) == 2
++      assert Enum.all?(requests, &Memba.ID.valid?(:auth_email_request, &1.request_id))
++      assert Enum.all?(requests, &(&1.status == AuthEmailRequest.status_created()))
++      assert Enum.all?(requests, &is_nil(&1.recipient_email))
++      assert length(Enum.uniq_by(requests, & &1.request_id)) == 2
++      assert_no_email_sent()
++    end
++
+     test "creates group-led club-subdomain callback URL emails when sign-in is requested on a known club host",
+          %{conn: conn} do
+       configure_auth_email()
