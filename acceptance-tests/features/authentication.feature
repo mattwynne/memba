@@ -58,6 +58,24 @@ Rule: People who are neither club members nor Memba staff cannot sign in
       When Robin requests a sign-in link for their email address
       Then Robin should not receive a sign-in link
 
+Rule: Sign-in email progress protects privacy
+
+    @iteration-032 @todo-domain @todo-ui
+    Scenario: Alice sees when her mailbox provider accepts the sign-in email
+      Given Alice is a member of Kootenay Mountaineering Club
+      When Alice requests a sign-in link for their email address
+      Then Alice should see that Memba is trying to send a sign-in link
+      When Alice's mailbox provider accepts the sign-in email
+      Then Alice should see that the email has been accepted by her mailbox provider
+      And Alice should not be told that the email is in her inbox
+
+    @iteration-032 @todo-domain @todo-ui
+    Scenario: Robin sees the same neutral waiting experience for an unknown email address
+      Given Robin is not a member of any club
+      When Robin requests a sign-in link for their email address
+      Then Robin should see neutral sign-in email instructions
+      And Robin should not learn whether Memba recognises the email address
+
 Rule: A sign-in link can only be used once
 
     Scenario: A signed-out person cannot reuse a sign-in link

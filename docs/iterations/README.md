@@ -41,6 +41,7 @@ green than before.
 | 029 | 2026-06-08 | merged | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 | 030 | 2026-06-08 | merged | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
 | 031 | 2026-06-08 | merged | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
+| 032 | 2026-06-13 | ready | Auth email delivery progress | [plan](032-auth-email-delivery-progress/plan.md) |
 
 Status notes:
 
@@ -51,6 +52,7 @@ Status notes:
 
 Shared acceptance feature files used across these iterations:
 
+- [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation)
 - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@todo-domain`/`@todo-ui` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
