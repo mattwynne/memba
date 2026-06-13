@@ -76,24 +76,46 @@ These scenarios describe the business rules without naming LiveView, PubSub, Pos
 
 ## Acceptance Criteria
 
-- Submitting a known sign-in email creates a short-lived auth-email request/progress record and redirects or patches to a check-email page identified by an opaque request ID.
-- Submitting an unknown email creates an indistinguishable opaque request/progress experience from the user's point of view, without sending an email.
-- Known and unknown submissions use the same route shape and neutral copy so a user cannot infer account existence from the URL, initial page, or timing-sensitive first response.
+- Submitting a known sign-in email creates an auth-email request/progress record that is public through an opaque request ID and redirects or patches to a check-email page identified by that request ID.
+- Submitting an unknown email creates the same route shape and neutral request/progress experience from the user's point of view, without sending an email.
+- Known and unknown submissions use the same route shape and neutral initial copy so a user cannot infer account existence from the URL, initial page, or first response.
+- Memba does not add an artificial long delay for unknown email addresses. Unknown requests may show the same initial and fallback copy, but they must not receive a fake “mailbox provider accepted it” state.
 - The sign-in email sent through Postmark includes metadata that can correlate delivery webhooks to the auth-email request without exposing sensitive data in the UI.
-- When Postmark reports that the recipient mailbox provider accepted the auth email, Memba records that state and the check-email page updates live.
-- The page uses careful wording such as “Your mailbox provider has accepted the email. It should appear shortly.” It must not say “the email is in your inbox.”
-- If no provider-accepted event arrives within a short period, the page falls back to neutral guidance to check inbox/junk and ask for another link later.
-- Postmark delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation webhook events are handled safely without crashing and without revealing account existence to the requester.
+- When Postmark reports that the recipient mailbox provider accepted the auth email, Memba records `provider_accepted` and the check-email page updates live.
+- The page uses the exact accepted-state wording: “Your mailbox provider has accepted the email. It should appear shortly.” It must not say “the email is in your inbox.”
+- If no `provider_accepted` event arrives within 60 seconds of request creation, the page shows the neutral fallback guidance: “If it does not arrive, check junk mail or ask for another link.”
+- Auth-email request records are valid for user-facing progress for 30 minutes. After that, the page may render expired neutral guidance and invite the person to request another link.
+- Auth-email request records are retained for 7 days for webhook retries and diagnostics, then become eligible for cleanup.
+- Postmark delayed, bounced, spam complaint, malformed, duplicate, and missing-correlation webhook events are handled safely according to the webhook edge-case policy below.
 - Existing sign-in-link behaviour still works: known members and staff can sign in; unknown people cannot; links remain one-use and expiring.
 
-## Open Business Decisions
+## Product / UX Decisions
 
-- Exact progress copy and timing thresholds need final wording during implementation. Suggested states:
-  - “Preparing your sign-in link…”
-  - “If this email can sign in, the link is on its way.”
-  - “Your mailbox provider has accepted the email. It should appear shortly.”
-  - “If it does not arrive, check junk mail or ask for another link.”
-- Whether unknown-email requests should display simulated progress for a fixed minimum duration or immediately show the same neutral “on its way” copy. Default recommendation: keep the first response and page shape identical, and avoid long artificial waits.
+These decisions are binding for the iteration:
+
+- Progress copy states:
+  - Initial/pre-send: “Preparing your sign-in link…”
+  - Sent/neutral: “If this email can sign in, the link is on its way.”
+  - Provider accepted: “Your mailbox provider has accepted the email. It should appear shortly.”
+  - Fallback after 60 seconds without provider acceptance: “If it does not arrive, check junk mail or ask for another link.”
+- Unknown-email behaviour:
+  - Do not send email.
+  - Do create the same opaque request/progress page shape.
+  - Do not add an artificial long delay.
+  - Do not show a fake provider-accepted state.
+  - Do show only neutral initial/sent/fallback guidance.
+- Expiry/retention:
+  - User-facing progress expires after 30 minutes.
+  - Records are retained for 7 days for webhook retry and diagnostic use, then become eligible for cleanup.
+
+## Webhook Edge-Case Policy
+
+- Delivered / mailbox-provider accepted events set the persisted state to `provider_accepted`, are idempotent, and may show the provider-accepted copy on the requester page.
+- Delayed events set the persisted state to `provider_delayed`, are idempotent, and do not show provider-specific failure details to the requester. The requester sees only the neutral fallback guidance after the 60-second threshold.
+- Bounced and spam-complaint events set the persisted state to `provider_failed`, are idempotent, and do not show the specific failure to the requester. Store/log enough detail for diagnostics.
+- Malformed webhook payloads are ignored safely or rejected with the appropriate HTTP response according to the existing webhook-controller pattern. They must not crash processing and must not change requester-visible state.
+- Missing-correlation events are ignored safely after diagnostic logging. They must not create new auth-email requests and must not change requester-visible state.
+- Duplicate events are idempotent no-ops after the first effective state transition.
 
 ## Implementation Plan
 
@@ -104,16 +126,20 @@ These scenarios describe the business rules without naming LiveView, PubSub, Pos
 5. Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
 6. Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
 7. Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
-8. Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 pattern. If the auth progress record is not a Commanded projection, use a small committed-update publisher with the same PubSub discipline and document why it is not a projector.
-9. Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, and privacy-preserving copy.
+8. Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
+9. Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
 10. Implement or update acceptance step support for the `@iteration-032` scenarios, then remove/narrow `@todo-domain`/`@todo-ui` when they pass.
 
-## Open Technical Decisions
+## Technical Decisions
 
-- Whether auth-email progress should be modelled as a simple Ecto source-of-truth table or as a small event-sourced/projection flow. Default recommendation: simple Ecto table, because auth-email request progress is operational/session state rather than core domain history.
-- Whether to publish through `Memba.ReadModelChanges` directly or add `Memba.AuthEmailProgressChanges` with a narrower topic. Default recommendation: reuse the committed-change pattern and topic discipline, but keep payloads narrow enough for the auth LiveView to filter by request ID.
-- How long to retain auth-email request records. Default recommendation: short retention aligned with sign-in token expiry plus enough time for webhook retries and diagnostics.
-- How to handle old `/auth/check-email` without a request ID. Default recommendation: render the existing neutral static guidance or redirect to `/auth` rather than inventing progress.
+These decisions are binding for the iteration:
+
+- Model auth-email progress as a simple Ecto source-of-truth table, not an event-sourced aggregate/projection. This is operational/session state rather than core domain history.
+- Publish committed auth-progress changes through a narrow auth progress PubSub/change module that follows ADR 0021's committed-change discipline. LiveViews must reload from persistence after receiving broadcasts.
+- Do not publish sensitive email addresses or account-existence information in PubSub payloads. Prefer opaque request IDs and persisted-state reloads.
+- User-facing progress expires after 30 minutes.
+- Auth-email request rows are retained for 7 days, then eligible for cleanup.
+- `/auth/check-email` without a request ID renders the existing static neutral guidance or redirects to the sign-in form; it must not invent progress.
 
 ## New Capability
 
