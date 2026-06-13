@@ -15,14 +15,12 @@ When examples reveal a rule, make the rule visible in the
 feature file: group related scenarios under a rule heading that
 states the rule they illustrate.
 
-In Memba, write rule headings as comments, not Gherkin `Rule:`
-keywords. The browser Cucumber runner accepts `Rule:`, but the
-Elixir/domain Cucumber parser currently rejects files containing
-`Rule:`. Commented rule headings keep the living-documentation
-structure while preserving compatibility with both runners.
+In Memba, use the native Gherkin `Rule:` keyword for rule headings.
+Both the browser Cucumber runner and the Elixir/domain Cucumber parser
+support it now, so commented rule headings are no longer needed.
 
 ```gherkin
-# Rule: Manual blockers replace the existing manual blocker
+Rule: Manual blockers replace the existing manual blocker
 
   Scenario: Adding another manual blocker updates the reason
     Given I add the yak "deploy"
@@ -43,11 +41,11 @@ From Seb Rose, scenarios should be:
 
 ## Guidelines
 
-- Use commented rule headings (`# Rule: ...`) for business/domain rules, not implementation mechanisms.
+- Use native `Rule:` headings for business/domain rules, not implementation mechanisms.
 - Keep scenario names as concrete examples of the rule, not restatements of it.
-- If a scenario discovers a new rule, add or split out a new commented rule-heading section.
+- If a scenario discovers a new rule, add or split out a new `Rule:` section.
 - If a scenario appears to illustrate multiple rules, split it.
-- Prefer several small commented rule-heading groups over one long pile of loosely related scenarios.
+- Prefer several small `Rule:` groups over one long pile of loosely related scenarios.
 - Carry one consistent narrative through a feature where possible.
 - Put cross-cutting assertions, such as output or logging, on existing scenarios rather than in separate rules.
 

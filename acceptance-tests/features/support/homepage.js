@@ -38,6 +38,22 @@ async function assertHomepageVolunteeringPromise({ page }, { expect = playwright
   await expect(page.getByRole("heading", { name: HOMEPAGE_VOLUNTEERING_PROMISE })).toBeVisible();
 }
 
+async function assertNoHomepageVolunteeringPromise({ page }, { expect = playwrightExpect } = {}) {
+  await expect(page.getByRole("heading", { name: HOMEPAGE_VOLUNTEERING_PROMISE })).toHaveCount(0);
+}
+
+async function assertHomepageRequestAccess({ page }, { expect = playwrightExpect } = {}) {
+  await expect(page.getByRole("link", { name: /Request access(?: for your group)?/ }).first()).toBeVisible();
+}
+
+async function assertHomepageSignIn({ page }, { expect = playwrightExpect } = {}) {
+  await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+}
+
+async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect } = {}) {
+  await expect(page.locator("a#admin-home-link", { hasText: "Memba staff" })).toBeVisible();
+}
+
 async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
   const viewport = page.viewportSize();
   const overflow = await page.evaluate(() => ({
@@ -54,7 +70,11 @@ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } 
 module.exports = {
   HOMEPAGE_VOLUNTEERING_PROMISE,
   assertHomepageFitsScreen,
+  assertHomepageRequestAccess,
+  assertHomepageSignIn,
+  assertHomepageStaffAccess,
   assertMembaHomepage,
+  assertNoHomepageVolunteeringPromise,
   assertHomepageVolunteeringPromise,
   homepageUrl,
   homepageUrlPattern,

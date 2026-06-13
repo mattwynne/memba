@@ -53,6 +53,14 @@ The apparent system weakness is a weak review gate for Gherkin quality and stand
 - Existing plans show that the project has previously understood this compatibility issue, so the drift is probably a review/process failure rather than a missing idea.
 - Some feature files carry `@not-domain`, `@todo-domain`, and `@todo-ui` tags, which suggests the project is already distinguishing domain examples from browser/UI/supporting examples. The standard for how those tags should affect review quality may need to be made more explicit.
 
+### Additional observation: 2026-06-13
+
+- Matt confirmed the `# Rule:` requirement is obsolete: comments are no longer needed because native `Rule:` is acceptable now.
+- The immediate fix is to update the BDD formulation skill so future agents do not treat correct native `Rule:` headings as defects.
+- Matt identified `acceptance-tests/features/homepage.feature` as the example that first triggered concern.
+- The homepage currently has different behaviour for visitors, staff, members, and staff who are also club members; the old feature file mostly checked generic homepage presence, the volunteering promise, and mobile layout, so important homepage behaviour was not reflected as examples.
+- Long scenarios may reveal missing abstraction: repeated step sequences can sometimes be factored into a named domain concept represented by one higher-level step, rather than merely tolerated as long scripts.
+
 ## Why this matters
 
 Feature files are part of the product's domain model and planning handoff. If they are mediocre, ambiguous, or inconsistent with the runner compatibility standard, they mislead future agents and humans. The cost compounds: implementation work optimizes against weaker examples, review becomes more subjective, and Matt has to repeatedly supply tacit BDD judgement manually.
