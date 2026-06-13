@@ -1,7 +1,7 @@
 # Auth email delivery progress
 
 Date: 2026-06-13
-Status: validated
+Status: implementing
 
 ## Goal
 

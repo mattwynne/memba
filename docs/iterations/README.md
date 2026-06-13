@@ -41,7 +41,7 @@ green than before.
 | 029 | 2026-06-08 | merged | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 | 030 | 2026-06-08 | merged | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
 | 031 | 2026-06-08 | merged | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
-| 032 | 2026-06-13 | validated | Auth email delivery progress | [plan](032-auth-email-delivery-progress/plan.md) |
+| 032 | 2026-06-13 | implementing | Auth email delivery progress | [plan](032-auth-email-delivery-progress/plan.md) |
 
 Status notes:
 
