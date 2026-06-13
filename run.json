@@ -1461,7 +1461,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-13T23:15:46.303990042Z",
-  "last_event_at": "2026-06-13T23:38:24.730860533Z",
+  "last_event_at": "2026-06-13T23:38:28.169539091Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3847,9 +3847,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 750,
       "checkpoint": {
-        "timestamp": "2026-06-13T23:38:24.752797654Z",
+        "timestamp": "2026-06-13T23:38:27.939186430Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -3869,6 +3869,312 @@
         ],
         "node_retries": {},
         "context_values": {
+          "failure_class": "",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "command.output": "blob://sha256/c7f514e41876661de0ecc7c162ff561c861ff66d854816e1c1d2d79f3fbcb219",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "graph.max_node_visits": "80",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.task_gate": 0,
+          "internal.run_id": "01KV1M7ZZ0VY6A30BT9BP9KXFA",
+          "internal.retry_count.validate_task": 0,
+          "failure_signature": "",
+          "task_list_complete": false,
+          "task_valid": true,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.thread_id": "all_tasks_done",
+          "current_node": "implement_next_task",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 2,
+          "internal.retry_count.resume_gate": 0,
+          "graph.rankdir": "LR",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.work_dir": "/workspace/memba",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "task_list_needs_human": false,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `f76ba77` changes exactly one ordinary task line in `docs/iterations/032-auth-email-delivery-progress/todo.md`.\n  - Task `001 Inspect...` changed from `- [ ]` to `- [x]`.\n  - Parent commit shows task 001 was the first unchecked task at implementation start.\n- Implementation artifacts found:\n  - Added `docs/iterations/032-auth-email-delivery-progress/task-001-inspection.md`.\n  - The inspection note covers the requested surfaces: auth LiveView/routes, auth email construction, existing auth persistence, Postmark webhook handling, ADR 0021 read-model change publishing, and LiveViews that reload after committed change broadcasts.\n  - Spot-checked referenced source files including `router.ex`, `auth_live/sign_in.ex`, `accounts/auth_email.ex`, `postmark_webhook_controller.ex`, and `read_model_changes.ex`.\n- Tests run/results found:\n  - Working tree is clean.\n  - `git diff --check` passes.\n  - No automated app tests were required for this docs-only inspection task; repo workflow explicitly does not require `dev check` for docs-only task-note changes.\n- ADR/plan conformance notes:\n  - Inspection references ADR 0021 and ADR 0022 accurately: committed read-model changes are distinct from projection barriers.\n  - No acceptance feature files were edited.\n  - Scope stayed within task 001 and preserved all remaining plan-required work in `todo.md`.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "last_stage": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.sync_task_list": 0,
+          "outcome": "succeeded",
+          "task_retry_available": false,
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.`\n\n2. **Changes made**\n   - Added auth-email request typed IDs:\n     - `Memba.ID.generate(:auth_email_request)` / `Memba.ID.valid?(:auth_email_request, ...)`\n     - Prefix: `aer_...`\n   - Added new Ecto source-of-truth schema:\n     - `web/lib/memba/accounts/auth_email_request.ex`\n     - Opaque primary key `request_id`\n     - Optional normalized `recipient_email`\n     - Statuses: `created`, `sent`, `provider_accepted`, `provider_delayed`, `provider_failed`\n     - Provider correlation fields: provider, message ID, stream, event ID/type/reason\n     - Progress/retention timestamps: `sent_at`, `provider_reported_at`, `expires_at`, `retain_until`\n   - Added migration:\n     - `web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs`\n     - Status check constraint\n     - Retention-after-expiry check constraint\n     - Indexes for status/timestamps/provider correlation cleanup/lookups\n   - Added public Accounts APIs:\n     - `create_auth_email_request/2`\n     - `get_auth_email_request/1`\n     - `auth_email_request_expired?/2`\n     - `mark_auth_email_sent/3`\n     - `record_auth_email_provider_accepted/3`\n     - `record_auth_email_provider_delayed/3`\n     - `record_auth_email_provider_failed/3`\n     - `delete_retained_auth_email_requests/1`\n   - Added focused persistence tests:\n     - `web/test/memba/accounts/auth_email_request_test.exs`\n\n3. **Focused validation run**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/accounts.ex lib/memba/accounts/auth_email_request.ex lib/memba/id.ex priv/repo/migrations/20260613232953_create_auth_email_requests.exs test/memba/accounts/auth_email_request_test.exs`\n     - Passed.\n   - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_request_test.exs'`\n     - Passed: `6 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Command exited `0`.\n     - Note: output included unrelated existing failures in member-message/page-controller/layout/domain-cucumber tests; I did not modify those unrelated areas for this persistence-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - From `- [ ] 002 Add a small persistence model...`\n     - To `- [x] 002 Add a small persistence model...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0021/0022 were read before implementation.\n   - This task models auth-email progress as a simple Ecto source-of-truth table, not a Commanded aggregate/projection, matching the iteration’s binding technical decision.\n   - No PubSub/read-model-change publishing was added in this task; that remains isolated for todo 008, preserving ADR 0021’s committed-change discipline.\n   - No projection barriers were introduced or overloaded, consistent with ADR 0022.",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.start.current_node": "read_plan",
+          "internal.fidelity": "summary:high",
+          "last_response": "1. **Selected todo line**\n   - `002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider mess"
+        },
+        "node_outcomes": {
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cc093492f44e7c37504de6f5afc3622bbe57cb5b80aa425408c9a524a04159de"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 192,
+              "active_time_ms": 192
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/720575c9df907fd464482031ee5d7225c27cf4fed527f0276f9fd251024c1a90"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151211,
+              "active_time_ms": 151211
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `f76ba77` changes exactly one ordinary task line in `docs/iterations/032-auth-email-delivery-progress/todo.md`.\n  - ",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `f76ba77` changes exactly one ordinary task line in `docs/iterations/032-auth-email-delivery-progress/todo.md`.\n  - Task `001 Inspect...` changed from `- [ ]` to `- [x]`.\n  - Parent commit shows task 001 was the first unchecked task at implementation start.\n- Implementation artifacts found:\n  - Added `docs/iterations/032-auth-email-delivery-progress/task-001-inspection.md`.\n  - The inspection note covers the requested surfaces: auth LiveView/routes, auth email construction, existing auth persistence, Postmark webhook handling, ADR 0021 read-model change publishing, and LiveViews that reload after committed change broadcasts.\n  - Spot-checked referenced source files including `router.ex`, `auth_live/sign_in.ex`, `accounts/auth_email.ex`, `postmark_webhook_controller.ex`, and `read_model_changes.ex`.\n- Tests run/results found:\n  - Working tree is clean.\n  - `git diff --check` passes.\n  - No automated app tests were required for this docs-only inspection task; repo workflow explicitly does not require `dev check` for docs-only task-note changes.\n- ADR/plan conformance notes:\n  - Inspection references ADR 0021 and ADR 0022 accurately: committed read-model changes are distinct from projection barriers.\n  - No acceptance feature files were edited.\n  - Scope stayed within task 001 and preserved all remaining plan-required work in `todo.md`.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false,
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 216898,
+                    "output_tokens": 2188,
+                    "reasoning_tokens": 1196,
+                    "cache_read_tokens": 86016,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1229018
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 89165,
+              "tool_time_ms": 2868,
+              "active_time_ms": 92033
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/140f4930da2b39783ac5ab5f3890a6039fd993ae191d2b16cf83f3dd88aa7e46"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7248,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 99,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 40050
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3258,
+              "tool_time_ms": 0,
+              "active_time_ms": 3258
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/162dfb64b825201b359cfcd76a17c6d0e7055eb0114d4876d325ca7638936ffc"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2258,
+              "active_time_ms": 2258
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c7f514e41876661de0ecc7c162ff561c861ff66d854816e1c1d2d79f3fbcb219"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 173,
+              "active_time_ms": 173
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.`\n\n2. **Changes made**\n   - Added auth-email request typed IDs:\n     - `Memba.ID.generate(:auth_email_request)` / `Memba.ID.valid?(:auth_email_request, ...)`\n     - Prefix: `aer_...`\n   - Added new Ecto source-of-truth schema:\n     - `web/lib/memba/accounts/auth_email_request.ex`\n     - Opaque primary key `request_id`\n     - Optional normalized `recipient_email`\n     - Statuses: `created`, `sent`, `provider_accepted`, `provider_delayed`, `provider_failed`\n     - Provider correlation fields: provider, message ID, stream, event ID/type/reason\n     - Progress/retention timestamps: `sent_at`, `provider_reported_at`, `expires_at`, `retain_until`\n   - Added migration:\n     - `web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs`\n     - Status check constraint\n     - Retention-after-expiry check constraint\n     - Indexes for status/timestamps/provider correlation cleanup/lookups\n   - Added public Accounts APIs:\n     - `create_auth_email_request/2`\n     - `get_auth_email_request/1`\n     - `auth_email_request_expired?/2`\n     - `mark_auth_email_sent/3`\n     - `record_auth_email_provider_accepted/3`\n     - `record_auth_email_provider_delayed/3`\n     - `record_auth_email_provider_failed/3`\n     - `delete_retained_auth_email_requests/1`\n   - Added focused persistence tests:\n     - `web/test/memba/accounts/auth_email_request_test.exs`\n\n3. **Focused validation run**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/accounts.ex lib/memba/accounts/auth_email_request.ex lib/memba/id.ex priv/repo/migrations/20260613232953_create_auth_email_requests.exs test/memba/accounts/auth_email_request_test.exs`\n     - Passed.\n   - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_request_test.exs'`\n     - Passed: `6 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Command exited `0`.\n     - Note: output included unrelated existing failures in member-message/page-controller/layout/domain-cucumber tests; I did not modify those unrelated areas for this persistence-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - From `- [ ] 002 Add a small persistence model...`\n     - To `- [x] 002 Add a small persistence model...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0021/0022 were read before implementation.\n   - This task models auth-email progress as a simple Ecto source-of-truth table, not a Commanded aggregate/projection, matching the iteration’s binding technical decision.\n   - No PubSub/read-model-change publishing was added in this task; that remains isolated for todo 008, preserving ADR 0021’s committed-change discipline.\n   - No projection barriers were introduced or overloaded, consistent with ADR 0022.",
+              "last_response": "1. **Selected todo line**\n   - `002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider mess"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 902149,
+                    "output_tokens": 12423,
+                    "reasoning_tokens": 8352,
+                    "cache_read_tokens": 3177472,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6722731
+            },
+            "files_touched": [
+              "/workspace/memba/web/test/memba/accounts/auth_email_request_test.exs"
+            ],
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 524989,
+              "tool_time_ms": 269460,
+              "active_time_ms": 794449
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0c7683f894c1ace777e80955b698908c0107239413ed7ad4d61131331f0eab27"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 230,
+              "active_time_ms": 230
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "41f45e03c788148a11a9cad972e8fb8855bd0197",
+        "node_visits": {
+          "all_tasks_done": 2,
+          "implement_next_task": 2,
+          "start": 1,
+          "pre_validate_snapshot": 1,
+          "resume_gate": 1,
+          "wip_gate": 1,
+          "sync_task_list": 2,
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "task_gate": 1,
+          "validate_task": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md\nindex d07c7ce..95816db 100644\n--- a/docs/iterations/032-auth-email-delivery-progress/todo.md\n+++ b/docs/iterations/032-auth-email-delivery-progress/todo.md\n@@ -1,7 +1,7 @@\n # Implementation TODO\n \n - [x] 001 Inspect the existing auth LiveView, auth email module, Postmark webhook controller, read-model change publisher, and current delivery-status LiveViews that subscribe to read-model changes.\n-- [ ] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.\n+- [x] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.\n - [ ] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.\n - [ ] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.\n - [ ] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.\ndiff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex\nindex 60e2463..a6d8b42 100644\n--- a/web/lib/memba/accounts.ex\n+++ b/web/lib/memba/accounts.ex\n@@ -8,12 +8,15 @@ defmodule Memba.Accounts do\n \n   import Ecto.Query\n \n+  alias Memba.Accounts.AuthEmailRequest\n   alias Memba.Accounts.SignInToken\n   alias Memba.Membership\n   alias Memba.Repo\n \n   @sign_in_token_ttl_seconds 15 * 60\n   @sign_in_token_bytes 32\n+  @auth_email_request_progress_ttl_seconds 30 * 60\n+  @auth_email_request_retention_seconds 7 * 24 * 60 * 60\n   @staff_domain \"memba.io\"\n \n   @doc \"\"\"\n@@ -149,6 +152,106 @@ defmodule Memba.Accounts do\n \n   def consume_sign_in_token(_token, _opts), do: {:error, :not_found}\n \n+  @doc \"\"\"\n+  Create a short-lived auth-email progress request.\n+\n+  The returned request has an opaque public ID. The optional `:recipient_email`\n+  attribute is normalized and should only be supplied by callers that already\n+  need to persist the real delivery address for a known auth email send.\n+  \"\"\"\n+  def create_auth_email_request(attrs \\\\ %{}, opts \\\\ []) when is_map(attrs) and is_list(opts) do\n+    now = timestamp(opts)\n+\n+    attrs\n+    |> AuthEmailRequest.create_changeset(\n+      now: now,\n+      expires_at: DateTime.add(now, @auth_email_request_progress_ttl_seconds, :second),\n+      retain_until: DateTime.add(now, @auth_email_request_retention_seconds, :second)\n+    )\n+    |> Repo.insert()\n+  end\n+\n+  @doc \"\"\"\n+  Fetch an auth-email progress request by its opaque public request ID.\n+  \"\"\"\n+  def get_auth_email_request(request_id) do\n+    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do\n+      Repo.get(AuthEmailRequest, request_id)\n+    else\n+      :error -> nil\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Return whether the request is past its 30-minute user-facing progress window.\n+  \"\"\"\n+  def auth_email_request_expired?(%AuthEmailRequest{} = request, opts \\\\ []) do\n+    now = timestamp(opts)\n+    DateTime.compare(request.expires_at, now) != :gt\n+  end\n+\n+  @doc \"\"\"\n+  Mark an auth-email request as handed to the email provider.\n+  \"\"\"\n+  def mark_auth_email_sent(request_id, attrs \\\\ %{}, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    update_auth_email_request(request_id, fn request ->\n+      request\n+      |> AuthEmailRequest.sent_changeset(attrs, now: timestamp(opts))\n+      |> Repo.update()\n+    end)\n+  end\n+\n+  @doc \"\"\"\n+  Record that the recipient mailbox provider accepted the auth email.\n+  \"\"\"\n+  def record_auth_email_provider_accepted(request_id, attrs \\\\ %{}, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    record_auth_email_provider_progress(\n+      request_id,\n+      AuthEmailRequest.status_provider_accepted(),\n+      attrs,\n+      opts\n+    )\n+  end\n+\n+  @doc \"\"\"\n+  Record that the provider reported delayed auth-email delivery.\n+  \"\"\"\n+  def record_auth_email_provider_delayed(request_id, attrs \\\\ %{}, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    record_auth_email_provider_progress(\n+      request_id,\n+      AuthEmailRequest.status_provider_delayed(),\n+      attrs,\n+      opts\n+    )\n+  end\n+\n+  @doc \"\"\"\n+  Record that the provider reported failed auth-email delivery.\n+  \"\"\"\n+  def record_auth_email_provider_failed(request_id, attrs \\\\ %{}, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    record_auth_email_provider_progress(\n+      request_id,\n+      AuthEmailRequest.status_provider_failed(),\n+      attrs,\n+      opts\n+    )\n+  end\n+\n+  @doc \"\"\"\n+  Delete auth-email request rows whose seven-day retention window has elapsed.\n+  \"\"\"\n+  def delete_retained_auth_email_requests(opts \\\\ []) do\n+    now = timestamp(opts)\n+\n+    AuthEmailRequest\n+    |> where([request], request.retain_until <= ^now)\n+    |> Repo.delete_all()\n+  end\n+\n   @doc \"\"\"\n   List active clubs for a signed-in email address.\n \n@@ -201,6 +304,49 @@ defmodule Memba.Accounts do\n     end\n   end\n \n+  defp record_auth_email_provider_progress(request_id, status, attrs, opts) do\n+    update_auth_email_request(request_id, fn request ->\n+      request\n+      |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))\n+      |> Repo.update()\n+    end)\n+  end\n+\n+  defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do\n+    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do\n+      request_id\n+      |> transact_auth_email_request_update(update_fun)\n+      |> unwrap_auth_email_request_update()\n+    else\n+      :error -> {:error, :not_found}\n+    end\n+  end\n+\n+  defp transact_auth_email_request_update(request_id, update_fun) do\n+    Repo.transaction(fn ->\n+      case lock_auth_email_request(request_id) do\n+        nil ->\n+          Repo.rollback(:not_found)\n+\n+        %AuthEmailRequest{} = request ->\n+          case update_fun.(request) do\n+            {:ok, %AuthEmailRequest{} = request} -> request\n+            {:error, changeset} -> Repo.rollback(changeset)\n+          end\n+      end\n+    end)\n+  end\n+\n+  defp lock_auth_email_request(request_id) do\n+    AuthEmailRequest\n+    |> where([request], request.request_id == ^request_id)\n+    |> lock(\"FOR UPDATE\")\n+    |> Repo.one()\n+  end\n+\n+  defp unwrap_auth_email_request_update({:ok, %AuthEmailRequest{} = request}), do: {:ok, request}\n+  defp unwrap_auth_email_request_update({:error, reason}), do: {:error, reason}\n+\n   defp timestamp(opts) do\n     Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)\n   end\ndiff --git a/web/lib/memba/accounts/auth_email_request.ex b/web/lib/memba/accounts/auth_email_request.ex\nnew file mode 100644\nindex 0000000..2b68b32\n--- /dev/null\n+++ b/web/lib/memba/accounts/auth_email_request.ex\n@@ -0,0 +1,196 @@\n+defmodule Memba.Accounts.AuthEmailRequest do\n+  @moduledoc \"\"\"\n+  Short-lived source-of-truth record for sign-in-link email delivery progress.\n+\n+  The public identifier is an opaque typed request ID. Recipient email is\n+  optional and stores only the normalized internal delivery address when later\n+  steps need to correlate a real auth email send.\n+  \"\"\"\n+\n+  use Ecto.Schema\n+\n+  import Ecto.Changeset\n+\n+  alias Memba.Accounts\n+  alias Memba.ID\n+\n+  @status_created \"created\"\n+  @status_sent \"sent\"\n+  @status_provider_accepted \"provider_accepted\"\n+  @status_provider_delayed \"provider_delayed\"\n+  @status_provider_failed \"provider_failed\"\n+\n+  @statuses [\n+    @status_created,\n+    @status_sent,\n+    @status_provider_accepted,\n+    @status_provider_delayed,\n+    @status_provider_failed\n+  ]\n+\n+  @primary_key {:request_id, :string, autogenerate: false}\n+  schema \"auth_email_requests\" do\n+    field :recipient_email, :string\n+    field :status, :string\n+\n+    field :provider, :string\n+    field :provider_message_id, :string\n+    field :provider_message_stream, :string\n+    field :provider_event_id, :string\n+    field :provider_event_type, :string\n+    field :provider_reason, :string\n+\n+    field :sent_at, :utc_datetime_usec\n+    field :provider_reported_at, :utc_datetime_usec\n+    field :expires_at, :utc_datetime_usec\n+    field :retain_until, :utc_datetime_usec\n+\n+    timestamps(type: :utc_datetime_usec)\n+  end\n+\n+  def create_changeset(attrs, opts) when is_map(attrs) and is_list(opts) do\n+    %__MODULE__{\n+      request_id: ID.generate(:auth_email_request),\n+      status: @status_created,\n+      expires_at: Keyword.fetch!(opts, :expires_at),\n+      retain_until: Keyword.fetch!(opts, :retain_until)\n+    }\n+    |> change()\n+    |> put_optional_recipient_email(attrs)\n+    |> validate_required([:request_id, :status, :expires_at, :retain_until])\n+    |> validate_common()\n+    |> check_constraint(:status, name: :auth_email_requests_status_check)\n+    |> check_constraint(:retain_until, name: :auth_email_requests_retain_after_expiry_check)\n+  end\n+\n+  def sent_changeset(%__MODULE__{} = request, attrs, opts)\n+      when is_map(attrs) and is_list(opts) do\n+    now = Keyword.fetch!(opts, :now)\n+\n+    request\n+    |> change(status: @status_sent, sent_at: now)\n+    |> put_optional_recipient_email(attrs)\n+    |> put_provider_attrs(attrs)\n+    |> validate_required([:status, :sent_at])\n+    |> validate_common()\n+    |> check_constraint(:status, name: :auth_email_requests_status_check)\n+  end\n+\n+  def provider_progress_changeset(%__MODULE__{} = request, status, attrs, opts)\n+      when status in [\n+             @status_provider_accepted,\n+             @status_provider_delayed,\n+             @status_provider_failed\n+           ] and\n+             is_map(attrs) and is_list(opts) do\n+    now = Keyword.fetch!(opts, :now)\n+\n+    request\n+    |> change(status: status, provider_reported_at: now)\n+    |> put_provider_attrs(attrs)\n+    |> validate_required([:status, :provider_reported_at])\n+    |> validate_common()\n+    |> check_constraint(:status, name: :auth_email_requests_status_check)\n+  end\n+\n+  def status_created, do: @status_created\n+  def status_sent, do: @status_sent\n+  def status_provider_accepted, do: @status_provider_accepted\n+  def status_provider_delayed, do: @status_provider_delayed\n+  def status_provider_failed, do: @status_provider_failed\n+\n+  defp validate_common(changeset) do\n+    changeset\n+    |> validate_inclusion(:status, @statuses)\n+    |> validate_typed_request_id()\n+    |> validate_retention_after_expiry()\n+  end\n+\n+  defp validate_typed_request_id(changeset) do\n+    case get_field(changeset, :request_id) do\n+      nil ->\n+        changeset\n+\n+      request_id ->\n+        case ID.cast(:auth_email_request, request_id) do\n+          {:ok, ^request_id} -> changeset\n+          :error -> add_error(changeset, :request_id, \"is invalid\")\n+        end\n+    end\n+  end\n+\n+  defp validate_retention_after_expiry(changeset) do\n+    expires_at = get_field(changeset, :expires_at)\n+    retain_until = get_field(changeset, :retain_until)\n+\n+    if expires_at && retain_until && DateTime.compare(retain_until, expires_at) != :gt do\n+      add_error(changeset, :retain_until, \"must be after expiry\")\n+    else\n+      changeset\n+    end\n+  end\n+\n+  defp put_optional_recipient_email(changeset, attrs) do\n+    case fetch_attr(attrs, :recipient_email) do\n+      :error ->\n+        changeset\n+\n+      {:ok, nil} ->\n+        changeset\n+\n+      {:ok, email} when is_binary(email) ->\n+        case Accounts.normalize_email(email) do\n+          nil -> add_error(changeset, :recipient_email, \"can't be blank\")\n+          normalized_email -> put_change(changeset, :recipient_email, normalized_email)\n+        end\n+\n+      {:ok, _email} ->\n+        add_error(changeset, :recipient_email, \"is invalid\")\n+    end\n+  end\n+\n+  defp put_provider_attrs(changeset, attrs) do\n+    Enum.reduce(\n+      [\n+        :provider,\n+        :provider_message_id,\n+        :provider_message_stream,\n+        :provider_event_id,\n+        :provider_event_type,\n+        :provider_reason\n+      ],\n+      changeset,\n+      fn field, changeset ->\n+        put_optional_trimmed_string(changeset, attrs, field)\n+      end\n+    )\n+  end\n+\n+  defp put_optional_trimmed_string(changeset, attrs, field) do\n+    case fetch_attr(attrs, field) do\n+      :error ->\n+        changeset\n+\n+      {:ok, nil} ->\n+        changeset\n+\n+      {:ok, value} when is_binary(value) ->\n+        case String.trim(value) do\n+          \"\" -> changeset\n+          trimmed_value -> put_change(changeset, field, trimmed_value)\n+        end\n+\n+      {:ok, _value} ->\n+        add_error(changeset, field, \"is invalid\")\n+    end\n+  end\n+\n+  defp fetch_attr(attrs, key) when is_map(attrs) do\n+    string_key = Atom.to_string(key)\n+\n+    case Map.fetch(attrs, key) do\n+      {:ok, value} -> {:ok, value}\n+      :error -> Map.fetch(attrs, string_key)\n+    end\n+  end\n+end\ndiff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex\nindex 954fe95..a45fdd4 100644\n--- a/web/lib/memba/id.ex\n+++ b/web/lib/memba/id.ex\n@@ -16,7 +16,8 @@ defmodule Memba.ID do\n     delivery: \"del\",\n     inbound_email: \"inb\",\n     email_address: \"ead\",\n-    onboarding_request: \"req\"\n+    onboarding_request: \"req\",\n+    auth_email_request: \"aer\"\n   }\n \n   @types Map.keys(@prefixes)\n@@ -32,6 +33,7 @@ defmodule Memba.ID do\n           | :inbound_email\n           | :email_address\n           | :onboarding_request\n+          | :auth_email_request\n   @type t :: String.t()\n \n   @doc \"Generate a new typed ID.\"\ndiff --git a/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs b/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs\nnew file mode 100644\nindex 0000000..62b7877\n--- /dev/null\n+++ b/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs\n@@ -0,0 +1,47 @@\n+defmodule Memba.Repo.Migrations.CreateAuthEmailRequests do\n+  use Ecto.Migration\n+\n+  def change do\n+    create table(:auth_email_requests, primary_key: false) do\n+      add :request_id, :text, primary_key: true\n+      add :recipient_email, :text\n+      add :status, :text, null: false, default: \"created\"\n+\n+      add :provider, :text\n+      add :provider_message_id, :text\n+      add :provider_message_stream, :text\n+      add :provider_event_id, :text\n+      add :provider_event_type, :text\n+      add :provider_reason, :text\n+\n+      add :sent_at, :utc_datetime_usec\n+      add :provider_reported_at, :utc_datetime_usec\n+      add :expires_at, :utc_datetime_usec, null: false\n+      add :retain_until, :utc_datetime_usec, null: false\n+\n+      timestamps(type: :utc_datetime_usec)\n+    end\n+\n+    create index(:auth_email_requests, [:status, :inserted_at])\n+\n+    create index(:auth_email_requests, [:provider_message_id],\n+             where: \"provider_message_id IS NOT NULL\"\n+           )\n+\n+    create index(:auth_email_requests, [:provider_event_id],\n+             where: \"provider_event_id IS NOT NULL\"\n+           )\n+\n+    create index(:auth_email_requests, [:expires_at])\n+    create index(:auth_email_requests, [:retain_until])\n+\n+    create constraint(:auth_email_requests, :auth_email_requests_status_check,\n+             check:\n+               \"status IN ('created', 'sent', 'provider_accepted', 'provider_delayed', 'provider_failed')\"\n+           )\n+\n+    create constraint(:auth_email_requests, :auth_email_requests_retain_after_expiry_check,\n+             check: \"retain_until > expires_at\"\n+           )\n+  end\n+end\ndiff --git a/web/test/memba/accounts/auth_email_request_test.exs b/web/test/memba/accounts/auth_email_request_test.exs\nnew file mode 100644\nindex 0000000..aeb7f13\n--- /dev/null\n+++ b/web/test/memba/accounts/auth_email_request_test.exs\n@@ -0,0 +1,118 @@\n+defmodule Memba.Accounts.AuthEmailRequestTest do\n+  use Memba.DataCase, async: true\n+\n+  alias Memba.Accounts\n+  alias Memba.Accounts.AuthEmailRequest\n+  alias Memba.Repo\n+\n+  describe \"create_auth_email_request/2\" do\n+    test \"creates an opaque progress request without storing a submitted email by default\" do\n+      now = ~U[2026-06-13 12:00:00.000000Z]\n+\n+      assert {:ok, %AuthEmailRequest{} = request} =\n+               Accounts.create_auth_email_request(%{}, now: now)\n+\n+      assert Memba.ID.valid?(:auth_email_request, request.request_id)\n+      assert request.status == \"created\"\n+      assert request.recipient_email == nil\n+      assert request.provider == nil\n+      assert request.provider_message_id == nil\n+      assert request.provider_message_stream == nil\n+      assert request.expires_at == DateTime.add(now, 30 * 60, :second)\n+      assert request.retain_until == DateTime.add(now, 7 * 24 * 60 * 60, :second)\n+\n+      assert Accounts.get_auth_email_request(request.request_id).request_id == request.request_id\n+      assert Accounts.get_auth_email_request(\"not-a-request-id\") == nil\n+    end\n+\n+    test \"stores an optional normalized internal recipient email only when supplied\" do\n+      assert {:ok, %AuthEmailRequest{} = request} =\n+               Accounts.create_auth_email_request(%{recipient_email: \" Pat@Memba.IO \"})\n+\n+      assert request.recipient_email == \"pat@memba.io\"\n+      refute Map.has_key?(Map.from_struct(request), :submitted_email)\n+      refute Map.has_key?(Map.from_struct(request), :raw_email)\n+    end\n+  end\n+\n+  describe \"status transitions\" do\n+    test \"marks a request sent with provider correlation data\" do\n+      now = ~U[2026-06-13 12:00:00.000000Z]\n+      sent_at = DateTime.add(now, 2, :second)\n+      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)\n+\n+      assert {:ok, %AuthEmailRequest{} = sent_request} =\n+               Accounts.mark_auth_email_sent(\n+                 request.request_id,\n+                 %{\n+                   recipient_email: \" ALICE@EXAMPLE.COM \",\n+                   provider: \"postmark\",\n+                   provider_message_id: \"postmark-message-123\",\n+                   provider_message_stream: \"outbound-authentication\"\n+                 },\n+                 now: sent_at\n+               )\n+\n+      assert sent_request.status == \"sent\"\n+      assert sent_request.recipient_email == \"alice@example.com\"\n+      assert sent_request.provider == \"postmark\"\n+      assert sent_request.provider_message_id == \"postmark-message-123\"\n+      assert sent_request.provider_message_stream == \"outbound-authentication\"\n+      assert sent_request.sent_at == sent_at\n+    end\n+\n+    test \"records provider progress while preserving request correlation\" do\n+      now = ~U[2026-06-13 12:00:00.000000Z]\n+      delivered_at = DateTime.add(now, 9, :second)\n+      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)\n+      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: now)\n+\n+      assert {:ok, %AuthEmailRequest{} = accepted_request} =\n+               Accounts.record_auth_email_provider_accepted(\n+                 request.request_id,\n+                 %{\n+                   provider: \"postmark\",\n+                   provider_message_id: \"postmark-message-123\",\n+                   provider_event_id: \"postmark-event-456\",\n+                   provider_event_type: \"Delivered\"\n+                 },\n+                 now: delivered_at\n+               )\n+\n+      assert accepted_request.request_id == request.request_id\n+      assert accepted_request.status == \"provider_accepted\"\n+      assert accepted_request.provider == \"postmark\"\n+      assert accepted_request.provider_message_id == \"postmark-message-123\"\n+      assert accepted_request.provider_event_id == \"postmark-event-456\"\n+      assert accepted_request.provider_event_type == \"Delivered\"\n+      assert accepted_request.provider_reported_at == delivered_at\n+    end\n+  end\n+\n+  describe \"expiry and cleanup\" do\n+    test \"identifies user-facing expiry after 30 minutes\" do\n+      now = ~U[2026-06-13 12:00:00.000000Z]\n+      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)\n+\n+      refute Accounts.auth_email_request_expired?(request,\n+               now: DateTime.add(now, 29 * 60, :second)\n+             )\n+\n+      assert Accounts.auth_email_request_expired?(request,\n+               now: DateTime.add(now, 30 * 60, :second)\n+             )\n+    end\n+\n+    test \"deletes rows only after the seven-day retention window\" do\n+      old_now = ~U[2026-06-01 12:00:00.000000Z]\n+      current_now = ~U[2026-06-13 12:00:00.000000Z]\n+      {:ok, old_request} = Accounts.create_auth_email_request(%{}, now: old_now)\n+      {:ok, retained_request} = Accounts.create_auth_email_request(%{}, now: current_now)\n+\n+      assert {1, nil} = Accounts.delete_retained_auth_email_requests(now: current_now)\n+\n+      assert Repo.get(AuthEmailRequest, old_request.request_id) == nil\n+      assert Repo.get(AuthEmailRequest, retained_request.request_id)\n+    end\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 7,
+          "additions": 597,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-13T23:38:28.182889361Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "task_retry_available": false,
           "internal.retry_count.resume_gate": 0,
           "internal.fidelity": "summary:high",
@@ -3880,7 +4186,7 @@
           "internal.retry_count.start": 0,
           "thread.start.current_node": "read_plan",
           "internal.work_dir": "/workspace/memba",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "failure_class": "",
           "graph.rankdir": "LR",
           "internal.retry_count.wip_gate": 0,
@@ -3903,10 +4209,10 @@
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "response.implement_next_task": "1. **Selected todo line**\n   - `002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.`\n\n2. **Changes made**\n   - Added auth-email request typed IDs:\n     - `Memba.ID.generate(:auth_email_request)` / `Memba.ID.valid?(:auth_email_request, ...)`\n     - Prefix: `aer_...`\n   - Added new Ecto source-of-truth schema:\n     - `web/lib/memba/accounts/auth_email_request.ex`\n     - Opaque primary key `request_id`\n     - Optional normalized `recipient_email`\n     - Statuses: `created`, `sent`, `provider_accepted`, `provider_delayed`, `provider_failed`\n     - Provider correlation fields: provider, message ID, stream, event ID/type/reason\n     - Progress/retention timestamps: `sent_at`, `provider_reported_at`, `expires_at`, `retain_until`\n   - Added migration:\n     - `web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs`\n     - Status check constraint\n     - Retention-after-expiry check constraint\n     - Indexes for status/timestamps/provider correlation cleanup/lookups\n   - Added public Accounts APIs:\n     - `create_auth_email_request/2`\n     - `get_auth_email_request/1`\n     - `auth_email_request_expired?/2`\n     - `mark_auth_email_sent/3`\n     - `record_auth_email_provider_accepted/3`\n     - `record_auth_email_provider_delayed/3`\n     - `record_auth_email_provider_failed/3`\n     - `delete_retained_auth_email_requests/1`\n   - Added focused persistence tests:\n     - `web/test/memba/accounts/auth_email_request_test.exs`\n\n3. **Focused validation run**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/accounts.ex lib/memba/accounts/auth_email_request.ex lib/memba/id.ex priv/repo/migrations/20260613232953_create_auth_email_requests.exs test/memba/accounts/auth_email_request_test.exs`\n     - Passed.\n   - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_request_test.exs'`\n     - Passed: `6 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Command exited `0`.\n     - Note: output included unrelated existing failures in member-message/page-controller/layout/domain-cucumber tests; I did not modify those unrelated areas for this persistence-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - From `- [ ] 002 Add a small persistence model...`\n     - To `- [x] 002 Add a small persistence model...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0021/0022 were read before implementation.\n   - This task models auth-email progress as a simple Ecto source-of-truth table, not a Commanded aggregate/projection, matching the iteration’s binding technical decision.\n   - No PubSub/read-model-change publishing was added in this task; that remains isolated for todo 008, preserving ADR 0021’s committed-change discipline.\n   - No projection barriers were introduced or overloaded, consistent with ADR 0022.",
           "thread.read_plan.current_node": "wip_gate",
-          "command.output": "blob://sha256/c7f514e41876661de0ecc7c162ff561c861ff66d854816e1c1d2d79f3fbcb219",
+          "command.output": "blob://sha256/47a97c893bc48000ecce2722760696ebb12e8d9f7e6f6b74a954fe1df59e247d",
           "failure_signature": "",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.read_plan": 0,
           "outcome": "succeeded",
           "thread.all_tasks_done.current_node": "implement_next_task",
@@ -4043,15 +4349,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/140f4930da2b39783ac5ab5f3890a6039fd993ae191d2b16cf83f3dd88aa7e46"
+              "command.output": "blob://sha256/47a97c893bc48000ecce2722760696ebb12e8d9f7e6f6b74a954fe1df59e247d"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 164,
-              "active_time_ms": 164
+              "tool_time_ms": 175,
+              "active_time_ms": 175
             }
           },
           "sync_task_list": {
@@ -4126,7 +4432,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "start": 1,
           "preflight_sandbox": 1,
@@ -4138,7 +4444,7 @@
           "resume_gate": 1,
           "read_plan": 1,
           "implement_next_task": 2,
-          "pre_validate_snapshot": 1
+          "pre_validate_snapshot": 2
         }
       },
       "diff": {}
@@ -4164,138 +4470,6 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
-    "start@1": {
-      "first_event_seq": 21,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:15:48.152245248Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-13T23:15:48.151553664Z",
-      "handler": "start",
-      "timing": {
-        "wall_time_ms": 7,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "resume_gate@1": {
-      "first_event_seq": 55,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:18:31.654098693Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/cc093492f44e7c37504de6f5afc3622bbe57cb5b80aa425408c9a524a04159de",
-        "exit_code": 0,
-        "duration_ms": 192,
-        "termination": "exited",
-        "output_bytes": 301,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 301,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:18:31.444607843Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 209,
-        "inference_time_ms": 0,
-        "tool_time_ms": 192,
-        "active_time_ms": 192
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "pre_validate_snapshot@1": {
-      "first_event_seq": 344,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:23:18.067604977Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/140f4930da2b39783ac5ab5f3890a6039fd993ae191d2b16cf83f3dd88aa7e46",
-        "exit_code": 0,
-        "duration_ms": 164,
-        "termination": "exited",
-        "output_bytes": 599,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 599,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:23:17.882576140Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 184,
-        "inference_time_ms": 0,
-        "tool_time_ms": 164,
-        "active_time_ms": 164
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
     "task_gate@1": {
       "first_event_seq": 467,
       "prompt": null,
@@ -4330,161 +4504,15 @@
       },
       "state": "succeeded"
     },
-    "sync_task_list@2": {
-      "first_event_seq": 475,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:24:59.998686478Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/c7f514e41876661de0ecc7c162ff561c861ff66d854816e1c1d2d79f3fbcb219",
-        "exit_code": 0,
-        "duration_ms": 173,
-        "termination": "exited",
-        "output_bytes": 2142,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 2142,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:24:59.806973091Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 191,
-        "inference_time_ms": 0,
-        "tool_time_ms": 173,
-        "active_time_ms": 173
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "read_plan@1": {
-      "first_event_seq": 25,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: PLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:15:48.395306851Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "PLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/0c7683f894c1ace777e80955b698908c0107239413ed7ad4d61131331f0eab27",
-        "exit_code": 0,
-        "duration_ms": 230,
-        "termination": "exited",
-        "output_bytes": 14319,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 14319,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:15:48.153015238Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 242,
-        "inference_time_ms": 0,
-        "tool_time_ms": 230,
-        "active_time_ms": 230
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "preflight_sandbox@1": {
-      "first_event_seq": 45,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "failure_reason": null,
-        "timestamp": "2026-06-13T23:18:28.260820298Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "command": "exec 2>&1\nset -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "language": "shell",
-        "timeout_ms": 600000
-      },
-      "script_timing": {
-        "output": "blob://sha256/720575c9df907fd464482031ee5d7225c27cf4fed527f0276f9fd251024c1a90",
-        "exit_code": 0,
-        "duration_ms": 151211,
-        "termination": "exited",
-        "output_bytes": 7969,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 7969,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:15:57.001811694Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 151257,
-        "inference_time_ms": 0,
-        "tool_time_ms": 151211,
-        "active_time_ms": 151211
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "all_tasks_done@2": {
-      "first_event_seq": 485,
+    "all_tasks_done@1": {
+      "first_event_seq": 75,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
         "notes": "Stage completed: all_tasks_done",
         "failure_reason": null,
-        "timestamp": "2026-06-13T23:25:06.604926969Z"
+        "timestamp": "2026-06-13T23:18:43.755651950Z"
       },
       "provider_used": {
         "mode": "prompt",
@@ -4497,228 +4525,28 @@
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-13T23:25:03.283090727Z",
+      "started_at": "2026-06-13T23:18:37.939758483Z",
       "handler": "prompt",
       "timing": {
-        "wall_time_ms": 3321,
-        "inference_time_ms": 3258,
+        "wall_time_ms": 5815,
+        "inference_time_ms": 5741,
         "tool_time_ms": 0,
-        "active_time_ms": 3258
+        "active_time_ms": 5741
       },
       "usage": {
-        "input_tokens": 7248,
+        "input_tokens": 4663,
         "output_tokens": 28,
-        "total_tokens": 7375,
-        "reasoning_tokens": 99,
+        "total_tokens": 4906,
+        "reasoning_tokens": 215,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
-        "total_usd_micros": 40050
+        "total_usd_micros": 30605
       },
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
-    },
-    "implement_next_task@2": {
-      "first_event_seq": 495,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-13T23:25:09.707293929Z",
-      "handler": "agent",
-      "usage": {
-        "input_tokens": 901174,
-        "output_tokens": 11669,
-        "total_tokens": 3996263,
-        "reasoning_tokens": 7836,
-        "cache_read_tokens": 3075584,
-        "cache_write_tokens": 0
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": true
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": true
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 102301,
-        "usage_percent": 37.61066176470588,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-13T23:37:55.599216525Z",
-        "event_seq": 739,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 962,
-            "usage_percent": 0.3536764705882353
-          },
-          {
-            "category": "tools",
-            "tokens": 1371,
-            "usage_percent": 0.5040441176470588
-          },
-          {
-            "category": "memory",
-            "tokens": 340,
-            "usage_percent": 0.125
-          },
-          {
-            "category": "conversation",
-            "tokens": 99622,
-            "usage_percent": 36.625735294117646
-          },
-          {
-            "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
-          }
-        ],
-        "warnings": []
-      },
-      "state": "running"
     },
     "implement_next_task@1": {
       "first_event_seq": 85,
@@ -5174,52 +5002,215 @@
       },
       "state": "succeeded"
     },
-    "sync_task_list@1": {
-      "first_event_seq": 65,
+    "implement_next_task@2": {
+      "first_event_seq": 495,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "notes": "Stage completed: implement_next_task",
         "failure_reason": null,
-        "timestamp": "2026-06-13T23:18:34.843416944Z"
+        "timestamp": "2026-06-13T23:38:24.742358381Z"
       },
-      "provider_used": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
       "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/f1445abb68d5a5aa55e22b58092c5354e07556d2808d2e8a143a81e07c87548f",
-        "exit_code": 0,
-        "duration_ms": 174,
-        "termination": "exited",
-        "output_bytes": 2142,
-        "live_streaming": true
-      },
+      "script_invocation": null,
+      "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "output_bytes": 2142,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-13T23:18:34.657459568Z",
-      "handler": "command",
+      "started_at": "2026-06-13T23:25:09.707293929Z",
+      "handler": "agent",
       "timing": {
-        "wall_time_ms": 185,
-        "inference_time_ms": 0,
-        "tool_time_ms": 174,
-        "active_time_ms": 174
+        "wall_time_ms": 795035,
+        "inference_time_ms": 524989,
+        "tool_time_ms": 269460,
+        "active_time_ms": 794449
       },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "input_tokens": 902149,
+        "output_tokens": 12423,
+        "total_tokens": 4100396,
+        "reasoning_tokens": 8352,
+        "cache_read_tokens": 3177472,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6722731
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 102863,
+        "usage_percent": 37.81727941176471,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-13T23:38:24.730812301Z",
+        "event_seq": 745,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 960,
+            "usage_percent": 0.35294117647058826
+          },
+          {
+            "category": "tools",
+            "tokens": 1368,
+            "usage_percent": 0.5029411764705882
+          },
+          {
+            "category": "memory",
+            "tokens": 339,
+            "usage_percent": 0.12463235294117647
+          },
+          {
+            "category": "conversation",
+            "tokens": 100190,
+            "usage_percent": 36.83455882352941
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
       },
       "state": "succeeded"
     },
@@ -5272,15 +5263,331 @@
       },
       "state": "succeeded"
     },
-    "all_tasks_done@1": {
-      "first_event_seq": 75,
+    "start@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:15:48.152245248Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-13T23:15:48.151553664Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 7,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "resume_gate@1": {
+      "first_event_seq": 55,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:18:31.654098693Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/cc093492f44e7c37504de6f5afc3622bbe57cb5b80aa425408c9a524a04159de",
+        "exit_code": 0,
+        "duration_ms": 192,
+        "termination": "exited",
+        "output_bytes": 301,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 301,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:18:31.444607843Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 209,
+        "inference_time_ms": 0,
+        "tool_time_ms": 192,
+        "active_time_ms": 192
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "read_plan@1": {
+      "first_event_seq": 25,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:15:48.395306851Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/0c7683f894c1ace777e80955b698908c0107239413ed7ad4d61131331f0eab27",
+        "exit_code": 0,
+        "duration_ms": 230,
+        "termination": "exited",
+        "output_bytes": 14319,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 14319,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:15:48.153015238Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 242,
+        "inference_time_ms": 0,
+        "tool_time_ms": 230,
+        "active_time_ms": 230
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "preflight_sandbox@1": {
+      "first_event_seq": 45,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:18:28.260820298Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "command": "exec 2>&1\nset -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "language": "shell",
+        "timeout_ms": 600000
+      },
+      "script_timing": {
+        "output": "blob://sha256/720575c9df907fd464482031ee5d7225c27cf4fed527f0276f9fd251024c1a90",
+        "exit_code": 0,
+        "duration_ms": 151211,
+        "termination": "exited",
+        "output_bytes": 7969,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 7969,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:15:57.001811694Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 151257,
+        "inference_time_ms": 0,
+        "tool_time_ms": 151211,
+        "active_time_ms": 151211
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@2": {
+      "first_event_seq": 753,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/47a97c893bc48000ecce2722760696ebb12e8d9f7e6f6b74a954fe1df59e247d",
+        "exit_code": 0,
+        "duration_ms": 175,
+        "termination": "exited",
+        "output_bytes": 599,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 599,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:38:27.975276686Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
+    "sync_task_list@2": {
+      "first_event_seq": 475,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:24:59.998686478Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/c7f514e41876661de0ecc7c162ff561c861ff66d854816e1c1d2d79f3fbcb219",
+        "exit_code": 0,
+        "duration_ms": 173,
+        "termination": "exited",
+        "output_bytes": 2142,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 2142,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:24:59.806973091Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 191,
+        "inference_time_ms": 0,
+        "tool_time_ms": 173,
+        "active_time_ms": 173
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "sync_task_list@1": {
+      "first_event_seq": 65,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:18:34.843416944Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/f1445abb68d5a5aa55e22b58092c5354e07556d2808d2e8a143a81e07c87548f",
+        "exit_code": 0,
+        "duration_ms": 174,
+        "termination": "exited",
+        "output_bytes": 2142,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 2142,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:18:34.657459568Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 185,
+        "inference_time_ms": 0,
+        "tool_time_ms": 174,
+        "active_time_ms": 174
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "all_tasks_done@2": {
+      "first_event_seq": 485,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
         "notes": "Stage completed: all_tasks_done",
         "failure_reason": null,
-        "timestamp": "2026-06-13T23:18:43.755651950Z"
+        "timestamp": "2026-06-13T23:25:06.604926969Z"
       },
       "provider_used": {
         "mode": "prompt",
@@ -5293,26 +5600,75 @@
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-13T23:18:37.939758483Z",
+      "started_at": "2026-06-13T23:25:03.283090727Z",
       "handler": "prompt",
       "timing": {
-        "wall_time_ms": 5815,
-        "inference_time_ms": 5741,
+        "wall_time_ms": 3321,
+        "inference_time_ms": 3258,
         "tool_time_ms": 0,
-        "active_time_ms": 5741
+        "active_time_ms": 3258
       },
       "usage": {
-        "input_tokens": 4663,
+        "input_tokens": 7248,
         "output_tokens": 28,
-        "total_tokens": 4906,
-        "reasoning_tokens": 215,
+        "total_tokens": 7375,
+        "reasoning_tokens": 99,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
-        "total_usd_micros": 30605
+        "total_usd_micros": 40050
       },
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@1": {
+      "first_event_seq": 344,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-13T23:23:18.067604977Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/032-auth-email-delivery-progress/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/140f4930da2b39783ac5ab5f3890a6039fd993ae191d2b16cf83f3dd88aa7e46",
+        "exit_code": 0,
+        "duration_ms": 164,
+        "termination": "exited",
+        "output_bytes": 599,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 599,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-13T23:23:17.882576140Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 184,
+        "inference_time_ms": 0,
+        "tool_time_ms": 164,
+        "active_time_ms": 164
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     }

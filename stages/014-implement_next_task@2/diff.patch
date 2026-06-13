@@ -1,0 +1,591 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index d07c7ce..95816db 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the existing auth LiveView, auth email module, Postmark webhook controller, read-model change publisher, and current delivery-status LiveViews that subscribe to read-model changes.
+-- [ ] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
++- [x] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
+ - [ ] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
+ - [ ] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
+ - [ ] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+index 60e2463..a6d8b42 100644
+--- a/web/lib/memba/accounts.ex
++++ b/web/lib/memba/accounts.ex
+@@ -8,12 +8,15 @@ defmodule Memba.Accounts do
+ 
+   import Ecto.Query
+ 
++  alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership
+   alias Memba.Repo
+ 
+   @sign_in_token_ttl_seconds 15 * 60
+   @sign_in_token_bytes 32
++  @auth_email_request_progress_ttl_seconds 30 * 60
++  @auth_email_request_retention_seconds 7 * 24 * 60 * 60
+   @staff_domain "memba.io"
+ 
+   @doc """
+@@ -149,6 +152,106 @@ defmodule Memba.Accounts do
+ 
+   def consume_sign_in_token(_token, _opts), do: {:error, :not_found}
+ 
++  @doc """
++  Create a short-lived auth-email progress request.
++
++  The returned request has an opaque public ID. The optional `:recipient_email`
++  attribute is normalized and should only be supplied by callers that already
++  need to persist the real delivery address for a known auth email send.
++  """
++  def create_auth_email_request(attrs \\ %{}, opts \\ []) when is_map(attrs) and is_list(opts) do
++    now = timestamp(opts)
++
++    attrs
++    |> AuthEmailRequest.create_changeset(
++      now: now,
++      expires_at: DateTime.add(now, @auth_email_request_progress_ttl_seconds, :second),
++      retain_until: DateTime.add(now, @auth_email_request_retention_seconds, :second)
++    )
++    |> Repo.insert()
++  end
++
++  @doc """
++  Fetch an auth-email progress request by its opaque public request ID.
++  """
++  def get_auth_email_request(request_id) do
++    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do
++      Repo.get(AuthEmailRequest, request_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Return whether the request is past its 30-minute user-facing progress window.
++  """
++  def auth_email_request_expired?(%AuthEmailRequest{} = request, opts \\ []) do
++    now = timestamp(opts)
++    DateTime.compare(request.expires_at, now) != :gt
++  end
++
++  @doc """
++  Mark an auth-email request as handed to the email provider.
++  """
++  def mark_auth_email_sent(request_id, attrs \\ %{}, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    update_auth_email_request(request_id, fn request ->
++      request
++      |> AuthEmailRequest.sent_changeset(attrs, now: timestamp(opts))
++      |> Repo.update()
++    end)
++  end
++
++  @doc """
++  Record that the recipient mailbox provider accepted the auth email.
++  """
++  def record_auth_email_provider_accepted(request_id, attrs \\ %{}, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    record_auth_email_provider_progress(
++      request_id,
++      AuthEmailRequest.status_provider_accepted(),
++      attrs,
++      opts
++    )
++  end
++
++  @doc """
++  Record that the provider reported delayed auth-email delivery.
++  """
++  def record_auth_email_provider_delayed(request_id, attrs \\ %{}, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    record_auth_email_provider_progress(
++      request_id,
++      AuthEmailRequest.status_provider_delayed(),
++      attrs,
++      opts
++    )
++  end
++
++  @doc """
++  Record that the provider reported failed auth-email delivery.
++  """
++  def record_auth_email_provider_failed(request_id, attrs \\ %{}, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    record_auth_email_provider_progress(
++      request_id,
++      AuthEmailRequest.status_provider_failed(),
++      attrs,
++      opts
++    )
++  end
++
++  @doc """
++  Delete auth-email request rows whose seven-day retention window has elapsed.
++  """
++  def delete_retained_auth_email_requests(opts \\ []) do
++    now = timestamp(opts)
++
++    AuthEmailRequest
++    |> where([request], request.retain_until <= ^now)
++    |> Repo.delete_all()
++  end
++
+   @doc """
+   List active clubs for a signed-in email address.
+ 
+@@ -201,6 +304,49 @@ defmodule Memba.Accounts do
+     end
+   end
+ 
++  defp record_auth_email_provider_progress(request_id, status, attrs, opts) do
++    update_auth_email_request(request_id, fn request ->
++      request
++      |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
++      |> Repo.update()
++    end)
++  end
++
++  defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do
++    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do
++      request_id
++      |> transact_auth_email_request_update(update_fun)
++      |> unwrap_auth_email_request_update()
++    else
++      :error -> {:error, :not_found}
++    end
++  end
++
++  defp transact_auth_email_request_update(request_id, update_fun) do
++    Repo.transaction(fn ->
++      case lock_auth_email_request(request_id) do
++        nil ->
++          Repo.rollback(:not_found)
++
++        %AuthEmailRequest{} = request ->
++          case update_fun.(request) do
++            {:ok, %AuthEmailRequest{} = request} -> request
++            {:error, changeset} -> Repo.rollback(changeset)
++          end
++      end
++    end)
++  end
++
++  defp lock_auth_email_request(request_id) do
++    AuthEmailRequest
++    |> where([request], request.request_id == ^request_id)
++    |> lock("FOR UPDATE")
++    |> Repo.one()
++  end
++
++  defp unwrap_auth_email_request_update({:ok, %AuthEmailRequest{} = request}), do: {:ok, request}
++  defp unwrap_auth_email_request_update({:error, reason}), do: {:error, reason}
++
+   defp timestamp(opts) do
+     Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
+   end
+diff --git a/web/lib/memba/accounts/auth_email_request.ex b/web/lib/memba/accounts/auth_email_request.ex
+new file mode 100644
+index 0000000..2b68b32
+--- /dev/null
++++ b/web/lib/memba/accounts/auth_email_request.ex
+@@ -0,0 +1,196 @@
++defmodule Memba.Accounts.AuthEmailRequest do
++  @moduledoc """
++  Short-lived source-of-truth record for sign-in-link email delivery progress.
++
++  The public identifier is an opaque typed request ID. Recipient email is
++  optional and stores only the normalized internal delivery address when later
++  steps need to correlate a real auth email send.
++  """
++
++  use Ecto.Schema
++
++  import Ecto.Changeset
++
++  alias Memba.Accounts
++  alias Memba.ID
++
++  @status_created "created"
++  @status_sent "sent"
++  @status_provider_accepted "provider_accepted"
++  @status_provider_delayed "provider_delayed"
++  @status_provider_failed "provider_failed"
++
++  @statuses [
++    @status_created,
++    @status_sent,
++    @status_provider_accepted,
++    @status_provider_delayed,
++    @status_provider_failed
++  ]
++
++  @primary_key {:request_id, :string, autogenerate: false}
++  schema "auth_email_requests" do
++    field :recipient_email, :string
++    field :status, :string
++
++    field :provider, :string
++    field :provider_message_id, :string
++    field :provider_message_stream, :string
++    field :provider_event_id, :string
++    field :provider_event_type, :string
++    field :provider_reason, :string
++
++    field :sent_at, :utc_datetime_usec
++    field :provider_reported_at, :utc_datetime_usec
++    field :expires_at, :utc_datetime_usec
++    field :retain_until, :utc_datetime_usec
++
++    timestamps(type: :utc_datetime_usec)
++  end
++
++  def create_changeset(attrs, opts) when is_map(attrs) and is_list(opts) do
++    %__MODULE__{
++      request_id: ID.generate(:auth_email_request),
++      status: @status_created,
++      expires_at: Keyword.fetch!(opts, :expires_at),
++      retain_until: Keyword.fetch!(opts, :retain_until)
++    }
++    |> change()
++    |> put_optional_recipient_email(attrs)
++    |> validate_required([:request_id, :status, :expires_at, :retain_until])
++    |> validate_common()
++    |> check_constraint(:status, name: :auth_email_requests_status_check)
++    |> check_constraint(:retain_until, name: :auth_email_requests_retain_after_expiry_check)
++  end
++
++  def sent_changeset(%__MODULE__{} = request, attrs, opts)
++      when is_map(attrs) and is_list(opts) do
++    now = Keyword.fetch!(opts, :now)
++
++    request
++    |> change(status: @status_sent, sent_at: now)
++    |> put_optional_recipient_email(attrs)
++    |> put_provider_attrs(attrs)
++    |> validate_required([:status, :sent_at])
++    |> validate_common()
++    |> check_constraint(:status, name: :auth_email_requests_status_check)
++  end
++
++  def provider_progress_changeset(%__MODULE__{} = request, status, attrs, opts)
++      when status in [
++             @status_provider_accepted,
++             @status_provider_delayed,
++             @status_provider_failed
++           ] and
++             is_map(attrs) and is_list(opts) do
++    now = Keyword.fetch!(opts, :now)
++
++    request
++    |> change(status: status, provider_reported_at: now)
++    |> put_provider_attrs(attrs)
++    |> validate_required([:status, :provider_reported_at])
++    |> validate_common()
++    |> check_constraint(:status, name: :auth_email_requests_status_check)
++  end
++
++  def status_created, do: @status_created
++  def status_sent, do: @status_sent
++  def status_provider_accepted, do: @status_provider_accepted
++  def status_provider_delayed, do: @status_provider_delayed
++  def status_provider_failed, do: @status_provider_failed
++
++  defp validate_common(changeset) do
++    changeset
++    |> validate_inclusion(:status, @statuses)
++    |> validate_typed_request_id()
++    |> validate_retention_after_expiry()
++  end
++
++  defp validate_typed_request_id(changeset) do
++    case get_field(changeset, :request_id) do
++      nil ->
++        changeset
++
++      request_id ->
++        case ID.cast(:auth_email_request, request_id) do
++          {:ok, ^request_id} -> changeset
++          :error -> add_error(changeset, :request_id, "is invalid")
++        end
++    end
++  end
++
++  defp validate_retention_after_expiry(changeset) do
++    expires_at = get_field(changeset, :expires_at)
++    retain_until = get_field(changeset, :retain_until)
++
++    if expires_at && retain_until && DateTime.compare(retain_until, expires_at) != :gt do
++      add_error(changeset, :retain_until, "must be after expiry")
++    else
++      changeset
++    end
++  end
++
++  defp put_optional_recipient_email(changeset, attrs) do
++    case fetch_attr(attrs, :recipient_email) do
++      :error ->
++        changeset
++
++      {:ok, nil} ->
++        changeset
++
++      {:ok, email} when is_binary(email) ->
++        case Accounts.normalize_email(email) do
++          nil -> add_error(changeset, :recipient_email, "can't be blank")
++          normalized_email -> put_change(changeset, :recipient_email, normalized_email)
++        end
++
++      {:ok, _email} ->
++        add_error(changeset, :recipient_email, "is invalid")
++    end
++  end
++
++  defp put_provider_attrs(changeset, attrs) do
++    Enum.reduce(
++      [
++        :provider,
++        :provider_message_id,
++        :provider_message_stream,
++        :provider_event_id,
++        :provider_event_type,
++        :provider_reason
++      ],
++      changeset,
++      fn field, changeset ->
++        put_optional_trimmed_string(changeset, attrs, field)
++      end
++    )
++  end
++
++  defp put_optional_trimmed_string(changeset, attrs, field) do
++    case fetch_attr(attrs, field) do
++      :error ->
++        changeset
++
++      {:ok, nil} ->
++        changeset
++
++      {:ok, value} when is_binary(value) ->
++        case String.trim(value) do
++          "" -> changeset
++          trimmed_value -> put_change(changeset, field, trimmed_value)
++        end
++
++      {:ok, _value} ->
++        add_error(changeset, field, "is invalid")
++    end
++  end
++
++  defp fetch_attr(attrs, key) when is_map(attrs) do
++    string_key = Atom.to_string(key)
++
++    case Map.fetch(attrs, key) do
++      {:ok, value} -> {:ok, value}
++      :error -> Map.fetch(attrs, string_key)
++    end
++  end
++end
+diff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex
+index 954fe95..a45fdd4 100644
+--- a/web/lib/memba/id.ex
++++ b/web/lib/memba/id.ex
+@@ -16,7 +16,8 @@ defmodule Memba.ID do
+     delivery: "del",
+     inbound_email: "inb",
+     email_address: "ead",
+-    onboarding_request: "req"
++    onboarding_request: "req",
++    auth_email_request: "aer"
+   }
+ 
+   @types Map.keys(@prefixes)
+@@ -32,6 +33,7 @@ defmodule Memba.ID do
+           | :inbound_email
+           | :email_address
+           | :onboarding_request
++          | :auth_email_request
+   @type t :: String.t()
+ 
+   @doc "Generate a new typed ID."
+diff --git a/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs b/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs
+new file mode 100644
+index 0000000..62b7877
+--- /dev/null
++++ b/web/priv/repo/migrations/20260613232953_create_auth_email_requests.exs
+@@ -0,0 +1,47 @@
++defmodule Memba.Repo.Migrations.CreateAuthEmailRequests do
++  use Ecto.Migration
++
++  def change do
++    create table(:auth_email_requests, primary_key: false) do
++      add :request_id, :text, primary_key: true
++      add :recipient_email, :text
++      add :status, :text, null: false, default: "created"
++
++      add :provider, :text
++      add :provider_message_id, :text
++      add :provider_message_stream, :text
++      add :provider_event_id, :text
++      add :provider_event_type, :text
++      add :provider_reason, :text
++
++      add :sent_at, :utc_datetime_usec
++      add :provider_reported_at, :utc_datetime_usec
++      add :expires_at, :utc_datetime_usec, null: false
++      add :retain_until, :utc_datetime_usec, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:auth_email_requests, [:status, :inserted_at])
++
++    create index(:auth_email_requests, [:provider_message_id],
++             where: "provider_message_id IS NOT NULL"
++           )
++
++    create index(:auth_email_requests, [:provider_event_id],
++             where: "provider_event_id IS NOT NULL"
++           )
++
++    create index(:auth_email_requests, [:expires_at])
++    create index(:auth_email_requests, [:retain_until])
++
++    create constraint(:auth_email_requests, :auth_email_requests_status_check,
++             check:
++               "status IN ('created', 'sent', 'provider_accepted', 'provider_delayed', 'provider_failed')"
++           )
++
++    create constraint(:auth_email_requests, :auth_email_requests_retain_after_expiry_check,
++             check: "retain_until > expires_at"
++           )
++  end
++end
+diff --git a/web/test/memba/accounts/auth_email_request_test.exs b/web/test/memba/accounts/auth_email_request_test.exs
+new file mode 100644
+index 0000000..aeb7f13
+--- /dev/null
++++ b/web/test/memba/accounts/auth_email_request_test.exs
+@@ -0,0 +1,118 @@
++defmodule Memba.Accounts.AuthEmailRequestTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Accounts
++  alias Memba.Accounts.AuthEmailRequest
++  alias Memba.Repo
++
++  describe "create_auth_email_request/2" do
++    test "creates an opaque progress request without storing a submitted email by default" do
++      now = ~U[2026-06-13 12:00:00.000000Z]
++
++      assert {:ok, %AuthEmailRequest{} = request} =
++               Accounts.create_auth_email_request(%{}, now: now)
++
++      assert Memba.ID.valid?(:auth_email_request, request.request_id)
++      assert request.status == "created"
++      assert request.recipient_email == nil
++      assert request.provider == nil
++      assert request.provider_message_id == nil
++      assert request.provider_message_stream == nil
++      assert request.expires_at == DateTime.add(now, 30 * 60, :second)
++      assert request.retain_until == DateTime.add(now, 7 * 24 * 60 * 60, :second)
++
++      assert Accounts.get_auth_email_request(request.request_id).request_id == request.request_id
++      assert Accounts.get_auth_email_request("not-a-request-id") == nil
++    end
++
++    test "stores an optional normalized internal recipient email only when supplied" do
++      assert {:ok, %AuthEmailRequest{} = request} =
++               Accounts.create_auth_email_request(%{recipient_email: " Pat@Memba.IO "})
++
++      assert request.recipient_email == "pat@memba.io"
++      refute Map.has_key?(Map.from_struct(request), :submitted_email)
++      refute Map.has_key?(Map.from_struct(request), :raw_email)
++    end
++  end
++
++  describe "status transitions" do
++    test "marks a request sent with provider correlation data" do
++      now = ~U[2026-06-13 12:00:00.000000Z]
++      sent_at = DateTime.add(now, 2, :second)
++      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)
++
++      assert {:ok, %AuthEmailRequest{} = sent_request} =
++               Accounts.mark_auth_email_sent(
++                 request.request_id,
++                 %{
++                   recipient_email: " ALICE@EXAMPLE.COM ",
++                   provider: "postmark",
++                   provider_message_id: "postmark-message-123",
++                   provider_message_stream: "outbound-authentication"
++                 },
++                 now: sent_at
++               )
++
++      assert sent_request.status == "sent"
++      assert sent_request.recipient_email == "alice@example.com"
++      assert sent_request.provider == "postmark"
++      assert sent_request.provider_message_id == "postmark-message-123"
++      assert sent_request.provider_message_stream == "outbound-authentication"
++      assert sent_request.sent_at == sent_at
++    end
++
++    test "records provider progress while preserving request correlation" do
++      now = ~U[2026-06-13 12:00:00.000000Z]
++      delivered_at = DateTime.add(now, 9, :second)
++      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)
++      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: now)
++
++      assert {:ok, %AuthEmailRequest{} = accepted_request} =
++               Accounts.record_auth_email_provider_accepted(
++                 request.request_id,
++                 %{
++                   provider: "postmark",
++                   provider_message_id: "postmark-message-123",
++                   provider_event_id: "postmark-event-456",
++                   provider_event_type: "Delivered"
++                 },
++                 now: delivered_at
++               )
++
++      assert accepted_request.request_id == request.request_id
++      assert accepted_request.status == "provider_accepted"
++      assert accepted_request.provider == "postmark"
++      assert accepted_request.provider_message_id == "postmark-message-123"
++      assert accepted_request.provider_event_id == "postmark-event-456"
++      assert accepted_request.provider_event_type == "Delivered"
++      assert accepted_request.provider_reported_at == delivered_at
++    end
++  end
++
++  describe "expiry and cleanup" do
++    test "identifies user-facing expiry after 30 minutes" do
++      now = ~U[2026-06-13 12:00:00.000000Z]
++      {:ok, request} = Accounts.create_auth_email_request(%{}, now: now)
++
++      refute Accounts.auth_email_request_expired?(request,
++               now: DateTime.add(now, 29 * 60, :second)
++             )
++
++      assert Accounts.auth_email_request_expired?(request,
++               now: DateTime.add(now, 30 * 60, :second)
++             )
++    end
++
++    test "deletes rows only after the seven-day retention window" do
++      old_now = ~U[2026-06-01 12:00:00.000000Z]
++      current_now = ~U[2026-06-13 12:00:00.000000Z]
++      {:ok, old_request} = Accounts.create_auth_email_request(%{}, now: old_now)
++      {:ok, retained_request} = Accounts.create_auth_email_request(%{}, now: current_now)
++
++      assert {1, nil} = Accounts.delete_retained_auth_email_requests(now: current_now)
++
++      assert Repo.get(AuthEmailRequest, old_request.request_id) == nil
++      assert Repo.get(AuthEmailRequest, retained_request.request_id)
++    end
++  end
++end
