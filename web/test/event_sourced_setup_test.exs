@@ -117,29 +117,29 @@ defmodule Memba.EventSourcedSetupTest do
                query!("""
                SELECT name, slug
                FROM membership_clubs
-               WHERE club_id = '33333333-3333-3333-3333-333333333333'
+               WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
                """).rows
 
       assert [["Smoke Tester", "test@memba.io"]] =
                query!("""
                SELECT name, email
                FROM membership_people
-               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               WHERE person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
                """).rows
 
       assert [["test@memba.io", true]] =
                query!("""
                SELECT email, is_primary
                FROM membership_person_email_addresses
-               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               WHERE person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
                """).rows
 
       assert [[true]] =
                query!("""
                SELECT active
                FROM membership_memberships
-               WHERE club_id = '33333333-3333-3333-3333-333333333333'
-                 AND person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
+                 AND person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
                """).rows
     after
       Memba.EventSourcedCase.reset_event_sourced_system!()

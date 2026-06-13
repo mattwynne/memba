@@ -15,9 +15,9 @@ defmodule Memba.SeedDataTest do
       Code.eval_file(Path.expand("../../priv/repo/seeds.exs", __DIR__))
     end)
 
-    kootenay_club_id = "11111111-1111-1111-1111-111111111111"
-    alice_person_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-    alice_kootenay_membership_id = "10000000-0000-0000-0000-000000000001"
+    kootenay_club_id = "clb_11111111-1111-1111-1111-111111111111"
+    alice_person_id = "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    alice_kootenay_membership_id = "mem_10000000-0000-0000-0000-000000000001"
     role_id = Roles.membership_administrator_role_id(kootenay_club_id)
     permission = Permissions.club_manage_members()
 

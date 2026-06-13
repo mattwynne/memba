@@ -30,19 +30,19 @@ two_days_ago = DateTime.add(now, -2 * 24 * 60 * 60, :second)
 
 clubs = [
   %{
-    club_id: "11111111-1111-1111-1111-111111111111",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
     name: "Kootenay Mountaineering Club",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    club_id: "22222222-2222-2222-2222-222222222222",
+    club_id: "clb_22222222-2222-2222-2222-222222222222",
     name: "Nelson Paddling Club",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    club_id: "33333333-3333-3333-3333-333333333333",
+    club_id: "clb_33333333-3333-3333-3333-333333333333",
     name: "Smoke Test Club",
     slug: "test",
     inserted_at: two_days_ago,
@@ -52,42 +52,42 @@ clubs = [
 
 people = [
   %{
-    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    person_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     name: "Alice Adams",
     email: "alice@example.com",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    person_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    person_id: "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     name: "Bob Brown",
     email: "bob@example.com",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    person_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    person_id: "per_cccccccc-cccc-cccc-cccc-cccccccccccc",
     name: "Carol Chen",
     email: "carol@example.com",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    person_id: "per_dddddddd-dddd-dddd-dddd-dddddddddddd",
     name: "Dana Diaz",
     email: "dana@example.com",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    person_id: "per_eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     name: "Pat Staff",
     email: "pat@memba.io",
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    person_id: "per_ffffffff-ffff-ffff-ffff-ffffffffffff",
     name: "Smoke Tester",
     email: "test@memba.io",
     inserted_at: two_days_ago,
@@ -97,8 +97,8 @@ people = [
 
 person_email_addresses = [
   %{
-    id: "20000000-0000-0000-0000-000000000001",
-    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    id: "ead_20000000-0000-0000-0000-000000000001",
+    person_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     email: "alice@example.com",
     normalized_email: "alice@example.com",
     is_primary: true,
@@ -106,8 +106,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000002",
-    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    id: "ead_20000000-0000-0000-0000-000000000002",
+    person_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     email: "alice@work.example",
     normalized_email: "alice@work.example",
     is_primary: false,
@@ -115,8 +115,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000003",
-    person_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    id: "ead_20000000-0000-0000-0000-000000000003",
+    person_id: "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     email: "bob@example.com",
     normalized_email: "bob@example.com",
     is_primary: true,
@@ -124,8 +124,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000004",
-    person_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    id: "ead_20000000-0000-0000-0000-000000000004",
+    person_id: "per_cccccccc-cccc-cccc-cccc-cccccccccccc",
     email: "carol@example.com",
     normalized_email: "carol@example.com",
     is_primary: true,
@@ -133,8 +133,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000005",
-    person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    id: "ead_20000000-0000-0000-0000-000000000005",
+    person_id: "per_dddddddd-dddd-dddd-dddd-dddddddddddd",
     email: "dana@example.com",
     normalized_email: "dana@example.com",
     is_primary: true,
@@ -142,8 +142,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000006",
-    person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    id: "ead_20000000-0000-0000-0000-000000000006",
+    person_id: "per_eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     email: "pat@memba.io",
     normalized_email: "pat@memba.io",
     is_primary: true,
@@ -151,8 +151,8 @@ person_email_addresses = [
     updated_at: now
   },
   %{
-    id: "20000000-0000-0000-0000-000000000007",
-    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    id: "ead_20000000-0000-0000-0000-000000000007",
+    person_id: "per_ffffffff-ffff-ffff-ffff-ffffffffffff",
     email: "test@memba.io",
     normalized_email: "test@memba.io",
     is_primary: true,
@@ -163,57 +163,57 @@ person_email_addresses = [
 
 memberships = [
   %{
-    membership_id: "10000000-0000-0000-0000-000000000001",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    membership_id: "mem_10000000-0000-0000-0000-000000000001",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    person_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000002",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    person_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    membership_id: "mem_10000000-0000-0000-0000-000000000002",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    person_id: "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000003",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    person_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    membership_id: "mem_10000000-0000-0000-0000-000000000003",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    person_id: "per_cccccccc-cccc-cccc-cccc-cccccccccccc",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000004",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    membership_id: "mem_10000000-0000-0000-0000-000000000004",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    person_id: "per_dddddddd-dddd-dddd-dddd-dddddddddddd",
     active: false,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000005",
-    club_id: "22222222-2222-2222-2222-222222222222",
-    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    membership_id: "mem_10000000-0000-0000-0000-000000000005",
+    club_id: "clb_22222222-2222-2222-2222-222222222222",
+    person_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000006",
-    club_id: "22222222-2222-2222-2222-222222222222",
-    person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    membership_id: "mem_10000000-0000-0000-0000-000000000006",
+    club_id: "clb_22222222-2222-2222-2222-222222222222",
+    person_id: "per_eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
   },
   %{
-    membership_id: "10000000-0000-0000-0000-000000000007",
-    club_id: "33333333-3333-3333-3333-333333333333",
-    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    membership_id: "mem_10000000-0000-0000-0000-000000000007",
+    club_id: "clb_33333333-3333-3333-3333-333333333333",
+    person_id: "per_ffffffff-ffff-ffff-ffff-ffffffffffff",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
@@ -284,27 +284,27 @@ membership_administrator_member_permissions =
 
 messages = [
   %{
-    message_id: "30000000-0000-0000-0000-000000000001",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    sender_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    message_id: "msg_30000000-0000-0000-0000-000000000001",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    sender_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     subject: "Saturday trail day",
     body: "Meet at the trailhead at 9am. Bring gloves, lunch, and a thermos.",
     inserted_at: one_hour_ago,
     updated_at: one_hour_ago
   },
   %{
-    message_id: "30000000-0000-0000-0000-000000000002",
-    club_id: "11111111-1111-1111-1111-111111111111",
-    sender_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    message_id: "msg_30000000-0000-0000-0000-000000000002",
+    club_id: "clb_11111111-1111-1111-1111-111111111111",
+    sender_id: "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     subject: "Trip planning night",
     body: "We’ll meet at the clubhouse on Thursday at 7pm to plan the next overnight trip.",
     inserted_at: two_days_ago,
     updated_at: two_days_ago
   },
   %{
-    message_id: "30000000-0000-0000-0000-000000000003",
-    club_id: "22222222-2222-2222-2222-222222222222",
-    sender_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    message_id: "msg_30000000-0000-0000-0000-000000000003",
+    club_id: "clb_22222222-2222-2222-2222-222222222222",
+    sender_id: "per_eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     subject: "Lake cleanup this weekend",
     body: "Bring a dry bag and gloves. We’ll meet by the boat ramp at 10am.",
     inserted_at: one_hour_ago,
@@ -314,9 +314,9 @@ messages = [
 
 email_deliveries = [
   %{
-    delivery_id: "40000000-0000-0000-0000-000000000001",
-    message_id: "30000000-0000-0000-0000-000000000001",
-    recipient_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    delivery_id: "del_40000000-0000-0000-0000-000000000001",
+    message_id: "msg_30000000-0000-0000-0000-000000000001",
+    recipient_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     recipient_name: "Alice Adams",
     recipient_address: "alice@example.com",
     channel: "email",
@@ -325,9 +325,9 @@ email_deliveries = [
     updated_at: now
   },
   %{
-    delivery_id: "40000000-0000-0000-0000-000000000002",
-    message_id: "30000000-0000-0000-0000-000000000001",
-    recipient_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    delivery_id: "del_40000000-0000-0000-0000-000000000002",
+    message_id: "msg_30000000-0000-0000-0000-000000000001",
+    recipient_id: "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     recipient_name: "Bob Brown",
     recipient_address: "bob@example.com",
     channel: "email",
@@ -336,9 +336,9 @@ email_deliveries = [
     updated_at: now
   },
   %{
-    delivery_id: "40000000-0000-0000-0000-000000000003",
-    message_id: "30000000-0000-0000-0000-000000000001",
-    recipient_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    delivery_id: "del_40000000-0000-0000-0000-000000000003",
+    message_id: "msg_30000000-0000-0000-0000-000000000001",
+    recipient_id: "per_cccccccc-cccc-cccc-cccc-cccccccccccc",
     recipient_name: "Carol Chen",
     recipient_address: "carol@example.com",
     channel: "email",
@@ -347,9 +347,9 @@ email_deliveries = [
     updated_at: now
   },
   %{
-    delivery_id: "40000000-0000-0000-0000-000000000004",
-    message_id: "30000000-0000-0000-0000-000000000003",
-    recipient_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    delivery_id: "del_40000000-0000-0000-0000-000000000004",
+    message_id: "msg_30000000-0000-0000-0000-000000000003",
+    recipient_id: "per_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     recipient_name: "Alice Adams",
     recipient_address: "alice@example.com",
     channel: "email",
@@ -358,9 +358,9 @@ email_deliveries = [
     updated_at: now
   },
   %{
-    delivery_id: "40000000-0000-0000-0000-000000000005",
-    message_id: "30000000-0000-0000-0000-000000000003",
-    recipient_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    delivery_id: "del_40000000-0000-0000-0000-000000000005",
+    message_id: "msg_30000000-0000-0000-0000-000000000003",
+    recipient_id: "per_eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     recipient_name: "Pat Staff",
     recipient_address: "pat@memba.io",
     channel: "email",
@@ -429,7 +429,19 @@ Repo.insert_all(Membership, memberships,
 )
 
 seed_membership_ids = Enum.map(memberships, & &1.membership_id)
+seed_club_ids = Enum.map(clubs, & &1.club_id)
 seed_role_ids = Enum.map(membership_administrator_roles, & &1.role_id)
+
+existing_seed_admin_role_ids =
+  Repo.all(
+    from(role in Role,
+      where: role.club_id in ^seed_club_ids,
+      where: role.role_key == ^Roles.membership_administrator_key(),
+      select: role.role_id
+    )
+  )
+
+seed_admin_role_ids = Enum.uniq(seed_role_ids ++ existing_seed_admin_role_ids)
 
 Repo.delete_all(
   from(member_permission in MemberPermission,
@@ -440,14 +452,14 @@ Repo.delete_all(
 )
 
 Repo.delete_all(
-  from(role_assignment in RoleAssignment, where: role_assignment.role_id in ^seed_role_ids)
+  from(role_assignment in RoleAssignment, where: role_assignment.role_id in ^seed_admin_role_ids)
 )
 
 Repo.delete_all(
-  from(role_permission in RolePermission, where: role_permission.role_id in ^seed_role_ids)
+  from(role_permission in RolePermission, where: role_permission.role_id in ^seed_admin_role_ids)
 )
 
-Repo.delete_all(from(role in Role, where: role.role_id in ^seed_role_ids))
+Repo.delete_all(from(role in Role, where: role.role_id in ^seed_admin_role_ids))
 
 Repo.insert_all(Role, membership_administrator_roles,
   on_conflict: {:replace_all_except, [:role_id]},
