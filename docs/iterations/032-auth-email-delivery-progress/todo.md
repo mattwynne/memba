@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the existing auth LiveView, auth email module, Postmark webhook controller, read-model change publisher, and current delivery-status LiveViews that subscribe to read-model changes.
-- [ ] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
+- [x] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
 - [ ] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
 - [ ] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
 - [ ] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
