@@ -1,7 +1,7 @@
 Feature: Authentication
   People use one sign-in form to access the parts of Memba they are allowed to use.
 
-# Rule: Club pages are public until member-only access is needed
+Rule: Club pages are public until member-only access is needed
 
     Scenario: Logged-out visitor sees a public club page
       Given Alice is a member of Kootenay Mountaineering Club
@@ -9,7 +9,7 @@ Feature: Authentication
       Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
 
-# Rule: Known club members can sign in
+Rule: Known club members can sign in
 
     Scenario: A club member signs in and sees their club
       Given Alice is a member of Kootenay Mountaineering Club
@@ -32,7 +32,7 @@ Feature: Authentication
       And Alice should see Kootenay Mountaineering Club in their clubs
       And Alice should see Nelson Paddling Club in their clubs
 
-# Rule: Anyone with a memba.io email address can sign in as staff
+Rule: Anyone with a memba.io email address can sign in as staff
 
     Scenario: New Memba staff sign themselves up
       Given Pat is not a member of any club
@@ -51,14 +51,14 @@ Feature: Authentication
       And Pat should be on the Memba staff home
       And Pat should be able to see Kootenay Mountaineering Club in their clubs
 
-# Rule: People who are neither club members nor Memba staff cannot sign in
+Rule: People who are neither club members nor Memba staff cannot sign in
 
     Scenario: Unknown person requests a sign-in link
       Given Robin is not a member of any club
       When Robin requests a sign-in link for their email address
       Then Robin should not receive a sign-in link
 
-# Rule: A sign-in link can only be used once
+Rule: A sign-in link can only be used once
 
     Scenario: A signed-out person cannot reuse a sign-in link
       Given Alice is a member of Kootenay Mountaineering Club
@@ -76,7 +76,7 @@ Feature: Authentication
       Then Alice should still be signed in
       And Alice should be on the homepage
 
-# Rule: Expired sign-in links cannot be used
+Rule: Expired sign-in links cannot be used
 
     Scenario: Following an expired sign-in link
       Given Alice is a member of Kootenay Mountaineering Club
@@ -85,13 +85,13 @@ Feature: Authentication
       When Alice follows the sign-in link
       Then Alice should not be signed in
 
-# Rule: Invalid sign-in links cannot be used
+Rule: Invalid sign-in links cannot be used
 
     Scenario: Following a link that Memba did not issue
       When Robin follows a sign-in link that Memba did not issue
       Then Robin should not be signed in
 
-# Rule: Signing in can continue an interrupted journey
+Rule: Signing in can continue an interrupted journey
 
     Scenario: Staff signs in after trying to open the Memba staff area
       Given Pat is not a member of any club
@@ -102,7 +102,7 @@ Feature: Authentication
       Then Pat should be signed in as Memba staff
       And Pat should be on the Memba staff home
 
-# Rule: Signed-in people can sign out
+Rule: Signed-in people can sign out
 
     Scenario: Staff signs out
       Given Pat is not a member of any club

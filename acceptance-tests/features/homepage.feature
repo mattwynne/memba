@@ -4,7 +4,7 @@ Feature: Homepage
     When I visit the homepage
     Then I should see the Memba homepage
 
-# Rule: The homepage leads with Memba's volunteering promise
+Rule: The homepage leads with Memba's volunteering promise
 
   @iteration-031 @not-domain
   Scenario: Robin sees the volunteering vision first

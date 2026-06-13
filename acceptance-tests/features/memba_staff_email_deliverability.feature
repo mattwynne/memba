@@ -7,7 +7,7 @@ Feature: Memba staff email deliverability
     And Alice, Bob, and Carol are people
     And Alice, Bob, and Carol are members of Kootenay Mountaineering Club
 
-# Rule: Memba staff monitor detailed email deliveries across messages
+Rule: Memba staff monitor detailed email deliveries across messages
 
     Scenario: Deliveries from different messages appear together
       Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members

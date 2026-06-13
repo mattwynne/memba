@@ -1,7 +1,7 @@
 Feature: Person email addresses
   People may be known by more than one email address while Memba still has one primary address for sending club mail.
 
-# Rule: A known alternate email address can identify a member
+Rule: A known alternate email address can identify a member
 
     Scenario: Alice signs in with her work email address
       Given Alice is a member of Kootenay Mountaineering Club
@@ -13,7 +13,7 @@ Feature: Person email addresses
       Then Alice should be signed in
       And Alice should see Kootenay Mountaineering Club in their clubs
 
-# Rule: Club messages are sent to the primary email address only
+Rule: Club messages are sent to the primary email address only
 
     Scenario: Alice receives a club message at her primary email address
       Given Alice is a member of Kootenay Mountaineering Club
@@ -24,7 +24,7 @@ Feature: Person email addresses
       Then Alice should receive the email at "alice@example.com"
       And Alice should not receive the email at "alice@work.example"
 
-# Rule: Staff manage a person's known email addresses
+Rule: Staff manage a person's known email addresses
 
     Scenario: Staff creates a person with primary and alternate email addresses
       Given Pat is signed in as Memba staff

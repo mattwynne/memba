@@ -1,7 +1,7 @@
 Feature: Email branding
   People receiving Memba emails should recognise Memba and, when a club is involved, the club context.
 
-# Rule: Memba transactional emails use consistent Memba branding
+Rule: Memba transactional emails use consistent Memba branding
 
     @iteration-031 @todo-domain
     Scenario: Alice receives a branded sign-in email
@@ -10,7 +10,7 @@ Feature: Email branding
       Then Alice should receive a sign-in email with the Memba sprig icon
       And the sign-in email should use the standard Memba footer
 
-# Rule: Club-message rejection emails identify the club
+Rule: Club-message rejection emails identify the club
 
     @iteration-031 @todo-domain
     Scenario: Robin receives a KMC rejection email

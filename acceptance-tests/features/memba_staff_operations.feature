@@ -9,7 +9,7 @@ Feature: Memba staff operations
     And Alice is a member of Nelson Paddling Club
     And Pat is signed in as Memba staff
 
-# Rule: Staff navigation only offers working operations pages
+Rule: Staff navigation only offers working operations pages
 
     @not-domain
     Scenario: Pat opens the staff operations area
@@ -20,7 +20,7 @@ Feature: Memba staff operations
       And Pat should be able to navigate to Deliveries
       But Pat should not be offered unavailable staff pages such as Incoming or Roles
 
-# Rule: People are global records that can have memberships in multiple clubs
+Rule: People are global records that can have memberships in multiple clubs
 
     Scenario: Alice belongs to two clubs
       When Memba staff review people
@@ -28,7 +28,7 @@ Feature: Memba staff operations
       And Memba should show Alice's Kootenay Mountaineering Club membership
       And Memba should show Alice's Nelson Paddling Club membership
 
-# Rule: Staff review messages without composing them
+Rule: Staff review messages without composing them
 
     @not-domain
     Scenario: Pat opens diagnostics for an existing club message

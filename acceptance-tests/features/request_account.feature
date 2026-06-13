@@ -2,7 +2,7 @@ Feature: Request account
   Memba protects its email reputation by keeping onboarding staff-approved.
   Interested club organisers can request access, but only Memba staff can turn a request into a club with an active first member.
 
-# Rule: A public request does not grant access
+Rule: A public request does not grant access
 
     Scenario: Robin requests access without gaining immediate club access
       When Robin requests Memba access for West Coast Paddlers with a short note
@@ -11,7 +11,7 @@ Feature: Request account
       And West Coast Paddlers should not exist as a club yet
       And Robin should not be able to sign in to West Coast Paddlers yet
 
-# Rule: Signed-out requesters verify their email before Staff review
+Rule: Signed-out requesters verify their email before Staff review
 
     @iteration-030 @todo-ui
     Scenario: Robin verifies their email before submitting a request
@@ -33,7 +33,7 @@ Feature: Request account
       And Robin's request should not appear in the active requests inbox
       And Robin should not be a person in Memba
 
-# Rule: Signed-in people do not re-enter their known identity details
+Rule: Signed-in people do not re-enter their known identity details
 
     Scenario: Alice requests a new club while signed in
       Given Alice is signed in
@@ -42,7 +42,7 @@ Feature: Request account
       When Alice requests Memba access for Nelson Trail Society with a short note
       Then Memba should record Alice's request with Alice's known name and email address
 
-# Rule: Verified request submission does not create membership-domain records
+Rule: Verified request submission does not create membership-domain records
 
     @iteration-030 @todo-ui
     Scenario: Robin submits a verified request before becoming a Person
@@ -62,7 +62,7 @@ Feature: Request account
       And Robin should be a person in Memba
       And Robin should be an active member of West Coast Paddlers
 
-# Rule: Memba staff triage active requests
+Rule: Memba staff triage active requests
 
     Scenario: Pat converts a request into a club and first active member
       Given Robin has requested Memba access for West Coast Paddlers
@@ -93,7 +93,7 @@ Feature: Request account
       And Suspicious Sender Club should not exist as a club
       And Robin should not be able to sign in to Suspicious Sender Club
 
-# Rule: Memba staff can act from request notification emails
+Rule: Memba staff can act from request notification emails
 
     Scenario: Pat opens a request from the notification email
       Given Robin has requested Memba access for West Coast Paddlers
@@ -101,7 +101,7 @@ Feature: Request account
       When Pat follows the staff notification link for Robin's request
       Then Pat should be preparing to convert Robin's West Coast Paddlers request
 
-# Rule: Converted requesters receive direct club access
+Rule: Converted requesters receive direct club access
 
     Scenario: Robin receives a welcome sign-in link for the new club
       Given Robin has requested Memba access for West Coast Paddlers

@@ -1,7 +1,7 @@
 Feature: Member club subdomains
   Club members use their club's slug subdomain as the home for member-only club pages.
 
-# Rule: Club members reach their club from the club slug subdomain
+Rule: Club members reach their club from the club slug subdomain
 
     @not-domain
     Scenario: Alice opens Kootenay Mountaineering Club from her clubs
@@ -12,7 +12,7 @@ Feature: Member club subdomains
       Then Alice should be on "kmc.clubs.memba.io"
       And Alice should see the Kootenay Mountaineering Club member dashboard
 
-# Rule: The club subdomain selects the club for member-only pages
+Rule: The club subdomain selects the club for member-only pages
 
     @not-domain
     Scenario: Alice composes a message on the Kootenay Mountaineering Club subdomain
@@ -29,7 +29,7 @@ Feature: Member club subdomains
       When Alice views the message "Trip planning night" on "kmc.clubs.memba.io"
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
 
-# Rule: Private member URLs require membership
+Rule: Private member URLs require membership
 
     @not-domain
     Scenario: Alice signs in after opening a private club message URL
@@ -49,7 +49,7 @@ Feature: Member club subdomains
       When Pat opens the private message URL on "kmc.clubs.memba.io"
       Then Pat should see that they are not allowed to view it
 
-# Rule: Public club pages remain public at the club subdomain root
+Rule: Public club pages remain public at the club subdomain root
 
     @not-domain
     Scenario: Robin opens the public club page
@@ -58,7 +58,7 @@ Feature: Member club subdomains
       Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
 
-# Rule: Club pages offer a path back to Memba
+Rule: Club pages offer a path back to Memba
 
     @iteration-031 @not-domain
     Scenario: Robin returns from a club page to Memba
@@ -66,7 +66,7 @@ Feature: Member club subdomains
       When Robin opens "kmc.clubs.memba.io"
       Then Robin should see a link to the Memba homepage
 
-# Rule: Memba keeps a smoke-test club available without publishing it
+Rule: Memba keeps a smoke-test club available without publishing it
 
     @not-domain
     Scenario: Staff can see the smoke-test club
