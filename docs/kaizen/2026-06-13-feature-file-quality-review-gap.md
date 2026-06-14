@@ -61,6 +61,14 @@ The apparent system weakness is a weak review gate for Gherkin quality and stand
 - The homepage currently has different behaviour for visitors, staff, members, and staff who are also club members; the old feature file mostly checked generic homepage presence, the volunteering promise, and mobile layout, so important homepage behaviour was not reflected as examples.
 - Long scenarios may reveal missing abstraction: repeated step sequences can sometimes be factored into a named domain concept represented by one higher-level step, rather than merely tolerated as long scripts.
 
+### Additional observation: 2026-06-13, after reviewing long scenarios
+
+- While reviewing long scenarios, Matt agreed that the useful distinction is not simply “long is bad.” Long scenarios can be appropriate when one action produces several concrete business-readable outcomes, but repeated ceremony should prompt discovery of a named concept.
+- The acceptance feature cleanup factored repeated sign-in ceremony into steps such as `When Alice signs in with their email address` and `Given Alice is signed in as a member of Kootenay Mountaineering Club` when sign-in mechanics were incidental to the rule.
+- The invitation scenarios similarly exposed an invitation-acceptance concept, expressed as `When Robin accepts the invitation as "Robin Example"`, while keeping intermediate profile-completion states visible in the scenario where those states are the rule being proved.
+- One request-account example mixed staff review of a request with conversion into a club and first member. Splitting it made the review workflow and domain outcome visible under the appropriate rule instead of treating them as one long script.
+- The `bdd-formulation` skill did not yet capture this abstraction heuristic, so the review depended on Matt's tacit judgement and ad hoc conversation.
+
 ## Why this matters
 
 Feature files are part of the product's domain model and planning handoff. If they are mediocre, ambiguous, or inconsistent with the runner compatibility standard, they mislead future agents and humans. The cost compounds: implementation work optimizes against weaker examples, review becomes more subjective, and Matt has to repeatedly supply tacit BDD judgement manually.
