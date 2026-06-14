@@ -29,10 +29,15 @@ defmodule Memba.Accounts.AuthEmailTest do
       message_stream: "outbound-authentication"
     )
 
+    request_id = Memba.ID.generate(:auth_email_request)
+
     callback_url =
       "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin&client=ipad"
 
-    assert :ok = AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url)
+    assert :ok =
+             AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url,
+               auth_email_request_id: request_id
+             )
 
     assert_received {:email, %Swoosh.Email{} = email}
 
@@ -57,7 +62,11 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert_standard_memba_footer(email.html_body, recipient_email: "alice@example.com")
 
     assert email.provider_options == %{
-             message_stream: "outbound-authentication"
+             message_stream: "outbound-authentication",
+             metadata: %{
+               "memba_email_kind" => "auth_sign_in_link",
+               "memba_auth_email_request_id" => request_id
+             }
            }
   end
 

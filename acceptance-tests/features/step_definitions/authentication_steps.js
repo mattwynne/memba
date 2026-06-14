@@ -1,8 +1,11 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   assertDoesNotReceiveSignInLink,
+  assertAuthEmailAcceptedByMailboxProvider,
   assertNotSignedIn,
   assertClubMarketingPage,
+  assertNeutralSignInEmailInstructions,
+  assertNoInboxPlacementClaim,
   assertOnHomepage,
   assertOnStaffOnlyHomepage,
   assertReceivesSignInLink,
@@ -11,6 +14,8 @@ const {
   assertSignedInAsStaff,
   assertSignedOut,
   assertSignedInOnClubPage,
+  assertSignInEmailPrivacyPreserved,
+  assertSignInEmailProgressStarted,
   assertStillSignedIn,
   assertPoweredByMembaInClubFooter,
   ensureMember,
@@ -20,6 +25,7 @@ const {
   followUnissuedSignInLink,
   openClubPage,
   recordNonMember,
+  recordSignInEmailProviderAccepted,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
   signOut,
@@ -56,6 +62,30 @@ Then("{word} should receive a sign-in link", async function (personName) {
 
 Then("{word} should not receive a sign-in link", async function (personName) {
   await assertDoesNotReceiveSignInLink(this, personName);
+});
+
+Then("{word} should see that Memba is trying to send a sign-in link", async function (personName) {
+  await assertSignInEmailProgressStarted(this, personName);
+});
+
+When("Alice's mailbox provider accepts the sign-in email", async function () {
+  await recordSignInEmailProviderAccepted(this, "Alice");
+});
+
+Then("{word} should see that the email has been accepted by her mailbox provider", async function (personName) {
+  await assertAuthEmailAcceptedByMailboxProvider(this, personName);
+});
+
+Then("{word} should not be told that the email is in her inbox", async function (_personName) {
+  await assertNoInboxPlacementClaim(this);
+});
+
+Then("{word} should see neutral sign-in email instructions", async function (personName) {
+  await assertNeutralSignInEmailInstructions(this, personName);
+});
+
+Then("{word} should not learn whether Memba recognises the email address", async function (personName) {
+  await assertSignInEmailPrivacyPreserved(this, personName);
 });
 
 When("{word} follows the sign-in link", async function (personName) {

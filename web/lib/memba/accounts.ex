@@ -8,12 +8,16 @@ defmodule Memba.Accounts do
 
   import Ecto.Query
 
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
+  alias Memba.AuthEmailProgressChanges
   alias Memba.Membership
   alias Memba.Repo
 
   @sign_in_token_ttl_seconds 15 * 60
   @sign_in_token_bytes 32
+  @auth_email_request_progress_ttl_seconds 30 * 60
+  @auth_email_request_retention_seconds 7 * 24 * 60 * 60
   @staff_domain "memba.io"
 
   @doc """
@@ -150,6 +154,107 @@ defmodule Memba.Accounts do
   def consume_sign_in_token(_token, _opts), do: {:error, :not_found}
 
   @doc """
+  Create a short-lived auth-email progress request.
+
+  The returned request has an opaque public ID. The optional `:recipient_email`
+  attribute is normalized and should only be supplied by callers that already
+  need to persist the real delivery address for a known auth email send.
+  """
+  def create_auth_email_request(attrs \\ %{}, opts \\ []) when is_map(attrs) and is_list(opts) do
+    now = timestamp(opts)
+
+    attrs
+    |> AuthEmailRequest.create_changeset(
+      now: now,
+      expires_at: DateTime.add(now, @auth_email_request_progress_ttl_seconds, :second),
+      retain_until: DateTime.add(now, @auth_email_request_retention_seconds, :second)
+    )
+    |> Repo.insert()
+  end
+
+  @doc """
+  Fetch an auth-email progress request by its opaque public request ID.
+  """
+  def get_auth_email_request(request_id) do
+    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do
+      Repo.get(AuthEmailRequest, request_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Return whether the request is past its 30-minute user-facing progress window.
+  """
+  def auth_email_request_expired?(%AuthEmailRequest{} = request, opts \\ []) do
+    now = timestamp(opts)
+    DateTime.compare(request.expires_at, now) != :gt
+  end
+
+  @doc """
+  Mark an auth-email request as handed to the email provider.
+  """
+  def mark_auth_email_sent(request_id, attrs \\ %{}, opts \\ [])
+      when is_map(attrs) and is_list(opts) do
+    update_auth_email_request(request_id, fn request ->
+      request
+      |> AuthEmailRequest.sent_changeset(attrs, now: timestamp(opts))
+      |> Repo.update()
+    end)
+    |> publish_auth_email_progress_change()
+  end
+
+  @doc """
+  Record that the recipient mailbox provider accepted the auth email.
+  """
+  def record_auth_email_provider_accepted(request_id, attrs \\ %{}, opts \\ [])
+      when is_map(attrs) and is_list(opts) do
+    record_auth_email_provider_progress(
+      request_id,
+      AuthEmailRequest.status_provider_accepted(),
+      attrs,
+      opts
+    )
+  end
+
+  @doc """
+  Record that the provider reported delayed auth-email delivery.
+  """
+  def record_auth_email_provider_delayed(request_id, attrs \\ %{}, opts \\ [])
+      when is_map(attrs) and is_list(opts) do
+    record_auth_email_provider_progress(
+      request_id,
+      AuthEmailRequest.status_provider_delayed(),
+      attrs,
+      opts
+    )
+  end
+
+  @doc """
+  Record that the provider reported failed auth-email delivery.
+  """
+  def record_auth_email_provider_failed(request_id, attrs \\ %{}, opts \\ [])
+      when is_map(attrs) and is_list(opts) do
+    record_auth_email_provider_progress(
+      request_id,
+      AuthEmailRequest.status_provider_failed(),
+      attrs,
+      opts
+    )
+  end
+
+  @doc """
+  Delete auth-email request rows whose seven-day retention window has elapsed.
+  """
+  def delete_retained_auth_email_requests(opts \\ []) do
+    now = timestamp(opts)
+
+    AuthEmailRequest
+    |> where([request], request.retain_until <= ^now)
+    |> Repo.delete_all()
+  end
+
+  @doc """
   List active clubs for a signed-in email address.
 
   Results are ordered by the Membership context's club listing order.
@@ -200,6 +305,94 @@ defmodule Memba.Accounts do
       {:error, :expired}
     end
   end
+
+  defp record_auth_email_provider_progress(request_id, status, attrs, opts) do
+    update_auth_email_request(request_id, fn request ->
+      if duplicate_auth_email_provider_progress?(request, status, attrs) do
+        {:ok, {:unchanged, request}}
+      else
+        request
+        |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
+        |> Repo.update()
+      end
+    end)
+    |> publish_auth_email_progress_change()
+  end
+
+  defp duplicate_auth_email_provider_progress?(%AuthEmailRequest{} = request, status, attrs) do
+    provider_event_id = optional_trimmed_attr(attrs, :provider_event_id)
+    provider_event_type = optional_trimmed_attr(attrs, :provider_event_type)
+
+    request.status == status &&
+      not is_nil(provider_event_id) &&
+      request.provider_event_id == provider_event_id &&
+      request.provider_event_type == provider_event_type
+  end
+
+  defp optional_trimmed_attr(attrs, key) when is_map(attrs) do
+    case Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key)) do
+      value when is_binary(value) ->
+        case String.trim(value) do
+          "" -> nil
+          trimmed_value -> trimmed_value
+        end
+
+      _value ->
+        nil
+    end
+  end
+
+  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request} = result) do
+    _result = AuthEmailProgressChanges.publish(request.request_id)
+    result
+  end
+
+  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request, :unchanged}) do
+    {:ok, request}
+  end
+
+  defp publish_auth_email_progress_change(result), do: result
+
+  defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do
+    with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do
+      request_id
+      |> transact_auth_email_request_update(update_fun)
+      |> unwrap_auth_email_request_update()
+    else
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp transact_auth_email_request_update(request_id, update_fun) do
+    Repo.transaction(fn ->
+      case lock_auth_email_request(request_id) do
+        nil ->
+          Repo.rollback(:not_found)
+
+        %AuthEmailRequest{} = request ->
+          case update_fun.(request) do
+            {:ok, %AuthEmailRequest{} = request} -> {:changed, request}
+            {:ok, {:unchanged, %AuthEmailRequest{} = request}} -> {:unchanged, request}
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+      end
+    end)
+  end
+
+  defp lock_auth_email_request(request_id) do
+    AuthEmailRequest
+    |> where([request], request.request_id == ^request_id)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+  end
+
+  defp unwrap_auth_email_request_update({:ok, {:changed, %AuthEmailRequest{} = request}}),
+    do: {:ok, request}
+
+  defp unwrap_auth_email_request_update({:ok, {:unchanged, %AuthEmailRequest{} = request}}),
+    do: {:ok, request, :unchanged}
+
+  defp unwrap_auth_email_request_update({:error, reason}), do: {:error, reason}
 
   defp timestamp(opts) do
     Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)

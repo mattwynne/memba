@@ -5,6 +5,7 @@ defmodule MembaWeb.PageControllerTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.MemberPermission
@@ -767,8 +768,14 @@ defmodule MembaWeb.PageControllerTest do
         }
       )
 
-    assert redirected_to(conn) == ~p"/auth/check-email"
+    check_email_path = redirected_to(conn)
+    assert auth_email_request_path?(check_email_path)
     assert Repo.aggregate(Request, :count) == 0
+
+    assert [%AuthEmailRequest{} = auth_email_request] = Repo.all(AuthEmailRequest)
+    assert check_email_path == ~p"/auth/check-email/#{auth_email_request.request_id}"
+    assert auth_email_request.status == AuthEmailRequest.status_sent()
+    assert auth_email_request.recipient_email == "robin@example.com"
 
     assert [%SignInToken{email: "robin@example.com"}] = Repo.all(SignInToken)
     assert_received {:email, %Swoosh.Email{} = email}
@@ -797,7 +804,7 @@ defmodule MembaWeb.PageControllerTest do
         }
       )
 
-    assert redirected_to(conn) == ~p"/auth/check-email"
+    assert auth_email_request_path?(redirected_to(conn))
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert [_, token, query] =
@@ -1264,4 +1271,8 @@ defmodule MembaWeb.PageControllerTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp auth_email_request_path?(path) do
+    Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
+  end
 end

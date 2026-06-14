@@ -1,6 +1,9 @@
 defmodule MembaWeb.PostmarkWebhookController do
   use MembaWeb, :controller
 
+  require Logger
+
+  alias Memba.Accounts
   alias Memba.Messaging
 
   @successful_status :accepted
@@ -22,8 +25,7 @@ defmodule MembaWeb.PostmarkWebhookController do
   defp handle_postmark_event(params) do
     with {:ok, event_type} <- postmark_event_type(params) do
       params
-      |> status_report_attrs(event_type)
-      |> report_status(event_type)
+      |> report_postmark_event(event_type)
       |> normalize_dispatch_result()
     end
   end
@@ -70,6 +72,16 @@ defmodule MembaWeb.PostmarkWebhookController do
     end
   end
 
+  defp report_postmark_event(params, event_type) do
+    if auth_email_event?(params) do
+      report_auth_email_progress(params, event_type)
+    else
+      params
+      |> status_report_attrs(event_type)
+      |> report_status(event_type)
+    end
+  end
+
   defp report_status(attrs, :delivered),
     do: Messaging.report_email_delivery_delivered(attrs)
 
@@ -81,6 +93,68 @@ defmodule MembaWeb.PostmarkWebhookController do
 
   defp report_status(attrs, :spam_complaint),
     do: Messaging.report_email_delivery_spam_complaint(attrs)
+
+  defp report_auth_email_progress(params, event_type) do
+    case event_auth_email_request_id(params) do
+      nil ->
+        Logger.info("Ignoring Postmark auth-email webhook without auth-email request correlation")
+        :ok
+
+      request_id ->
+        params
+        |> auth_email_progress_attrs(event_type)
+        |> record_auth_email_progress(request_id, event_type)
+        |> normalize_auth_email_progress_result(request_id)
+    end
+  end
+
+  defp record_auth_email_progress(attrs, request_id, :delivered),
+    do: Accounts.record_auth_email_provider_accepted(request_id, attrs)
+
+  defp record_auth_email_progress(attrs, request_id, :delayed),
+    do: Accounts.record_auth_email_provider_delayed(request_id, attrs)
+
+  defp record_auth_email_progress(attrs, request_id, event_type)
+       when event_type in [:bounced, :spam_complaint],
+       do: Accounts.record_auth_email_provider_failed(request_id, attrs)
+
+  defp normalize_auth_email_progress_result({:error, :not_found}, request_id) do
+    Logger.info(
+      "Ignoring Postmark auth-email webhook for unknown auth-email request #{inspect(request_id)}"
+    )
+
+    :ok
+  end
+
+  defp normalize_auth_email_progress_result(result, _request_id), do: result
+
+  defp auth_email_event?(params) do
+    auth_email_message_stream?(params) ||
+      present_value(event_auth_email_request_id(params)) != nil
+  end
+
+  defp auth_email_message_stream?(params) do
+    params
+    |> event_message_stream()
+    |> normalize_token()
+    |> Kernel.==("outboundauthentication")
+  end
+
+  defp auth_email_progress_attrs(params, event_type) do
+    attrs = %{
+      provider: "postmark",
+      provider_message_id: event_provider_message_id(params),
+      provider_message_stream: event_message_stream(params),
+      provider_event_id: event_provider_event_id(params),
+      provider_event_type: event_record_type(params)
+    }
+
+    if event_type in [:delayed, :bounced, :spam_complaint] do
+      Map.put(attrs, :provider_reason, event_reason(params))
+    else
+      attrs
+    end
+  end
 
   defp normalize_dispatch_result(:ok), do: :ok
   defp normalize_dispatch_result({:ok, _result}), do: :ok
@@ -130,6 +204,59 @@ defmodule MembaWeb.PostmarkWebhookController do
         :DeliveryID
       ])
     end)
+  end
+
+  defp event_auth_email_request_id(params) do
+    params
+    |> event_metadata()
+    |> event_value([
+      :auth_email_request_id,
+      "auth_email_request_id",
+      :memba_auth_email_request_id,
+      "memba_auth_email_request_id",
+      "MembaAuthEmailRequestID"
+    ])
+    |> present_or_else(fn ->
+      event_value(params, [
+        :auth_email_request_id,
+        "auth_email_request_id",
+        :memba_auth_email_request_id,
+        "memba_auth_email_request_id",
+        "MembaAuthEmailRequestID"
+      ])
+    end)
+  end
+
+  defp event_provider_message_id(params) do
+    event_value(params, [
+      :MessageID,
+      "MessageID",
+      :message_id,
+      "message_id",
+      :MessageId,
+      "MessageId"
+    ])
+  end
+
+  defp event_message_stream(params) do
+    event_value(params, [
+      :MessageStream,
+      "MessageStream",
+      :message_stream,
+      "message_stream"
+    ])
+  end
+
+  defp event_provider_event_id(params) do
+    params
+    |> event_value([:ID, "ID", :id, "id", :MessageID, "MessageID"])
+    |> present_to_string()
+  end
+
+  defp event_record_type(params) do
+    params
+    |> event_value([:RecordType, "RecordType", :record_type, "record_type"])
+    |> present_to_string()
   end
 
   defp event_metadata(params) do
@@ -182,6 +309,9 @@ defmodule MembaWeb.PostmarkWebhookController do
 
   defp present_value(nil), do: nil
   defp present_value(value), do: value
+
+  defp present_to_string(nil), do: nil
+  defp present_to_string(value), do: value |> to_string() |> present_value()
 
   defp normalize_token(nil), do: nil
 

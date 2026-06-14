@@ -6,6 +6,7 @@ defmodule MembaWeb.AuthControllerTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
@@ -75,6 +76,189 @@ defmodule MembaWeb.AuthControllerTest do
       assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
     end
 
+    test "shows the sign-in link request acknowledgement page for an opaque request id", %{
+      conn: conn
+    } do
+      {:ok, request} = Accounts.create_auth_email_request()
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+      html = LazyHTML.from_fragment(response)
+
+      assert response =~ "Check your email for the sign-in link."
+      assert_exact_text(html, "#auth-email-progress-message", "Preparing your sign-in link…")
+      assert html |> LazyHTML.query("section#auth-sign-in-sent") |> Enum.any?()
+      assert html |> LazyHTML.query("div#auth-email-progress") |> Enum.any?()
+      assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
+    end
+
+    test "renders neutral auth email progress from persisted request status", %{conn: conn} do
+      {:ok, sent_request} = Accounts.create_auth_email_request()
+      {:ok, sent_request} = Accounts.mark_auth_email_sent(sent_request.request_id)
+
+      {:ok, _view, sent_response} = live(conn, ~p"/auth/check-email/#{sent_request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(sent_response),
+        "#auth-email-progress-message",
+        "If this email can sign in, the link is on its way."
+      )
+
+      {:ok, accepted_request} = Accounts.create_auth_email_request()
+      {:ok, accepted_request} = Accounts.mark_auth_email_sent(accepted_request.request_id)
+
+      {:ok, accepted_request} =
+        Accounts.record_auth_email_provider_accepted(accepted_request.request_id)
+
+      {:ok, _view, accepted_response} =
+        live(conn, ~p"/auth/check-email/#{accepted_request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(accepted_response),
+        "#auth-email-progress-message",
+        "Your mailbox provider has accepted the email. It should appear shortly."
+      )
+    end
+
+    test "renders neutral fallback guidance after waiting without provider acceptance", %{
+      conn: conn
+    } do
+      created_at = DateTime.add(DateTime.utc_now(:microsecond), -61, :second)
+      {:ok, request} = Accounts.create_auth_email_request(%{})
+
+      request =
+        request
+        |> Ecto.Changeset.change(inserted_at: created_at, updated_at: created_at)
+        |> Repo.update!()
+
+      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: created_at)
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(response),
+        "#auth-email-progress-message",
+        "If it does not arrive, check junk mail or ask for another link."
+      )
+    end
+
+    test "keeps fallback guidance hidden before the fallback threshold", %{conn: conn} do
+      created_at = DateTime.add(DateTime.utc_now(:microsecond), -30, :second)
+      {:ok, request} = Accounts.create_auth_email_request(%{})
+
+      request =
+        request
+        |> Ecto.Changeset.change(inserted_at: created_at, updated_at: created_at)
+        |> Repo.update!()
+
+      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: created_at)
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+      html = LazyHTML.from_fragment(response)
+
+      assert_exact_text(
+        html,
+        "#auth-email-progress-message",
+        "If this email can sign in, the link is on its way."
+      )
+
+      refute response =~ "If it does not arrive, check junk mail or ask for another link."
+    end
+
+    test "renders expired neutral guidance after the user-facing progress window", %{conn: conn} do
+      created_at = DateTime.add(DateTime.utc_now(:microsecond), -31 * 60, :second)
+      {:ok, request} = Accounts.create_auth_email_request(%{}, now: created_at)
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(response),
+        "#auth-email-progress-message",
+        "This sign-in-link request has expired. Ask for another link."
+      )
+    end
+
+    test "refreshes auth email progress after a committed progress update", %{conn: conn} do
+      {:ok, request} = Accounts.create_auth_email_request()
+
+      {:ok, view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(response),
+        "#auth-email-progress-message",
+        "Preparing your sign-in link…"
+      )
+
+      {:ok, _request} = Accounts.record_auth_email_provider_accepted(request.request_id)
+
+      html = render(view) |> LazyHTML.from_fragment()
+
+      assert_exact_text(
+        html,
+        "#auth-email-progress-message",
+        "Your mailbox provider has accepted the email. It should appear shortly."
+      )
+    end
+
+    test "patches known and unknown sign-in submissions to opaque request id URLs", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      known_path = submit_sign_in_link_request_path(conn, " ALICE@EXAMPLE.COM ")
+
+      assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
+      assert known_path == ~p"/auth/check-email/#{known_request.request_id}"
+      assert auth_email_request_path?(known_path)
+
+      unknown_path =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> submit_sign_in_link_request_path("unknown@example.com")
+
+      requests = Repo.all(AuthEmailRequest)
+      assert length(requests) == 2
+
+      assert [%AuthEmailRequest{} = unknown_request] =
+               Enum.reject(requests, &(&1.request_id == known_request.request_id))
+
+      assert unknown_path == ~p"/auth/check-email/#{unknown_request.request_id}"
+      assert auth_email_request_path?(unknown_path)
+    end
+
+    test "keeps known and unknown check-email pages privacy-preserving", %{conn: conn} do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      known_path = submit_sign_in_link_request_path(conn, "alice@example.com")
+
+      unknown_path =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> submit_sign_in_link_request_path("robin@example.net")
+
+      for {path, submitted_email} <- [
+            {known_path, "alice@example.com"},
+            {unknown_path, "robin@example.net"}
+          ] do
+        {:ok, _view, response} =
+          conn
+          |> Phoenix.ConnTest.recycle()
+          |> live(path)
+
+        html = LazyHTML.from_fragment(response)
+
+        assert response =~ "Check your email for the sign-in link."
+        assert response =~ neutral_notice()
+        assert html |> LazyHTML.query("div#auth-email-progress") |> Enum.any?()
+        refute response =~ submitted_email
+        refute response =~ "recognised"
+        refute response =~ "recognized"
+        refute response =~ "unknown email"
+        refute response =~ "No account"
+      end
+    end
+
     test "creates a sign-in token and sends a callback URL email for known member recipients", %{
       conn: conn
     } do
@@ -92,6 +276,51 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.subject == "Sign in to Memba"
       assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+    end
+
+    test "correlates known auth email delivery while keeping unknown progress neutral", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
+               "Check your email for the sign-in link."
+
+      assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
+      assert Memba.ID.valid?(:auth_email_request, known_request.request_id)
+      assert known_request.status == AuthEmailRequest.status_sent()
+      assert known_request.recipient_email == "alice@example.com"
+      assert known_request.provider == "postmark"
+      assert known_request.provider_message_stream == "outbound-authentication"
+      assert known_request.sent_at
+
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.provider_options[:metadata] == %{
+               "memba_email_kind" => "auth_sign_in_link",
+               "memba_auth_email_request_id" => known_request.request_id
+             }
+
+      assert conn
+             |> Phoenix.ConnTest.recycle()
+             |> submit_sign_in_link_request("unknown@example.com") =~
+               "Check your email for the sign-in link."
+
+      requests = Repo.all(AuthEmailRequest)
+
+      assert length(requests) == 2
+      assert Enum.all?(requests, &Memba.ID.valid?(:auth_email_request, &1.request_id))
+      assert length(Enum.uniq_by(requests, & &1.request_id)) == 2
+
+      assert [%AuthEmailRequest{} = unknown_request] =
+               Enum.reject(requests, &(&1.request_id == known_request.request_id))
+
+      assert unknown_request.status == AuthEmailRequest.status_created()
+      assert unknown_request.recipient_email == nil
+      assert unknown_request.provider == nil
+      assert unknown_request.sent_at == nil
+      assert_no_email_sent()
     end
 
     test "creates group-led club-subdomain callback URL emails when sign-in is requested on a known club host",
@@ -468,6 +697,28 @@ defmodule MembaWeb.AuthControllerTest do
     view
     |> form("#sign-in-link-form", auth: %{email: email})
     |> render_submit()
+  end
+
+  defp submit_sign_in_link_request_path(conn, email) do
+    {:ok, view, _html} = live(conn, ~p"/auth")
+
+    view
+    |> form("#sign-in-link-form", auth: %{email: email})
+    |> render_submit()
+
+    assert_patch(view)
+  end
+
+  defp auth_email_request_path?(path) do
+    Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
+  end
+
+  defp assert_exact_text(html, selector, expected_text) do
+    assert html
+           |> LazyHTML.query(selector)
+           |> LazyHTML.text()
+           |> String.replace(~r/\s+/, " ")
+           |> String.trim() == expected_text
   end
 
   defp create_active_member(attrs) do

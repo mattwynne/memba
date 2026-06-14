@@ -397,6 +397,34 @@ end
   );
 }
 
+function recordAuthEmailProviderAccepted({ requestId }) {
+  return runCommand(
+    `
+request_id = Map.fetch!(payload, "requestId")
+
+case Memba.Accounts.record_auth_email_provider_accepted(request_id, %{
+       provider: "postmark",
+       provider_event_id: "acceptance-#{request_id}",
+       provider_event_type: "Delivered",
+       provider_message_id: "acceptance-message-#{request_id}",
+       provider_message_stream: "outbound-authentication"
+     }) do
+  {:ok, request} ->
+    %{
+      requestId: request.request_id,
+      status: request.status,
+      providerEventId: request.provider_event_id,
+      providerEventType: request.provider_event_type
+    }
+
+  {:error, reason} ->
+    raise "Could not record auth-email provider acceptance for #{request_id}: #{inspect(reason)}"
+end
+`,
+    { requestId }
+  );
+}
+
 function runCommand(code, payload = {}) {
   const serverNode = acceptanceServerNode();
   const cookie = process.env.ACCEPTANCE_SERVER_COOKIE || defaultCookie;
@@ -409,11 +437,22 @@ end).(payload)
 result |> Jason.encode!() |> IO.write()
 `;
 
-  const result = spawnSync(
-    "elixir",
-    ["--hidden", "--sname", "undefined", "--cookie", cookie, "--rpc-eval", serverNode, wrappedCode],
-    { encoding: "utf8", env: process.env }
-  );
+  const deadline = Date.now() + Number(process.env.ACCEPTANCE_SERVER_COMMAND_CONNECT_TIMEOUT_MS || 5000);
+  let result = null;
+
+  do {
+    result = spawnSync(
+      "elixir",
+      ["--hidden", "--sname", "undefined", "--cookie", cookie, "--rpc-eval", serverNode, wrappedCode],
+      { encoding: "utf8", env: process.env }
+    );
+
+    if (result.status === 0 || !serverCommandConnectionFailed(result) || Date.now() >= deadline) {
+      break;
+    }
+
+    sleepSync(100);
+  } while (true);
 
   if (result.status !== 0) {
     throw new Error(
@@ -428,6 +467,14 @@ result |> Jason.encode!() |> IO.write()
   } catch (error) {
     throw new Error(`Acceptance server command returned invalid JSON: ${result.stdout}`, { cause: error });
   }
+}
+
+function serverCommandConnectionFailed(result) {
+  return String(result && result.stderr).includes("RPC failed with reason :noconnection");
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 function acceptanceServerNode() {
@@ -455,6 +502,7 @@ module.exports = {
   ensurePersonEmailAddresses,
   ensureSmokeTestClub,
   listLocalDeliveryFacts,
+  recordAuthEmailProviderAccepted,
   runCommand,
   sendClubMessage,
   waitForProjectionBarrier

@@ -16,7 +16,8 @@ defmodule Memba.ID do
     delivery: "del",
     inbound_email: "inb",
     email_address: "ead",
-    onboarding_request: "req"
+    onboarding_request: "req",
+    auth_email_request: "aer"
   }
 
   @types Map.keys(@prefixes)
@@ -32,6 +33,7 @@ defmodule Memba.ID do
           | :inbound_email
           | :email_address
           | :onboarding_request
+          | :auth_email_request
   @type t :: String.t()
 
   @doc "Generate a new typed ID."

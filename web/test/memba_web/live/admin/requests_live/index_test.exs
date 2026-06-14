@@ -198,7 +198,11 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
         }
       )
 
-    assert redirected_to(verification_conn) == ~p"/auth/check-email"
+    assert Regex.match?(
+             ~r|^/auth/check-email/aer_[0-9a-f-]{36}$|,
+             redirected_to(verification_conn)
+           )
+
     assert Onboarding.list_active_requests() == []
 
     assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
