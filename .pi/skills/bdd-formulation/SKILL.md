@@ -49,10 +49,22 @@ From Seb Rose, scenarios should be:
 - Carry one consistent narrative through a feature where possible.
 - Put cross-cutting assertions, such as output or logging, on existing scenarios rather than in separate rules.
 
+## Abstraction Heuristic
+
+When a scenario feels long, do not shorten it mechanically. First ask what makes it long.
+
+- If repeated steps describe an incidental journey, introduce a named business step.
+  Example: replace request-link / receive-link / follow-link with `When Alice signs in with their email address` when sign-in mechanics are not the rule under test.
+- If the intermediate states are the rule, keep them visible.
+  Example: invitation profile completion should show that membership does not start before the invitee supplies required details.
+- If one scenario proves a workflow and a domain outcome, consider splitting it into two scenarios under the appropriate rules.
+- If a scenario has one action and several concrete expected outcomes, it may be fine; result-set examples can be longer when the table of outcomes is the point.
+
 ## Review Questions
 
 - What rule does this scenario prove?
 - Does the Example name add information beyond the Rule?
 - Is every line essential?
 - Is the data concrete and business-readable?
+- Are repeated steps revealing a named domain concept that should become one higher-level step?
 - Would a feature with no `Rule:` sections be clearer if its rules were extracted?
