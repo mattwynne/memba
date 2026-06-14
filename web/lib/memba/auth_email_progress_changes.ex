@@ -39,4 +39,27 @@ defmodule Memba.AuthEmailProgressChanges do
   end
 
   def subscribe(_request_id), do: {:error, :invalid_request_id}
+
+  @doc """
+  Publish that committed auth-email progress changed for an opaque request ID.
+
+  The broadcast payload intentionally contains only the opaque request ID.
+  Subscribers must reload persisted progress to render current state.
+  """
+  @spec publish(String.t()) :: :ok | {:error, term()}
+  def publish(request_id) when is_binary(request_id) do
+    case topic(request_id) do
+      nil ->
+        {:error, :invalid_request_id}
+
+      topic ->
+        Phoenix.PubSub.broadcast(
+          Memba.PubSub,
+          topic,
+          {:auth_email_progress_changed, %{request_id: request_id}}
+        )
+    end
+  end
+
+  def publish(_request_id), do: {:error, :invalid_request_id}
 end

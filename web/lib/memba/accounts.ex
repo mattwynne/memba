@@ -10,6 +10,7 @@ defmodule Memba.Accounts do
 
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
+  alias Memba.AuthEmailProgressChanges
   alias Memba.Membership
   alias Memba.Repo
 
@@ -200,6 +201,7 @@ defmodule Memba.Accounts do
       |> AuthEmailRequest.sent_changeset(attrs, now: timestamp(opts))
       |> Repo.update()
     end)
+    |> publish_auth_email_progress_change()
   end
 
   @doc """
@@ -310,7 +312,15 @@ defmodule Memba.Accounts do
       |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
       |> Repo.update()
     end)
+    |> publish_auth_email_progress_change()
   end
+
+  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request} = result) do
+    _result = AuthEmailProgressChanges.publish(request.request_id)
+    result
+  end
+
+  defp publish_auth_email_progress_change(result), do: result
 
   defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do
     with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do

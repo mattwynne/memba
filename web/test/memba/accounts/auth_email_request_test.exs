@@ -3,6 +3,7 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmailRequest
+  alias Memba.AuthEmailProgressChanges
   alias Memba.Repo
 
   describe "create_auth_email_request/2" do
@@ -86,6 +87,38 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
       assert accepted_request.provider_event_id == "postmark-event-456"
       assert accepted_request.provider_event_type == "Delivered"
       assert accepted_request.provider_reported_at == delivered_at
+    end
+  end
+
+  describe "committed progress notifications" do
+    test "publishes narrow notifications after auth-email progress commits" do
+      {:ok, request} = Accounts.create_auth_email_request()
+
+      :ok = AuthEmailProgressChanges.subscribe(request.request_id)
+
+      assert {:ok, %AuthEmailRequest{} = sent_request} =
+               Accounts.mark_auth_email_sent(request.request_id, %{
+                 recipient_email: "alice@example.com"
+               })
+
+      assert sent_request.status == "sent"
+
+      assert_receive {:auth_email_progress_changed, %{request_id: request_id} = payload}
+      assert request_id == request.request_id
+      assert Map.keys(payload) == [:request_id]
+
+      assert Accounts.get_auth_email_request(request.request_id).status == "sent"
+
+      assert {:ok, %AuthEmailRequest{} = accepted_request} =
+               Accounts.record_auth_email_provider_accepted(request.request_id)
+
+      assert accepted_request.status == "provider_accepted"
+
+      assert_receive {:auth_email_progress_changed, %{request_id: request_id} = payload}
+      assert request_id == request.request_id
+      assert Map.keys(payload) == [:request_id]
+
+      assert Accounts.get_auth_email_request(request.request_id).status == "provider_accepted"
     end
   end
 

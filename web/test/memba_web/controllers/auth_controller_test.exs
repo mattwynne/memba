@@ -141,7 +141,7 @@ defmodule MembaWeb.AuthControllerTest do
       )
     end
 
-    test "refreshes auth email progress after a committed progress notification", %{conn: conn} do
+    test "refreshes auth email progress after a committed progress update", %{conn: conn} do
       {:ok, request} = Accounts.create_auth_email_request()
 
       {:ok, view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
@@ -153,12 +153,6 @@ defmodule MembaWeb.AuthControllerTest do
       )
 
       {:ok, _request} = Accounts.record_auth_email_provider_accepted(request.request_id)
-
-      Phoenix.PubSub.broadcast(
-        Memba.PubSub,
-        Memba.AuthEmailProgressChanges.topic(request.request_id),
-        {:auth_email_progress_changed, %{request_id: request.request_id}}
-      )
 
       html = render(view) |> LazyHTML.from_fragment()
 
