@@ -65,9 +65,11 @@ defmodule Memba.Accounts.AuthEmailTest do
              message_stream: "outbound-authentication",
              metadata: %{
                "memba_email_kind" => "auth_sign_in_link",
-               "memba_auth_email_request_id" => request_id
+               "memba_auth_req_id" => request_id
              }
            }
+
+    assert Enum.all?(Map.keys(email.provider_options.metadata), &(String.length(&1) <= 20))
   end
 
   test "builds and sends a Resend-tagged sign-in-link email" do

@@ -212,6 +212,8 @@ defmodule MembaWeb.PostmarkWebhookController do
     |> event_value([
       :auth_email_request_id,
       "auth_email_request_id",
+      :memba_auth_req_id,
+      "memba_auth_req_id",
       :memba_auth_email_request_id,
       "memba_auth_email_request_id",
       "MembaAuthEmailRequestID"
@@ -220,6 +222,8 @@ defmodule MembaWeb.PostmarkWebhookController do
       event_value(params, [
         :auth_email_request_id,
         "auth_email_request_id",
+        :memba_auth_req_id,
+        "memba_auth_req_id",
         :memba_auth_email_request_id,
         "memba_auth_email_request_id",
         "MembaAuthEmailRequestID"

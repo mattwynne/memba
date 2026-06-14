@@ -299,8 +299,10 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert email.provider_options[:metadata] == %{
                "memba_email_kind" => "auth_sign_in_link",
-               "memba_auth_email_request_id" => known_request.request_id
+               "memba_auth_req_id" => known_request.request_id
              }
+
+      assert Enum.all?(Map.keys(email.provider_options[:metadata]), &(String.length(&1) <= 20))
 
       assert conn
              |> Phoenix.ConnTest.recycle()

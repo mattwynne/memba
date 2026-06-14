@@ -104,7 +104,7 @@ defmodule Memba.Accounts.AuthEmail do
        when is_binary(request_id) do
     put_provider_option(email, :metadata, %{
       "memba_email_kind" => "auth_sign_in_link",
-      "memba_auth_email_request_id" => request_id
+      "memba_auth_req_id" => request_id
     })
   end
 

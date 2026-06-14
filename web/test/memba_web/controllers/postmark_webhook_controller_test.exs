@@ -469,7 +469,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
         "MessageID" => "postmark-auth-message-123",
         "MessageStream" => "outbound-authentication",
         "Metadata" => %{
-          "memba_auth_email_request_id" => request.request_id
+          "memba_auth_req_id" => request.request_id
         },
         "Recipient" => recipient.email,
         "ServerID" => 12_345,
