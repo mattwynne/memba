@@ -1,0 +1,158 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index 78af430..d2580b3 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -7,6 +7,6 @@
+ - [x] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
+ - [x] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
+ - [x] 007 Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
+-- [ ] 008 Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
++- [x] 008 Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
+ - [ ] 009 Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
+ - [ ] 010 Implement or update acceptance step support for the `@iteration-032` scenarios, then remove/narrow `@todo-domain`/`@todo-ui` when they pass.
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+index a6d8b42..438a73f 100644
+--- a/web/lib/memba/accounts.ex
++++ b/web/lib/memba/accounts.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Accounts do
+ 
+   alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
++  alias Memba.AuthEmailProgressChanges
+   alias Memba.Membership
+   alias Memba.Repo
+ 
+@@ -200,6 +201,7 @@ defmodule Memba.Accounts do
+       |> AuthEmailRequest.sent_changeset(attrs, now: timestamp(opts))
+       |> Repo.update()
+     end)
++    |> publish_auth_email_progress_change()
+   end
+ 
+   @doc """
+@@ -310,8 +312,16 @@ defmodule Memba.Accounts do
+       |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
+       |> Repo.update()
+     end)
++    |> publish_auth_email_progress_change()
+   end
+ 
++  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request} = result) do
++    _result = AuthEmailProgressChanges.publish(request.request_id)
++    result
++  end
++
++  defp publish_auth_email_progress_change(result), do: result
++
+   defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do
+     with {:ok, request_id} <- Memba.ID.cast(:auth_email_request, request_id) do
+       request_id
+diff --git a/web/lib/memba/auth_email_progress_changes.ex b/web/lib/memba/auth_email_progress_changes.ex
+index 9e65b86..e58a83c 100644
+--- a/web/lib/memba/auth_email_progress_changes.ex
++++ b/web/lib/memba/auth_email_progress_changes.ex
+@@ -39,4 +39,27 @@ defmodule Memba.AuthEmailProgressChanges do
+   end
+ 
+   def subscribe(_request_id), do: {:error, :invalid_request_id}
++
++  @doc """
++  Publish that committed auth-email progress changed for an opaque request ID.
++
++  The broadcast payload intentionally contains only the opaque request ID.
++  Subscribers must reload persisted progress to render current state.
++  """
++  @spec publish(String.t()) :: :ok | {:error, term()}
++  def publish(request_id) when is_binary(request_id) do
++    case topic(request_id) do
++      nil ->
++        {:error, :invalid_request_id}
++
++      topic ->
++        Phoenix.PubSub.broadcast(
++          Memba.PubSub,
++          topic,
++          {:auth_email_progress_changed, %{request_id: request_id}}
++        )
++    end
++  end
++
++  def publish(_request_id), do: {:error, :invalid_request_id}
+ end
+diff --git a/web/test/memba/accounts/auth_email_request_test.exs b/web/test/memba/accounts/auth_email_request_test.exs
+index aeb7f13..47fee60 100644
+--- a/web/test/memba/accounts/auth_email_request_test.exs
++++ b/web/test/memba/accounts/auth_email_request_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
+ 
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmailRequest
++  alias Memba.AuthEmailProgressChanges
+   alias Memba.Repo
+ 
+   describe "create_auth_email_request/2" do
+@@ -89,6 +90,38 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
+     end
+   end
+ 
++  describe "committed progress notifications" do
++    test "publishes narrow notifications after auth-email progress commits" do
++      {:ok, request} = Accounts.create_auth_email_request()
++
++      :ok = AuthEmailProgressChanges.subscribe(request.request_id)
++
++      assert {:ok, %AuthEmailRequest{} = sent_request} =
++               Accounts.mark_auth_email_sent(request.request_id, %{
++                 recipient_email: "alice@example.com"
++               })
++
++      assert sent_request.status == "sent"
++
++      assert_receive {:auth_email_progress_changed, %{request_id: request_id} = payload}
++      assert request_id == request.request_id
++      assert Map.keys(payload) == [:request_id]
++
++      assert Accounts.get_auth_email_request(request.request_id).status == "sent"
++
++      assert {:ok, %AuthEmailRequest{} = accepted_request} =
++               Accounts.record_auth_email_provider_accepted(request.request_id)
++
++      assert accepted_request.status == "provider_accepted"
++
++      assert_receive {:auth_email_progress_changed, %{request_id: request_id} = payload}
++      assert request_id == request.request_id
++      assert Map.keys(payload) == [:request_id]
++
++      assert Accounts.get_auth_email_request(request.request_id).status == "provider_accepted"
++    end
++  end
++
+   describe "expiry and cleanup" do
+     test "identifies user-facing expiry after 30 minutes" do
+       now = ~U[2026-06-13 12:00:00.000000Z]
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 5db4624..38af3d6 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -141,7 +141,7 @@ defmodule MembaWeb.AuthControllerTest do
+       )
+     end
+ 
+-    test "refreshes auth email progress after a committed progress notification", %{conn: conn} do
++    test "refreshes auth email progress after a committed progress update", %{conn: conn} do
+       {:ok, request} = Accounts.create_auth_email_request()
+ 
+       {:ok, view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+@@ -154,12 +154,6 @@ defmodule MembaWeb.AuthControllerTest do
+ 
+       {:ok, _request} = Accounts.record_auth_email_provider_accepted(request.request_id)
+ 
+-      Phoenix.PubSub.broadcast(
+-        Memba.PubSub,
+-        Memba.AuthEmailProgressChanges.topic(request.request_id),
+-        {:auth_email_progress_changed, %{request_id: request.request_id}}
+-      )
+-
+       html = render(view) |> LazyHTML.from_fragment()
+ 
+       assert_exact_text(
