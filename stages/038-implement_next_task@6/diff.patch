@@ -1,0 +1,364 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index 0aa8af6..36e4d52 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
+ - [x] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
+ - [x] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
+-- [ ] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
++- [x] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
+ - [ ] 007 Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
+ - [ ] 008 Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
+ - [ ] 009 Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
+diff --git a/web/lib/memba/auth_email_progress_changes.ex b/web/lib/memba/auth_email_progress_changes.ex
+new file mode 100644
+index 0000000..9e65b86
+--- /dev/null
++++ b/web/lib/memba/auth_email_progress_changes.ex
+@@ -0,0 +1,42 @@
++defmodule Memba.AuthEmailProgressChanges do
++  @moduledoc """
++  Topic helpers for committed auth-email progress notifications.
++
++  Payloads intentionally carry only the opaque auth-email request ID. LiveViews
++  reload progress from persistence after receiving a notification so PubSub does
++  not disclose recipient email addresses or account-existence information.
++  """
++
++  alias Memba.ID
++
++  @topic_prefix "auth_email_progress:"
++
++  @type message :: {:auth_email_progress_changed, %{request_id: String.t()}}
++
++  @doc """
++  Return the narrow PubSub topic for an opaque auth-email request ID.
++  """
++  @spec topic(term()) :: String.t() | nil
++  def topic(request_id) when is_binary(request_id) do
++    with {:ok, request_id} <- ID.cast(:auth_email_request, request_id) do
++      @topic_prefix <> request_id
++    else
++      :error -> nil
++    end
++  end
++
++  def topic(_request_id), do: nil
++
++  @doc """
++  Subscribe the current process to committed progress notifications for a request.
++  """
++  @spec subscribe(String.t()) :: :ok | {:error, :invalid_request_id}
++  def subscribe(request_id) when is_binary(request_id) do
++    case topic(request_id) do
++      nil -> {:error, :invalid_request_id}
++      topic -> Phoenix.PubSub.subscribe(Memba.PubSub, topic)
++    end
++  end
++
++  def subscribe(_request_id), do: {:error, :invalid_request_id}
++end
+diff --git a/web/lib/memba_web/live/auth_live/sign_in.ex b/web/lib/memba_web/live/auth_live/sign_in.ex
+index 6b5b9d4..6eecd08 100644
+--- a/web/lib/memba_web/live/auth_live/sign_in.ex
++++ b/web/lib/memba_web/live/auth_live/sign_in.ex
+@@ -5,29 +5,70 @@ defmodule MembaWeb.AuthLive.SignIn do
+ 
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmail
++  alias Memba.Accounts.AuthEmailRequest
++  alias Memba.AuthEmailProgressChanges
+   alias Memba.Membership
+   alias MembaWeb.ClubSite
+ 
+   @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
++  @progress_message_pre_send "Preparing your sign-in link…"
++  @progress_message_sent "If this email can sign in, the link is on its way."
++  @progress_message_provider_accepted "Your mailbox provider has accepted the email. It should appear shortly."
++  @progress_message_fallback "If it does not arrive, check junk mail or ask for another link."
++  @progress_message_expired "This sign-in-link request has expired. Ask for another link."
++  @fallback_after_seconds 60
+ 
+   @impl Phoenix.LiveView
+   def mount(_params, _session, socket) do
+     {:ok,
+      socket
+      |> assign(:form, to_form(%{"email" => ""}, as: :auth))
+-     |> assign(:notice, @neutral_notice)}
++     |> assign(:notice, @neutral_notice)
++     |> assign(:auth_email_request_id, nil)
++     |> assign(:auth_email_progress_request, nil)
++     |> assign(:auth_email_progress_message, @neutral_notice)
++     |> assign(:auth_email_progress_subscribed_request_id, nil)}
+   end
+ 
+   @impl Phoenix.LiveView
+   def handle_params(params, uri, socket) do
++    request_id = auth_email_request_id(params)
++
+     {:noreply,
+      socket
+      |> assign(:page_title, page_title(socket.assigns.live_action))
+-     |> assign(:auth_email_request_id, auth_email_request_id(params))
++     |> assign(:auth_email_request_id, request_id)
++     |> assign_auth_email_progress(request_id)
++     |> maybe_subscribe_to_auth_email_progress(request_id)
++     |> maybe_schedule_auth_email_progress_fallback()
+      |> assign(:auth_callback_base_url, auth_callback_base_url(uri))
+      |> assign(:sign_in_email_context, sign_in_email_context(uri))}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_info(
++        {:auth_email_progress_changed, %{request_id: request_id}},
++        %{assigns: %{auth_email_request_id: request_id}} = socket
++      ) do
++    {:noreply,
++     socket
++     |> assign_auth_email_progress(request_id)
++     |> maybe_schedule_auth_email_progress_fallback()}
++  end
++
++  def handle_info({:auth_email_progress_fallback, request_id}, socket) do
++    if socket.assigns.auth_email_request_id == request_id do
++      {:noreply,
++       socket
++       |> assign_auth_email_progress(request_id)
++       |> maybe_schedule_auth_email_progress_fallback()}
++    else
++      {:noreply, socket}
++    end
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def handle_event("request_sign_in_link", params, socket) do
+     check_email_path =
+@@ -72,6 +113,18 @@ defmodule MembaWeb.AuthLive.SignIn do
+         </div>
+ 
+         <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm">
++          <div
++            id="auth-email-progress"
++            class="mb-5 rounded-2xl border border-sage-200 bg-sage-50/70 p-4"
++          >
++            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sage-700">
++              Sign-in link progress
++            </p>
++            <p id="auth-email-progress-message" class="mt-2 text-base leading-7 text-ink">
++              {@auth_email_progress_message}
++            </p>
++          </div>
++
+           <p class="text-sm leading-6 text-ink-3">
+             Open the email on this iPad and tap the sign-in button. The link works once and expires in 15 minutes. If it does not arrive, check your junk mail or ask for another link.
+           </p>
+@@ -142,6 +195,95 @@ defmodule MembaWeb.AuthLive.SignIn do
+   defp page_title(:sent), do: "Check your email"
+   defp page_title(_live_action), do: "Sign in"
+ 
++  defp assign_auth_email_progress(socket, nil) do
++    socket
++    |> assign(:auth_email_progress_request, nil)
++    |> assign(:auth_email_progress_message, @neutral_notice)
++  end
++
++  defp assign_auth_email_progress(socket, request_id) do
++    request = Accounts.get_auth_email_request(request_id)
++
++    socket
++    |> assign(:auth_email_progress_request, request)
++    |> assign(:auth_email_progress_message, auth_email_progress_message(request))
++  end
++
++  defp maybe_subscribe_to_auth_email_progress(socket, nil), do: socket
++
++  defp maybe_subscribe_to_auth_email_progress(socket, request_id) do
++    if connected?(socket) &&
++         socket.assigns.auth_email_progress_subscribed_request_id != request_id do
++      case AuthEmailProgressChanges.subscribe(request_id) do
++        :ok ->
++          assign(socket, :auth_email_progress_subscribed_request_id, request_id)
++
++        {:error, :invalid_request_id} ->
++          socket
++      end
++    else
++      socket
++    end
++  end
++
++  defp maybe_schedule_auth_email_progress_fallback(socket) do
++    request = socket.assigns.auth_email_progress_request
++
++    if connected?(socket) && schedule_fallback_timer?(request) do
++      Process.send_after(
++        self(),
++        {:auth_email_progress_fallback, request.request_id},
++        fallback_timer_ms(request)
++      )
++    end
++
++    socket
++  end
++
++  defp schedule_fallback_timer?(%AuthEmailRequest{} = request) do
++    not Accounts.auth_email_request_expired?(request) &&
++      request.status != AuthEmailRequest.status_provider_accepted() &&
++      seconds_since_request_created(request) < @fallback_after_seconds
++  end
++
++  defp schedule_fallback_timer?(_request), do: false
++
++  defp fallback_timer_ms(%AuthEmailRequest{} = request) do
++    seconds_remaining =
++      @fallback_after_seconds - seconds_since_request_created(request)
++
++    max(seconds_remaining, 0) * 1_000
++  end
++
++  defp auth_email_progress_message(nil), do: @neutral_notice
++
++  defp auth_email_progress_message(%AuthEmailRequest{} = request) do
++    cond do
++      Accounts.auth_email_request_expired?(request) ->
++        @progress_message_expired
++
++      request.status == AuthEmailRequest.status_provider_accepted() ->
++        @progress_message_provider_accepted
++
++      seconds_since_request_created(request) >= @fallback_after_seconds ->
++        @progress_message_fallback
++
++      request.status == AuthEmailRequest.status_created() ->
++        @progress_message_pre_send
++
++      true ->
++        @progress_message_sent
++    end
++  end
++
++  defp seconds_since_request_created(%AuthEmailRequest{inserted_at: %DateTime{} = inserted_at}) do
++    DateTime.utc_now(:microsecond)
++    |> DateTime.diff(inserted_at, :second)
++    |> max(0)
++  end
++
++  defp seconds_since_request_created(_request), do: 0
++
+   defp email_param(%{"auth" => %{"email" => email}}), do: email
+   defp email_param(_params), do: nil
+ 
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 9364b85..5db4624 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -85,11 +85,90 @@ defmodule MembaWeb.AuthControllerTest do
+       html = LazyHTML.from_fragment(response)
+ 
+       assert response =~ "Check your email for the sign-in link."
+-      assert response =~ neutral_notice()
++      assert_exact_text(html, "#auth-email-progress-message", "Preparing your sign-in link…")
+       assert html |> LazyHTML.query("section#auth-sign-in-sent") |> Enum.any?()
++      assert html |> LazyHTML.query("div#auth-email-progress") |> Enum.any?()
+       assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
+     end
+ 
++    test "renders neutral auth email progress from persisted request status", %{conn: conn} do
++      {:ok, sent_request} = Accounts.create_auth_email_request()
++      {:ok, sent_request} = Accounts.mark_auth_email_sent(sent_request.request_id)
++
++      {:ok, _view, sent_response} = live(conn, ~p"/auth/check-email/#{sent_request.request_id}")
++
++      assert_exact_text(
++        LazyHTML.from_fragment(sent_response),
++        "#auth-email-progress-message",
++        "If this email can sign in, the link is on its way."
++      )
++
++      {:ok, accepted_request} = Accounts.create_auth_email_request()
++      {:ok, accepted_request} = Accounts.mark_auth_email_sent(accepted_request.request_id)
++
++      {:ok, accepted_request} =
++        Accounts.record_auth_email_provider_accepted(accepted_request.request_id)
++
++      {:ok, _view, accepted_response} =
++        live(conn, ~p"/auth/check-email/#{accepted_request.request_id}")
++
++      assert_exact_text(
++        LazyHTML.from_fragment(accepted_response),
++        "#auth-email-progress-message",
++        "Your mailbox provider has accepted the email. It should appear shortly."
++      )
++    end
++
++    test "renders neutral fallback guidance after waiting without provider acceptance", %{
++      conn: conn
++    } do
++      created_at = DateTime.add(DateTime.utc_now(:microsecond), -61, :second)
++      {:ok, request} = Accounts.create_auth_email_request(%{})
++
++      request =
++        request
++        |> Ecto.Changeset.change(inserted_at: created_at, updated_at: created_at)
++        |> Repo.update!()
++
++      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: created_at)
++
++      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
++
++      assert_exact_text(
++        LazyHTML.from_fragment(response),
++        "#auth-email-progress-message",
++        "If it does not arrive, check junk mail or ask for another link."
++      )
++    end
++
++    test "refreshes auth email progress after a committed progress notification", %{conn: conn} do
++      {:ok, request} = Accounts.create_auth_email_request()
++
++      {:ok, view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
++
++      assert_exact_text(
++        LazyHTML.from_fragment(response),
++        "#auth-email-progress-message",
++        "Preparing your sign-in link…"
++      )
++
++      {:ok, _request} = Accounts.record_auth_email_provider_accepted(request.request_id)
++
++      Phoenix.PubSub.broadcast(
++        Memba.PubSub,
++        Memba.AuthEmailProgressChanges.topic(request.request_id),
++        {:auth_email_progress_changed, %{request_id: request.request_id}}
++      )
++
++      html = render(view) |> LazyHTML.from_fragment()
++
++      assert_exact_text(
++        html,
++        "#auth-email-progress-message",
++        "Your mailbox provider has accepted the email. It should appear shortly."
++      )
++    end
++
+     test "patches known and unknown sign-in submissions to opaque request id URLs", %{
+       conn: conn
+     } do
+@@ -571,6 +650,14 @@ defmodule MembaWeb.AuthControllerTest do
+     Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
+   end
+ 
++  defp assert_exact_text(html, selector, expected_text) do
++    assert html
++           |> LazyHTML.query(selector)
++           |> LazyHTML.text()
++           |> String.replace(~r/\s+/, " ")
++           |> String.trim() == expected_text
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
