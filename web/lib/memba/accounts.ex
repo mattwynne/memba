@@ -308,16 +308,47 @@ defmodule Memba.Accounts do
 
   defp record_auth_email_provider_progress(request_id, status, attrs, opts) do
     update_auth_email_request(request_id, fn request ->
-      request
-      |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
-      |> Repo.update()
+      if duplicate_auth_email_provider_progress?(request, status, attrs) do
+        {:ok, {:unchanged, request}}
+      else
+        request
+        |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
+        |> Repo.update()
+      end
     end)
     |> publish_auth_email_progress_change()
+  end
+
+  defp duplicate_auth_email_provider_progress?(%AuthEmailRequest{} = request, status, attrs) do
+    provider_event_id = optional_trimmed_attr(attrs, :provider_event_id)
+    provider_event_type = optional_trimmed_attr(attrs, :provider_event_type)
+
+    request.status == status &&
+      not is_nil(provider_event_id) &&
+      request.provider_event_id == provider_event_id &&
+      request.provider_event_type == provider_event_type
+  end
+
+  defp optional_trimmed_attr(attrs, key) when is_map(attrs) do
+    case Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key)) do
+      value when is_binary(value) ->
+        case String.trim(value) do
+          "" -> nil
+          trimmed_value -> trimmed_value
+        end
+
+      _value ->
+        nil
+    end
   end
 
   defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request} = result) do
     _result = AuthEmailProgressChanges.publish(request.request_id)
     result
+  end
+
+  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request, :unchanged}) do
+    {:ok, request}
   end
 
   defp publish_auth_email_progress_change(result), do: result
@@ -340,7 +371,8 @@ defmodule Memba.Accounts do
 
         %AuthEmailRequest{} = request ->
           case update_fun.(request) do
-            {:ok, %AuthEmailRequest{} = request} -> request
+            {:ok, %AuthEmailRequest{} = request} -> {:changed, request}
+            {:ok, {:unchanged, %AuthEmailRequest{} = request}} -> {:unchanged, request}
             {:error, changeset} -> Repo.rollback(changeset)
           end
       end
@@ -354,7 +386,12 @@ defmodule Memba.Accounts do
     |> Repo.one()
   end
 
-  defp unwrap_auth_email_request_update({:ok, %AuthEmailRequest{} = request}), do: {:ok, request}
+  defp unwrap_auth_email_request_update({:ok, {:changed, %AuthEmailRequest{} = request}}),
+    do: {:ok, request}
+
+  defp unwrap_auth_email_request_update({:ok, {:unchanged, %AuthEmailRequest{} = request}}),
+    do: {:ok, request, :unchanged}
+
   defp unwrap_auth_email_request_update({:error, reason}), do: {:error, reason}
 
   defp timestamp(opts) do

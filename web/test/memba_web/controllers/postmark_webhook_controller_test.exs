@@ -208,6 +208,34 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     assert updated_request.provider_event_type == "Delivery"
   end
 
+  test "treats duplicate auth-stream delivered events as idempotent no-ops", %{conn: conn} do
+    {:ok, %AuthEmailRequest{} = request} = sent_auth_email_request()
+    payload = realistic_auth_postmark_payload(:delivered, request)
+
+    conn = post_postmark_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             first_update =
+             Accounts.get_auth_email_request(request.request_id)
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_event(payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             duplicate_update =
+             Accounts.get_auth_email_request(request.request_id)
+
+    assert duplicate_update.status == "provider_accepted"
+    assert duplicate_update.provider_reported_at == first_update.provider_reported_at
+    assert duplicate_update.updated_at == first_update.updated_at
+  end
+
   test "routes auth-stream delayed, bounced, and spam complaint events to auth-email progress",
        %{conn: conn} do
     {:ok, delayed_request} = sent_auth_email_request()

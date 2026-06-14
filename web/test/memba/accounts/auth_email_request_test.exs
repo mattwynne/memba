@@ -120,6 +120,48 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
 
       assert Accounts.get_auth_email_request(request.request_id).status == "provider_accepted"
     end
+
+    test "does not publish or rewrite state for duplicate provider progress events" do
+      accepted_at = ~U[2026-06-13 12:00:09.000000Z]
+      duplicate_at = DateTime.add(accepted_at, 60, :second)
+
+      {:ok, request} = Accounts.create_auth_email_request()
+      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id)
+
+      :ok = AuthEmailProgressChanges.subscribe(request.request_id)
+
+      attrs = %{
+        provider: "postmark",
+        provider_message_id: "postmark-message-123",
+        provider_event_id: "postmark-event-456",
+        provider_event_type: "Delivery"
+      }
+
+      assert {:ok, %AuthEmailRequest{} = accepted_request} =
+               Accounts.record_auth_email_provider_accepted(request.request_id, attrs,
+                 now: accepted_at
+               )
+
+      assert accepted_request.status == "provider_accepted"
+      assert accepted_request.provider_reported_at == accepted_at
+
+      assert_receive {:auth_email_progress_changed, %{request_id: request_id}}
+      assert request_id == request.request_id
+
+      assert {:ok, %AuthEmailRequest{} = duplicate_request} =
+               Accounts.record_auth_email_provider_accepted(request.request_id, attrs,
+                 now: duplicate_at
+               )
+
+      assert duplicate_request.status == "provider_accepted"
+      assert duplicate_request.provider_reported_at == accepted_request.provider_reported_at
+      assert duplicate_request.updated_at == accepted_request.updated_at
+      refute_receive {:auth_email_progress_changed, _payload}, 50
+
+      persisted_request = Repo.get!(AuthEmailRequest, request.request_id)
+      assert persisted_request.provider_reported_at == accepted_request.provider_reported_at
+      assert persisted_request.updated_at == accepted_request.updated_at
+    end
   end
 
   describe "expiry and cleanup" do

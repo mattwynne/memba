@@ -141,6 +141,42 @@ defmodule MembaWeb.AuthControllerTest do
       )
     end
 
+    test "keeps fallback guidance hidden before the fallback threshold", %{conn: conn} do
+      created_at = DateTime.add(DateTime.utc_now(:microsecond), -30, :second)
+      {:ok, request} = Accounts.create_auth_email_request(%{})
+
+      request =
+        request
+        |> Ecto.Changeset.change(inserted_at: created_at, updated_at: created_at)
+        |> Repo.update!()
+
+      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: created_at)
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+      html = LazyHTML.from_fragment(response)
+
+      assert_exact_text(
+        html,
+        "#auth-email-progress-message",
+        "If this email can sign in, the link is on its way."
+      )
+
+      refute response =~ "If it does not arrive, check junk mail or ask for another link."
+    end
+
+    test "renders expired neutral guidance after the user-facing progress window", %{conn: conn} do
+      created_at = DateTime.add(DateTime.utc_now(:microsecond), -31 * 60, :second)
+      {:ok, request} = Accounts.create_auth_email_request(%{}, now: created_at)
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+
+      assert_exact_text(
+        LazyHTML.from_fragment(response),
+        "#auth-email-progress-message",
+        "This sign-in-link request has expired. Ask for another link."
+      )
+    end
+
     test "refreshes auth email progress after a committed progress update", %{conn: conn} do
       {:ok, request} = Accounts.create_auth_email_request()
 
@@ -188,6 +224,39 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert unknown_path == ~p"/auth/check-email/#{unknown_request.request_id}"
       assert auth_email_request_path?(unknown_path)
+    end
+
+    test "keeps known and unknown check-email pages privacy-preserving", %{conn: conn} do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      known_path = submit_sign_in_link_request_path(conn, "alice@example.com")
+
+      unknown_path =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> submit_sign_in_link_request_path("robin@example.net")
+
+      for {path, submitted_email} <- [
+            {known_path, "alice@example.com"},
+            {unknown_path, "robin@example.net"}
+          ] do
+        {:ok, _view, response} =
+          conn
+          |> Phoenix.ConnTest.recycle()
+          |> live(path)
+
+        html = LazyHTML.from_fragment(response)
+
+        assert response =~ "Check your email for the sign-in link."
+        assert response =~ neutral_notice()
+        assert html |> LazyHTML.query("div#auth-email-progress") |> Enum.any?()
+        refute response =~ submitted_email
+        refute response =~ "recognised"
+        refute response =~ "recognized"
+        refute response =~ "unknown email"
+        refute response =~ "No account"
+      end
     end
 
     test "creates a sign-in token and sends a callback URL email for known member recipients", %{
