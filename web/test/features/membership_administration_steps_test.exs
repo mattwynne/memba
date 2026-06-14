@@ -31,7 +31,18 @@ defmodule Memba.MembershipAdministrationStepsTest do
   end
 
   defp scenario!(feature, name) do
-    Enum.find(feature.scenarios, &(&1.name == name)) ||
+    feature
+    |> feature_scenarios()
+    |> Enum.find(&(&1.name == name)) ||
       flunk("Expected #{feature.file} to include scenario #{inspect(name)}")
+  end
+
+  defp feature_scenarios(feature) do
+    rule_scenarios =
+      feature
+      |> Map.get(:rules, [])
+      |> Enum.flat_map(& &1.scenarios)
+
+    feature.scenarios ++ rule_scenarios
   end
 end

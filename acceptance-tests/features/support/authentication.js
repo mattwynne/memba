@@ -100,7 +100,14 @@ async function requestSignInLinkForEmail(world, email, personName = email) {
     world.page.getByText("If that email address can sign in to Memba, the sign-in email is on its way.")
   ).toBeVisible();
 
-  world.signInRequests[personName] = { email, previousEmails };
+  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
+
+  world.signInRequests[personName] = {
+    authEmailRequestId: authEmailRequestIdFromCurrentPage(world),
+    checkEmailUrl: world.page.url(),
+    email,
+    previousEmails
+  };
 }
 
 async function assertReceivesSignInLink(world, personName) {
@@ -166,6 +173,58 @@ async function assertDoesNotReceiveSignInLink(world, personName) {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
   } while (Date.now() <= deadline);
+}
+
+async function assertSignInEmailProgressStarted(world, personName) {
+  const request = signInRequestFor(world, personName);
+
+  assert.ok(request.authEmailRequestId, `Expected ${personName} to have an auth-email request id`);
+  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
+  await playwrightExpect(world.page.locator("#auth-email-progress")).toBeVisible();
+  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
+    /Preparing your sign-in link…|If this email can sign in, the link is on its way\./
+  );
+}
+
+async function recordSignInEmailProviderAccepted(world, personName) {
+  const request = signInRequestFor(world, personName);
+  serverCommands.recordAuthEmailProviderAccepted({ requestId: request.authEmailRequestId });
+}
+
+async function assertAuthEmailAcceptedByMailboxProvider(world, _personName) {
+  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
+    "Your mailbox provider has accepted the email. It should appear shortly."
+  );
+}
+
+async function assertNoInboxPlacementClaim(world) {
+  await playwrightExpect(world.page.locator("body")).not.toContainText("in your inbox");
+  await playwrightExpect(world.page.locator("body")).not.toContainText("email is in the inbox");
+}
+
+async function assertNeutralSignInEmailInstructions(world, personName) {
+  const request = signInRequestFor(world, personName);
+
+  assert.ok(request.authEmailRequestId, `Expected ${personName} to have an auth-email request id`);
+  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
+  await playwrightExpect(world.page.locator("#sign-in-link-sent-notice")).toContainText(
+    "If that email address can sign in to Memba, the sign-in email is on its way."
+  );
+  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
+    /Preparing your sign-in link…|If this email can sign in, the link is on its way\./
+  );
+}
+
+async function assertSignInEmailPrivacyPreserved(world, personName) {
+  const request = signInRequestFor(world, personName);
+  const body = world.page.locator("body");
+
+  await playwrightExpect(body).not.toContainText(request.email);
+  await playwrightExpect(body).not.toContainText("unknown email");
+  await playwrightExpect(body).not.toContainText("not recognised");
+  await playwrightExpect(body).not.toContainText("not recognized");
+  await playwrightExpect(body).not.toContainText("does not have an account");
+  await playwrightExpect(body).not.toContainText("not found");
 }
 
 async function followSignInLink(world, personName) {
@@ -382,6 +441,15 @@ function currentPageUrl(page) {
   return page.currentUrl || "";
 }
 
+function authEmailRequestIdFromCurrentPage(world) {
+  const url = new URL(world.page.url());
+  const match = url.pathname.match(/\/auth\/check-email\/([^/]+)$/);
+
+  assert.ok(match, `Expected check-email URL with auth request id, got ${url.toString()}`);
+
+  return match[1];
+}
+
 function signInEmailMatches(email, recipientEmail) {
   return (
     email.subject === signInSubject &&
@@ -449,6 +517,9 @@ function emailSummary(email) {
 
 module.exports = {
   assertDoesNotReceiveSignInLink,
+  assertAuthEmailAcceptedByMailboxProvider,
+  assertNoInboxPlacementClaim,
+  assertNeutralSignInEmailInstructions,
   assertNotSignedIn,
   assertOnStaffOnlyHomepage,
   assertReceivesSignInLink,
@@ -457,6 +528,8 @@ module.exports = {
   assertSignInEmailUsesStandardMembaFooter,
   assertSignedIn,
   assertSignedInAsStaff,
+  assertSignInEmailPrivacyPreserved,
+  assertSignInEmailProgressStarted,
   assertStillSignedIn,
   ensureMember,
   expireSignInLink,
@@ -467,6 +540,7 @@ module.exports = {
   nelsonClubName,
   openClubPage,
   recordNonMember,
+  recordSignInEmailProviderAccepted,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
   signInAsStaffDirectly,

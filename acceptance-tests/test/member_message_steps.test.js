@@ -259,7 +259,7 @@ class FakePage {
       this.rows.clubMessages.push(messageRow);
     }
 
-    if (role === "button" && name === "Send to all members") {
+    if (role === "button" && name === "Send to all current members") {
       const subject = this.fields["Subject"];
       const messageId = idFor("message", subject, this.rows.messages.length + 1);
 
@@ -670,7 +670,7 @@ test("member send flow opens compose from club home and stores the new message",
     ["click", "locator", "#member-send-message-link"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all members" }],
+    ["click", "button", { name: "Send to all current members" }],
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]
   ]);
   assert.equal(
@@ -715,7 +715,7 @@ test("member failed-send flow stays on compose failure state with support guidan
     ["click", "locator", "#member-send-message-link"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all members" }]
+    ["click", "button", { name: "Send to all current members" }]
   ]);
   assert.ok(
     expectations.some(
@@ -723,7 +723,7 @@ test("member failed-send flow stays on compose failure state with support guidan
         expectation[0] === "text" &&
         typeof expectation[1] === "string" &&
         expectation[1].includes("#member-compose-error-summary") &&
-        expectation[2].includes("contact support")
+        expectation[2].includes("contact Memba")
     )
   );
 });
@@ -1280,6 +1280,7 @@ test("sending an inbound club email posts to the Resend inbound webhook and reco
   assert.deepEqual(world.messages["Trip planning night"], {
     body: "Trip planning night details.",
     clubId: "club-1",
+    clubSlug: "kmc",
     messageId: "message-inbound-1",
     senderName: "Alice",
     subject: "Trip planning night"

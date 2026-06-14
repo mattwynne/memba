@@ -91,7 +91,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
   end
 
-  step "{word} invites {word} to join {word} {word} {word}",
+  step ~r/^(\w+) invites (\w+) to join (\w+) (\w+) (\w+)$/,
        %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
     context = ensure_person(context, person_name)
 
@@ -113,7 +113,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     try_invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
   end
 
-  step "{word} tries to invite {word} to join {word} {word} {word}",
+  step ~r/^(\w+) tries to invite (\w+) to join (\w+) (\w+) (\w+)$/,
        %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
     club_name = club_name(word_1, word_2, word_3)
     context = ensure_person(context, person_name)
@@ -156,7 +156,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     assert_invitation_received(context, email, club_name(word_1, word_2, word_3))
   end
 
-  step "{word} should receive an invitation to join {word} {word} {word}",
+  step ~r/^(\w+) should receive an invitation to join (\w+) (\w+) (\w+)$/,
        %{args: [person_name, word_1, word_2, word_3]} = context do
     assert_invitation_received(
       context,

@@ -60,7 +60,7 @@ Rule: People who are neither club members nor Memba staff cannot sign in
 
 Rule: Sign-in email progress protects privacy
 
-    @iteration-032 @todo-domain @todo-ui
+    @iteration-032
     Scenario: Alice sees when her mailbox provider accepts the sign-in email
       Given Alice is a member of Kootenay Mountaineering Club
       When Alice requests a sign-in link for their email address
@@ -69,7 +69,7 @@ Rule: Sign-in email progress protects privacy
       Then Alice should see that the email has been accepted by her mailbox provider
       And Alice should not be told that the email is in her inbox
 
-    @iteration-032 @todo-domain @todo-ui
+    @iteration-032
     Scenario: Robin sees the same neutral waiting experience for an unknown email address
       Given Robin is not a member of any club
       When Robin requests a sign-in link for their email address

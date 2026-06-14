@@ -1600,7 +1600,7 @@ async function assertInboundRejectionEmail(world, senderName, expectedText) {
 
   const rejectionEmail = newEmails.find(
     (email) =>
-      /wasn.?t posted/i.test(email.subject) &&
+      /(wasn.?t|was not) posted/i.test(email.subject) &&
       mailboxEmailTo(email).includes(senderEmail) &&
       mailboxEmailText(email).includes(expectedText)
   );

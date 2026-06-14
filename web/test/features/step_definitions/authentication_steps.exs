@@ -5,10 +5,15 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   import ExUnit.Assertions
 
   alias Memba.Accounts
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.Membership
   alias Memba.Membership.Slug
   alias Memba.Repo
+
+  @progress_message_pre_send "Preparing your sign-in link…"
+  @progress_message_sent "If this email can sign in, the link is on its way."
+  @progress_message_provider_accepted "Your mailbox provider has accepted the email. It should appear shortly."
 
   step "{word} is a member of Kootenay Mountaineering Club", %{args: [person_name]} = context do
     ensure_member(context, person_name, "Kootenay Mountaineering Club")
@@ -44,6 +49,92 @@ defmodule Memba.Cucumber.AuthenticationSteps do
 
   step "{word} should not receive a sign-in link", %{args: [person_name]} = context do
     assert %{token: nil} = fetch_from_context!(context, :sign_in_links, person_name)
+    context
+  end
+
+  step "{word} should see that Memba is trying to send a sign-in link",
+       %{args: [person_name]} = context do
+    request = auth_email_request_for(context, person_name)
+
+    assert request.status in [
+             AuthEmailRequest.status_created(),
+             AuthEmailRequest.status_sent()
+           ]
+
+    assert auth_email_progress_message(request) in [
+             @progress_message_pre_send,
+             @progress_message_sent
+           ]
+
+    context
+  end
+
+  step "Alice's mailbox provider accepts the sign-in email", context do
+    person_name = "Alice"
+    request = auth_email_request_for(context, person_name)
+
+    assert {:ok, %AuthEmailRequest{} = request} =
+             Accounts.record_auth_email_provider_accepted(request.request_id, %{
+               provider: "postmark",
+               provider_event_id: "acceptance-#{request.request_id}",
+               provider_event_type: "Delivered",
+               provider_message_id: "acceptance-message-#{request.request_id}",
+               provider_message_stream: "outbound-authentication"
+             })
+
+    update_context_map(context, :auth_email_requests, person_name, %{
+      request_id: request.request_id
+    })
+  end
+
+  step "{word} should see that the email has been accepted by her mailbox provider",
+       %{args: [person_name]} = context do
+    request = auth_email_request_for(context, person_name)
+
+    assert request.status == AuthEmailRequest.status_provider_accepted()
+    assert auth_email_progress_message(request) == @progress_message_provider_accepted
+
+    context
+  end
+
+  step "{word} should not be told that the email is in her inbox", context do
+    context
+    |> current_auth_email_progress_message()
+    |> refute_inbox_placement_claim()
+
+    context
+  end
+
+  step "{word} should see neutral sign-in email instructions",
+       %{args: [person_name]} = context do
+    request = auth_email_request_for(context, person_name)
+    message = auth_email_progress_message(request)
+
+    assert message in [
+             @progress_message_pre_send,
+             @progress_message_sent
+           ]
+
+    refute message =~ "unknown"
+    refute message =~ "recognised"
+    refute message =~ "recognized"
+
+    context
+  end
+
+  step "{word} should not learn whether Memba recognises the email address",
+       %{args: [person_name]} = context do
+    request = auth_email_request_for(context, person_name)
+    %{email: email} = fetch_from_context!(context, :people, person_name)
+    message = auth_email_progress_message(request)
+
+    refute message =~ email
+    refute message =~ "unknown"
+    refute message =~ "recognised"
+    refute message =~ "recognized"
+    refute message =~ "does not have"
+    refute message =~ "not found"
+
     context
   end
 
@@ -256,9 +347,14 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   end
 
   defp request_sign_in_link(context, person_name, email) do
+    context = create_auth_email_request(context, person_name)
+    request = auth_email_request_for(context, person_name)
+
     case Accounts.request_sign_in_link(email) do
       {:ok, %{token: token, email: normalized_email}} ->
-        update_context_map(context, :sign_in_links, person_name, %{
+        context
+        |> mark_auth_email_sent(person_name, request.request_id, normalized_email)
+        |> update_context_map(:sign_in_links, person_name, %{
           token: token,
           email: normalized_email
         })
@@ -269,6 +365,74 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       {:error, reason} ->
         flunk("Expected sign-in link request not to error; got #{inspect(reason)}")
     end
+  end
+
+  defp create_auth_email_request(context, person_name) do
+    case Accounts.create_auth_email_request() do
+      {:ok, %AuthEmailRequest{} = request} ->
+        update_context_map(context, :auth_email_requests, person_name, %{
+          request_id: request.request_id
+        })
+
+      {:error, reason} ->
+        flunk("Expected auth-email progress request not to error; got #{inspect(reason)}")
+    end
+  end
+
+  defp mark_auth_email_sent(context, person_name, request_id, recipient_email) do
+    assert {:ok, %AuthEmailRequest{} = request} =
+             Accounts.mark_auth_email_sent(request_id, %{
+               recipient_email: recipient_email,
+               provider: "postmark",
+               provider_message_stream: "outbound-authentication"
+             })
+
+    update_context_map(context, :auth_email_requests, person_name, %{
+      request_id: request.request_id
+    })
+  end
+
+  defp auth_email_request_for(context, person_name) do
+    %{request_id: request_id} = fetch_from_context!(context, :auth_email_requests, person_name)
+    assert %AuthEmailRequest{} = request = Accounts.get_auth_email_request(request_id)
+    request
+  end
+
+  defp auth_email_progress_message(%AuthEmailRequest{} = request) do
+    cond do
+      request.status == AuthEmailRequest.status_provider_accepted() ->
+        @progress_message_provider_accepted
+
+      request.status == AuthEmailRequest.status_created() ->
+        @progress_message_pre_send
+
+      true ->
+        @progress_message_sent
+    end
+  end
+
+  defp auth_email_progress_message(_request), do: ""
+
+  defp current_auth_email_progress_message(context) do
+    context
+    |> Map.get(:auth_email_requests, %{})
+    |> Map.values()
+    |> List.last()
+    |> case do
+      %{request_id: request_id} ->
+        request_id
+        |> Accounts.get_auth_email_request()
+        |> auth_email_progress_message()
+
+      _missing ->
+        ""
+    end
+  end
+
+  defp refute_inbox_placement_claim(message) do
+    refute message =~ "in your inbox"
+    refute message =~ "is in the inbox"
+    refute message =~ "is visible in the inbox"
   end
 
   defp follow_sign_in_link(context, person_name) do
