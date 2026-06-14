@@ -132,18 +132,18 @@ defmodule MembaWeb.AuthLive.SignIn do
 
   defp create_request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
     case Accounts.create_auth_email_request() do
-      {:ok, _request} ->
-        request_and_deliver_sign_in_link(email, callback_base_url, email_context)
+      {:ok, request} ->
+        request_and_deliver_sign_in_link(email, callback_base_url, email_context, request)
 
       {:error, reason} ->
         Logger.warning("Could not create auth email progress request: #{inspect(reason)}")
     end
   end
 
-  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context, request) do
     case Accounts.request_sign_in_link(email) do
       {:ok, %{email: recipient_email, token: token}} ->
-        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context)
+        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request)
 
       {:ok, nil} ->
         :ok
@@ -153,16 +153,48 @@ defmodule MembaWeb.AuthLive.SignIn do
     end
   end
 
-  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context) do
+  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request) do
     callback_url = callback_base_url <> ~p"/auth/sign-in/#{token}"
+    email_context = Map.put(email_context, :auth_email_request_id, request.request_id)
 
     case AuthEmail.deliver_sign_in_link(recipient_email, callback_url, email_context) do
       :ok ->
-        :ok
+        mark_auth_email_sent(request, recipient_email)
 
       {:error, reason} ->
         Logger.warning("Could not deliver auth sign-in link email: #{inspect(reason)}")
     end
+  end
+
+  defp mark_auth_email_sent(request, recipient_email) do
+    attrs = %{
+      recipient_email: recipient_email,
+      provider: auth_email_provider(),
+      provider_message_stream: auth_email_message_stream()
+    }
+
+    case Accounts.mark_auth_email_sent(request.request_id, attrs) do
+      {:ok, _request} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Could not mark auth email progress request sent: #{inspect(reason)}")
+    end
+  end
+
+  defp auth_email_provider do
+    case Keyword.get(auth_email_config(), :provider, :postmark) do
+      :resend -> "resend"
+      _provider -> "postmark"
+    end
+  end
+
+  defp auth_email_message_stream do
+    Keyword.get(auth_email_config(), :message_stream)
+  end
+
+  defp auth_email_config do
+    Application.get_env(:memba, AuthEmail, [])
   end
 
   defp auth_callback_base_url(uri) when is_binary(uri) do

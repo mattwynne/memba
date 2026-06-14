@@ -11,6 +11,7 @@ defmodule Memba.Accounts.AuthEmail do
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmailConfig
   alias Memba.EmailTemplates
+  alias Memba.ID
 
   @sender_name "Memba"
   @subject "Sign in to Memba"
@@ -83,19 +84,31 @@ defmodule Memba.Accounts.AuthEmail do
     |> subject(subject(context))
     |> text_body(sign_in_text_body(callback_url, context))
     |> html_body(html_body(callback_url, recipient_email, context))
-    |> put_provider_options(config)
+    |> put_provider_options(config, context)
   end
 
-  defp put_provider_options(email, %AuthEmailConfig{provider: :resend}) do
+  defp put_provider_options(email, %AuthEmailConfig{provider: :resend}, _context) do
     put_provider_option(email, :tags, [
       %{name: "memba_email_kind", value: "auth_sign_in_link"},
       %{name: "memba_auth_email_stream", value: "auth"}
     ])
   end
 
-  defp put_provider_options(email, %AuthEmailConfig{} = config) do
-    put_provider_option(email, :message_stream, config.message_stream)
+  defp put_provider_options(email, %AuthEmailConfig{} = config, context) do
+    email
+    |> put_provider_option(:message_stream, config.message_stream)
+    |> put_postmark_auth_request_metadata(context)
   end
+
+  defp put_postmark_auth_request_metadata(email, %{auth_email_request_id: request_id})
+       when is_binary(request_id) do
+    put_provider_option(email, :metadata, %{
+      "memba_email_kind" => "auth_sign_in_link",
+      "memba_auth_email_request_id" => request_id
+    })
+  end
+
+  defp put_postmark_auth_request_metadata(email, _context), do: email
 
   defp sign_in_text_body(callback_url, context) do
     """
@@ -145,7 +158,10 @@ defmodule Memba.Accounts.AuthEmail do
   end
 
   defp sign_in_context(opts) do
-    %{group_name: group_name_from_context(opts)}
+    %{
+      group_name: group_name_from_context(opts),
+      auth_email_request_id: auth_email_request_id_from_context(opts)
+    }
   end
 
   defp group_name_from_context(opts) do
@@ -169,6 +185,25 @@ defmodule Memba.Accounts.AuthEmail do
     |> option_value([:group_name, :club_name, :name])
     |> present_header_text()
   end
+
+  defp auth_email_request_id_from_context(opts) do
+    opts
+    |> option_value([:auth_email_request_id, :request_id])
+    |> cast_auth_email_request_id()
+  end
+
+  defp cast_auth_email_request_id(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> then(fn value ->
+      case ID.cast(:auth_email_request, value) do
+        {:ok, request_id} -> request_id
+        :error -> nil
+      end
+    end)
+  end
+
+  defp cast_auth_email_request_id(_value), do: nil
 
   defp option_value(opts, keys) when is_list(opts) do
     if Keyword.keyword?(opts) do

@@ -95,7 +95,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
-    test "creates opaque auth-email progress records for known and unknown submissions", %{
+    test "correlates known auth email delivery while keeping unknown progress neutral", %{
       conn: conn
     } do
       configure_auth_email()
@@ -106,9 +106,18 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
       assert Memba.ID.valid?(:auth_email_request, known_request.request_id)
-      assert known_request.status == AuthEmailRequest.status_created()
-      assert known_request.recipient_email == nil
-      assert_received {:email, %Swoosh.Email{}}
+      assert known_request.status == AuthEmailRequest.status_sent()
+      assert known_request.recipient_email == "alice@example.com"
+      assert known_request.provider == "postmark"
+      assert known_request.provider_message_stream == "outbound-authentication"
+      assert known_request.sent_at
+
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.provider_options[:metadata] == %{
+               "memba_email_kind" => "auth_sign_in_link",
+               "memba_auth_email_request_id" => known_request.request_id
+             }
 
       assert conn
              |> Phoenix.ConnTest.recycle()
@@ -119,9 +128,15 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert length(requests) == 2
       assert Enum.all?(requests, &Memba.ID.valid?(:auth_email_request, &1.request_id))
-      assert Enum.all?(requests, &(&1.status == AuthEmailRequest.status_created()))
-      assert Enum.all?(requests, &is_nil(&1.recipient_email))
       assert length(Enum.uniq_by(requests, & &1.request_id)) == 2
+
+      assert [%AuthEmailRequest{} = unknown_request] =
+               Enum.reject(requests, &(&1.request_id == known_request.request_id))
+
+      assert unknown_request.status == AuthEmailRequest.status_created()
+      assert unknown_request.recipient_email == nil
+      assert unknown_request.provider == nil
+      assert unknown_request.sent_at == nil
       assert_no_email_sent()
     end
 
