@@ -42,6 +42,7 @@ green than before.
 | 030 | 2026-06-08 | merged | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
 | 031 | 2026-06-08 | merged | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
 | 032 | 2026-06-13 | merged | Auth email delivery progress | [plan](032-auth-email-delivery-progress/plan.md) |
+| 033 | 2026-06-13 | draft | Homepage staff bar | [plan](033-homepage-staff-bar/plan.md) |
 
 Status notes:
 
