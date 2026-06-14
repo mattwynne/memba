@@ -1,0 +1,271 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index d2580b3..4cd432c 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -8,5 +8,5 @@
+ - [x] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
+ - [x] 007 Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
+ - [x] 008 Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
+-- [ ] 009 Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
++- [x] 009 Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
+ - [ ] 010 Implement or update acceptance step support for the `@iteration-032` scenarios, then remove/narrow `@todo-domain`/`@todo-ui` when they pass.
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+index 438a73f..47f45bb 100644
+--- a/web/lib/memba/accounts.ex
++++ b/web/lib/memba/accounts.ex
+@@ -308,18 +308,49 @@ defmodule Memba.Accounts do
+ 
+   defp record_auth_email_provider_progress(request_id, status, attrs, opts) do
+     update_auth_email_request(request_id, fn request ->
+-      request
+-      |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
+-      |> Repo.update()
++      if duplicate_auth_email_provider_progress?(request, status, attrs) do
++        {:ok, {:unchanged, request}}
++      else
++        request
++        |> AuthEmailRequest.provider_progress_changeset(status, attrs, now: timestamp(opts))
++        |> Repo.update()
++      end
+     end)
+     |> publish_auth_email_progress_change()
+   end
+ 
++  defp duplicate_auth_email_provider_progress?(%AuthEmailRequest{} = request, status, attrs) do
++    provider_event_id = optional_trimmed_attr(attrs, :provider_event_id)
++    provider_event_type = optional_trimmed_attr(attrs, :provider_event_type)
++
++    request.status == status &&
++      not is_nil(provider_event_id) &&
++      request.provider_event_id == provider_event_id &&
++      request.provider_event_type == provider_event_type
++  end
++
++  defp optional_trimmed_attr(attrs, key) when is_map(attrs) do
++    case Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key)) do
++      value when is_binary(value) ->
++        case String.trim(value) do
++          "" -> nil
++          trimmed_value -> trimmed_value
++        end
++
++      _value ->
++        nil
++    end
++  end
++
+   defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request} = result) do
+     _result = AuthEmailProgressChanges.publish(request.request_id)
+     result
+   end
+ 
++  defp publish_auth_email_progress_change({:ok, %AuthEmailRequest{} = request, :unchanged}) do
++    {:ok, request}
++  end
++
+   defp publish_auth_email_progress_change(result), do: result
+ 
+   defp update_auth_email_request(request_id, update_fun) when is_function(update_fun, 1) do
+@@ -340,7 +371,8 @@ defmodule Memba.Accounts do
+ 
+         %AuthEmailRequest{} = request ->
+           case update_fun.(request) do
+-            {:ok, %AuthEmailRequest{} = request} -> request
++            {:ok, %AuthEmailRequest{} = request} -> {:changed, request}
++            {:ok, {:unchanged, %AuthEmailRequest{} = request}} -> {:unchanged, request}
+             {:error, changeset} -> Repo.rollback(changeset)
+           end
+       end
+@@ -354,7 +386,12 @@ defmodule Memba.Accounts do
+     |> Repo.one()
+   end
+ 
+-  defp unwrap_auth_email_request_update({:ok, %AuthEmailRequest{} = request}), do: {:ok, request}
++  defp unwrap_auth_email_request_update({:ok, {:changed, %AuthEmailRequest{} = request}}),
++    do: {:ok, request}
++
++  defp unwrap_auth_email_request_update({:ok, {:unchanged, %AuthEmailRequest{} = request}}),
++    do: {:ok, request, :unchanged}
++
+   defp unwrap_auth_email_request_update({:error, reason}), do: {:error, reason}
+ 
+   defp timestamp(opts) do
+diff --git a/web/test/memba/accounts/auth_email_request_test.exs b/web/test/memba/accounts/auth_email_request_test.exs
+index 47fee60..c6707c9 100644
+--- a/web/test/memba/accounts/auth_email_request_test.exs
++++ b/web/test/memba/accounts/auth_email_request_test.exs
+@@ -120,6 +120,48 @@ defmodule Memba.Accounts.AuthEmailRequestTest do
+ 
+       assert Accounts.get_auth_email_request(request.request_id).status == "provider_accepted"
+     end
++
++    test "does not publish or rewrite state for duplicate provider progress events" do
++      accepted_at = ~U[2026-06-13 12:00:09.000000Z]
++      duplicate_at = DateTime.add(accepted_at, 60, :second)
++
++      {:ok, request} = Accounts.create_auth_email_request()
++      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id)
++
++      :ok = AuthEmailProgressChanges.subscribe(request.request_id)
++
++      attrs = %{
++        provider: "postmark",
++        provider_message_id: "postmark-message-123",
++        provider_event_id: "postmark-event-456",
++        provider_event_type: "Delivery"
++      }
++
++      assert {:ok, %AuthEmailRequest{} = accepted_request} =
++               Accounts.record_auth_email_provider_accepted(request.request_id, attrs,
++                 now: accepted_at
++               )
++
++      assert accepted_request.status == "provider_accepted"
++      assert accepted_request.provider_reported_at == accepted_at
++
++      assert_receive {:auth_email_progress_changed, %{request_id: request_id}}
++      assert request_id == request.request_id
++
++      assert {:ok, %AuthEmailRequest{} = duplicate_request} =
++               Accounts.record_auth_email_provider_accepted(request.request_id, attrs,
++                 now: duplicate_at
++               )
++
++      assert duplicate_request.status == "provider_accepted"
++      assert duplicate_request.provider_reported_at == accepted_request.provider_reported_at
++      assert duplicate_request.updated_at == accepted_request.updated_at
++      refute_receive {:auth_email_progress_changed, _payload}, 50
++
++      persisted_request = Repo.get!(AuthEmailRequest, request.request_id)
++      assert persisted_request.provider_reported_at == accepted_request.provider_reported_at
++      assert persisted_request.updated_at == accepted_request.updated_at
++    end
+   end
+ 
+   describe "expiry and cleanup" do
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 38af3d6..f3fa3cf 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -141,6 +141,42 @@ defmodule MembaWeb.AuthControllerTest do
+       )
+     end
+ 
++    test "keeps fallback guidance hidden before the fallback threshold", %{conn: conn} do
++      created_at = DateTime.add(DateTime.utc_now(:microsecond), -30, :second)
++      {:ok, request} = Accounts.create_auth_email_request(%{})
++
++      request =
++        request
++        |> Ecto.Changeset.change(inserted_at: created_at, updated_at: created_at)
++        |> Repo.update!()
++
++      {:ok, request} = Accounts.mark_auth_email_sent(request.request_id, %{}, now: created_at)
++
++      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
++      html = LazyHTML.from_fragment(response)
++
++      assert_exact_text(
++        html,
++        "#auth-email-progress-message",
++        "If this email can sign in, the link is on its way."
++      )
++
++      refute response =~ "If it does not arrive, check junk mail or ask for another link."
++    end
++
++    test "renders expired neutral guidance after the user-facing progress window", %{conn: conn} do
++      created_at = DateTime.add(DateTime.utc_now(:microsecond), -31 * 60, :second)
++      {:ok, request} = Accounts.create_auth_email_request(%{}, now: created_at)
++
++      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
++
++      assert_exact_text(
++        LazyHTML.from_fragment(response),
++        "#auth-email-progress-message",
++        "This sign-in-link request has expired. Ask for another link."
++      )
++    end
++
+     test "refreshes auth email progress after a committed progress update", %{conn: conn} do
+       {:ok, request} = Accounts.create_auth_email_request()
+ 
+@@ -190,6 +226,39 @@ defmodule MembaWeb.AuthControllerTest do
+       assert auth_email_request_path?(unknown_path)
+     end
+ 
++    test "keeps known and unknown check-email pages privacy-preserving", %{conn: conn} do
++      configure_auth_email()
++      create_active_member(email: "alice@example.com")
++
++      known_path = submit_sign_in_link_request_path(conn, "alice@example.com")
++
++      unknown_path =
++        conn
++        |> Phoenix.ConnTest.recycle()
++        |> submit_sign_in_link_request_path("robin@example.net")
++
++      for {path, submitted_email} <- [
++            {known_path, "alice@example.com"},
++            {unknown_path, "robin@example.net"}
++          ] do
++        {:ok, _view, response} =
++          conn
++          |> Phoenix.ConnTest.recycle()
++          |> live(path)
++
++        html = LazyHTML.from_fragment(response)
++
++        assert response =~ "Check your email for the sign-in link."
++        assert response =~ neutral_notice()
++        assert html |> LazyHTML.query("div#auth-email-progress") |> Enum.any?()
++        refute response =~ submitted_email
++        refute response =~ "recognised"
++        refute response =~ "recognized"
++        refute response =~ "unknown email"
++        refute response =~ "No account"
++      end
++    end
++
+     test "creates a sign-in token and sends a callback URL email for known member recipients", %{
+       conn: conn
+     } do
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 6fb199a..d4745f5 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -208,6 +208,34 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     assert updated_request.provider_event_type == "Delivery"
+   end
+ 
++  test "treats duplicate auth-stream delivered events as idempotent no-ops", %{conn: conn} do
++    {:ok, %AuthEmailRequest{} = request} = sent_auth_email_request()
++    payload = realistic_auth_postmark_payload(:delivered, request)
++
++    conn = post_postmark_event(conn, payload)
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert %AuthEmailRequest{} =
++             first_update =
++             Accounts.get_auth_email_request(request.request_id)
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_event(payload)
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert %AuthEmailRequest{} =
++             duplicate_update =
++             Accounts.get_auth_email_request(request.request_id)
++
++    assert duplicate_update.status == "provider_accepted"
++    assert duplicate_update.provider_reported_at == first_update.provider_reported_at
++    assert duplicate_update.updated_at == first_update.updated_at
++  end
++
+   test "routes auth-stream delayed, bounced, and spam complaint events to auth-email progress",
+        %{conn: conn} do
+     {:ok, delayed_request} = sent_auth_email_request()
