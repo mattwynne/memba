@@ -1,0 +1,267 @@
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index 1acb58e..d67f736 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the existing auth LiveView, auth email module, Postmark webhook controller, read-model change publisher, and current delivery-status LiveViews that subscribe to read-model changes.
+ - [x] 002 Add a small persistence model for auth-email requests/progress, with an opaque public request ID, normalized internal email only where needed, status, provider message/correlation data, timestamps, and expiry/cleanup considerations.
+ - [x] 003 Update the sign-in request flow so every submitted address creates an opaque request/progress record before navigation.
+-- [ ] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
++- [x] 004 For recognized recipients, send the auth email with Postmark metadata linking it to the auth request. For unknown recipients, do not send email but keep the request's public status neutral.
+ - [ ] 005 Change `/auth/check-email` to use an opaque request ID, with backward-compatible handling for any old route if needed.
+ - [ ] 006 Add LiveView progress rendering and subscription. Refresh from persistence after receiving committed-change notifications.
+ - [ ] 007 Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
+diff --git a/web/lib/memba/accounts/auth_email.ex b/web/lib/memba/accounts/auth_email.ex
+index b4be630..49e450e 100644
+--- a/web/lib/memba/accounts/auth_email.ex
++++ b/web/lib/memba/accounts/auth_email.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Accounts.AuthEmail do
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmailConfig
+   alias Memba.EmailTemplates
++  alias Memba.ID
+ 
+   @sender_name "Memba"
+   @subject "Sign in to Memba"
+@@ -83,20 +84,32 @@ defmodule Memba.Accounts.AuthEmail do
+     |> subject(subject(context))
+     |> text_body(sign_in_text_body(callback_url, context))
+     |> html_body(html_body(callback_url, recipient_email, context))
+-    |> put_provider_options(config)
++    |> put_provider_options(config, context)
+   end
+ 
+-  defp put_provider_options(email, %AuthEmailConfig{provider: :resend}) do
++  defp put_provider_options(email, %AuthEmailConfig{provider: :resend}, _context) do
+     put_provider_option(email, :tags, [
+       %{name: "memba_email_kind", value: "auth_sign_in_link"},
+       %{name: "memba_auth_email_stream", value: "auth"}
+     ])
+   end
+ 
+-  defp put_provider_options(email, %AuthEmailConfig{} = config) do
+-    put_provider_option(email, :message_stream, config.message_stream)
++  defp put_provider_options(email, %AuthEmailConfig{} = config, context) do
++    email
++    |> put_provider_option(:message_stream, config.message_stream)
++    |> put_postmark_auth_request_metadata(context)
++  end
++
++  defp put_postmark_auth_request_metadata(email, %{auth_email_request_id: request_id})
++       when is_binary(request_id) do
++    put_provider_option(email, :metadata, %{
++      "memba_email_kind" => "auth_sign_in_link",
++      "memba_auth_email_request_id" => request_id
++    })
+   end
+ 
++  defp put_postmark_auth_request_metadata(email, _context), do: email
++
+   defp sign_in_text_body(callback_url, context) do
+     """
+     Use this link to sign in to #{target_name(context)}:
+@@ -145,7 +158,10 @@ defmodule Memba.Accounts.AuthEmail do
+   end
+ 
+   defp sign_in_context(opts) do
+-    %{group_name: group_name_from_context(opts)}
++    %{
++      group_name: group_name_from_context(opts),
++      auth_email_request_id: auth_email_request_id_from_context(opts)
++    }
+   end
+ 
+   defp group_name_from_context(opts) do
+@@ -170,6 +186,25 @@ defmodule Memba.Accounts.AuthEmail do
+     |> present_header_text()
+   end
+ 
++  defp auth_email_request_id_from_context(opts) do
++    opts
++    |> option_value([:auth_email_request_id, :request_id])
++    |> cast_auth_email_request_id()
++  end
++
++  defp cast_auth_email_request_id(value) when is_binary(value) do
++    value
++    |> String.trim()
++    |> then(fn value ->
++      case ID.cast(:auth_email_request, value) do
++        {:ok, request_id} -> request_id
++        :error -> nil
++      end
++    end)
++  end
++
++  defp cast_auth_email_request_id(_value), do: nil
++
+   defp option_value(opts, keys) when is_list(opts) do
+     if Keyword.keyword?(opts) do
+       Enum.find_value(keys, &Keyword.get(opts, &1))
+diff --git a/web/lib/memba_web/live/auth_live/sign_in.ex b/web/lib/memba_web/live/auth_live/sign_in.ex
+index 69770b6..cfb0edb 100644
+--- a/web/lib/memba_web/live/auth_live/sign_in.ex
++++ b/web/lib/memba_web/live/auth_live/sign_in.ex
+@@ -132,18 +132,18 @@ defmodule MembaWeb.AuthLive.SignIn do
+ 
+   defp create_request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+     case Accounts.create_auth_email_request() do
+-      {:ok, _request} ->
+-        request_and_deliver_sign_in_link(email, callback_base_url, email_context)
++      {:ok, request} ->
++        request_and_deliver_sign_in_link(email, callback_base_url, email_context, request)
+ 
+       {:error, reason} ->
+         Logger.warning("Could not create auth email progress request: #{inspect(reason)}")
+     end
+   end
+ 
+-  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
++  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context, request) do
+     case Accounts.request_sign_in_link(email) do
+       {:ok, %{email: recipient_email, token: token}} ->
+-        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context)
++        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request)
+ 
+       {:ok, nil} ->
+         :ok
+@@ -153,18 +153,50 @@ defmodule MembaWeb.AuthLive.SignIn do
+     end
+   end
+ 
+-  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context) do
++  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context, request) do
+     callback_url = callback_base_url <> ~p"/auth/sign-in/#{token}"
++    email_context = Map.put(email_context, :auth_email_request_id, request.request_id)
+ 
+     case AuthEmail.deliver_sign_in_link(recipient_email, callback_url, email_context) do
+       :ok ->
+-        :ok
++        mark_auth_email_sent(request, recipient_email)
+ 
+       {:error, reason} ->
+         Logger.warning("Could not deliver auth sign-in link email: #{inspect(reason)}")
+     end
+   end
+ 
++  defp mark_auth_email_sent(request, recipient_email) do
++    attrs = %{
++      recipient_email: recipient_email,
++      provider: auth_email_provider(),
++      provider_message_stream: auth_email_message_stream()
++    }
++
++    case Accounts.mark_auth_email_sent(request.request_id, attrs) do
++      {:ok, _request} ->
++        :ok
++
++      {:error, reason} ->
++        Logger.warning("Could not mark auth email progress request sent: #{inspect(reason)}")
++    end
++  end
++
++  defp auth_email_provider do
++    case Keyword.get(auth_email_config(), :provider, :postmark) do
++      :resend -> "resend"
++      _provider -> "postmark"
++    end
++  end
++
++  defp auth_email_message_stream do
++    Keyword.get(auth_email_config(), :message_stream)
++  end
++
++  defp auth_email_config do
++    Application.get_env(:memba, AuthEmail, [])
++  end
++
+   defp auth_callback_base_url(uri) when is_binary(uri) do
+     case URI.parse(uri) do
+       %URI{scheme: scheme, host: host, port: port}
+diff --git a/web/test/memba/accounts/auth_email_test.exs b/web/test/memba/accounts/auth_email_test.exs
+index 978e6a0..eddb424 100644
+--- a/web/test/memba/accounts/auth_email_test.exs
++++ b/web/test/memba/accounts/auth_email_test.exs
+@@ -29,10 +29,15 @@ defmodule Memba.Accounts.AuthEmailTest do
+       message_stream: "outbound-authentication"
+     )
+ 
++    request_id = Memba.ID.generate(:auth_email_request)
++
+     callback_url =
+       "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin&client=ipad"
+ 
+-    assert :ok = AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url)
++    assert :ok =
++             AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url,
++               auth_email_request_id: request_id
++             )
+ 
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+@@ -57,7 +62,11 @@ defmodule Memba.Accounts.AuthEmailTest do
+     assert_standard_memba_footer(email.html_body, recipient_email: "alice@example.com")
+ 
+     assert email.provider_options == %{
+-             message_stream: "outbound-authentication"
++             message_stream: "outbound-authentication",
++             metadata: %{
++               "memba_email_kind" => "auth_sign_in_link",
++               "memba_auth_email_request_id" => request_id
++             }
+            }
+   end
+ 
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 8754cf0..abd69bb 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -95,7 +95,7 @@ defmodule MembaWeb.AuthControllerTest do
+       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+     end
+ 
+-    test "creates opaque auth-email progress records for known and unknown submissions", %{
++    test "correlates known auth email delivery while keeping unknown progress neutral", %{
+       conn: conn
+     } do
+       configure_auth_email()
+@@ -106,9 +106,18 @@ defmodule MembaWeb.AuthControllerTest do
+ 
+       assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
+       assert Memba.ID.valid?(:auth_email_request, known_request.request_id)
+-      assert known_request.status == AuthEmailRequest.status_created()
+-      assert known_request.recipient_email == nil
+-      assert_received {:email, %Swoosh.Email{}}
++      assert known_request.status == AuthEmailRequest.status_sent()
++      assert known_request.recipient_email == "alice@example.com"
++      assert known_request.provider == "postmark"
++      assert known_request.provider_message_stream == "outbound-authentication"
++      assert known_request.sent_at
++
++      assert_received {:email, %Swoosh.Email{} = email}
++
++      assert email.provider_options[:metadata] == %{
++               "memba_email_kind" => "auth_sign_in_link",
++               "memba_auth_email_request_id" => known_request.request_id
++             }
+ 
+       assert conn
+              |> Phoenix.ConnTest.recycle()
+@@ -119,9 +128,15 @@ defmodule MembaWeb.AuthControllerTest do
+ 
+       assert length(requests) == 2
+       assert Enum.all?(requests, &Memba.ID.valid?(:auth_email_request, &1.request_id))
+-      assert Enum.all?(requests, &(&1.status == AuthEmailRequest.status_created()))
+-      assert Enum.all?(requests, &is_nil(&1.recipient_email))
+       assert length(Enum.uniq_by(requests, & &1.request_id)) == 2
++
++      assert [%AuthEmailRequest{} = unknown_request] =
++               Enum.reject(requests, &(&1.request_id == known_request.request_id))
++
++      assert unknown_request.status == AuthEmailRequest.status_created()
++      assert unknown_request.recipient_email == nil
++      assert unknown_request.provider == nil
++      assert unknown_request.sent_at == nil
+       assert_no_email_sent()
+     end
+ 
