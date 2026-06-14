@@ -1,6 +1,8 @@
 defmodule MembaWeb.PostmarkWebhookControllerTest do
   use MembaWeb.FeatureCase, async: false
 
+  alias Memba.Accounts
+  alias Memba.Accounts.AuthEmailRequest
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
@@ -187,6 +189,110 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     end)
   end
 
+  test "routes auth-stream delivered events to auth-email progress", %{conn: conn} do
+    {:ok, %AuthEmailRequest{} = request} = sent_auth_email_request()
+
+    conn = post_postmark_event(conn, realistic_auth_postmark_payload(:delivered, request))
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             updated_request =
+             Accounts.get_auth_email_request(request.request_id)
+
+    assert updated_request.status == "provider_accepted"
+    assert updated_request.provider == "postmark"
+    assert updated_request.provider_message_stream == "outbound-authentication"
+    assert updated_request.provider_message_id == "postmark-auth-message-123"
+    assert updated_request.provider_event_id == "postmark-auth-message-123"
+    assert updated_request.provider_event_type == "Delivery"
+  end
+
+  test "routes auth-stream delayed, bounced, and spam complaint events to auth-email progress",
+       %{conn: conn} do
+    {:ok, delayed_request} = sent_auth_email_request()
+    {:ok, bounced_request} = sent_auth_email_request()
+    {:ok, spam_request} = sent_auth_email_request()
+
+    conn =
+      post_postmark_event(
+        conn,
+        realistic_auth_postmark_payload(:delayed, delayed_request,
+          reason: "recipient server is temporarily unavailable"
+        )
+      )
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             updated_delayed_request =
+             Accounts.get_auth_email_request(delayed_request.request_id)
+
+    assert updated_delayed_request.status == "provider_delayed"
+    assert updated_delayed_request.provider_event_type == "Bounce"
+
+    assert updated_delayed_request.provider_reason ==
+             "recipient server is temporarily unavailable"
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_event(
+        realistic_auth_postmark_payload(:bounced, bounced_request,
+          reason: "mailbox does not exist"
+        )
+      )
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             updated_bounced_request =
+             Accounts.get_auth_email_request(bounced_request.request_id)
+
+    assert updated_bounced_request.status == "provider_failed"
+    assert updated_bounced_request.provider_event_type == "Bounce"
+    assert updated_bounced_request.provider_reason == "mailbox does not exist"
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_event(
+        realistic_auth_postmark_payload(:spam_complaint, spam_request,
+          reason: "recipient marked the message as spam"
+        )
+      )
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             updated_spam_request =
+             Accounts.get_auth_email_request(spam_request.request_id)
+
+    assert updated_spam_request.status == "provider_failed"
+    assert updated_spam_request.provider_event_type == "SpamComplaint"
+    assert updated_spam_request.provider_reason == "recipient marked the message as spam"
+  end
+
+  test "ignores auth-stream events with missing request correlation", %{conn: conn} do
+    {:ok, %AuthEmailRequest{} = request} = sent_auth_email_request()
+
+    payload =
+      :delivered
+      |> realistic_auth_postmark_payload(request)
+      |> put_in(["Metadata"], %{})
+
+    conn = post_postmark_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %AuthEmailRequest{} =
+             unchanged_request =
+             Accounts.get_auth_email_request(request.request_id)
+
+    assert unchanged_request.status == "sent"
+    refute unchanged_request.provider_reported_at
+  end
+
   test "rejects Postmark open events before delivered events", %{conn: conn} do
     %{message_id: message_id, recipients: [bob, carol]} =
       message = send_message_to(["Bob", "Carol"])
@@ -236,6 +342,19 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     conn
     |> put_req_header("content-type", "application/json")
     |> post(~p"/webhooks/postmark", Jason.encode!(payload))
+  end
+
+  defp sent_auth_email_request do
+    {:ok, request} =
+      Accounts.create_auth_email_request(%{
+        recipient_email: "alice@example.test"
+      })
+
+    Accounts.mark_auth_email_sent(request.request_id, %{
+      provider: "postmark",
+      provider_message_id: "postmark-auth-message-123",
+      provider_message_stream: "outbound-authentication"
+    })
   end
 
   defp send_message_to(names, opts \\ []) do
@@ -307,6 +426,26 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
         "Recipient" => recipient.email,
         "ServerID" => 12_345,
         "Tag" => "member-message"
+      }
+
+    Map.merge(base, realistic_postmark_event_fields(event_type, recipient, opts))
+  end
+
+  defp realistic_auth_postmark_payload(event_type, request, opts \\ []) do
+    recipient = %{
+      email: request.recipient_email || "alice@example.test"
+    }
+
+    base =
+      %{
+        "MessageID" => "postmark-auth-message-123",
+        "MessageStream" => "outbound-authentication",
+        "Metadata" => %{
+          "memba_auth_email_request_id" => request.request_id
+        },
+        "Recipient" => recipient.email,
+        "ServerID" => 12_345,
+        "Tag" => "auth-email"
       }
 
     Map.merge(base, realistic_postmark_event_fields(event_type, recipient, opts))
