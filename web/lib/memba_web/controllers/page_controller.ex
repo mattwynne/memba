@@ -115,8 +115,8 @@ defmodule MembaWeb.PageController do
   defp request_get_started_verification(conn, verification_params) do
     case verified_get_started_email(verification_params) do
       {:ok, email} ->
-        create_and_deliver_get_started_sign_in_link(email)
-        redirect(conn, to: ~p"/auth/check-email")
+        request_id = create_and_deliver_get_started_sign_in_link(email)
+        redirect(conn, to: check_email_path(request_id))
 
       {:error, changeset} ->
         conn
@@ -160,26 +160,92 @@ defmodule MembaWeb.PageController do
 
   defp verification_changeset(_params), do: verification_changeset(%{})
 
+  defp check_email_path(nil), do: ~p"/auth/check-email"
+  defp check_email_path(request_id), do: ~p"/auth/check-email/#{request_id}"
+
   defp create_and_deliver_get_started_sign_in_link(email) do
+    auth_email_request = create_get_started_auth_email_request(email)
+
     case Accounts.create_sign_in_token(email) do
       {:ok, %{email: recipient_email, token: token}} ->
-        deliver_get_started_sign_in_link(recipient_email, token)
+        deliver_get_started_sign_in_link(recipient_email, token, auth_email_request)
+        auth_email_request_id(auth_email_request)
 
       {:error, reason} ->
         Logger.warning("Could not create get-started sign-in link: #{inspect(reason)}")
+        auth_email_request_id(auth_email_request)
     end
   end
 
-  defp deliver_get_started_sign_in_link(recipient_email, token) do
+  defp create_get_started_auth_email_request(email) do
+    case Accounts.create_auth_email_request(%{recipient_email: email}) do
+      {:ok, request} ->
+        request
+
+      {:error, reason} ->
+        Logger.warning(
+          "Could not create get-started auth email progress request: #{inspect(reason)}"
+        )
+
+        nil
+    end
+  end
+
+  defp auth_email_request_id(%{request_id: request_id}), do: request_id
+  defp auth_email_request_id(nil), do: nil
+
+  defp deliver_get_started_sign_in_link(recipient_email, token, auth_email_request) do
     callback_url = get_started_sign_in_callback_url(token)
 
-    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
+    case AuthEmail.deliver_sign_in_link(
+           recipient_email,
+           callback_url,
+           auth_email_context(auth_email_request)
+         ) do
       :ok ->
-        :ok
+        mark_get_started_auth_email_sent(auth_email_request, recipient_email)
 
       {:error, reason} ->
         Logger.warning("Could not deliver get-started sign-in link email: #{inspect(reason)}")
     end
+  end
+
+  defp auth_email_context(%{request_id: request_id}), do: %{auth_email_request_id: request_id}
+  defp auth_email_context(nil), do: %{}
+
+  defp mark_get_started_auth_email_sent(nil, _recipient_email), do: :ok
+
+  defp mark_get_started_auth_email_sent(auth_email_request, recipient_email) do
+    attrs = %{
+      recipient_email: recipient_email,
+      provider: auth_email_provider(),
+      provider_message_stream: auth_email_message_stream()
+    }
+
+    case Accounts.mark_auth_email_sent(auth_email_request.request_id, attrs) do
+      {:ok, _request} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Could not mark get-started auth email progress request sent: #{inspect(reason)}"
+        )
+    end
+  end
+
+  defp auth_email_provider do
+    case Keyword.get(auth_email_config(), :provider, :postmark) do
+      :resend -> "resend"
+      _provider -> "postmark"
+    end
+  end
+
+  defp auth_email_message_stream do
+    Keyword.get(auth_email_config(), :message_stream)
+  end
+
+  defp auth_email_config do
+    Application.get_env(:memba, AuthEmail, [])
   end
 
   defp get_started_sign_in_callback_url(token) do

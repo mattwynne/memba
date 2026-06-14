@@ -19,25 +19,40 @@ defmodule MembaWeb.AuthLive.SignIn do
   end
 
   @impl Phoenix.LiveView
-  def handle_params(_params, uri, socket) do
+  def handle_params(params, uri, socket) do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
+     |> assign(:auth_email_request_id, auth_email_request_id(params))
      |> assign(:auth_callback_base_url, auth_callback_base_url(uri))
      |> assign(:sign_in_email_context, sign_in_email_context(uri))}
   end
 
   @impl Phoenix.LiveView
   def handle_event("request_sign_in_link", params, socket) do
-    params
-    |> email_param()
-    |> create_request_and_deliver_sign_in_link(
-      socket.assigns.auth_callback_base_url,
-      Map.get(socket.assigns, :sign_in_email_context, %{})
-    )
+    check_email_path =
+      params
+      |> email_param()
+      |> create_request_and_deliver_sign_in_link(
+        socket.assigns.auth_callback_base_url,
+        Map.get(socket.assigns, :sign_in_email_context, %{})
+      )
+      |> check_email_path()
 
-    {:noreply, push_patch(socket, to: ~p"/auth/check-email")}
+    {:noreply, push_patch(socket, to: check_email_path)}
   end
+
+  defp check_email_path({:ok, request_id}), do: ~p"/auth/check-email/#{request_id}"
+  defp check_email_path(:error), do: ~p"/auth/check-email"
+
+  defp auth_email_request_id(%{"request_id" => request_id}) do
+    case Memba.ID.cast(:auth_email_request, request_id) do
+      {:ok, request_id} -> request_id
+      :error -> nil
+    end
+  end
+
+  defp auth_email_request_id(_params), do: nil
 
   @impl Phoenix.LiveView
   def render(%{live_action: :sent} = assigns) do
@@ -134,9 +149,11 @@ defmodule MembaWeb.AuthLive.SignIn do
     case Accounts.create_auth_email_request() do
       {:ok, request} ->
         request_and_deliver_sign_in_link(email, callback_base_url, email_context, request)
+        {:ok, request.request_id}
 
       {:error, reason} ->
         Logger.warning("Could not create auth email progress request: #{inspect(reason)}")
+        :error
     end
   end
 

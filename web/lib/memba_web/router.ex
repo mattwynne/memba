@@ -86,6 +86,7 @@ defmodule MembaWeb.Router do
     live_session :auth do
       live "/auth", AuthLive.SignIn, :new
       live "/auth/check-email", AuthLive.SignIn, :sent
+      live "/auth/check-email/:request_id", AuthLive.SignIn, :sent
     end
 
     get "/auth/sign-in/:token", AuthController, :callback

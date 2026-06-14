@@ -76,6 +76,47 @@ defmodule MembaWeb.AuthControllerTest do
       assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
     end
 
+    test "shows the sign-in link request acknowledgement page for an opaque request id", %{
+      conn: conn
+    } do
+      {:ok, request} = Accounts.create_auth_email_request()
+
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email/#{request.request_id}")
+      html = LazyHTML.from_fragment(response)
+
+      assert response =~ "Check your email for the sign-in link."
+      assert response =~ neutral_notice()
+      assert html |> LazyHTML.query("section#auth-sign-in-sent") |> Enum.any?()
+      assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
+    end
+
+    test "patches known and unknown sign-in submissions to opaque request id URLs", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      known_path = submit_sign_in_link_request_path(conn, " ALICE@EXAMPLE.COM ")
+
+      assert [%AuthEmailRequest{} = known_request] = Repo.all(AuthEmailRequest)
+      assert known_path == ~p"/auth/check-email/#{known_request.request_id}"
+      assert auth_email_request_path?(known_path)
+
+      unknown_path =
+        conn
+        |> Phoenix.ConnTest.recycle()
+        |> submit_sign_in_link_request_path("unknown@example.com")
+
+      requests = Repo.all(AuthEmailRequest)
+      assert length(requests) == 2
+
+      assert [%AuthEmailRequest{} = unknown_request] =
+               Enum.reject(requests, &(&1.request_id == known_request.request_id))
+
+      assert unknown_path == ~p"/auth/check-email/#{unknown_request.request_id}"
+      assert auth_email_request_path?(unknown_path)
+    end
+
     test "creates a sign-in token and sends a callback URL email for known member recipients", %{
       conn: conn
     } do
@@ -514,6 +555,20 @@ defmodule MembaWeb.AuthControllerTest do
     view
     |> form("#sign-in-link-form", auth: %{email: email})
     |> render_submit()
+  end
+
+  defp submit_sign_in_link_request_path(conn, email) do
+    {:ok, view, _html} = live(conn, ~p"/auth")
+
+    view
+    |> form("#sign-in-link-form", auth: %{email: email})
+    |> render_submit()
+
+    assert_patch(view)
+  end
+
+  defp auth_email_request_path?(path) do
+    Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
   end
 
   defp create_active_member(attrs) do
