@@ -1,0 +1,739 @@
+diff --git a/acceptance-tests/features/authentication.feature b/acceptance-tests/features/authentication.feature
+index 85c2880..7c8fb74 100644
+--- a/acceptance-tests/features/authentication.feature
++++ b/acceptance-tests/features/authentication.feature
+@@ -60,7 +60,7 @@ Rule: People who are neither club members nor Memba staff cannot sign in
+ 
+ Rule: Sign-in email progress protects privacy
+ 
+-    @iteration-032 @todo-domain @todo-ui
++    @iteration-032
+     Scenario: Alice sees when her mailbox provider accepts the sign-in email
+       Given Alice is a member of Kootenay Mountaineering Club
+       When Alice requests a sign-in link for their email address
+@@ -69,7 +69,7 @@ Rule: Sign-in email progress protects privacy
+       Then Alice should see that the email has been accepted by her mailbox provider
+       And Alice should not be told that the email is in her inbox
+ 
+-    @iteration-032 @todo-domain @todo-ui
++    @iteration-032
+     Scenario: Robin sees the same neutral waiting experience for an unknown email address
+       Given Robin is not a member of any club
+       When Robin requests a sign-in link for their email address
+diff --git a/acceptance-tests/features/step_definitions/authentication_steps.js b/acceptance-tests/features/step_definitions/authentication_steps.js
+index 9fc8fca..d3b6ea0 100644
+--- a/acceptance-tests/features/step_definitions/authentication_steps.js
++++ b/acceptance-tests/features/step_definitions/authentication_steps.js
+@@ -1,8 +1,11 @@
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
+   assertDoesNotReceiveSignInLink,
++  assertAuthEmailAcceptedByMailboxProvider,
+   assertNotSignedIn,
+   assertClubMarketingPage,
++  assertNeutralSignInEmailInstructions,
++  assertNoInboxPlacementClaim,
+   assertOnHomepage,
+   assertOnStaffOnlyHomepage,
+   assertReceivesSignInLink,
+@@ -11,6 +14,8 @@ const {
+   assertSignedInAsStaff,
+   assertSignedOut,
+   assertSignedInOnClubPage,
++  assertSignInEmailPrivacyPreserved,
++  assertSignInEmailProgressStarted,
+   assertStillSignedIn,
+   assertPoweredByMembaInClubFooter,
+   ensureMember,
+@@ -20,6 +25,7 @@ const {
+   followUnissuedSignInLink,
+   openClubPage,
+   recordNonMember,
++  recordSignInEmailProviderAccepted,
+   requestSignInLinkForEmail,
+   requestSignInLinkForPerson,
+   signOut,
+@@ -58,6 +64,30 @@ Then("{word} should not receive a sign-in link", async function (personName) {
+   await assertDoesNotReceiveSignInLink(this, personName);
+ });
+ 
++Then("{word} should see that Memba is trying to send a sign-in link", async function (personName) {
++  await assertSignInEmailProgressStarted(this, personName);
++});
++
++When("Alice's mailbox provider accepts the sign-in email", async function () {
++  await recordSignInEmailProviderAccepted(this, "Alice");
++});
++
++Then("{word} should see that the email has been accepted by her mailbox provider", async function (personName) {
++  await assertAuthEmailAcceptedByMailboxProvider(this, personName);
++});
++
++Then("{word} should not be told that the email is in her inbox", async function (_personName) {
++  await assertNoInboxPlacementClaim(this);
++});
++
++Then("{word} should see neutral sign-in email instructions", async function (personName) {
++  await assertNeutralSignInEmailInstructions(this, personName);
++});
++
++Then("{word} should not learn whether Memba recognises the email address", async function (personName) {
++  await assertSignInEmailPrivacyPreserved(this, personName);
++});
++
+ When("{word} follows the sign-in link", async function (personName) {
+   await followSignInLink(this, personName);
+ });
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index 991ad3c..e617527 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -100,7 +100,14 @@ async function requestSignInLinkForEmail(world, email, personName = email) {
+     world.page.getByText("If that email address can sign in to Memba, the sign-in email is on its way.")
+   ).toBeVisible();
+ 
+-  world.signInRequests[personName] = { email, previousEmails };
++  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
++
++  world.signInRequests[personName] = {
++    authEmailRequestId: authEmailRequestIdFromCurrentPage(world),
++    checkEmailUrl: world.page.url(),
++    email,
++    previousEmails
++  };
+ }
+ 
+ async function assertReceivesSignInLink(world, personName) {
+@@ -168,6 +175,58 @@ async function assertDoesNotReceiveSignInLink(world, personName) {
+   } while (Date.now() <= deadline);
+ }
+ 
++async function assertSignInEmailProgressStarted(world, personName) {
++  const request = signInRequestFor(world, personName);
++
++  assert.ok(request.authEmailRequestId, `Expected ${personName} to have an auth-email request id`);
++  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
++  await playwrightExpect(world.page.locator("#auth-email-progress")).toBeVisible();
++  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
++    /Preparing your sign-in link…|If this email can sign in, the link is on its way\./
++  );
++}
++
++async function recordSignInEmailProviderAccepted(world, personName) {
++  const request = signInRequestFor(world, personName);
++  serverCommands.recordAuthEmailProviderAccepted({ requestId: request.authEmailRequestId });
++}
++
++async function assertAuthEmailAcceptedByMailboxProvider(world, _personName) {
++  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
++    "Your mailbox provider has accepted the email. It should appear shortly."
++  );
++}
++
++async function assertNoInboxPlacementClaim(world) {
++  await playwrightExpect(world.page.locator("body")).not.toContainText("in your inbox");
++  await playwrightExpect(world.page.locator("body")).not.toContainText("email is in the inbox");
++}
++
++async function assertNeutralSignInEmailInstructions(world, personName) {
++  const request = signInRequestFor(world, personName);
++
++  assert.ok(request.authEmailRequestId, `Expected ${personName} to have an auth-email request id`);
++  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email\/[^/?#]+/);
++  await playwrightExpect(world.page.locator("#sign-in-link-sent-notice")).toContainText(
++    "If that email address can sign in to Memba, the sign-in email is on its way."
++  );
++  await playwrightExpect(world.page.locator("#auth-email-progress-message")).toContainText(
++    /Preparing your sign-in link…|If this email can sign in, the link is on its way\./
++  );
++}
++
++async function assertSignInEmailPrivacyPreserved(world, personName) {
++  const request = signInRequestFor(world, personName);
++  const body = world.page.locator("body");
++
++  await playwrightExpect(body).not.toContainText(request.email);
++  await playwrightExpect(body).not.toContainText("unknown email");
++  await playwrightExpect(body).not.toContainText("not recognised");
++  await playwrightExpect(body).not.toContainText("not recognized");
++  await playwrightExpect(body).not.toContainText("does not have an account");
++  await playwrightExpect(body).not.toContainText("not found");
++}
++
+ async function followSignInLink(world, personName) {
+   await followSignInLinkUrl(world, signInLinkFor(world, personName));
+ }
+@@ -382,6 +441,15 @@ function currentPageUrl(page) {
+   return page.currentUrl || "";
+ }
+ 
++function authEmailRequestIdFromCurrentPage(world) {
++  const url = new URL(world.page.url());
++  const match = url.pathname.match(/\/auth\/check-email\/([^/]+)$/);
++
++  assert.ok(match, `Expected check-email URL with auth request id, got ${url.toString()}`);
++
++  return match[1];
++}
++
+ function signInEmailMatches(email, recipientEmail) {
+   return (
+     email.subject === signInSubject &&
+@@ -449,6 +517,9 @@ function emailSummary(email) {
+ 
+ module.exports = {
+   assertDoesNotReceiveSignInLink,
++  assertAuthEmailAcceptedByMailboxProvider,
++  assertNoInboxPlacementClaim,
++  assertNeutralSignInEmailInstructions,
+   assertNotSignedIn,
+   assertOnStaffOnlyHomepage,
+   assertReceivesSignInLink,
+@@ -457,6 +528,8 @@ module.exports = {
+   assertSignInEmailUsesStandardMembaFooter,
+   assertSignedIn,
+   assertSignedInAsStaff,
++  assertSignInEmailPrivacyPreserved,
++  assertSignInEmailProgressStarted,
+   assertStillSignedIn,
+   ensureMember,
+   expireSignInLink,
+@@ -467,6 +540,7 @@ module.exports = {
+   nelsonClubName,
+   openClubPage,
+   recordNonMember,
++  recordSignInEmailProviderAccepted,
+   requestSignInLinkForEmail,
+   requestSignInLinkForPerson,
+   signInAsStaffDirectly,
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 22f0c53..cb25349 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1600,7 +1600,7 @@ async function assertInboundRejectionEmail(world, senderName, expectedText) {
+ 
+   const rejectionEmail = newEmails.find(
+     (email) =>
+-      /wasn.?t posted/i.test(email.subject) &&
++      /(wasn.?t|was not) posted/i.test(email.subject) &&
+       mailboxEmailTo(email).includes(senderEmail) &&
+       mailboxEmailText(email).includes(expectedText)
+   );
+diff --git a/acceptance-tests/features/support/server_commands.js b/acceptance-tests/features/support/server_commands.js
+index c3a4111..17129ea 100644
+--- a/acceptance-tests/features/support/server_commands.js
++++ b/acceptance-tests/features/support/server_commands.js
+@@ -397,6 +397,34 @@ end
+   );
+ }
+ 
++function recordAuthEmailProviderAccepted({ requestId }) {
++  return runCommand(
++    `
++request_id = Map.fetch!(payload, "requestId")
++
++case Memba.Accounts.record_auth_email_provider_accepted(request_id, %{
++       provider: "postmark",
++       provider_event_id: "acceptance-#{request_id}",
++       provider_event_type: "Delivered",
++       provider_message_id: "acceptance-message-#{request_id}",
++       provider_message_stream: "outbound-authentication"
++     }) do
++  {:ok, request} ->
++    %{
++      requestId: request.request_id,
++      status: request.status,
++      providerEventId: request.provider_event_id,
++      providerEventType: request.provider_event_type
++    }
++
++  {:error, reason} ->
++    raise "Could not record auth-email provider acceptance for #{request_id}: #{inspect(reason)}"
++end
++`,
++    { requestId }
++  );
++}
++
+ function runCommand(code, payload = {}) {
+   const serverNode = acceptanceServerNode();
+   const cookie = process.env.ACCEPTANCE_SERVER_COOKIE || defaultCookie;
+@@ -409,11 +437,22 @@ end).(payload)
+ result |> Jason.encode!() |> IO.write()
+ `;
+ 
+-  const result = spawnSync(
+-    "elixir",
+-    ["--hidden", "--sname", "undefined", "--cookie", cookie, "--rpc-eval", serverNode, wrappedCode],
+-    { encoding: "utf8", env: process.env }
+-  );
++  const deadline = Date.now() + Number(process.env.ACCEPTANCE_SERVER_COMMAND_CONNECT_TIMEOUT_MS || 5000);
++  let result = null;
++
++  do {
++    result = spawnSync(
++      "elixir",
++      ["--hidden", "--sname", "undefined", "--cookie", cookie, "--rpc-eval", serverNode, wrappedCode],
++      { encoding: "utf8", env: process.env }
++    );
++
++    if (result.status === 0 || !serverCommandConnectionFailed(result) || Date.now() >= deadline) {
++      break;
++    }
++
++    sleepSync(100);
++  } while (true);
+ 
+   if (result.status !== 0) {
+     throw new Error(
+@@ -430,6 +469,14 @@ result |> Jason.encode!() |> IO.write()
+   }
+ }
+ 
++function serverCommandConnectionFailed(result) {
++  return String(result && result.stderr).includes("RPC failed with reason :noconnection");
++}
++
++function sleepSync(ms) {
++  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
++}
++
+ function acceptanceServerNode() {
+   const configured = process.env.ACCEPTANCE_SERVER_NODE || defaultServerNodeName;
+ 
+@@ -455,6 +502,7 @@ module.exports = {
+   ensurePersonEmailAddresses,
+   ensureSmokeTestClub,
+   listLocalDeliveryFacts,
++  recordAuthEmailProviderAccepted,
+   runCommand,
+   sendClubMessage,
+   waitForProjectionBarrier
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 79c74a1..ba6390a 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -259,7 +259,7 @@ class FakePage {
+       this.rows.clubMessages.push(messageRow);
+     }
+ 
+-    if (role === "button" && name === "Send to all members") {
++    if (role === "button" && name === "Send to all current members") {
+       const subject = this.fields["Subject"];
+       const messageId = idFor("message", subject, this.rows.messages.length + 1);
+ 
+@@ -670,7 +670,7 @@ test("member send flow opens compose from club home and stores the new message",
+     ["click", "locator", "#member-send-message-link"],
+     ["fill", "Subject", "Trip planning night"],
+     ["fill", "Message", "Trip planning night details."],
+-    ["click", "button", { name: "Send to all members" }],
++    ["click", "button", { name: "Send to all current members" }],
+     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]
+   ]);
+   assert.equal(
+@@ -715,7 +715,7 @@ test("member failed-send flow stays on compose failure state with support guidan
+     ["click", "locator", "#member-send-message-link"],
+     ["fill", "Subject", "Trip planning night"],
+     ["fill", "Message", "Trip planning night details."],
+-    ["click", "button", { name: "Send to all members" }]
++    ["click", "button", { name: "Send to all current members" }]
+   ]);
+   assert.ok(
+     expectations.some(
+@@ -723,7 +723,7 @@ test("member failed-send flow stays on compose failure state with support guidan
+         expectation[0] === "text" &&
+         typeof expectation[1] === "string" &&
+         expectation[1].includes("#member-compose-error-summary") &&
+-        expectation[2].includes("contact support")
++        expectation[2].includes("contact Memba")
+     )
+   );
+ });
+@@ -1280,6 +1280,7 @@ test("sending an inbound club email posts to the Resend inbound webhook and reco
+   assert.deepEqual(world.messages["Trip planning night"], {
+     body: "Trip planning night details.",
+     clubId: "club-1",
++    clubSlug: "kmc",
+     messageId: "message-inbound-1",
+     senderName: "Alice",
+     subject: "Trip planning night"
+diff --git a/docs/iterations/032-auth-email-delivery-progress/todo.md b/docs/iterations/032-auth-email-delivery-progress/todo.md
+index 4cd432c..c7725c3 100644
+--- a/docs/iterations/032-auth-email-delivery-progress/todo.md
++++ b/docs/iterations/032-auth-email-delivery-progress/todo.md
+@@ -9,4 +9,4 @@
+ - [x] 007 Extend Postmark webhook handling to route auth-stream delivery/problem events to auth-email progress updates without weakening member-message delivery-status handling.
+ - [x] 008 Publish auth-email progress changes after the relevant DB update commits, using the ADR 0021 discipline. The auth progress record is not a Commanded projection; use a small committed-update publisher with a narrow auth-progress topic and reload from persistence in the LiveView after broadcast.
+ - [x] 009 Add tests for known/unknown submissions, metadata, webhook correlation, duplicate webhook idempotency, live update behaviour, expiry, fallback timing, and privacy-preserving copy.
+-- [ ] 010 Implement or update acceptance step support for the `@iteration-032` scenarios, then remove/narrow `@todo-domain`/`@todo-ui` when they pass.
++- [x] 010 Implement or update acceptance step support for the `@iteration-032` scenarios, then remove/narrow `@todo-domain`/`@todo-ui` when they pass.
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index f22789b..4cd3bf5 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -22,7 +22,7 @@ defmodule MembaWeb.DevTestSupportController do
+     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+     Memba.Messaging.Projectors.InboundEmailSource
+   ]
+-  @public_reset_tables [:auth_sign_in_tokens, :onboarding_requests]
++  @public_reset_tables [:auth_email_requests, :auth_sign_in_tokens, :onboarding_requests]
+ 
+   @messaging_email_delivery_providers %{
+     "fake" => Memba.Messaging.EmailDeliveryProviders.Fake,
+diff --git a/web/test/features/membership_administration_steps_test.exs b/web/test/features/membership_administration_steps_test.exs
+index 94a7f14..b3168a2 100644
+--- a/web/test/features/membership_administration_steps_test.exs
++++ b/web/test/features/membership_administration_steps_test.exs
+@@ -31,7 +31,18 @@ defmodule Memba.MembershipAdministrationStepsTest do
+   end
+ 
+   defp scenario!(feature, name) do
+-    Enum.find(feature.scenarios, &(&1.name == name)) ||
++    feature
++    |> feature_scenarios()
++    |> Enum.find(&(&1.name == name)) ||
+       flunk("Expected #{feature.file} to include scenario #{inspect(name)}")
+   end
++
++  defp feature_scenarios(feature) do
++    rule_scenarios =
++      feature
++      |> Map.get(:rules, [])
++      |> Enum.flat_map(& &1.scenarios)
++
++    feature.scenarios ++ rule_scenarios
++  end
+ end
+diff --git a/web/test/features/step_definitions/authentication_steps.exs b/web/test/features/step_definitions/authentication_steps.exs
+index aad574c..ae72c9c 100644
+--- a/web/test/features/step_definitions/authentication_steps.exs
++++ b/web/test/features/step_definitions/authentication_steps.exs
+@@ -5,11 +5,16 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+   import ExUnit.Assertions
+ 
+   alias Memba.Accounts
++  alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership
+   alias Memba.Membership.Slug
+   alias Memba.Repo
+ 
++  @progress_message_pre_send "Preparing your sign-in link…"
++  @progress_message_sent "If this email can sign in, the link is on its way."
++  @progress_message_provider_accepted "Your mailbox provider has accepted the email. It should appear shortly."
++
+   step "{word} is a member of Kootenay Mountaineering Club", %{args: [person_name]} = context do
+     ensure_member(context, person_name, "Kootenay Mountaineering Club")
+   end
+@@ -47,6 +52,92 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+     context
+   end
+ 
++  step "{word} should see that Memba is trying to send a sign-in link",
++       %{args: [person_name]} = context do
++    request = auth_email_request_for(context, person_name)
++
++    assert request.status in [
++             AuthEmailRequest.status_created(),
++             AuthEmailRequest.status_sent()
++           ]
++
++    assert auth_email_progress_message(request) in [
++             @progress_message_pre_send,
++             @progress_message_sent
++           ]
++
++    context
++  end
++
++  step "Alice's mailbox provider accepts the sign-in email", context do
++    person_name = "Alice"
++    request = auth_email_request_for(context, person_name)
++
++    assert {:ok, %AuthEmailRequest{} = request} =
++             Accounts.record_auth_email_provider_accepted(request.request_id, %{
++               provider: "postmark",
++               provider_event_id: "acceptance-#{request.request_id}",
++               provider_event_type: "Delivered",
++               provider_message_id: "acceptance-message-#{request.request_id}",
++               provider_message_stream: "outbound-authentication"
++             })
++
++    update_context_map(context, :auth_email_requests, person_name, %{
++      request_id: request.request_id
++    })
++  end
++
++  step "{word} should see that the email has been accepted by her mailbox provider",
++       %{args: [person_name]} = context do
++    request = auth_email_request_for(context, person_name)
++
++    assert request.status == AuthEmailRequest.status_provider_accepted()
++    assert auth_email_progress_message(request) == @progress_message_provider_accepted
++
++    context
++  end
++
++  step "{word} should not be told that the email is in her inbox", context do
++    context
++    |> current_auth_email_progress_message()
++    |> refute_inbox_placement_claim()
++
++    context
++  end
++
++  step "{word} should see neutral sign-in email instructions",
++       %{args: [person_name]} = context do
++    request = auth_email_request_for(context, person_name)
++    message = auth_email_progress_message(request)
++
++    assert message in [
++             @progress_message_pre_send,
++             @progress_message_sent
++           ]
++
++    refute message =~ "unknown"
++    refute message =~ "recognised"
++    refute message =~ "recognized"
++
++    context
++  end
++
++  step "{word} should not learn whether Memba recognises the email address",
++       %{args: [person_name]} = context do
++    request = auth_email_request_for(context, person_name)
++    %{email: email} = fetch_from_context!(context, :people, person_name)
++    message = auth_email_progress_message(request)
++
++    refute message =~ email
++    refute message =~ "unknown"
++    refute message =~ "recognised"
++    refute message =~ "recognized"
++    refute message =~ "does not have"
++    refute message =~ "not found"
++
++    context
++  end
++
+   step "{word} follows the sign-in link", %{args: [person_name]} = context do
+     follow_sign_in_link(context, person_name)
+   end
+@@ -256,9 +347,14 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+   end
+ 
+   defp request_sign_in_link(context, person_name, email) do
++    context = create_auth_email_request(context, person_name)
++    request = auth_email_request_for(context, person_name)
++
+     case Accounts.request_sign_in_link(email) do
+       {:ok, %{token: token, email: normalized_email}} ->
+-        update_context_map(context, :sign_in_links, person_name, %{
++        context
++        |> mark_auth_email_sent(person_name, request.request_id, normalized_email)
++        |> update_context_map(:sign_in_links, person_name, %{
+           token: token,
+           email: normalized_email
+         })
+@@ -271,6 +367,74 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+     end
+   end
+ 
++  defp create_auth_email_request(context, person_name) do
++    case Accounts.create_auth_email_request() do
++      {:ok, %AuthEmailRequest{} = request} ->
++        update_context_map(context, :auth_email_requests, person_name, %{
++          request_id: request.request_id
++        })
++
++      {:error, reason} ->
++        flunk("Expected auth-email progress request not to error; got #{inspect(reason)}")
++    end
++  end
++
++  defp mark_auth_email_sent(context, person_name, request_id, recipient_email) do
++    assert {:ok, %AuthEmailRequest{} = request} =
++             Accounts.mark_auth_email_sent(request_id, %{
++               recipient_email: recipient_email,
++               provider: "postmark",
++               provider_message_stream: "outbound-authentication"
++             })
++
++    update_context_map(context, :auth_email_requests, person_name, %{
++      request_id: request.request_id
++    })
++  end
++
++  defp auth_email_request_for(context, person_name) do
++    %{request_id: request_id} = fetch_from_context!(context, :auth_email_requests, person_name)
++    assert %AuthEmailRequest{} = request = Accounts.get_auth_email_request(request_id)
++    request
++  end
++
++  defp auth_email_progress_message(%AuthEmailRequest{} = request) do
++    cond do
++      request.status == AuthEmailRequest.status_provider_accepted() ->
++        @progress_message_provider_accepted
++
++      request.status == AuthEmailRequest.status_created() ->
++        @progress_message_pre_send
++
++      true ->
++        @progress_message_sent
++    end
++  end
++
++  defp auth_email_progress_message(_request), do: ""
++
++  defp current_auth_email_progress_message(context) do
++    context
++    |> Map.get(:auth_email_requests, %{})
++    |> Map.values()
++    |> List.last()
++    |> case do
++      %{request_id: request_id} ->
++        request_id
++        |> Accounts.get_auth_email_request()
++        |> auth_email_progress_message()
++
++      _missing ->
++        ""
++    end
++  end
++
++  defp refute_inbox_placement_claim(message) do
++    refute message =~ "in your inbox"
++    refute message =~ "is in the inbox"
++    refute message =~ "is visible in the inbox"
++  end
++
+   defp follow_sign_in_link(context, person_name) do
+     %{token: token} = fetch_from_context!(context, :sign_in_links, person_name)
+ 
+diff --git a/web/test/features/step_definitions/club_member_invitation_steps.exs b/web/test/features/step_definitions/club_member_invitation_steps.exs
+index 2785288..c3bfd16 100644
+--- a/web/test/features/step_definitions/club_member_invitation_steps.exs
++++ b/web/test/features/step_definitions/club_member_invitation_steps.exs
+@@ -91,7 +91,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
+   end
+ 
+-  step "{word} invites {word} to join {word} {word} {word}",
++  step ~r/^(\w+) invites (\w+) to join (\w+) (\w+) (\w+)$/,
+        %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
+     context = ensure_person(context, person_name)
+ 
+@@ -113,7 +113,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     try_invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
+   end
+ 
+-  step "{word} tries to invite {word} to join {word} {word} {word}",
++  step ~r/^(\w+) tries to invite (\w+) to join (\w+) (\w+) (\w+)$/,
+        %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
+     club_name = club_name(word_1, word_2, word_3)
+     context = ensure_person(context, person_name)
+@@ -156,7 +156,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     assert_invitation_received(context, email, club_name(word_1, word_2, word_3))
+   end
+ 
+-  step "{word} should receive an invitation to join {word} {word} {word}",
++  step ~r/^(\w+) should receive an invitation to join (\w+) (\w+) (\w+)$/,
+        %{args: [person_name, word_1, word_2, word_3]} = context do
+     assert_invitation_received(
+       context,
+diff --git a/web/test/support/domain_cucumber_runner.ex b/web/test/support/domain_cucumber_runner.ex
+index 61e67f4..77176c0 100644
+--- a/web/test/support/domain_cucumber_runner.ex
++++ b/web/test/support/domain_cucumber_runner.ex
+@@ -10,20 +10,29 @@ defmodule Memba.DomainCucumberRunner do
+     excluded_tags = excluded_tags(tag_expression)
+ 
+     discovery.features
+-    |> Enum.flat_map(fn feature ->
+-      feature.scenarios
+-      |> Enum.map(fn scenario -> %{feature: feature, scenario: scenario} end)
+-    end)
+-    |> Enum.reject(fn %{feature: feature, scenario: scenario} ->
+-      excluded?(feature.tags ++ scenario.tags, excluded_tags)
++    |> Enum.flat_map(&feature_scenarios/1)
++    |> Enum.reject(fn %{feature: feature, scenario: scenario} = selected_scenario ->
++      selected_scenario
++      |> scenario_tags()
++      |> Kernel.++(feature.tags)
++      |> Kernel.++(scenario.tags)
++      |> excluded?(excluded_tags)
+     end)
+   end
+ 
+-  def run_scenario(%{feature: feature, scenario: scenario}, step_registry, context \\ %{}) do
++  def run_scenario(
++        %{feature: feature, scenario: scenario} = selected_scenario,
++        step_registry,
++        context \\ %{}
++      ) do
++    rule = Map.get(selected_scenario, :rule)
++
+     context =
+       Map.merge(context, %{
+         feature_file: feature.file,
+         feature_tags: feature.tags,
++        rule_name: rule && rule.name,
++        rule_tags: scenario_tags(selected_scenario),
+         scenario_name: scenario.name,
+         scenario_tags: scenario.tags,
+         scenario_line: (scenario.line || 0) + 1,
+@@ -32,6 +41,7 @@ defmodule Memba.DomainCucumberRunner do
+ 
+     feature
+     |> background_steps()
++    |> Kernel.++(background_steps(rule))
+     |> Kernel.++(scenario.steps)
+     |> Enum.reduce(context, fn step, context ->
+       Runtime.execute_step(context, step, step_registry)
+@@ -124,11 +134,19 @@ defmodule Memba.DomainCucumberRunner do
+     Enum.reduce(step_modules, %{}, fn module, registry ->
+       module.__cucumber_steps__()
+       |> Enum.reduce(registry, fn {pattern, metadata}, registry ->
+-        Map.put(registry, pattern, {module, metadata})
++        Map.put(registry, step_pattern_key(pattern), {module, metadata})
+       end)
+     end)
+   end
+ 
++  defp step_pattern_key({:expression, _pattern_text} = pattern), do: pattern
++  defp step_pattern_key({:regex, _regex} = pattern), do: pattern
++
++  defp step_pattern_key(%Regex{} = pattern),
++    do: {:regex, {Regex.source(pattern), Regex.opts(pattern)}}
++
++  defp step_pattern_key(pattern) when is_binary(pattern), do: {:expression, pattern}
++
+   defp configured_tag_expression do
+     Application.fetch_env!(:cucumber, :tags)
+   end
+@@ -144,6 +162,26 @@ defmodule Memba.DomainCucumberRunner do
+     Enum.any?(excluded_tags, &(&1 in normalized_tags))
+   end
+ 
++  defp feature_scenarios(feature) do
++    top_level_scenarios =
++      Enum.map(feature.scenarios, fn scenario -> %{feature: feature, scenario: scenario} end)
++
++    rule_scenarios =
++      feature
++      |> Map.get(:rules, [])
++      |> Enum.flat_map(fn rule ->
++        Enum.map(rule.scenarios, fn scenario ->
++          %{feature: feature, rule: rule, scenario: scenario}
++        end)
++      end)
++
++    top_level_scenarios ++ rule_scenarios
++  end
++
++  defp scenario_tags(%{rule: rule}), do: Map.get(rule, :tags, [])
++  defp scenario_tags(_selected_scenario), do: []
++
++  defp background_steps(nil), do: []
+   defp background_steps(%{background: nil}), do: []
+   defp background_steps(%{background: background}), do: background.steps
+ end
