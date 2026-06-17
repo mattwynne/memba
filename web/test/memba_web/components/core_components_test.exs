@@ -5,6 +5,35 @@ defmodule MembaWeb.CoreComponentsTest do
 
   alias MembaWeb.CoreComponents
 
+  describe "avatar/1" do
+    test "renders the initials text" do
+      html = render_avatar(initials: "MW")
+
+      assert html |> LazyHTML.from_fragment() |> LazyHTML.text() =~ "MW"
+      assert_class(html, "div.avatar", "avatar")
+      assert_class(html, "div.avatar", "avatar-placeholder")
+    end
+
+    test "maps each size to its width class" do
+      for {size, expected_class} <- [sm: "w-7", md: "w-9", lg: "w-12"] do
+        html = render_avatar(initials: "MW", size: size)
+
+        assert_class(html, "div.avatar > div", expected_class)
+      end
+    end
+
+    test "picks a deterministic sage background from the cycle" do
+      first_html = render_avatar(initials: "MW")
+      second_html = render_avatar(initials: "MW")
+
+      [first_bg] = avatar_bg_classes(first_html)
+      [second_bg] = avatar_bg_classes(second_html)
+
+      assert first_bg == second_bg
+      assert first_bg in ~w(bg-sage-200 bg-sage-300 bg-sage-100 bg-sage-400 bg-sage-50)
+    end
+  end
+
   describe "status_badge/1" do
     test "renders each semantic tone class" do
       for {tone, expected_class} <- [
@@ -114,6 +143,10 @@ defmodule MembaWeb.CoreComponentsTest do
     render_component(&CoreComponents.status_badge/1, assigns)
   end
 
+  defp render_avatar(assigns) do
+    render_component(&CoreComponents.avatar/1, Map.new(assigns))
+  end
+
   defp render_button(assigns \\ []) do
     assigns =
       assigns
@@ -150,5 +183,11 @@ defmodule MembaWeb.CoreComponentsTest do
     |> LazyHTML.attribute("class")
     |> List.first("")
     |> String.split()
+  end
+
+  defp avatar_bg_classes(html) do
+    html
+    |> classes("div.avatar > div")
+    |> Enum.filter(&String.starts_with?(&1, "bg-sage-"))
   end
 end

@@ -77,7 +77,6 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
                       initials="✉"
                       title={subject_label(message.subject)}
                       subtitle={"From #{sender_label(message)}"}
-                      tone="green"
                       link={~p"/admin/messages/#{message.message_id}"}
                       testid="admin-message-subject"
                     />

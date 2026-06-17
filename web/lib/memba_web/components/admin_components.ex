@@ -109,7 +109,6 @@ defmodule MembaWeb.AdminComponents do
   attr :initials, :string, required: true
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
-  attr :tone, :string, default: "green"
   attr :link, :string, default: nil
   attr :link_id, :string, default: nil
   attr :testid, :string, default: nil
@@ -118,12 +117,7 @@ defmodule MembaWeb.AdminComponents do
   def admin_identity_cell(assigns) do
     ~H"""
     <div class="flex items-center gap-3">
-      <div class={[
-        "flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
-        avatar_class(@tone)
-      ]}>
-        {@initials}
-      </div>
+      <.avatar initials={@initials} size={:md} />
       <div class="min-w-0">
         <.link
           :if={@link}
@@ -143,10 +137,4 @@ defmodule MembaWeb.AdminComponents do
     </div>
     """
   end
-
-  defp avatar_class("purple"), do: "bg-[#7c5c8f] text-white"
-  defp avatar_class("blue"), do: "bg-[#2d7896] text-white"
-  defp avatar_class("orange"), do: "bg-[#b66a34] text-white"
-  defp avatar_class("muted"), do: "bg-[#d9d6cb] text-[#15201c]"
-  defp avatar_class(_tone), do: "bg-[#1f5a52] text-white"
 end

@@ -446,7 +446,6 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                       initials={requester_initials(request.requester_name)}
                       title={request.requester_name}
                       subtitle={request.requester_email}
-                      tone="blue"
                       testid="admin-request-requester"
                     />
                     <p class="mt-2 font-mono text-xs text-[#7d877f]">{request.request_id}</p>

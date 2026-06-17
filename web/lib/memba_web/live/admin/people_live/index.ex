@@ -76,7 +76,6 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
                       initials={person_initials(person.name)}
                       title={person.name}
                       subtitle="Person record"
-                      tone="muted"
                       testid="admin-person-name"
                     />
                   </td>

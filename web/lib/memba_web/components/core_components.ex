@@ -31,6 +31,23 @@ defmodule MembaWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  @avatar_bg_cycle ~w(bg-sage-200 bg-sage-300 bg-sage-100 bg-sage-400 bg-sage-50)
+
+  attr :initials, :string, required: true
+  attr :size, :atom, default: :md, values: [:sm, :md, :lg]
+  attr :class, :string, default: nil
+  attr :rest, :global
+
+  def avatar(assigns) do
+    ~H"""
+    <div class={["avatar avatar-placeholder", @class]} {@rest}>
+      <div class={[size_w(@size), "rounded-full text-sage-800", avatar_bg(@initials)]}>
+        <span class={size_text(@size)}>{@initials}</span>
+      </div>
+    </div>
+    """
+  end
+
   attr :tone, :string, default: "neutral", values: ~w(success info warning error neutral)
   attr :label, :string, required: true
   attr :rest, :global
@@ -151,6 +168,18 @@ defmodule MembaWeb.CoreComponents do
       </button>
       """
     end
+  end
+
+  defp size_w(:sm), do: "w-7"
+  defp size_w(:md), do: "w-9"
+  defp size_w(:lg), do: "w-12"
+
+  defp size_text(:sm), do: "text-xs font-semibold"
+  defp size_text(:md), do: "text-sm font-semibold"
+  defp size_text(:lg), do: "text-base font-semibold"
+
+  defp avatar_bg(initials) do
+    Enum.at(@avatar_bg_cycle, rem(:erlang.phash2(initials), length(@avatar_bg_cycle)))
   end
 
   defp tone_class("success"), do: "badge-success"

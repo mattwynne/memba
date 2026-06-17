@@ -141,7 +141,6 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                       initials={recipient_initials(delivery.recipient_name)}
                       title={delivery.recipient_name}
                       subtitle={delivery.recipient_address}
-                      tone="muted"
                     />
                   </td>
                   <td class="px-4 py-3.5 text-[#4b5a55]">{club_name(delivery)}</td>

@@ -167,7 +167,6 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
                       initials={club_initials(club.name)}
                       title={club.name}
                       subtitle="Club record"
-                      tone="green"
                       link={~p"/admin/clubs/#{club.club_id}"}
                       link_id={"club-link-#{club.club_id}"}
                       testid="club-link"
