@@ -63,6 +63,8 @@ defmodule MembaWeb.PageControllerTest do
     assert html |> LazyHTML.query("header a[href='/auth']") |> Enum.any?()
     assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.empty?()
     assert html |> LazyHTML.query("main a[href='/get-started']") |> Enum.any?()
+    refute html |> LazyHTML.query("#homepage-staff-bar") |> Enum.any?()
+    refute html |> LazyHTML.query("a#staff-console-link") |> Enum.any?()
     assert response =~ "Sign in"
     refute response =~ "Internal Memba staff"
     refute response =~ "Open internal Memba staff"
@@ -694,6 +696,42 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Open the staff console"
 
     assert html
+           |> LazyHTML.query("#signed-in-home > #homepage-staff-bar:first-child + header")
+           |> Enum.any?()
+
+    assert_exact_classes(html, "#homepage-staff-bar", "bg-sage-700 text-cream")
+
+    assert_exact_classes(
+      html,
+      "#homepage-staff-bar > div",
+      "mx-auto flex max-w-7xl items-center gap-3.5 px-6 py-2.5 lg:px-8"
+    )
+
+    assert_exact_classes(
+      html,
+      "#homepage-staff-bar span:first-child",
+      "rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em]"
+    )
+
+    assert_exact_classes(
+      html,
+      "#homepage-staff-bar span:nth-child(2)",
+      "hidden text-sm text-cream/80 sm:inline"
+    )
+
+    assert_exact_classes(
+      html,
+      "#staff-console-link",
+      "ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-1.5 text-sm font-semibold transition hover:border-white/40 hover:bg-white/15"
+    )
+
+    assert_exact_classes(
+      html,
+      "#staff-console-link .hero-arrow-top-right-on-square-mini",
+      "hero-arrow-top-right-on-square-mini size-3.5 bg-cream"
+    )
+
+    assert html
            |> LazyHTML.query("#homepage-staff-bar a#staff-console-link[href='/admin/clubs']")
            |> Enum.any?()
 
@@ -1208,6 +1246,19 @@ defmodule MembaWeb.PageControllerTest do
 
   defp create_club(attrs) do
     insert_membership_club!(attrs)
+  end
+
+  defp assert_exact_classes(html, selector, expected_classes) do
+    assert html |> classes(selector) == String.split(expected_classes),
+           "Expected #{inspect(selector)} to have exact classes #{inspect(expected_classes)}"
+  end
+
+  defp classes(html, selector) do
+    html
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute("class")
+    |> List.first("")
+    |> String.split()
   end
 
   defp club_host(conn, club) do

@@ -55,7 +55,9 @@ async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect }
   await expect(staffBar).toBeVisible();
   await expect(staffBar.getByText("Memba staff", { exact: true })).toBeVisible();
 
-  const consoleLink = page.locator("a#staff-console-link");
+  const consoleLink = page.locator("a#staff-console-link", {
+    hasText: "Open the staff console"
+  });
   await expect(consoleLink).toBeVisible();
   await expect(consoleLink).toHaveAttribute("href", "/admin/clubs");
 
