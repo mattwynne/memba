@@ -129,7 +129,11 @@ defmodule MembaWeb.CoreComponentsTest do
     test "renders a link with navigate" do
       html = render_button(rest: %{navigate: "/clubs"})
 
-      assert_selector(html, "a[href='/clubs'][data-phx-link='redirect'][data-phx-link-state='push']")
+      assert_selector(
+        html,
+        "a[href='/clubs'][data-phx-link='redirect'][data-phx-link-state='push']"
+      )
+
       refute_selector(html, "button")
     end
   end
