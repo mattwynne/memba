@@ -421,6 +421,67 @@ start_processes() {
   start_managed_processes "$@"
 }
 
+gallery_server_reachable() {
+  curl -fsS --max-time 2 http://localhost:4000/ >/dev/null 2>&1
+}
+
+wait_for_gallery_server() {
+  local timeout="${1:-90}"
+  local deadline=$((SECONDS + timeout))
+
+  while true; do
+    if gallery_server_reachable; then
+      return 0
+    fi
+
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "Timed out waiting for Phoenix at http://localhost:4000/." >&2
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
+start_gallery_server() {
+  mkdir -p "$repo_root/tmp/gallery"
+  echo "Building assets before starting Phoenix..."
+  (cd "$repo_root/web" && MIX_ENV=dev mix assets.build)
+
+  echo "Starting Phoenix at http://localhost:4000/ for gallery walk..."
+  (
+    cd "$repo_root/web"
+    exec env MIX_ENV=dev mix phx.server
+  ) > "$repo_root/tmp/gallery/phoenix-server.log" 2>&1 &
+  gallery_server_pid=$!
+
+  if ! wait_for_gallery_server 90; then
+    echo "Phoenix server log:" >&2
+    tail -n 120 "$repo_root/tmp/gallery/phoenix-server.log" >&2 || true
+    return 1
+  fi
+}
+
+stop_gallery_server() {
+  if [ -z "${gallery_server_pid:-}" ]; then
+    return 0
+  fi
+
+  kill "$gallery_server_pid" 2>/dev/null || true
+  wait "$gallery_server_pid" 2>/dev/null || true
+  pkill -f 'mix phx.server' 2>/dev/null || true
+}
+
+open_gallery_file() {
+  local gallery_path="$repo_root/tmp/gallery/gallery.html"
+
+  if command -v open >/dev/null 2>&1; then
+    open "$gallery_path"
+  else
+    echo "Gallery written to: $gallery_path"
+  fi
+}
+
 
 # @cmd Start Postgres, the optional ngrok tunnel, and the Phoenix web app
 # @flag --foreground Keep Phoenix attached to the terminal instead of starting it as a managed background process
@@ -690,6 +751,30 @@ _acceptance() {
 
     local_test_email_env npm test -- "$@"
   )
+}
+
+# @cmd Capture app/email screenshots and open the gallery walk
+gallery_walk() {
+  local gallery_server_pid=""
+
+  start_postgres
+
+  if gallery_server_reachable; then
+    echo "Using existing Phoenix server at http://localhost:4000/."
+  else
+    trap stop_gallery_server EXIT
+    start_gallery_server
+  fi
+
+  (
+    cd "$repo_root/acceptance-tests"
+    GALLERY_BASE_URL=http://lvh.me:4000 node gallery/walk.js
+  )
+
+  node "$repo_root/acceptance-tests/gallery/build-gallery.js"
+  open_gallery_file
+  stop_gallery_server
+  trap - EXIT
 }
 
 # @cmd Save/fetch local secrets in 1Password
