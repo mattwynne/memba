@@ -1,5 +1,5 @@
 defmodule Memba.SeedDataTest do
-  use Memba.DataCase, async: false
+  use Memba.EventSourcedCase, async: false
 
   import ExUnit.CaptureIO
 

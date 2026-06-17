@@ -4,6 +4,8 @@ defmodule Memba.EventSourcedSetupTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias Memba.Repo
 
+  import MembaWeb.FeatureCase, only: [assert_eventually: 1]
+
   test "mix aliases create and reset EventStore with projection migrations" do
     aliases = Keyword.fetch!(Memba.MixProject.project(), :aliases)
 
@@ -105,43 +107,47 @@ defmodule Memba.EventSourcedSetupTest do
     end
   end
 
-  test "seeds include a hidden smoke-test club for production inbound email checks" do
+  test "seeds include the representative Rideau Park Sailing club" do
     Memba.EventSourcedCase.reset_event_sourced_system!()
+    :ok = Sandbox.checkout(Repo)
+    Sandbox.mode(Repo, {:shared, self()})
 
     try do
-      Sandbox.unboxed_run(Repo, fn ->
-        Code.eval_file("priv/repo/seeds.exs")
+      Code.eval_file("priv/repo/seeds.exs")
+
+      assert_eventually(fn ->
+        assert [["Rideau Park Sailing", "rideau-sailing"]] =
+                 sandbox_query!("""
+                 SELECT name, slug
+                 FROM membership_clubs
+                 WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
+                 """).rows
+
+        assert [["Hana Hall", "hana@example.com"]] =
+                 sandbox_query!("""
+                 SELECT name, email
+                 FROM membership_people
+                 WHERE person_id = 'per_87654321-4321-4321-4321-cba987654321'
+                 """).rows
+
+        assert [["hana@example.com", true]] =
+                 sandbox_query!("""
+                 SELECT email, is_primary
+                 FROM membership_person_email_addresses
+                 WHERE person_id = 'per_87654321-4321-4321-4321-cba987654321'
+                 """).rows
+
+        assert [[true]] =
+                 sandbox_query!("""
+                 SELECT active
+                 FROM membership_memberships
+                 WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
+                   AND person_id = 'per_87654321-4321-4321-4321-cba987654321'
+                 """).rows
       end)
-
-      assert [["Smoke Test Club", "test"]] =
-               query!("""
-               SELECT name, slug
-               FROM membership_clubs
-               WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
-               """).rows
-
-      assert [["Smoke Tester", "test@memba.io"]] =
-               query!("""
-               SELECT name, email
-               FROM membership_people
-               WHERE person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
-               """).rows
-
-      assert [["test@memba.io", true]] =
-               query!("""
-               SELECT email, is_primary
-               FROM membership_person_email_addresses
-               WHERE person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
-               """).rows
-
-      assert [[true]] =
-               query!("""
-               SELECT active
-               FROM membership_memberships
-               WHERE club_id = 'clb_33333333-3333-3333-3333-333333333333'
-                 AND person_id = 'per_ffffffff-ffff-ffff-ffff-ffffffffffff'
-               """).rows
     after
+      Sandbox.mode(Repo, :manual)
+      Sandbox.checkin(Repo)
       Memba.EventSourcedCase.reset_event_sourced_system!()
     end
   end
@@ -215,5 +221,9 @@ defmodule Memba.EventSourcedSetupTest do
 
   defp query!(sql) do
     Sandbox.unboxed_run(Repo, fn -> Repo.query!(sql, []) end)
+  end
+
+  defp sandbox_query!(sql) do
+    Repo.query!(sql, [])
   end
 end

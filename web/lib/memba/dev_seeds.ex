@@ -183,34 +183,60 @@ defmodule Memba.DevSeeds do
   ]
 
   def run do
-    configure_local_mailbox_delivery()
-    clear_local_mailbox()
-    LocalDeliveryFacts.reset()
+    with_local_mailbox_delivery(fn ->
+      clear_local_mailbox()
+      LocalDeliveryFacts.reset()
 
-    clubs = seed_membership()
-    seed_pending_invitation(clubs)
-    seed_pending_account_request()
-    seed_messages(clubs)
+      clubs = seed_membership()
+      seed_pending_invitation(clubs)
+      seed_pending_account_request()
+      seed_messages(clubs)
 
-    IO.puts("Seeded representative Memba data.")
-    IO.puts("Reset and seed path: cd web && mix ecto.reset")
-    IO.puts("Seed-only path: cd web && mix run priv/repo/seeds.exs")
-    IO.puts("Member sign-in emails: alice@example.com, eleanor@example.com, hana@example.com")
-    IO.puts("Alice alternate sign-in email: alice@work.example")
-    IO.puts("Pending invitation email: invitee.kac@example.com")
-    IO.puts("Pending account request email: priya.requester@example.com")
-    IO.puts("Representative emails are available at /dev/mailbox.")
+      IO.puts("Seeded representative Memba data.")
+      IO.puts("Reset and seed path: cd web && mix ecto.reset")
+      IO.puts("Seed-only path: cd web && mix run priv/repo/seeds.exs")
+      IO.puts("Member sign-in emails: alice@example.com, eleanor@example.com, hana@example.com")
+      IO.puts("Alice alternate sign-in email: alice@work.example")
+      IO.puts("Pending invitation email: invitee.kac@example.com")
+      IO.puts("Pending account request email: priya.requester@example.com")
+      IO.puts("Representative emails are available at /dev/mailbox.")
+    end)
   end
 
   def deliver_representative_emails do
+    with_local_mailbox_delivery(fn ->
+      deliver_transactional_examples(@clubs)
+    end)
+  end
+
+  defp with_local_mailbox_delivery(fun) when is_function(fun, 0) do
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+    original_mailer = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email = Application.get_env(:memba, Memba.Accounts.AuthEmail)
+
     configure_local_mailbox_delivery()
-    deliver_transactional_examples(@clubs)
+
+    try do
+      fun.()
+    after
+      restore_env(:messaging_email_delivery_provider, original_provider)
+      restore_env(Memba.Mailer, original_mailer)
+      restore_env(Memba.Accounts.AuthEmail, original_auth_email)
+    end
   end
 
   defp configure_local_mailbox_delivery do
     Application.put_env(:memba, :messaging_email_delivery_provider, LocalDeliveryProvider)
     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Local)
+
+    Application.put_env(:memba, Memba.Accounts.AuthEmail,
+      from: "auth@mail.memba.local",
+      message_stream: "development-auth"
+    )
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 
   defp clear_local_mailbox do
     case :global.whereis_name(Swoosh.Adapters.Local.Storage.Memory) do

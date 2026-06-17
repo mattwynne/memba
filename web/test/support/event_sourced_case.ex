@@ -49,6 +49,7 @@ defmodule Memba.EventSourcedCase do
     end
 
     projector_child_ids = stop_event_sourced_projectors!()
+    stop_commanded_aggregate_instances!()
     reset_event_sourced_storage!()
     reset_commanded_subscription_acks!()
     Memba.DataCase.setup_sandbox(tags)
@@ -66,6 +67,7 @@ defmodule Memba.EventSourcedCase do
   """
   def reset_event_sourced_system! do
     projector_child_ids = stop_event_sourced_projectors!()
+    stop_commanded_aggregate_instances!()
     reset_event_sourced_storage!()
     reset_commanded_subscription_acks!()
     start_event_sourced_projectors!(projector_child_ids)
@@ -102,6 +104,22 @@ defmodule Memba.EventSourcedCase do
         {:ok, _pid} -> :ok
         {:ok, _pid, _info} -> :ok
         {:error, :running} -> :ok
+      end
+    end)
+  end
+
+  defp stop_commanded_aggregate_instances! do
+    Enum.each(@commanded_apps, fn app ->
+      supervisor_name = Module.concat([app, Commanded.Aggregates.Supervisor])
+
+      if supervisor_pid = Process.whereis(supervisor_name) do
+        supervisor_pid
+        |> DynamicSupervisor.which_children()
+        |> Enum.each(fn {_child_id, aggregate_pid, _type, _modules} ->
+          if is_pid(aggregate_pid) do
+            DynamicSupervisor.terminate_child(supervisor_pid, aggregate_pid)
+          end
+        end)
       end
     end)
   end
