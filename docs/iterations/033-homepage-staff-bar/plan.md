@@ -1,7 +1,7 @@
 # Homepage staff bar
 
 Date: 2026-06-13
-Status: draft
+Status: validated
 
 ## Goal
 
