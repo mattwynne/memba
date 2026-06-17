@@ -101,6 +101,7 @@ defmodule MembaWeb.PageControllerTest do
       refute response =~ "club_id=#{club.club_id}"
     end
 
+    refute html |> LazyHTML.query("#homepage-staff-bar") |> Enum.any?()
     refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
 
     assert html
@@ -678,7 +679,7 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "This should stay hidden"
   end
 
-  test "GET / shows a Memba staff link for signed-in Memba staff", %{conn: conn} do
+  test "GET / shows a Memba staff bar for signed-in Memba staff", %{conn: conn} do
     conn =
       conn
       |> init_test_session(%{IdentityAuth.identity_session_key() => "Pat@Memba.IO"})
@@ -688,10 +689,15 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Your clubs"
+    assert response =~ "Memba staff"
+    assert response =~ "You have operator access across every group on Memba."
+    assert response =~ "Open the staff console"
 
     assert html
-           |> LazyHTML.query("a#admin-home-link[href='/admin/clubs']")
+           |> LazyHTML.query("#homepage-staff-bar a#staff-console-link[href='/admin/clubs']")
            |> Enum.any?()
+
+    refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
   end
 
   test "GET / shows both clubs and Memba staff access for signed-in staff members", %{conn: conn} do
@@ -713,8 +719,10 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("a#admin-home-link[href='/admin/clubs']")
+           |> LazyHTML.query("#homepage-staff-bar a#staff-console-link[href='/admin/clubs']")
            |> Enum.any?()
+
+    refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
   end
 
   test "GET /about", %{conn: conn} do

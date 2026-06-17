@@ -51,7 +51,15 @@ async function assertHomepageSignIn({ page }, { expect = playwrightExpect } = {}
 }
 
 async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect } = {}) {
-  await expect(page.locator("a#admin-home-link", { hasText: "Memba staff" })).toBeVisible();
+  const staffBar = page.locator("#homepage-staff-bar");
+  await expect(staffBar).toBeVisible();
+  await expect(staffBar.getByText("Memba staff", { exact: true })).toBeVisible();
+
+  const consoleLink = page.locator("a#staff-console-link");
+  await expect(consoleLink).toBeVisible();
+  await expect(consoleLink).toHaveAttribute("href", "/admin/clubs");
+
+  await expect(page.locator("a#admin-home-link")).toHaveCount(0);
 }
 
 async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
