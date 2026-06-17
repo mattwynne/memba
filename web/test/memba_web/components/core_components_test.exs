@@ -5,6 +5,47 @@ defmodule MembaWeb.CoreComponentsTest do
 
   alias MembaWeb.CoreComponents
 
+  describe "status_badge/1" do
+    test "renders each semantic tone class" do
+      for {tone, expected_class} <- [
+            {"success", "badge-success"},
+            {"info", "badge-info"},
+            {"warning", "badge-warning"},
+            {"error", "badge-error"}
+          ] do
+        html = render_status_badge(tone: tone, label: "Ready")
+
+        assert_class(html, "span.badge", "badge")
+        assert_class(html, "span.badge", "badge-soft")
+        assert_class(html, "span.badge", expected_class)
+      end
+    end
+
+    test "renders neutral without a colored badge class" do
+      html = render_status_badge(tone: "neutral", label: "Ready")
+
+      assert_class(html, "span.badge", "badge")
+      assert_class(html, "span.badge", "badge-soft")
+      refute_class(html, "span.badge", "badge-success")
+      refute_class(html, "span.badge", "badge-info")
+      refute_class(html, "span.badge", "badge-warning")
+      refute_class(html, "span.badge", "badge-error")
+    end
+
+    test "renders the label text" do
+      html = render_status_badge(label: "Active")
+
+      assert html |> LazyHTML.from_fragment() |> LazyHTML.text() =~ "Active"
+    end
+
+    test "renders the leading dot" do
+      html = render_status_badge(label: "Active")
+
+      assert_selector(html, "span.badge span.rounded-full.bg-current")
+      assert_class(html, "span.badge span.rounded-full.bg-current", "size-1.5")
+    end
+  end
+
   describe "button/1" do
     test "renders each variant class" do
       for {variant, expected_class} <- [
@@ -62,6 +103,15 @@ defmodule MembaWeb.CoreComponentsTest do
       assert_selector(html, "a[href='/clubs'][data-phx-link='redirect'][data-phx-link-state='push']")
       refute_selector(html, "button")
     end
+  end
+
+  defp render_status_badge(assigns) do
+    assigns =
+      assigns
+      |> Map.new()
+      |> Map.put_new(:label, "Ready")
+
+    render_component(&CoreComponents.status_badge/1, assigns)
   end
 
   defp render_button(assigns \\ []) do

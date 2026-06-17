@@ -31,6 +31,18 @@ defmodule MembaWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  attr :tone, :string, default: "neutral", values: ~w(success info warning error neutral)
+  attr :label, :string, required: true
+  attr :rest, :global
+
+  def status_badge(assigns) do
+    ~H"""
+    <span class={["badge badge-soft gap-1.5", tone_class(@tone)]} {@rest}>
+      <span class="size-1.5 rounded-full bg-current"></span>{@label}
+    </span>
+    """
+  end
+
   @doc """
   Renders flash notices.
 
@@ -140,6 +152,12 @@ defmodule MembaWeb.CoreComponents do
       """
     end
   end
+
+  defp tone_class("success"), do: "badge-success"
+  defp tone_class("info"), do: "badge-info"
+  defp tone_class("warning"), do: "badge-warning"
+  defp tone_class("error"), do: "badge-error"
+  defp tone_class(_tone), do: nil
 
   @doc """
   Renders an input with label and error messages.

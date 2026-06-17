@@ -106,25 +106,6 @@ defmodule MembaWeb.AdminComponents do
     """
   end
 
-  attr :label, :string, required: true
-  attr :tone, :string, default: "neutral"
-  attr :rest, :global
-
-  def admin_status_chip(assigns) do
-    ~H"""
-    <span
-      class={[
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-        status_chip_class(@tone)
-      ]}
-      {@rest}
-    >
-      <span class="size-1.5 rounded-full bg-current"></span>
-      {@label}
-    </span>
-    """
-  end
-
   attr :initials, :string, required: true
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
@@ -162,12 +143,6 @@ defmodule MembaWeb.AdminComponents do
     </div>
     """
   end
-
-  defp status_chip_class("good"), do: "bg-[#e6ece4] text-[#315d3d]"
-  defp status_chip_class("info"), do: "bg-[#e4ebef] text-[#345365]"
-  defp status_chip_class("warn"), do: "bg-[#f3ecd8] text-[#7a5416]"
-  defp status_chip_class("bad"), do: "bg-[#f6e0c9] text-[#8a3d21]"
-  defp status_chip_class(_tone), do: "bg-[#eef0ec] text-[#4b5a55]"
 
   defp avatar_class("purple"), do: "bg-[#7c5c8f] text-white"
   defp avatar_class("blue"), do: "bg-[#2d7896] text-white"

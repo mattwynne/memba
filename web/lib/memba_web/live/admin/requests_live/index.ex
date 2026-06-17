@@ -459,7 +459,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                       >
                         {request.requested_club_name}
                       </p>
-                      <.admin_status_chip label="Active" tone="info" />
+                      <.status_badge label="Active" tone="info" />
                     </div>
                   </td>
                   <td

@@ -152,7 +152,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                     {message_subject(delivery)}
                   </td>
                   <td class="px-4 py-3.5">
-                    <.admin_status_chip
+                    <.status_badge
                       data-test-id="delivery-status"
                       label={delivery.status}
                       tone={status_tone(delivery.status)}
@@ -205,9 +205,9 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp reason_text(reason) when is_binary(reason) and reason != "", do: reason
   defp reason_text(_reason), do: "—"
 
-  defp status_tone("delayed"), do: "warn"
-  defp status_tone("bounced"), do: "bad"
-  defp status_tone("spam complaint"), do: "bad"
+  defp status_tone("delayed"), do: "warning"
+  defp status_tone("bounced"), do: "error"
+  defp status_tone("spam complaint"), do: "error"
   defp status_tone("delivered"), do: "info"
   defp status_tone(_status), do: "neutral"
 
