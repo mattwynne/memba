@@ -612,12 +612,19 @@ defmodule MembaWeb.PageControllerTest do
     message =
       create_message(club_id: club.club_id, sender_id: club.person_id, subject: "Members only")
 
-    return_path = ~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}"
+    return_path = ~p"/messages/#{message.message_id}"
 
-    conn = get(conn, return_path)
+    conn =
+      conn
+      |> club_host(club)
+      |> get(return_path)
+
+    %{host: club_host} = URI.parse(ClubSite.url(club))
 
     assert redirected_to(conn) == ~p"/auth"
-    assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
+
+    assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+             "http://#{club_host}#{return_path}"
   end
 
   test "GET /messages/:message_id forbids signed-in users outside the requested club", %{
@@ -636,6 +643,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
+      |> club_host(club)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
       |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
 
@@ -660,6 +668,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
+      |> club_host(club)
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
 
@@ -1191,6 +1200,11 @@ defmodule MembaWeb.PageControllerTest do
 
   defp create_club(attrs) do
     insert_membership_club!(attrs)
+  end
+
+  defp club_host(conn, club) do
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_active_member(attrs) do

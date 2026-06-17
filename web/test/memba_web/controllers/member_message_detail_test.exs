@@ -7,6 +7,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   describe "member message route authorization" do
@@ -37,6 +38,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       conn =
         conn
+        |> club_host(inactive_alice)
         |> sign_in_as("alice@example.com")
         |> get(~p"/messages/#{message.message_id}?#{[club_id: inactive_alice.club_id]}")
 
@@ -72,6 +74,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       conn =
         conn
+        |> club_host(paddling)
         |> sign_in_as("alice@example.com")
         |> get(~p"/messages/#{message.message_id}?#{[club_id: paddling.club_id]}")
 
@@ -149,6 +152,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       response =
         conn
+        |> club_host(alice)
         |> sign_in_as("bob@example.com")
         |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
         |> html_response(200)
@@ -255,6 +259,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       response =
         conn
+        |> club_host(alice)
         |> sign_in_as("alice@example.com")
         |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
         |> html_response(200)
@@ -281,6 +286,11 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
   defp sign_in_as(conn, email) do
     init_test_session(conn, %{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
   end
 
   defp create_member(attrs) do

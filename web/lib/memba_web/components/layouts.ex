@@ -127,9 +127,9 @@ defmodule MembaWeb.Layouts do
       >
         <div class="flex flex-col gap-6 py-5 lg:min-h-full">
           <a
-            href={~p"/"}
+            href={~p"/admin/clubs"}
             class="inline-flex w-fit items-center gap-2.5 px-1 transition duration-200 hover:opacity-80"
-            aria-label="Memba home"
+            aria-label="Memba staff home"
           >
             <span class="flex size-7 items-center justify-center rounded-lg bg-[#24574d] text-white">
               <.sprig class="size-4 text-white" />

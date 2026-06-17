@@ -112,6 +112,14 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     convert_request(context, request, %{name: club_name, slug: slug_for(club_name)})
   end
 
+  step ~r/^(\w+) converts (\w+)'s (\w+) (\w+) (\w+) request with slug "([^"]+)"$/,
+       %{args: [_staff_name, person_name, club_word_1, club_word_2, club_word_3, slug]} =
+         context do
+    club_name = Enum.join([club_word_1, club_word_2, club_word_3], " ")
+    request = fetch_request!(context, person_name, club_name)
+    convert_request(context, request, %{name: club_name, slug: slug})
+  end
+
   step "{word} rejects {word}'s {word} {word} {word} request with the internal note {string}",
        %{args: [staff_name, person_name, club_word_1, club_word_2, club_word_3, internal_note]} =
          context do

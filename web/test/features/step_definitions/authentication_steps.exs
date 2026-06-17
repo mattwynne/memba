@@ -41,6 +41,21 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     |> request_sign_in_link(person_name, email)
   end
 
+  step "{word} signs in with their email address", %{args: [person_name]} = context do
+    person = fetch_from_context!(context, :people, person_name)
+
+    context
+    |> request_sign_in_link(person_name, person.email)
+    |> follow_sign_in_link(person_name)
+  end
+
+  step "{word} signs in with {string}", %{args: [person_name, email]} = context do
+    context
+    |> update_context_map(:people, person_name, %{email: email})
+    |> request_sign_in_link(person_name, email)
+    |> follow_sign_in_link(person_name)
+  end
+
   step "{word} should receive a sign-in link", %{args: [person_name]} = context do
     assert %{token: token} = fetch_from_context!(context, :sign_in_links, person_name)
     assert is_binary(token)
@@ -174,6 +189,14 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       assert %{token: token} = fetch_from_context!(context, :sign_in_links, person_name)
       assert is_binary(token)
     end)
+  end
+
+  step "{word} is signed in as a member of Kootenay Mountaineering Club",
+       %{args: [person_name]} = context do
+    context
+    |> ensure_member(person_name, "Kootenay Mountaineering Club")
+    |> request_sign_in_link(person_name, default_email_for(context, person_name))
+    |> follow_sign_in_link(person_name)
   end
 
   step "{word} has already followed the sign-in link", %{args: [person_name]} = context do

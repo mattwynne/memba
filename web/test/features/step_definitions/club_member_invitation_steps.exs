@@ -72,6 +72,19 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     |> assert_invitation_received(email, club_name)
   end
 
+  step ~r/^(\w+) has invited (\w+) to join (\w+) (\w+) (\w+)$/,
+       %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
+    club_name = club_name(word_1, word_2, word_3)
+
+    context = ensure_person(context, person_name)
+    email = email_for_person(context, person_name)
+
+    context
+    |> ensure_staff_sign_in_if_staff_actor(actor_name)
+    |> invite_email(actor_name, email, club_name)
+    |> assert_invitation_received(email, club_name)
+  end
+
   step "{word} has accepted an invitation to join {word} {word} {word}",
        %{args: [person_name, word_1, word_2, word_3]} = context do
     club_name = club_name(word_1, word_2, word_3)
@@ -125,6 +138,23 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
 
   step "{word} follows the invitation link", %{args: [person_name]} = context do
     follow_invitation_link(context, person_name, inferred_club_name(context))
+  end
+
+  step "{word} accepts the invitation as {string}", %{args: [person_name, name]} = context do
+    context
+    |> follow_invitation_link(person_name, inferred_club_name(context))
+    |> enter_name(person_name, name)
+  end
+
+  step "{word} accepts the invitation", %{args: [person_name]} = context do
+    follow_invitation_link(context, person_name, inferred_club_name(context))
+  end
+
+  step "{word} returns to the invitation and completes their profile as {string}",
+       %{args: [person_name, name]} = context do
+    context
+    |> follow_invitation_link(person_name, inferred_club_name(context))
+    |> enter_name(person_name, name)
   end
 
   step "{word} follows the same invitation link again", %{args: [person_name]} = context do
