@@ -65,6 +65,13 @@ defmodule MembaWeb.DevTestSupportController do
     send_resp(conn, :no_content, "")
   end
 
+  def seed(conn, _params) do
+    Memba.DevSeeds.run()
+    Memba.DevSeeds.deliver_representative_emails()
+
+    send_resp(conn, :no_content, "")
+  end
+
   def configure_messaging_email_delivery_provider(conn, %{"provider" => provider_name}) do
     with {:ok, provider} <- Map.fetch(@messaging_email_delivery_providers, provider_name),
          true <- Code.ensure_loaded?(provider) do

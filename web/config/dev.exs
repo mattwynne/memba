@@ -125,6 +125,12 @@ config :memba, :club_site,
   scheme: "http",
   port: 4000
 
+# Share the signed-in browser session between the base host and club subdomains
+# (e.g. lvh.me and kootenay-alpine.lvh.me) in development, mirroring prod's
+# .memba.io and test's .lvh.me. Without this, signing in on the base host does
+# not carry to a club subdomain.
+config :memba, :session_cookie_domain, ".lvh.me"
+
 config :memba, :club_inbound_email,
   domain: System.get_env("MEMBA_CLUB_INBOUND_EMAIL_DOMAIN") || "clubs.memba.io"
 
