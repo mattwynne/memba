@@ -129,8 +129,7 @@ defmodule Memba.DevSeeds do
           message_id: "msg_30000000-0000-0000-0000-000000000004",
           sender_id: "per_ffffffff-ffff-ffff-ffff-ffffffffffff",
           subject: "Concert dress reminder",
-          body:
-            "Black folders and concert dress for Saturday. Doors open to singers at 6:15pm.",
+          body: "Black folders and concert dress for Saturday. Doors open to singers at 6:15pm.",
           statuses: ["bounced", "delivered", "sent"]
         }
       ]
@@ -562,10 +561,10 @@ defmodule Memba.DevSeeds do
       |> all_members()
       |> Enum.map(& &1.person_id)
       |> Enum.all?(&Membership.get_person/1) and
-        (Membership.list_people()
-         |> Enum.map(& &1.person_id)
-         |> MapSet.new()
-         |> then(&MapSet.subset?(person_ids, &1)))
+        Membership.list_people()
+        |> Enum.map(& &1.person_id)
+        |> MapSet.new()
+        |> then(&MapSet.subset?(person_ids, &1))
     end)
   end
 
