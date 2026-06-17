@@ -69,3 +69,7 @@ If agents can report `dev check` as green while the pushed state fails the ExUni
 - Make the delivery workflow capture a machine-readable validation artifact with command, working directory, commit SHA, exit code, and tail of output.
 - Require `./bin/dev check` final-gate evidence to include both ExUnit/precommit and browser acceptance summaries.
 - Fail publication or handoff if the claimed validation commit differs from `origin/main` after push.
+
+## Mitigation applied
+
+- Added a concise guardrail to `AGENTS.md`: report `dev check` as passing only after it ran on the exact committed/pushed state or a clean worktree with the same diff staged for commit.
