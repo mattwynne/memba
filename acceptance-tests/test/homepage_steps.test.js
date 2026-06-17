@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   HOMEPAGE_VOLUNTEERING_PROMISE,
   assertHomepageFitsScreen,
+  assertHomepageStaffAccess,
   assertMembaHomepage,
   assertHomepageVolunteeringPromise,
   homepageUrl,
@@ -124,5 +125,71 @@ test("homepage fit assertion checks horizontal overflow", async () => {
 
   assert.deepEqual(expectations, [
     { target: 390, matcher: "toBeLessThanOrEqual", expected: 390 }
+  ]);
+});
+
+test("homepage staff access assertion checks the staff bar and console link", async () => {
+  const expectations = [];
+  const staffBar = {
+    selector: "#homepage-staff-bar",
+    getByText(text, options) {
+      return { parent: this.selector, method: "getByText", text, options };
+    }
+  };
+  const page = {
+    locator(selector, options) {
+      if (selector === "#homepage-staff-bar") {
+        return staffBar;
+      }
+
+      return { selector, options };
+    }
+  };
+  const expect = (target) => ({
+    async toBeVisible() {
+      expectations.push({ target, matcher: "toBeVisible" });
+    },
+    async toHaveAttribute(attribute, expected) {
+      expectations.push({ target, matcher: "toHaveAttribute", attribute, expected });
+    },
+    async toHaveCount(expected) {
+      expectations.push({ target, matcher: "toHaveCount", expected });
+    }
+  });
+
+  await assertHomepageStaffAccess({ page }, { expect });
+
+  assert.deepEqual(expectations, [
+    { target: staffBar, matcher: "toBeVisible" },
+    {
+      target: {
+        parent: "#homepage-staff-bar",
+        method: "getByText",
+        text: "Memba staff",
+        options: { exact: true }
+      },
+      matcher: "toBeVisible"
+    },
+    {
+      target: {
+        selector: "a#staff-console-link",
+        options: { hasText: "Open the staff console" }
+      },
+      matcher: "toBeVisible"
+    },
+    {
+      target: {
+        selector: "a#staff-console-link",
+        options: { hasText: "Open the staff console" }
+      },
+      matcher: "toHaveAttribute",
+      attribute: "href",
+      expected: "/admin/clubs"
+    },
+    {
+      target: { selector: "a#admin-home-link", options: undefined },
+      matcher: "toHaveCount",
+      expected: 0
+    }
   ]);
 });
