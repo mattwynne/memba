@@ -97,16 +97,34 @@ defmodule MembaWeb.CoreComponents do
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
   attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
+  attr :size, :string, default: nil, values: [nil, "sm", "lg"]
+  attr :disabled, :boolean, default: false
   slot :inner_block, required: true
 
-  def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+  def button(assigns) do
+    variants = %{
+      "primary" => "btn-primary",
+      "secondary" => "btn-soft",
+      "ghost" => "btn-ghost",
+      "danger" => "btn-error"
+    }
+
+    sizes = %{nil => nil, "sm" => "btn-sm", "lg" => "btn-lg"}
+
+    assigns =
+      assigns
+      |> assign_new(:rest, fn -> %{} end)
+      |> assign_new(:variant, fn -> "primary" end)
+      |> assign_new(:size, fn -> nil end)
+      |> assign_new(:disabled, fn -> false end)
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        ["btn", Map.fetch!(variants, assigns.variant), Map.fetch!(sizes, assigns.size)]
       end)
+
+    rest = assigns.rest
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
@@ -116,7 +134,7 @@ defmodule MembaWeb.CoreComponents do
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
+      <button class={@class} disabled={@disabled} {@rest}>
         {render_slot(@inner_block)}
       </button>
       """
