@@ -7,6 +7,7 @@ Keep this file short. Detailed project rules live in [docs/reference/](docs/refe
 ## Required workflow
 
 - Use `dev check` when you are done with code, config, dependency, migration, acceptance-test, or app-behaviour changes, and fix any pending issues.
+- Report `dev check` as passing only after it ran on the exact committed/pushed state or a clean worktree with the same diff staged for commit.
 - Do not run `dev check` for docs-only, planning-only, prose-only, or kaizen-note edits unless Matt explicitly asks for it or the edit changes executable examples/scripts.
 - Use the included `:req` (`Req`) library for HTTP requests. Avoid `:httpoison`, `:tesla`, and `:httpc`.
 - Do not use `fabro rm` unless Matt explicitly approves it as a last resort. Prefer stopping, archiving, inspecting, preserving logs, or restarting runs; `fabro rm` can destroy run history/logs.
