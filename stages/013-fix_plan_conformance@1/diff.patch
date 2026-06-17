@@ -1,0 +1,201 @@
+diff --git a/acceptance-tests/features/support/homepage.js b/acceptance-tests/features/support/homepage.js
+index 3ea2b6b..50cc590 100644
+--- a/acceptance-tests/features/support/homepage.js
++++ b/acceptance-tests/features/support/homepage.js
+@@ -55,7 +55,9 @@ async function assertHomepageStaffAccess({ page }, { expect = playwrightExpect }
+   await expect(staffBar).toBeVisible();
+   await expect(staffBar.getByText("Memba staff", { exact: true })).toBeVisible();
+ 
+-  const consoleLink = page.locator("a#staff-console-link");
++  const consoleLink = page.locator("a#staff-console-link", {
++    hasText: "Open the staff console"
++  });
+   await expect(consoleLink).toBeVisible();
+   await expect(consoleLink).toHaveAttribute("href", "/admin/clubs");
+ 
+diff --git a/acceptance-tests/test/homepage_steps.test.js b/acceptance-tests/test/homepage_steps.test.js
+index dfc16a5..d650c28 100644
+--- a/acceptance-tests/test/homepage_steps.test.js
++++ b/acceptance-tests/test/homepage_steps.test.js
+@@ -4,6 +4,7 @@ const test = require("node:test");
+ const {
+   HOMEPAGE_VOLUNTEERING_PROMISE,
+   assertHomepageFitsScreen,
++  assertHomepageStaffAccess,
+   assertMembaHomepage,
+   assertHomepageVolunteeringPromise,
+   homepageUrl,
+@@ -126,3 +127,69 @@ test("homepage fit assertion checks horizontal overflow", async () => {
+     { target: 390, matcher: "toBeLessThanOrEqual", expected: 390 }
+   ]);
+ });
++
++test("homepage staff access assertion checks the staff bar and console link", async () => {
++  const expectations = [];
++  const staffBar = {
++    selector: "#homepage-staff-bar",
++    getByText(text, options) {
++      return { parent: this.selector, method: "getByText", text, options };
++    }
++  };
++  const page = {
++    locator(selector, options) {
++      if (selector === "#homepage-staff-bar") {
++        return staffBar;
++      }
++
++      return { selector, options };
++    }
++  };
++  const expect = (target) => ({
++    async toBeVisible() {
++      expectations.push({ target, matcher: "toBeVisible" });
++    },
++    async toHaveAttribute(attribute, expected) {
++      expectations.push({ target, matcher: "toHaveAttribute", attribute, expected });
++    },
++    async toHaveCount(expected) {
++      expectations.push({ target, matcher: "toHaveCount", expected });
++    }
++  });
++
++  await assertHomepageStaffAccess({ page }, { expect });
++
++  assert.deepEqual(expectations, [
++    { target: staffBar, matcher: "toBeVisible" },
++    {
++      target: {
++        parent: "#homepage-staff-bar",
++        method: "getByText",
++        text: "Memba staff",
++        options: { exact: true }
++      },
++      matcher: "toBeVisible"
++    },
++    {
++      target: {
++        selector: "a#staff-console-link",
++        options: { hasText: "Open the staff console" }
++      },
++      matcher: "toBeVisible"
++    },
++    {
++      target: {
++        selector: "a#staff-console-link",
++        options: { hasText: "Open the staff console" }
++      },
++      matcher: "toHaveAttribute",
++      attribute: "href",
++      expected: "/admin/clubs"
++    },
++    {
++      target: { selector: "a#admin-home-link", options: undefined },
++      matcher: "toHaveCount",
++      expected: 0
++    }
++  ]);
++});
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index 1d4381e..46083ea 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -2,8 +2,8 @@
+   <div id="signed-in-home" class="min-h-screen bg-cream text-ink">
+     <%= if @current_identity_staff? do %>
+       <div id="homepage-staff-bar" class="bg-sage-700 text-cream">
+-        <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3.5 px-6 py-2.5 lg:px-8">
+-          <span class="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em]">
++        <div class="mx-auto flex max-w-7xl items-center gap-3.5 px-6 py-2.5 lg:px-8">
++          <span class="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em]">
+             Memba staff
+           </span>
+           <span class="hidden text-sm text-cream/80 sm:inline">
+@@ -12,10 +12,10 @@
+           <a
+             id="staff-console-link"
+             href={~p"/admin/clubs"}
+-            class="ml-auto inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-1.5 text-sm font-semibold transition hover:border-white/40 hover:bg-white/15"
++            class="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-1.5 text-sm font-semibold transition hover:border-white/40 hover:bg-white/15"
+           >
+             <span>Open the staff console</span>
+-            <.icon name="hero-arrow-top-right-on-square-mini" class="size-3.5 shrink-0 bg-cream" />
++            <.icon name="hero-arrow-top-right-on-square-mini" class="size-3.5 bg-cream" />
+           </a>
+         </div>
+       </div>
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 47618e7..baab327 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -63,6 +63,8 @@ defmodule MembaWeb.PageControllerTest do
+     assert html |> LazyHTML.query("header a[href='/auth']") |> Enum.any?()
+     assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.empty?()
+     assert html |> LazyHTML.query("main a[href='/get-started']") |> Enum.any?()
++    refute html |> LazyHTML.query("#homepage-staff-bar") |> Enum.any?()
++    refute html |> LazyHTML.query("a#staff-console-link") |> Enum.any?()
+     assert response =~ "Sign in"
+     refute response =~ "Internal Memba staff"
+     refute response =~ "Open internal Memba staff"
+@@ -693,6 +695,42 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "You have operator access across every group on Memba."
+     assert response =~ "Open the staff console"
+ 
++    assert html
++           |> LazyHTML.query("#signed-in-home > #homepage-staff-bar:first-child + header")
++           |> Enum.any?()
++
++    assert_exact_classes(html, "#homepage-staff-bar", "bg-sage-700 text-cream")
++
++    assert_exact_classes(
++      html,
++      "#homepage-staff-bar > div",
++      "mx-auto flex max-w-7xl items-center gap-3.5 px-6 py-2.5 lg:px-8"
++    )
++
++    assert_exact_classes(
++      html,
++      "#homepage-staff-bar span:first-child",
++      "rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em]"
++    )
++
++    assert_exact_classes(
++      html,
++      "#homepage-staff-bar span:nth-child(2)",
++      "hidden text-sm text-cream/80 sm:inline"
++    )
++
++    assert_exact_classes(
++      html,
++      "#staff-console-link",
++      "ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-1.5 text-sm font-semibold transition hover:border-white/40 hover:bg-white/15"
++    )
++
++    assert_exact_classes(
++      html,
++      "#staff-console-link .hero-arrow-top-right-on-square-mini",
++      "hero-arrow-top-right-on-square-mini size-3.5 bg-cream"
++    )
++
+     assert html
+            |> LazyHTML.query("#homepage-staff-bar a#staff-console-link[href='/admin/clubs']")
+            |> Enum.any?()
+@@ -1210,6 +1248,19 @@ defmodule MembaWeb.PageControllerTest do
+     insert_membership_club!(attrs)
+   end
+ 
++  defp assert_exact_classes(html, selector, expected_classes) do
++    assert html |> classes(selector) == String.split(expected_classes),
++           "Expected #{inspect(selector)} to have exact classes #{inspect(expected_classes)}"
++  end
++
++  defp classes(html, selector) do
++    html
++    |> LazyHTML.query(selector)
++    |> LazyHTML.attribute("class")
++    |> List.first("")
++    |> String.split()
++  end
++
+   defp club_host(conn, club) do
+     %{host: host} = URI.parse(ClubSite.url(club))
+     Map.put(conn, :host, host)
