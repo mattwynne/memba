@@ -341,7 +341,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       |> post_postmark_event(opened_payload)
 
     assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
-    assert detail =~ "Unsupported Postmark webhook RecordType"
+    assert detail == "Unsupported Postmark webhook RecordType: opened"
 
     assert_eventually(fn ->
       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"

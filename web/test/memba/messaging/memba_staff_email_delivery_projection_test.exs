@@ -140,7 +140,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
   end
 
-  test "Memba staff email delivery queries normalize historic opened rows to delivered" do
+  test "Memba staff email delivery queries do not normalize unsupported opened rows" do
     %{message_id: message_id, recipients: [_alice, bob]} =
       send_message_with_recipients(["Alice", "Bob"])
 
@@ -148,13 +148,13 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
     |> where([delivery], delivery.delivery_id == ^bob.delivery_id)
     |> Repo.update_all(set: [status: "opened", reason: "legacy open"])
 
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
+    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
              Messaging.get_memba_staff_email_delivery(bob.delivery_id)
 
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
+    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
 
-    assert %{"Bob" => {"delivered", nil}} =
+    assert %{"Bob" => {"opened", "legacy open"}} =
              message_id
              |> Messaging.list_operator_email_deliveries()
              |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
@@ -162,8 +162,8 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
     assert [
              %MembaStaffEmailDeliveryProjection{
                recipient_name: "Bob",
-               status: "delivered",
-               reason: nil
+               status: "opened",
+               reason: "legacy open"
              }
            ] =
              [message_id: message_id]

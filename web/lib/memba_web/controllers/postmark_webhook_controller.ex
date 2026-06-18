@@ -42,7 +42,6 @@ defmodule MembaWeb.PostmarkWebhookController do
       "spamcomplaint" -> {:ok, :spam_complaint}
       "spam" -> {:ok, :spam_complaint}
       "open" -> {:error, {:unsupported_record_type, "Open"}}
-      "opened" -> {:error, {:unsupported_record_type, "Opened"}}
       "bounce" -> {:ok, bounce_event_type(params)}
       record_type -> {:error, {:unsupported_record_type, record_type}}
     end

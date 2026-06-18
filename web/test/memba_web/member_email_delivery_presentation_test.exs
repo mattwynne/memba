@@ -27,10 +27,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
              }
 
       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
-               status: "delivered",
-               label: "Delivered",
-               icon: "hero-check-circle",
-               tone: "success"
+               status: "opened",
+               label: "Opened",
+               icon: "hero-question-mark-circle",
+               tone: "neutral"
              }
     end
 
@@ -75,11 +75,11 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                "bg-error-soft text-error ring-error/25"
     end
 
-    test "normalizes historic opened statuses before mapping visuals" do
-      assert MemberEmailDeliveryPresentation.status_tone("opened") == "success"
-      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-sage-600"
-      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-sage-700"
-      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-sage-700"
+    test "does not normalize unsupported opened statuses before mapping visuals" do
+      assert MemberEmailDeliveryPresentation.status_tone("opened") == "neutral"
+      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-base-300"
+      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-ink-2"
+      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-ink-2"
     end
   end
 
@@ -101,7 +101,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
              }
     end
 
-    test "folds historic opened receipts into Delivered instead of exposing opened" do
+    test "does not fold unsupported opened receipts into Delivered" do
       receipt = %{
         recipient_id: "person-456",
         recipient_name: "Historic Recipient",
@@ -111,10 +111,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
                recipient_id: "person-456",
                recipient_name: "Historic Recipient",
-               status: "delivered",
-               status_label: "Delivered",
-               status_icon: "hero-check-circle",
-               status_tone: "success"
+               status: "opened",
+               status_label: "Opened",
+               status_icon: "hero-question-mark-circle",
+               status_tone: "neutral"
              }
     end
   end
@@ -128,11 +128,15 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
           recipient_name: "Delivered Member One",
           status: "delivered"
         },
-        %{recipient_id: "opened-1", recipient_name: "Historic Opened Member", status: "opened"},
         %{
           recipient_id: "delivered-2",
           recipient_name: "Delivered Member Two",
           status: "delivered"
+        },
+        %{
+          recipient_id: "problem-1",
+          recipient_name: "Problem Member",
+          status: "delivery problem"
         }
       ]
 
@@ -147,7 +151,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                "sent",
                "delivered",
                "delivered",
-               "delivered"
+               "delivery problem"
              ]
 
       assert summary == [
@@ -157,8 +161,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status_icon: "hero-check-circle",
                  status_tone: "success",
                  description: "Email delivered",
-                 count: 3,
-                 percentage: 75
+                 count: 2,
+                 percentage: 50
                },
                %{
                  status: "sent",
@@ -175,24 +179,22 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status_icon: "hero-exclamation-triangle",
                  status_tone: "error",
                  description: "Email not delivered",
-                 count: 0,
-                 percentage: 0
+                 count: 1,
+                 percentage: 25
                }
              ]
 
-      assert Enum.map(groups, & &1.status) == ["delivered", "sent"]
-      refute Enum.any?(groups, &(&1.status == "delivery problem"))
+      assert Enum.map(groups, & &1.status) == ["delivered", "sent", "delivery problem"]
 
       assert [
                %{recipient_name: "Delivered Member One", status_label: "Delivered"},
-               %{recipient_name: "Historic Opened Member", status_label: "Delivered"},
                %{recipient_name: "Delivered Member Two", status_label: "Delivered"}
              ] = Enum.find(groups, &(&1.status == "delivered")).receipts
     end
 
     test "rounds percentages independently from the addressed receipt total" do
       receipts = [
-        %{recipient_id: "opened-1", recipient_name: "Opened Member", status: "opened"},
+        %{recipient_id: "delivered-1", recipient_name: "Delivered Member", status: "delivered"},
         %{recipient_id: "sent-1", recipient_name: "Sending Member One", status: "sent"},
         %{recipient_id: "sent-2", recipient_name: "Sending Member Two", status: "sent"}
       ]

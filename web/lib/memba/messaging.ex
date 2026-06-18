@@ -427,19 +427,9 @@ defmodule Memba.Messaging do
 
   defp normalize_member_email_delivery(nil), do: nil
 
-  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{status: "opened"} = receipt) do
-    %{receipt | status: "delivered"}
-  end
-
   defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
 
   defp normalize_memba_staff_email_delivery(nil), do: nil
-
-  defp normalize_memba_staff_email_delivery(
-         %MembaStaffEmailDeliveryProjection{status: "opened"} = delivery
-       ) do
-    %{delivery | status: "delivered", reason: nil}
-  end
 
   defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
     delivery
