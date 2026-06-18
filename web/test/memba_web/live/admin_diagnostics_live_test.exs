@@ -61,6 +61,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     )
 
     assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "sent")
+    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
+    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
 
     assert_selector_exists(
       html,
@@ -73,6 +75,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     )
 
     assert_exact_text(html, "#receipt-status-#{bob.delivery_id}", "delivery problem")
+    assert_class(html, "#receipt-status-#{bob.delivery_id}", "bg-[#f6e0c9]")
+    assert_class(html, "#receipt-status-#{bob.delivery_id}", "text-[#8a3d21]")
     refute response =~ reason
     refute response =~ "Delivery problem"
   end
@@ -164,6 +168,18 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
       |> String.trim()
 
     assert actual_text == expected_text
+  end
+
+  defp assert_class(html, selector, expected_class) do
+    classes =
+      html
+      |> LazyHTML.query(selector)
+      |> LazyHTML.attribute("class")
+      |> List.first("")
+      |> String.split()
+
+    assert expected_class in classes,
+           "Expected #{selector} to include class #{expected_class}; got #{inspect(classes)}"
   end
 
   defp email_for(name) do

@@ -350,12 +350,27 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'].bg-sage-600"
+           )
+
+    assert has_element?(
+             view,
              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'][data-receipt-label='Sending'][data-receipt-count='1']"
            )
 
     assert has_element?(
              view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'].bg-warning"
+           )
+
+    assert has_element?(
+             view,
              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'][data-receipt-label='Delivery problem'][data-receipt-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'].bg-error"
            )
 
     html = render(view)

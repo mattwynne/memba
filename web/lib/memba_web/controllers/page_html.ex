@@ -8,6 +8,7 @@ defmodule MembaWeb.PageHTML do
 
   alias Memba.ClubInboundEmailAddress
   alias MembaWeb.ClubSite
+  alias MembaWeb.MemberEmailDeliveryPresentation
 
   embed_templates "page_html/*"
 
@@ -77,21 +78,7 @@ defmodule MembaWeb.PageHTML do
   defp member_message_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}")
 
-  defp status_bg_class("delivered"), do: "bg-sky-500"
-  defp status_bg_class("sent"), do: "bg-slate-400"
-  defp status_bg_class("delivery problem"), do: "bg-amber-500"
-  defp status_bg_class(_status), do: "bg-slate-300"
-
-  defp status_text_class("delivered"), do: "text-sky-700"
-  defp status_text_class("sent"), do: "text-slate-600"
-  defp status_text_class("delivery problem"), do: "text-amber-700"
-  defp status_text_class(_status), do: "text-slate-600"
-
-  defp status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
-  defp status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
-
-  defp status_tint_class("delivery problem"),
-    do: "bg-amber-50 text-amber-700 ring-amber-200"
-
-  defp status_tint_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-200"
+  defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
+  defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
+  defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
 end

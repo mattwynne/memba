@@ -165,6 +165,21 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
+             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivered'].bg-sage-600"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='sent'].bg-warning"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivery problem'].bg-error"
+           )
+
+    assert has_element?(
+             view,
              "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
              "67%"
            )
@@ -262,6 +277,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(view, "#{delivered_toggle}[aria-expanded='true']")
     assert has_element?(view, delivered_rows)
     assert has_element?(view, delivered_recipient, "Bob Builder")
+
+    assert has_element?(
+             view,
+             "#{delivered_rows} [data-testid='receipt-status'][data-receipt-status='delivered'].badge.badge-soft.badge-success",
+             "Delivered"
+           )
 
     view
     |> element(delivered_toggle)
@@ -457,6 +478,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                "[data-testid='member-receipt']" <>
                "[data-recipient-name='Bob Builder']" <>
                "[data-receipt-status='delivery problem']",
+             "Delivery problem"
+           )
+
+    assert has_element?(
+             view,
+             "#member-receipts-delivery-problem " <>
+               "[data-testid='receipt-status'][data-receipt-status='delivery problem']" <>
+               ".badge.badge-soft.badge-error",
              "Delivery problem"
            )
 
