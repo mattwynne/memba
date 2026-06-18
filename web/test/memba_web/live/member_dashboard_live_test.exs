@@ -115,7 +115,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-sender-initials']",
+             "#member-message-#{message.message_id} [data-testid='message-sender-initials'].avatar.avatar-placeholder",
              "BB"
            )
 
@@ -153,7 +153,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
              "AA"
            )
   end
@@ -579,7 +579,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
              "AA"
            )
 
@@ -587,6 +587,47 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#active-members-card-copy",
              "Memba sends club-wide messages to everyone with a current membership."
+           )
+  end
+
+  test "dashboard renders active-member stack overflow through the shared avatar component",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for index <- 2..7 do
+      create_active_member(
+        email: "member#{index}@example.com",
+        name: "Member #{index}",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+    end
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#active-members-card[data-active-member-count='7'][data-active-members-state='active-members']"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'].avatar.avatar-placeholder",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder",
+             "+1"
            )
   end
 
