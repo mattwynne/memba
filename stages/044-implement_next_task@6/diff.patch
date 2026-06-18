@@ -1,0 +1,844 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index c454ee7..cf0d7d7 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -361,14 +361,6 @@ When(
+   }
+ );
+ 
+-When("{word} opens the email for {string}", async function (recipientName, subject) {
+-  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
+-});
+-
+-Given("{word} has opened the email for {string}", async function (recipientName, subject) {
+-  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
+-});
+-
+ Then(
+   "Memba staff should see {word}'s delivery for {string} as {string}",
+   async function (recipientName, subject, expectedStatus) {
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index cb25349..f1a4675 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -86,9 +86,6 @@ function postmarkPayloadForStatus({
+     case "delivered":
+       return { ...payload, RecordType: "Delivery" };
+ 
+-    case "opened":
+-      return { ...payload, RecordType: "Open" };
+-
+     case "delayed":
+       return {
+         ...payload,
+@@ -1870,9 +1867,6 @@ function memberReceiptStatusForEventType(eventType) {
+     case "delivered":
+       return "delivered";
+ 
+-    case "opened":
+-      return "opened";
+-
+     case "delayed":
+     case "bounced":
+     case "spam_complaint":
+@@ -1894,9 +1888,6 @@ function memberReceiptIconForLabel(label) {
+     case "Delivery problem":
+       return "hero-exclamation-triangle";
+ 
+-    case "Opened":
+-      return "hero-envelope-open";
+-
+     default:
+       throw new Error(`Unsupported member-facing email delivery label: ${label}`);
+   }
+@@ -1966,17 +1957,6 @@ async function reportRecipientEmailStatus(
+   const key = `${subject}:${recipientName}`;
+   const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
+ 
+-  if (eventType === "opened" && !hasSuccessfulDeliveryReport(world, key)) {
+-    const deliveredPayload = postmarkPayloadForStatus({
+-      deliveryId: delivery.deliveryId,
+-      eventType: "delivered",
+-      messageId: delivery.messageId,
+-      recipientEmail: delivery.recipientEmail
+-    });
+-
+-    await postPostmarkWebhookAndWaitForDeliveryProjections(world, deliveredPayload, delivery.deliveryId, "delivered");
+-  }
+-
+   const payload = postmarkPayloadForStatus({
+     deliveryId: delivery.deliveryId,
+     eventType,
+@@ -1998,12 +1978,6 @@ async function reportRecipientEmailStatus(
+   return world;
+ }
+ 
+-function hasSuccessfulDeliveryReport(world, key) {
+-  const report = world.reportedDeliveryStatuses[key];
+-
+-  return report && ["delivered", "opened"].includes(report.eventType);
+-}
+-
+ async function postPostmarkWebhookAndWaitForDeliveryProjections(world, payload, deliveryId, eventType) {
+   const memberStatus = memberReceiptStatusForEventType(eventType);
+   const staffStatus = staffDeliveryStatusForEventType(eventType);
+@@ -2029,7 +2003,6 @@ async function postPostmarkWebhookAndWaitForDeliveryProjections(world, payload,
+ function staffDeliveryStatusForEventType(eventType) {
+   switch (eventType) {
+     case "delivered":
+-    case "opened":
+       return "delivered";
+ 
+     case "delayed":
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index ba6390a..9f7332c 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -909,7 +909,6 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+   });
+ 
+   assert.deepEqual(world.addressedMemberNames, ["Alice", "Bob", "Carol"]);
+-  assert.equal(memberReceiptIconForLabel("Opened"), "hero-envelope-open");
+   assert.deepEqual(
+     page.actions.filter((action) => action[0] === "goto"),
+     [
+@@ -982,13 +981,9 @@ test("member receipt assertions expand collapsed visible groups before inspectin
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
+ });
+ 
+-test("member receipt assertions can expand all four visible receipt groups", async () => {
++test("member receipt assertions can expand all visible receipt groups", async () => {
+   const page = new FakePage();
+   page.rows.memberReceiptGroupToggles.push(
+-    rowWithAttrs({
+-      id: "member-receipt-group-toggle-opened",
+-      "aria-expanded": "false"
+-    }),
+     rowWithAttrs({
+       id: "member-receipt-group-toggle-delivered",
+       "aria-expanded": "false"
+@@ -1021,12 +1016,12 @@ test("member receipt assertions can expand all four visible receipt groups", asy
+ 
+   assert.deepEqual(
+     page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
+-    ["true", "true", "true", "true"]
++    ["true", "true", "true"]
+   );
+   assert.equal(
+     page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
+       .length,
+-    4
++    3
+   );
+ });
+ 
+@@ -1133,13 +1128,6 @@ test("Postmark webhook payloads map member-facing status events onto the app end
+     }
+   );
+ 
+-  assert.deepEqual(redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "opened" })), {
+-    MessageID: "<generated>",
+-    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+-    Recipient: "bob@example.test",
+-    RecordType: "Open"
+-  });
+-
+   assert.deepEqual(
+     redactGeneratedMessageId(
+       postmarkPayloadForStatus({
+@@ -1194,7 +1182,6 @@ test("Postmark webhook payloads map member-facing status events onto the app end
+   );
+ 
+   assert.equal(memberReceiptStatusForEventType("delivered"), "delivered");
+-  assert.equal(memberReceiptStatusForEventType("opened"), "opened");
+   assert.equal(memberReceiptStatusForEventType("delayed"), "delivery problem");
+   assert.equal(memberReceiptStatusForEventType("bounced"), "delivery problem");
+   assert.equal(memberReceiptStatusForEventType("spam_complaint"), "delivery problem");
+@@ -1418,41 +1405,6 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using
+   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+ });
+ 
+-test("reporting an opened email first reports delivery when the provider has not already done so", async () => {
+-  const page = new FakePage();
+-  page.rows.deliveryRecords.push({
+-    attrs: {
+-      "data-delivery-id": "delivery-dana",
+-      "data-recipient-id": "person-dana",
+-      "data-recipient-name": "Dana"
+-    },
+-    dataset: { deliveryId: "delivery-dana", recipientId: "person-dana", recipientName: "Dana" }
+-  });
+-  page.rows.memberReceipts.push({
+-    attrs: { "data-recipient-name": "Dana", receiptStatus: "opened" },
+-    dataset: { recipientName: "Dana" }
+-  });
+-  const request = new FakeRequestContext();
+-  const world = worldWithPage(page);
+-  world.request = request;
+-  world.readModelChanges = [
+-    ...deliveryProjectionEvents("delivery-dana", "delivered"),
+-    ...deliveryProjectionEvents("delivery-dana", "opened", "delivered")
+-  ];
+-  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+-  world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
+-
+-  await reportRecipientEmailStatus(world, "Dana", "Trip planning night", "opened", {
+-    expect: fakeExpect([])
+-  });
+-
+-  assert.deepEqual(
+-    request.posts.map((post) => redactGeneratedMessageId(post.options.data).RecordType),
+-    ["Delivery", "Open"]
+-  );
+-  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
+-});
+-
+ test("reporting a recipient email status waits for committed read-model delivery projections", async () => {
+   const page = new FakePage();
+   page.rows.deliveryRecords.push({
+diff --git a/docs/iterations/035-obliterate-opened-delivery-status/todo.md b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+index 494d1d4..dd34e06 100644
+--- a/docs/iterations/035-obliterate-opened-delivery-status/todo.md
++++ b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Remove the `"opened"` read-model normalization clauses in `messaging.ex`, the presentation `"opened" -> "delivered"` mapping, and the webhook `"opened"` rejection branch.
+ - [x] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
+ - [x] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
+-- [ ] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
++- [x] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
+ - [ ] 007 Add the historic-event replay-safety regression test.
+ - [ ] 008 Re-run the baseline grep to confirm only the documented shim remains.
+ - [ ] 009 Run `dev check`.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index ba1c17e..646dcf6 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -1,11 +1,6 @@
+ defmodule Memba.CucumberConfigurationTest do
+   use ExUnit.Case, async: true
+ 
+-  @deliverability_feature_names [
+-    "member_message_deliverability.feature",
+-    "memba_staff_email_deliverability.feature"
+-  ]
+-
+   test "Cucumber discovers shared feature files from acceptance-tests" do
+     assert configured_feature_paths() == expected_shared_feature_paths()
+   end
+@@ -15,16 +10,6 @@ defmodule Memba.CucumberConfigurationTest do
+              "not @not-domain and not @todo-domain"
+   end
+ 
+-  test "shared deliverability features do not describe opened receipts" do
+-    configured_feature_paths()
+-    |> Enum.filter(&(Path.basename(&1) in @deliverability_feature_names))
+-    |> Enum.each(fn deliverability_feature_file ->
+-      feature_text = File.read!(deliverability_feature_file)
+-
+-      refute feature_text =~ ~r/\b(opened|opens|open tracking|track_opens)\b/i
+-    end)
+-  end
+-
+   defp configured_feature_paths do
+     :cucumber
+     |> Application.fetch_env!(:features)
+diff --git a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+index 6846884..4df999d 100644
+--- a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+@@ -147,37 +147,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+              )
+   end
+ 
+-  test "Memba staff email delivery queries do not normalize unsupported opened rows" do
+-    %{message_id: message_id, recipients: [_alice, bob]} =
+-      send_message_with_recipients(["Alice", "Bob"])
+-
+-    MembaStaffEmailDeliveryProjection
+-    |> where([delivery], delivery.delivery_id == ^bob.delivery_id)
+-    |> Repo.update_all(set: [status: "opened", reason: "legacy open"])
+-
+-    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
+-             Messaging.get_memba_staff_email_delivery(bob.delivery_id)
+-
+-    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
+-             Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+-
+-    assert %{"Bob" => {"opened", "legacy open"}} =
+-             message_id
+-             |> Messaging.list_operator_email_deliveries()
+-             |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
+-
+-    assert [
+-             %MembaStaffEmailDeliveryProjection{
+-               recipient_name: "Bob",
+-               status: "opened",
+-               reason: "legacy open"
+-             }
+-           ] =
+-             [message_id: message_id]
+-             |> Messaging.list_operator_deliveries()
+-             |> Enum.filter(&(&1.recipient_name == "Bob"))
+-  end
+-
+   test "Memba staff email delivery clears prior delay reason when delivery recovers" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+diff --git a/web/test/memba/messaging/member_email_delivery_projection_test.exs b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+index 3b6a6cf..109036d 100644
+--- a/web/test/memba/messaging/member_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+@@ -139,26 +139,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+              )
+   end
+ 
+-  test "member email delivery queries do not normalize unsupported opened rows" do
+-    %{message_id: message_id, recipients: [_alice, bob]} =
+-      send_message_with_recipients(["Alice", "Bob"])
+-
+-    MemberEmailDeliveryProjection
+-    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
+-    |> Repo.update_all(set: [status: "opened"])
+-
+-    assert %MemberEmailDeliveryProjection{status: "opened"} =
+-             Messaging.get_member_email_delivery(bob.delivery_id)
+-
+-    assert %MemberEmailDeliveryProjection{status: "opened"} =
+-             Messaging.get_member_email_delivery(message_id, bob.person_id)
+-
+-    assert %{"Bob" => "opened"} =
+-             message_id
+-             |> Messaging.list_member_email_deliverys()
+-             |> Map.new(&{&1.recipient_name, &1.status})
+-  end
+-
+   test "member email delivery queries return empty results for missing or invalid IDs" do
+     assert is_nil(Messaging.get_member_email_delivery(Memba.ID.generate(:delivery)))
+     assert is_nil(Messaging.get_member_email_delivery(nil))
+diff --git a/web/test/memba/messaging/status_report_api_test.exs b/web/test/memba/messaging/status_report_api_test.exs
+index 7514d77..ee9d20c 100644
+--- a/web/test/memba/messaging/status_report_api_test.exs
++++ b/web/test/memba/messaging/status_report_api_test.exs
+@@ -81,11 +81,6 @@ defmodule Memba.Messaging.StatusReportApiTest do
+              "spam complaint"
+   end
+ 
+-  test "public status reporting API does not expose opened reports" do
+-    refute function_exported?(Messaging, :report_email_delivery_opened, 1)
+-    refute function_exported?(Messaging, :report_email_delivery_opened, 2)
+-  end
+-
+   test "public status reporting APIs surface aggregate validation errors" do
+     assert {:error, :message_not_sent} =
+              Messaging.report_email_delivery_delivered(%{
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index bf760e8..4f90634 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -113,14 +113,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
+           club_id: alice.club_id
+         )
+ 
+-      dana =
+-        create_member(
+-          email: "dana@example.com",
+-          name: "Dana Downhill",
+-          club_name: "Alpine Club",
+-          club_id: alice.club_id
+-        )
+-
+       message =
+         create_message(
+           club_id: alice.club_id,
+@@ -137,8 +129,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
+       seeded_receipt_cases = [
+         {alice, "sent"},
+         {bob, "delivered"},
+-        {carol, "delivery problem"},
+-        {dana, "opened"}
++        {carol, "delivery problem"}
+       ]
+ 
+       Enum.each(seeded_receipt_cases, fn {member, status} ->
+@@ -161,7 +152,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+       assert_selector_exists(
+         html,
+-        "#member-receipts-summary[data-receipt-count='4']"
++        "#member-receipts-summary[data-receipt-count='3']"
+       )
+ 
+       for {status, bg_class} <- [
+@@ -187,12 +178,11 @@ defmodule MembaWeb.MemberMessageDetailTest do
+         )
+ 
+         assert_text_in(html, "#{group_selector} h3", label)
+-        expected_count = if status == "delivered", do: "2", else: "1"
+ 
+         assert_exact_text(
+           html,
+           "#{group_selector} [data-testid='receipt-group-count']",
+-          expected_count
++          "1"
+         )
+ 
+         assert_selector_exists(html, "#{group_selector} .#{icon}")
+@@ -203,21 +193,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
+                )
+                |> Enum.any?()
+       end)
+-
+-      refute html
+-             |> LazyHTML.query(
+-               "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+-             )
+-             |> Enum.any?()
+-
+-      refute html
+-             |> LazyHTML.query(
+-               "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+-             )
+-             |> Enum.any?()
+-
+-      refute response =~ "Opened"
+-      refute response =~ "not opened"
+     end
+ 
+     test "does not expose Memba-staff-only delivery fields on member message detail", %{
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 3830c95..a361d91 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -82,7 +82,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     end)
+   end
+ 
+-  test "maps realistic Postmark delivery events with outbound metadata and rejects opens", %{
++  test "maps realistic Postmark delivery events with outbound metadata", %{
+     conn: conn
+   } do
+     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+@@ -96,21 +96,6 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+       assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
+     end)
+-
+-    conn =
+-      conn
+-      |> recycle()
+-      |> post_postmark_event(realistic_postmark_payload(:opened, message, bob))
+-
+-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail =~ "Unsupported Postmark webhook RecordType"
+-
+-    assert_eventually(fn ->
+-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+-
+-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
+-               "delivered"
+-    end)
+   end
+ 
+   test "maps realistic Postmark delayed, bounced, and spam complaint events with reasons", %{
+@@ -321,37 +306,6 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     refute unchanged_request.provider_reported_at
+   end
+ 
+-  test "rejects Postmark open events before delivered events", %{conn: conn} do
+-    %{message_id: message_id, recipients: [bob, carol]} =
+-      message = send_message_to(["Bob", "Carol"])
+-
+-    conn = post_postmark_event(conn, realistic_postmark_payload(:opened, message, bob))
+-
+-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail =~ "Unsupported Postmark webhook RecordType"
+-
+-    opened_payload =
+-      :opened
+-      |> realistic_postmark_payload(message, carol)
+-      |> Map.put("RecordType", "Opened")
+-
+-    conn =
+-      conn
+-      |> recycle()
+-      |> post_postmark_event(opened_payload)
+-
+-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail == "Unsupported Postmark webhook RecordType: opened"
+-
+-    assert_eventually(fn ->
+-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
+-      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "sent"
+-
+-      assert Messaging.get_member_email_delivery(message_id, carol.person_id).status == "sent"
+-      assert Messaging.get_memba_staff_email_delivery(carol.delivery_id).status == "sent"
+-    end)
+-  end
+-
+   test "returns an unprocessable response for unsupported Postmark events", %{conn: conn} do
+     conn =
+       post_postmark_event(conn, %{
+@@ -487,25 +441,6 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     }
+   end
+ 
+-  defp realistic_postmark_event_fields(:opened, _recipient, _opts) do
+-    %{
+-      "Client" => %{"Company" => "Apple", "Family" => "Apple Mail", "Name" => "Apple Mail"},
+-      "FirstOpen" => true,
+-      "Geo" => %{
+-        "City" => "Nelson",
+-        "CountryISOCode" => "CA",
+-        "CountryName" => "Canada",
+-        "Region" => "British Columbia"
+-      },
+-      "OS" => %{"Company" => "Apple", "Family" => "iOS", "Name" => "iOS"},
+-      "Platform" => "Mobile",
+-      "ReadSeconds" => 7,
+-      "ReceivedAt" => "2026-05-30T19:13:45Z",
+-      "RecordType" => "Open",
+-      "UserAgent" => "Mozilla/5.0"
+-    }
+-  end
+-
+   defp realistic_postmark_event_fields(:delayed, recipient, opts) do
+     bounce_fields(recipient, opts,
+       description: "Temporary delivery issue",
+diff --git a/web/test/memba_web/controllers/resend_webhook_controller_test.exs b/web/test/memba_web/controllers/resend_webhook_controller_test.exs
+index 5810b48..2c1cd6e 100644
+--- a/web/test/memba_web/controllers/resend_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/resend_webhook_controller_test.exs
+@@ -8,7 +8,7 @@ defmodule MembaWeb.ResendWebhookControllerTest do
+ 
+   import Plug.Conn
+ 
+-  test "maps realistic Resend delivery events with outbound tags and rejects opens", %{conn: conn} do
++  test "maps realistic Resend delivery events with outbound tags", %{conn: conn} do
+     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+ 
+     conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))
+@@ -19,21 +19,6 @@ defmodule MembaWeb.ResendWebhookControllerTest do
+       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+       assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
+     end)
+-
+-    conn =
+-      conn
+-      |> recycle()
+-      |> post_resend_event(realistic_resend_payload(:opened, message, bob))
+-
+-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail =~ "Unsupported Resend webhook event type"
+-
+-    assert_eventually(fn ->
+-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+-
+-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
+-               "delivered"
+-    end)
+   end
+ 
+   test "maps realistic Resend delayed, bounced, and complaint events with reasons", %{conn: conn} do
+@@ -126,19 +111,6 @@ defmodule MembaWeb.ResendWebhookControllerTest do
+     end)
+   end
+ 
+-  test "rejects Resend open events before delivered events", %{conn: conn} do
+-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+-
+-    conn = post_resend_event(conn, realistic_resend_payload(:opened, message, bob))
+-
+-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail =~ "Unsupported Resend webhook event type"
+-
+-    assert_eventually(fn ->
+-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
+-    end)
+-  end
+-
+   test "returns an unprocessable response for unsupported Resend events", %{conn: conn} do
+     conn =
+       post_resend_event(conn, %{
+@@ -268,11 +240,9 @@ defmodule MembaWeb.ResendWebhookControllerTest do
+   end
+ 
+   defp event_data(:delivered, _opts), do: %{}
+-  defp event_data(:opened, _opts), do: %{"ip" => "203.0.113.10", "user_agent" => "Apple Mail"}
+   defp event_data(_event_type, opts), do: %{"reason" => Keyword.fetch!(opts, :reason)}
+ 
+   defp resend_event_type(:delivered), do: "email.delivered"
+-  defp resend_event_type(:opened), do: "email.opened"
+   defp resend_event_type(:delayed), do: "email.delivery_delayed"
+   defp resend_event_type(:bounced), do: "email.bounced"
+   defp resend_event_type(:spam_complaint), do: "email.complained"
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 1572e72..023263e 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -4,9 +4,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
+-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+   alias Memba.Messaging.Recipient
+-  alias Memba.Repo
+ 
+   test "operators can review deliveries from multiple messages with problem reasons", %{
+     conn: conn
+@@ -129,43 +127,6 @@ defmodule MembaWeb.DeliveriesLiveTest do
+     end)
+   end
+ 
+-  test "operators see historic opened delivery rows as delivered, never opened", %{
+-    conn: conn
+-  } do
+-    %{
+-      subject: subject,
+-      recipients: [recipient]
+-    } =
+-      send_projected_message(
+-        subject: "Privacy policy update",
+-        recipients: ["Dana"]
+-      )
+-
+-    set_operator_delivery_status(recipient.delivery_id, status: "opened", reason: "legacy open")
+-
+-    conn
+-    |> sign_in_staff()
+-    |> visit("/admin/deliveries")
+-    |> assert_path("/admin/deliveries")
+-    |> assert_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", count: 1)
+-    |> assert_has(
+-      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='delivered']"
+-    )
+-    |> refute_has(
+-      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='opened']"
+-    )
+-    |> assert_delivery_row(recipient.delivery_id, [
+-      subject,
+-      recipient.name,
+-      recipient.email,
+-      "email",
+-      "delivered",
+-      "—"
+-    ])
+-    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "opened")
+-    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "legacy open")
+-  end
+-
+   defp send_projected_message(opts) do
+     subject = Keyword.fetch!(opts, :subject)
+     recipient_names = Keyword.fetch!(opts, :recipients)
+@@ -209,15 +170,6 @@ defmodule MembaWeb.DeliveriesLiveTest do
+     %{message_id: message_id, subject: subject, recipients: recipients}
+   end
+ 
+-  defp set_operator_delivery_status(delivery_id, attrs) do
+-    delivery = Repo.get!(MembaStaffEmailDeliveryProjection, delivery_id)
+-
+-    assert {:ok, _delivery} =
+-             delivery
+-             |> Ecto.Changeset.change(attrs)
+-             |> Repo.update()
+-  end
+-
+   defp assert_delivery_row(session, delivery_id, expected_texts) do
+     row_selector = "[data-test-id='delivery-row-#{delivery_id}']"
+ 
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index a61aac2..412d59c 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -83,7 +83,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       message_id: message.message_id,
+       recipient_id: alice.person_id,
+       recipient_name: "Alice Adams",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+@@ -142,11 +142,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-percentage='50']"
+            )
+ 
+-    refute has_element?(
+-             view,
+-             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
+-           )
+-
+     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
+     assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
+     refute has_element?(view, "#active-members-empty-state", "You’re the first member listed")
+@@ -323,7 +318,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       message_id: message.message_id,
+       recipient_id: alice.person_id,
+       recipient_name: "Alice Adams",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+@@ -372,11 +367,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "2 of 4 delivered"
+            )
+ 
+-    refute has_element?(
+-             view,
+-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
+-           )
+-
+     assert has_element?(
+              view,
+              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
+@@ -409,8 +399,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     html = render(view)
+ 
+-    refute html =~ "Opened"
+-    refute html =~ "opened"
+     refute html =~ dana_delivery_id
+     refute html =~ "dana.operator@example.net"
+     refute html =~ "postmark-webhook"
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index ce27781..85fb5cf 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -127,7 +127,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       message_id: message.message_id,
+       recipient_id: bob.person_id,
+       recipient_name: "Bob Builder",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+@@ -194,19 +194,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
+            )
+-
+-    refute has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+-           )
+-
+-    refute has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+-           )
+-
+-    refute render(view) =~ "Opened"
+-    refute render(view) =~ "not opened"
+   end
+ 
+   test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
+@@ -244,7 +231,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       message_id: message.message_id,
+       recipient_id: bob.person_id,
+       recipient_name: "Bob Builder",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+@@ -266,7 +253,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+ 
+     assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
+-    refute has_element?(view, "#member-receipt-group-toggle-opened")
+     refute has_element?(view, delivered_rows)
+     refute has_element?(view, delivered_recipient)
+ 
+@@ -312,7 +298,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       message_id: message.message_id,
+       recipient_id: alice.person_id,
+       recipient_name: "Alice Adams",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     {:ok, view, _html} =
+@@ -349,13 +335,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
+     end
+ 
+-    refute has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+-           )
+-
+-    refute has_element?(view, "#member-receipt-group-toggle-opened")
+-
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 9682b22..0f7d466 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -52,7 +52,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+       message_id: newer_message.message_id,
+       recipient_id: alice.person_id,
+       recipient_name: "Alice Adams",
+-      status: "opened"
++      status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+diff --git a/web/test/memba_web/member_email_delivery_presentation_test.exs b/web/test/memba_web/member_email_delivery_presentation_test.exs
+index d9f81c8..4ef1495 100644
+--- a/web/test/memba_web/member_email_delivery_presentation_test.exs
++++ b/web/test/memba_web/member_email_delivery_presentation_test.exs
+@@ -25,13 +25,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                icon: "hero-exclamation-triangle",
+                tone: "error"
+              }
+-
+-      assert MemberEmailDeliveryPresentation.present_status("opened") == %{
+-               status: "opened",
+-               label: "Opened",
+-               icon: "hero-question-mark-circle",
+-               tone: "neutral"
+-             }
+     end
+ 
+     test "treats blank or missing statuses as the initial sent status" do
+@@ -74,13 +67,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       assert MemberEmailDeliveryPresentation.status_tint_class("delivery problem") ==
+                "bg-error-soft text-error ring-error/25"
+     end
+-
+-    test "does not normalize unsupported opened statuses before mapping visuals" do
+-      assert MemberEmailDeliveryPresentation.status_tone("opened") == "neutral"
+-      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-base-300"
+-      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-ink-2"
+-      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-ink-2"
+-    end
+   end
+ 
+   describe "present_receipt/1" do
+@@ -100,23 +86,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                status_tone: "success"
+              }
+     end
+-
+-    test "does not fold unsupported opened receipts into Delivered" do
+-      receipt = %{
+-        recipient_id: "person-456",
+-        recipient_name: "Historic Recipient",
+-        status: "opened"
+-      }
+-
+-      assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
+-               recipient_id: "person-456",
+-               recipient_name: "Historic Recipient",
+-               status: "opened",
+-               status_label: "Opened",
+-               status_icon: "hero-question-mark-circle",
+-               status_tone: "neutral"
+-             }
+-    end
+   end
+ 
+   describe "present_receipts/1" do
