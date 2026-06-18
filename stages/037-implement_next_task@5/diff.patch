@@ -1,0 +1,458 @@
+diff --git a/docs/iterations/034-member-page-design-system-alignment/todo.md b/docs/iterations/034-member-page-design-system-alignment/todo.md
+index 3ace51a..93e4439 100644
+--- a/docs/iterations/034-member-page-design-system-alignment/todo.md
++++ b/docs/iterations/034-member-page-design-system-alignment/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Remove the `--club-site-*` layer: replace its variables/classes with sage tokens + daisyUI classes; simplify or retire the white-label parts of `Layouts.club_site` while keeping the member page chrome (header/footer) working in sage.
+ - [x] 003 Replace member-page buttons with `<.button>`, mapping each to the right variant/size; preserve `href`/`navigate`/form behaviour.
+ - [x] 004 Replace member initials avatars with `<.avatar>`, including the club-home stack and "+N".
+-- [ ] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
++- [x] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
+ - [ ] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
+ - [ ] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
+ - [ ] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 4004a40..5117bfe 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.PageHTML do
+ 
+   alias Memba.ClubInboundEmailAddress
+   alias MembaWeb.ClubSite
++  alias MembaWeb.MemberEmailDeliveryPresentation
+ 
+   embed_templates "page_html/*"
+ 
+@@ -77,21 +78,7 @@ defmodule MembaWeb.PageHTML do
+   defp member_message_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+ 
+-  defp status_bg_class("delivered"), do: "bg-sky-500"
+-  defp status_bg_class("sent"), do: "bg-slate-400"
+-  defp status_bg_class("delivery problem"), do: "bg-amber-500"
+-  defp status_bg_class(_status), do: "bg-slate-300"
+-
+-  defp status_text_class("delivered"), do: "text-sky-700"
+-  defp status_text_class("sent"), do: "text-slate-600"
+-  defp status_text_class("delivery problem"), do: "text-amber-700"
+-  defp status_text_class(_status), do: "text-slate-600"
+-
+-  defp status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
+-  defp status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
+-
+-  defp status_tint_class("delivery problem"),
+-    do: "bg-amber-50 text-amber-700 ring-amber-200"
+-
+-  defp status_tint_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-200"
++  defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
++  defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
++  defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
+ end
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index e9462c8..63d64f4 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -204,22 +204,21 @@
+                   {receipt.recipient_name}
+                 </p>
+               </div>
+-              <p
+-                data-testid="receipt-status"
+-                data-receipt-status={receipt.status}
+-                class={[
+-                  "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
+-                  status_tint_class(receipt.status)
+-                ]}
+-              >
++              <span class="inline-flex w-fit items-center gap-2">
+                 <.icon
+                   name={receipt.status_icon}
+                   data-testid="receipt-status-icon"
+                   data-icon-name={receipt.status_icon}
+                   class={["size-4", status_text_class(receipt.status)]}
+                 />
+-                <span>{receipt.status_label}</span>
+-              </p>
++                <.status_badge
++                  data-testid="receipt-status"
++                  data-receipt-status={receipt.status}
++                  aria-label={"Delivery status for #{receipt.recipient_name}: #{receipt.status_label}"}
++                  label={receipt.status_label}
++                  tone={receipt.status_tone}
++                />
++              </span>
+             </div>
+           </div>
+         </section>
+diff --git a/web/lib/memba_web/member_email_delivery_presentation.ex b/web/lib/memba_web/member_email_delivery_presentation.ex
+index f925c5f..a4f2d74 100644
+--- a/web/lib/memba_web/member_email_delivery_presentation.ex
++++ b/web/lib/memba_web/member_email_delivery_presentation.ex
+@@ -11,9 +11,31 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   @status_order ["delivered", "sent", "delivery problem"]
+ 
+   @presentations %{
+-    "sent" => %{label: "Sending", icon: "hero-clock"},
+-    "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
+-    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"}
++    "sent" => %{label: "Sending", icon: "hero-clock", tone: "warning"},
++    "delivered" => %{label: "Delivered", icon: "hero-check-circle", tone: "success"},
++    "delivery problem" => %{
++      label: "Delivery problem",
++      icon: "hero-exclamation-triangle",
++      tone: "error"
++    }
++  }
++
++  @status_bg_classes %{
++    "delivered" => "bg-sage-600",
++    "sent" => "bg-warning",
++    "delivery problem" => "bg-error"
++  }
++
++  @status_text_classes %{
++    "delivered" => "text-sage-700",
++    "sent" => "text-warning",
++    "delivery problem" => "text-error"
++  }
++
++  @status_tint_classes %{
++    "delivered" => "bg-sage-50 text-sage-700 ring-sage-200",
++    "sent" => "bg-warning-soft text-warning ring-warning/25",
++    "delivery problem" => "bg-error-soft text-error ring-error/25"
+   }
+ 
+   @descriptions %{
+@@ -36,6 +58,38 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+     Map.put(presentation, :status, status)
+   end
+ 
++  @doc """
++  Returns the design-system status badge tone for a member delivery status.
++  """
++  def status_tone(status), do: present_status(status).tone
++
++  @doc """
++  Returns the filled bar/dot class for member delivery summary visuals.
++  """
++  def status_bg_class(status) do
++    status
++    |> normalize_status()
++    |> then(&Map.get(@status_bg_classes, &1, "bg-base-300"))
++  end
++
++  @doc """
++  Returns the text/icon class for member delivery status accents.
++  """
++  def status_text_class(status) do
++    status
++    |> normalize_status()
++    |> then(&Map.get(@status_text_classes, &1, "text-ink-2"))
++  end
++
++  @doc """
++  Returns the soft tint class for member delivery icons and initials.
++  """
++  def status_tint_class(status) do
++    status
++    |> normalize_status()
++    |> then(&Map.get(@status_tint_classes, &1, "bg-base-200 text-ink-2 ring-base-300"))
++  end
++
+   @doc """
+   Returns a template-friendly receipt map with raw status plus presentation data.
+   """
+@@ -47,7 +101,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+       recipient_name: Map.get(receipt, :recipient_name),
+       status: presentation.status,
+       status_label: presentation.label,
+-      status_icon: presentation.icon
++      status_icon: presentation.icon,
++      status_tone: presentation.tone
+     }
+   end
+ 
+@@ -95,7 +150,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   defp normalize_status(_status), do: @fallback_status
+ 
+   defp unknown_presentation(status) do
+-    %{label: humanize_status(status), icon: "hero-question-mark-circle"}
++    %{label: humanize_status(status), icon: "hero-question-mark-circle", tone: "neutral"}
+   end
+ 
+   defp humanize_status(status) do
+@@ -115,6 +170,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+       status: status,
+       status_label: presentation.label,
+       status_icon: presentation.icon,
++      status_tone: presentation.tone,
+       description: Map.fetch!(@descriptions, status),
+       count: count,
+       percentage: percentage(count, total_count)
+diff --git a/web/test/memba_web/live/admin_diagnostics_live_test.exs b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+index 7074ba8..5673674 100644
+--- a/web/test/memba_web/live/admin_diagnostics_live_test.exs
++++ b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+@@ -61,6 +61,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+     )
+ 
+     assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "sent")
++    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
++    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
+ 
+     assert_selector_exists(
+       html,
+@@ -73,6 +75,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+     )
+ 
+     assert_exact_text(html, "#receipt-status-#{bob.delivery_id}", "delivery problem")
++    assert_class(html, "#receipt-status-#{bob.delivery_id}", "bg-[#f6e0c9]")
++    assert_class(html, "#receipt-status-#{bob.delivery_id}", "text-[#8a3d21]")
+     refute response =~ reason
+     refute response =~ "Delivery problem"
+   end
+@@ -166,6 +170,18 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+     assert actual_text == expected_text
+   end
+ 
++  defp assert_class(html, selector, expected_class) do
++    classes =
++      html
++      |> LazyHTML.query(selector)
++      |> LazyHTML.attribute("class")
++      |> List.first("")
++      |> String.split()
++
++    assert expected_class in classes,
++           "Expected #{selector} to include class #{expected_class}; got #{inspect(classes)}"
++  end
++
+   defp email_for(name) do
+     normalized_name =
+       name
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 1a5d99e..6109a3d 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -348,16 +348,31 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'].bg-sage-600"
++           )
++
+     assert has_element?(
+              view,
+              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'][data-receipt-label='Sending'][data-receipt-count='1']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'].bg-warning"
++           )
++
+     assert has_element?(
+              view,
+              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'][data-receipt-label='Delivery problem'][data-receipt-count='1']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'].bg-error"
++           )
++
+     html = render(view)
+ 
+     refute html =~ "Opened"
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index e894074..ce27781 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -163,6 +163,21 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "Email not delivered"
+            )
+ 
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivered'].bg-sage-600"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='sent'].bg-warning"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivery problem'].bg-error"
++           )
++
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
+@@ -263,6 +278,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(view, delivered_rows)
+     assert has_element?(view, delivered_recipient, "Bob Builder")
+ 
++    assert has_element?(
++             view,
++             "#{delivered_rows} [data-testid='receipt-status'][data-receipt-status='delivered'].badge.badge-soft.badge-success",
++             "Delivered"
++           )
++
+     view
+     |> element(delivered_toggle)
+     |> render_click()
+@@ -460,6 +481,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "Delivery problem"
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-receipts-delivery-problem " <>
++               "[data-testid='receipt-status'][data-receipt-status='delivery problem']" <>
++               ".badge.badge-soft.badge-error",
++             "Delivery problem"
++           )
++
+     refute html =~ delivery_id
+     refute html =~ "bob-private@example.invalid"
+     refute html =~ "postmark-email"
+diff --git a/web/test/memba_web/member_email_delivery_presentation_test.exs b/web/test/memba_web/member_email_delivery_presentation_test.exs
+index cfb246e..0c3f4ac 100644
+--- a/web/test/memba_web/member_email_delivery_presentation_test.exs
++++ b/web/test/memba_web/member_email_delivery_presentation_test.exs
+@@ -8,25 +8,29 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       assert MemberEmailDeliveryPresentation.present_status("sent") == %{
+                status: "sent",
+                label: "Sending",
+-               icon: "hero-clock"
++               icon: "hero-clock",
++               tone: "warning"
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("delivered") == %{
+                status: "delivered",
+                label: "Delivered",
+-               icon: "hero-check-circle"
++               icon: "hero-check-circle",
++               tone: "success"
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("delivery problem") == %{
+                status: "delivery problem",
+                label: "Delivery problem",
+-               icon: "hero-exclamation-triangle"
++               icon: "hero-exclamation-triangle",
++               tone: "error"
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
+                status: "delivered",
+                label: "Delivered",
+-               icon: "hero-check-circle"
++               icon: "hero-check-circle",
++               tone: "success"
+              }
+     end
+ 
+@@ -34,17 +38,51 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       assert MemberEmailDeliveryPresentation.present_status(nil) == %{
+                status: "sent",
+                label: "Sending",
+-               icon: "hero-clock"
++               icon: "hero-clock",
++               tone: "warning"
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("") == %{
+                status: "sent",
+                label: "Sending",
+-               icon: "hero-clock"
++               icon: "hero-clock",
++               tone: "warning"
+              }
+     end
+   end
+ 
++  describe "design-system status mapping" do
++    test "maps member delivery statuses to sage, warning, and error visuals" do
++      assert MemberEmailDeliveryPresentation.status_tone("delivered") == "success"
++      assert MemberEmailDeliveryPresentation.status_bg_class("delivered") == "bg-sage-600"
++      assert MemberEmailDeliveryPresentation.status_text_class("delivered") == "text-sage-700"
++
++      assert MemberEmailDeliveryPresentation.status_tint_class("delivered") ==
++               "bg-sage-50 text-sage-700 ring-sage-200"
++
++      assert MemberEmailDeliveryPresentation.status_tone("sent") == "warning"
++      assert MemberEmailDeliveryPresentation.status_bg_class("sent") == "bg-warning"
++      assert MemberEmailDeliveryPresentation.status_text_class("sent") == "text-warning"
++
++      assert MemberEmailDeliveryPresentation.status_tint_class("sent") ==
++               "bg-warning-soft text-warning ring-warning/25"
++
++      assert MemberEmailDeliveryPresentation.status_tone("delivery problem") == "error"
++      assert MemberEmailDeliveryPresentation.status_bg_class("delivery problem") == "bg-error"
++      assert MemberEmailDeliveryPresentation.status_text_class("delivery problem") == "text-error"
++
++      assert MemberEmailDeliveryPresentation.status_tint_class("delivery problem") ==
++               "bg-error-soft text-error ring-error/25"
++    end
++
++    test "normalizes historic opened statuses before mapping visuals" do
++      assert MemberEmailDeliveryPresentation.status_tone("opened") == "success"
++      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-sage-600"
++      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-sage-700"
++      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-sage-700"
++    end
++  end
++
+   describe "present_receipt/1" do
+     test "maps the projection status to current member-facing receipt data" do
+       receipt = %{
+@@ -58,7 +96,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                recipient_name: "Alice Adams",
+                status: "delivered",
+                status_label: "Delivered",
+-               status_icon: "hero-check-circle"
++               status_icon: "hero-check-circle",
++               status_tone: "success"
+              }
+     end
+ 
+@@ -74,7 +113,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                recipient_name: "Historic Recipient",
+                status: "delivered",
+                status_label: "Delivered",
+-               status_icon: "hero-check-circle"
++               status_icon: "hero-check-circle",
++               status_tone: "success"
+              }
+     end
+   end
+@@ -115,6 +155,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                  status: "delivered",
+                  status_label: "Delivered",
+                  status_icon: "hero-check-circle",
++                 status_tone: "success",
+                  description: "Email delivered",
+                  count: 3,
+                  percentage: 75
+@@ -123,6 +164,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                  status: "sent",
+                  status_label: "Sending",
+                  status_icon: "hero-clock",
++                 status_tone: "warning",
+                  description: "Email still sending",
+                  count: 1,
+                  percentage: 25
+@@ -131,6 +173,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                  status: "delivery problem",
+                  status_label: "Delivery problem",
+                  status_icon: "hero-exclamation-triangle",
++                 status_tone: "error",
+                  description: "Email not delivered",
+                  count: 0,
+                  percentage: 0
