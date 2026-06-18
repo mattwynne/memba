@@ -1,0 +1,272 @@
+diff --git a/docs/iterations/035-obliterate-opened-delivery-status/todo.md b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+index 8a6f327..24e5ed0 100644
+--- a/docs/iterations/035-obliterate-opened-delivery-status/todo.md
++++ b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inventory every `opened`/`Opened` reference in `lib/`, `test/`, and `acceptance-tests/` (baseline grep) and classify each as remove vs retain-as-shim.
+ - [x] 002 Delete the `ReportEmailDeliveryOpened` command and any dispatch routing/registration for it.
+-- [ ] 003 Remove the `"opened"` read-model normalization clauses in `messaging.ex`, the presentation `"opened" -> "delivered"` mapping, and the webhook `"opened"` rejection branch.
++- [x] 003 Remove the `"opened"` read-model normalization clauses in `messaging.ex`, the presentation `"opened" -> "delivered"` mapping, and the webhook `"opened"` rejection branch.
+ - [ ] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
+ - [ ] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
+ - [ ] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index f1457d4..3b5fb7e 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -427,20 +427,10 @@ defmodule Memba.Messaging do
+ 
+   defp normalize_member_email_delivery(nil), do: nil
+ 
+-  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{status: "opened"} = receipt) do
+-    %{receipt | status: "delivered"}
+-  end
+-
+   defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
+ 
+   defp normalize_memba_staff_email_delivery(nil), do: nil
+ 
+-  defp normalize_memba_staff_email_delivery(
+-         %MembaStaffEmailDeliveryProjection{status: "opened"} = delivery
+-       ) do
+-    %{delivery | status: "delivered", reason: nil}
+-  end
+-
+   defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
+     delivery
+   end
+diff --git a/web/lib/memba_web/controllers/postmark_webhook_controller.ex b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+index ccaa73a..798fb36 100644
+--- a/web/lib/memba_web/controllers/postmark_webhook_controller.ex
++++ b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+@@ -42,7 +42,6 @@ defmodule MembaWeb.PostmarkWebhookController do
+       "spamcomplaint" -> {:ok, :spam_complaint}
+       "spam" -> {:ok, :spam_complaint}
+       "open" -> {:error, {:unsupported_record_type, "Open"}}
+-      "opened" -> {:error, {:unsupported_record_type, "Opened"}}
+       "bounce" -> {:ok, bounce_event_type(params)}
+       record_type -> {:error, {:unsupported_record_type, record_type}}
+     end
+diff --git a/web/lib/memba_web/member_email_delivery_presentation.ex b/web/lib/memba_web/member_email_delivery_presentation.ex
+index a4f2d74..e93ac99 100644
+--- a/web/lib/memba_web/member_email_delivery_presentation.ex
++++ b/web/lib/memba_web/member_email_delivery_presentation.ex
+@@ -142,7 +142,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   defp normalize_status(status) when is_binary(status) do
+     case status do
+       "" -> @fallback_status
+-      "opened" -> "delivered"
+       status -> status
+     end
+   end
+diff --git a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+index 56a0ad9..a126f3f 100644
+--- a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+@@ -140,7 +140,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+   end
+ 
+-  test "Memba staff email delivery queries normalize historic opened rows to delivered" do
++  test "Memba staff email delivery queries do not normalize unsupported opened rows" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+ 
+@@ -148,13 +148,13 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+     |> where([delivery], delivery.delivery_id == ^bob.delivery_id)
+     |> Repo.update_all(set: [status: "opened", reason: "legacy open"])
+ 
+-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
+              Messaging.get_memba_staff_email_delivery(bob.delivery_id)
+ 
+-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++    assert %MembaStaffEmailDeliveryProjection{status: "opened", reason: "legacy open"} =
+              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+ 
+-    assert %{"Bob" => {"delivered", nil}} =
++    assert %{"Bob" => {"opened", "legacy open"}} =
+              message_id
+              |> Messaging.list_operator_email_deliveries()
+              |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
+@@ -162,8 +162,8 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+     assert [
+              %MembaStaffEmailDeliveryProjection{
+                recipient_name: "Bob",
+-               status: "delivered",
+-               reason: nil
++               status: "opened",
++               reason: "legacy open"
+              }
+            ] =
+              [message_id: message_id]
+diff --git a/web/test/memba/messaging/member_email_delivery_projection_test.exs b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+index f3f9e2a..3f88e0f 100644
+--- a/web/test/memba/messaging/member_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+@@ -132,7 +132,7 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+              Messaging.get_member_email_delivery(message_id, bob.person_id)
+   end
+ 
+-  test "member email delivery queries normalize historic opened rows to delivered" do
++  test "member email delivery queries do not normalize unsupported opened rows" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+ 
+@@ -140,13 +140,13 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+     |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
+     |> Repo.update_all(set: [status: "opened"])
+ 
+-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++    assert %MemberEmailDeliveryProjection{status: "opened"} =
+              Messaging.get_member_email_delivery(bob.delivery_id)
+ 
+-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++    assert %MemberEmailDeliveryProjection{status: "opened"} =
+              Messaging.get_member_email_delivery(message_id, bob.person_id)
+ 
+-    assert %{"Bob" => "delivered"} =
++    assert %{"Bob" => "opened"} =
+              message_id
+              |> Messaging.list_member_email_deliverys()
+              |> Map.new(&{&1.recipient_name, &1.status})
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index e622981..3830c95 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -341,7 +341,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+       |> post_postmark_event(opened_payload)
+ 
+     assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+-    assert detail =~ "Unsupported Postmark webhook RecordType"
++    assert detail == "Unsupported Postmark webhook RecordType: opened"
+ 
+     assert_eventually(fn ->
+       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
+diff --git a/web/test/memba_web/member_email_delivery_presentation_test.exs b/web/test/memba_web/member_email_delivery_presentation_test.exs
+index 0c3f4ac..d9f81c8 100644
+--- a/web/test/memba_web/member_email_delivery_presentation_test.exs
++++ b/web/test/memba_web/member_email_delivery_presentation_test.exs
+@@ -27,10 +27,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
+-               status: "delivered",
+-               label: "Delivered",
+-               icon: "hero-check-circle",
+-               tone: "success"
++               status: "opened",
++               label: "Opened",
++               icon: "hero-question-mark-circle",
++               tone: "neutral"
+              }
+     end
+ 
+@@ -75,11 +75,11 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                "bg-error-soft text-error ring-error/25"
+     end
+ 
+-    test "normalizes historic opened statuses before mapping visuals" do
+-      assert MemberEmailDeliveryPresentation.status_tone("opened") == "success"
+-      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-sage-600"
+-      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-sage-700"
+-      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-sage-700"
++    test "does not normalize unsupported opened statuses before mapping visuals" do
++      assert MemberEmailDeliveryPresentation.status_tone("opened") == "neutral"
++      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-base-300"
++      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-ink-2"
++      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-ink-2"
+     end
+   end
+ 
+@@ -101,7 +101,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+              }
+     end
+ 
+-    test "folds historic opened receipts into Delivered instead of exposing opened" do
++    test "does not fold unsupported opened receipts into Delivered" do
+       receipt = %{
+         recipient_id: "person-456",
+         recipient_name: "Historic Recipient",
+@@ -111,10 +111,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
+                recipient_id: "person-456",
+                recipient_name: "Historic Recipient",
+-               status: "delivered",
+-               status_label: "Delivered",
+-               status_icon: "hero-check-circle",
+-               status_tone: "success"
++               status: "opened",
++               status_label: "Opened",
++               status_icon: "hero-question-mark-circle",
++               status_tone: "neutral"
+              }
+     end
+   end
+@@ -128,11 +128,15 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+           recipient_name: "Delivered Member One",
+           status: "delivered"
+         },
+-        %{recipient_id: "opened-1", recipient_name: "Historic Opened Member", status: "opened"},
+         %{
+           recipient_id: "delivered-2",
+           recipient_name: "Delivered Member Two",
+           status: "delivered"
++        },
++        %{
++          recipient_id: "problem-1",
++          recipient_name: "Problem Member",
++          status: "delivery problem"
+         }
+       ]
+ 
+@@ -147,7 +151,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                "sent",
+                "delivered",
+                "delivered",
+-               "delivered"
++               "delivery problem"
+              ]
+ 
+       assert summary == [
+@@ -157,8 +161,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                  status_icon: "hero-check-circle",
+                  status_tone: "success",
+                  description: "Email delivered",
+-                 count: 3,
+-                 percentage: 75
++                 count: 2,
++                 percentage: 50
+                },
+                %{
+                  status: "sent",
+@@ -175,24 +179,22 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                  status_icon: "hero-exclamation-triangle",
+                  status_tone: "error",
+                  description: "Email not delivered",
+-                 count: 0,
+-                 percentage: 0
++                 count: 1,
++                 percentage: 25
+                }
+              ]
+ 
+-      assert Enum.map(groups, & &1.status) == ["delivered", "sent"]
+-      refute Enum.any?(groups, &(&1.status == "delivery problem"))
++      assert Enum.map(groups, & &1.status) == ["delivered", "sent", "delivery problem"]
+ 
+       assert [
+                %{recipient_name: "Delivered Member One", status_label: "Delivered"},
+-               %{recipient_name: "Historic Opened Member", status_label: "Delivered"},
+                %{recipient_name: "Delivered Member Two", status_label: "Delivered"}
+              ] = Enum.find(groups, &(&1.status == "delivered")).receipts
+     end
+ 
+     test "rounds percentages independently from the addressed receipt total" do
+       receipts = [
+-        %{recipient_id: "opened-1", recipient_name: "Opened Member", status: "opened"},
++        %{recipient_id: "delivered-1", recipient_name: "Delivered Member", status: "delivered"},
+         %{recipient_id: "sent-1", recipient_name: "Sending Member One", status: "sent"},
+         %{recipient_id: "sent-2", recipient_name: "Sending Member Two", status: "sent"}
+       ]
