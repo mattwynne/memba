@@ -6,6 +6,6 @@
 - [x] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
 - [x] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
 - [x] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
-- [ ] 007 Add the historic-event replay-safety regression test.
+- [x] 007 Add the historic-event replay-safety regression test.
 - [ ] 008 Re-run the baseline grep to confirm only the documented shim remains.
 - [ ] 009 Run `dev check`.
