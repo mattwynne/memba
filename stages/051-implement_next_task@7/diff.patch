@@ -1,0 +1,178 @@
+diff --git a/docs/iterations/034-member-page-design-system-alignment/todo.md b/docs/iterations/034-member-page-design-system-alignment/todo.md
+index 587e662..435ba32 100644
+--- a/docs/iterations/034-member-page-design-system-alignment/todo.md
++++ b/docs/iterations/034-member-page-design-system-alignment/todo.md
+@@ -6,6 +6,6 @@
+ - [x] 004 Replace member initials avatars with `<.avatar>`, including the club-home stack and "+N".
+ - [x] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
+ - [x] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
+-- [ ] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
++- [x] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
+ - [ ] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
+ - [ ] 009 Run `dev check`.
+diff --git a/web/test/memba_web/components/core_components_test.exs b/web/test/memba_web/components/core_components_test.exs
+index 9a38ac0..ee29b7b 100644
+--- a/web/test/memba_web/components/core_components_test.exs
++++ b/web/test/memba_web/components/core_components_test.exs
+@@ -32,6 +32,22 @@ defmodule MembaWeb.CoreComponentsTest do
+       assert first_bg == second_bg
+       assert first_bg in ~w(bg-sage-200 bg-sage-300 bg-sage-100 bg-sage-400 bg-sage-50)
+     end
++
++    test "forwards member-page attributes while keeping shared avatar classes" do
++      html =
++        render_avatar(
++          id: "member-avatar",
++          "data-testid": "club-member-row",
++          title: "Alice Adams",
++          initials: "AA",
++          class: "shadow-sm"
++        )
++
++      assert_selector(
++        html,
++        "div#member-avatar.avatar.avatar-placeholder.shadow-sm[data-testid='club-member-row'][title='Alice Adams']"
++      )
++    end
+   end
+ 
+   describe "status_badge/1" do
+@@ -73,6 +89,22 @@ defmodule MembaWeb.CoreComponentsTest do
+       assert_selector(html, "span.badge span.rounded-full.bg-current")
+       assert_class(html, "span.badge span.rounded-full.bg-current", "size-1.5")
+     end
++
++    test "forwards member receipt status attributes while keeping tone classes" do
++      html =
++        render_status_badge(
++          tone: "warning",
++          label: "Sending",
++          "data-testid": "receipt-status",
++          "data-receipt-status": "sent",
++          "aria-label": "Delivery status for Alice Adams: Sending"
++        )
++
++      assert_selector(
++        html,
++        "span.badge.badge-soft.badge-warning[data-testid='receipt-status'][data-receipt-status='sent'][aria-label='Delivery status for Alice Adams: Sending']"
++      )
++    end
+   end
+ 
+   describe "button/1" do
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 01e4428..bf760e8 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -164,6 +164,17 @@ defmodule MembaWeb.MemberMessageDetailTest do
+         "#member-receipts-summary[data-receipt-count='4']"
+       )
+ 
++      for {status, bg_class} <- [
++            {"delivered", "bg-sage-600"},
++            {"sent", "bg-warning"},
++            {"delivery problem", "bg-error"}
++          ] do
++        assert_selector_exists(
++          html,
++          "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='#{status}'].#{bg_class}"
++        )
++      end
++
+       Enum.each(receipt_cases, fn {member, status, label, icon} ->
+         group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
+         status_slug = String.replace(status, " ", "-")
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 6109a3d..a61aac2 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -158,6 +158,40 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard renders the shared avatar overflow affordance for larger member lists",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    for index <- 2..8 do
++      create_active_member(
++        email: "member#{index}@example.com",
++        name: "Member #{index}",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++    end
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/")
++
++    assert has_element?(view, "#active-members-card[data-active-member-count='8']")
++
++    assert has_element?(
++             view,
++             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder[title='2 more current members']",
++             "+2"
++           )
++
++    refute has_element?(view, "#active-members-empty-state")
++  end
++
+   test "dashboard exposes the member invite action from the existing members list to Membership Admins",
+        %{conn: conn} do
+     robin =
+diff --git a/web/test/memba_web/member_page_design_system_alignment_test.exs b/web/test/memba_web/member_page_design_system_alignment_test.exs
+index 5cc3a8a..2fcc334 100644
+--- a/web/test/memba_web/member_page_design_system_alignment_test.exs
++++ b/web/test/memba_web/member_page_design_system_alignment_test.exs
+@@ -12,6 +12,16 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+ 
+   @legacy_member_palette ~r/\b(?:bg|text|border|ring|decoration|placeholder|focus:border|focus:ring)-(?:blue|emerald|rose|sky|slate)-[0-9]/
+ 
++  @expected_component_usage [
++    {"club home template", "lib/memba_web/controllers/page_html/club.html.heex",
++     ["<.button", "<.avatar"]},
++    {"message detail template", "lib/memba_web/controllers/page_html/message.html.heex",
++     ["<.button", "<.status_badge"]},
++    {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex", ["<.button"]},
++    {"public club page LiveView", "lib/memba_web/live/public_club_page_live.ex", ["<.button"]},
++    {"club site layout", :club_site, ["<.button"]}
++  ]
++
+   test "member page sources use theme tokens rather than hardcoded hex or legacy palette utilities" do
+     for {label, source} <- member_page_sources() do
+       refute source =~ @hardcoded_hex,
+@@ -25,6 +35,17 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+     end
+   end
+ 
++  test "member page sources call shared design-system components for buttons, avatars, and status pills" do
++    for {label, source_ref, required_components} <- @expected_component_usage do
++      source = source_for(source_ref)
++
++      for component_call <- required_components do
++        assert source =~ component_call,
++               "#{label} should render #{component_call} from the shared design system"
++      end
++    end
++  end
++
+   defp member_page_sources do
+     file_sources =
+       Enum.map(@member_page_files, fn path ->
+@@ -34,6 +55,9 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+     [{"MembaWeb.Layouts.club_site", club_site_source()} | file_sources]
+   end
+ 
++  defp source_for(:club_site), do: club_site_source()
++  defp source_for(path), do: File.read!(web_path(path))
++
+   defp club_site_source do
+     source = File.read!(web_path("lib/memba_web/components/layouts.ex"))
+ 
