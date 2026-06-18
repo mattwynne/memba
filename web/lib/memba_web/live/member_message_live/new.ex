@@ -127,7 +127,7 @@ defmodule MembaWeb.MemberMessageLive.New do
           id="member-compose-success-state"
           class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-6 text-center shadow-sm sm:p-10"
         >
-          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-success-soft text-success ring-1 ring-success/20">
             <.icon name="hero-check" class="size-8" />
           </div>
 
@@ -178,9 +178,9 @@ defmodule MembaWeb.MemberMessageLive.New do
         <section
           :if={@compose_state == :send_failed}
           id="member-compose-error-state"
-          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-rose-100 bg-base-100 p-6 text-center shadow-sm sm:p-10"
+          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-error/20 bg-base-100 p-6 text-center shadow-sm sm:p-10"
         >
-          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100">
+          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-error-soft text-error ring-1 ring-error/20">
             <.icon name="hero-exclamation-triangle" class="size-8" />
           </div>
 
@@ -254,14 +254,14 @@ defmodule MembaWeb.MemberMessageLive.New do
           <div
             id="member-compose-recipient-summary"
             data-active-member-count={@active_member_count}
-            class="mt-6 flex gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950"
+            class="mt-6 flex gap-3 rounded-2xl border border-info/20 bg-info-soft px-4 py-3 text-sm leading-6 text-base-content"
           >
-            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-sky-700 ring-1 ring-sky-100">
+            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-info ring-1 ring-info/20">
               <.icon name="hero-users" class="size-4" />
             </span>
             <p>
               Before you send: this message will be emailed to
-              <strong class="font-semibold text-sky-950">
+              <strong class="font-semibold text-base-content">
                 {active_member_count_summary(@active_member_count)}
               </strong>
               of {selected_club_name(@selected_club)}. There is no list to pick.
@@ -334,7 +334,7 @@ defmodule MembaWeb.MemberMessageLive.New do
             <p
               :if={@body_error}
               id="member-message-body-error"
-              class="text-sm font-semibold text-rose-700"
+              class="text-sm font-semibold text-error"
             >
               {@body_error}
             </p>

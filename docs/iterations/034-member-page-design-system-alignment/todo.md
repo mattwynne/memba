@@ -5,7 +5,7 @@
 - [x] 003 Replace member-page buttons with `<.button>`, mapping each to the right variant/size; preserve `href`/`navigate`/form behaviour.
 - [x] 004 Replace member initials avatars with `<.avatar>`, including the club-home stack and "+N".
 - [x] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
-- [ ] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
+- [x] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
 - [ ] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
 - [ ] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
 - [ ] 009 Run `dev check`.
