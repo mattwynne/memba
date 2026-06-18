@@ -116,6 +116,10 @@ The member experience — club home, reading and composing club messages, and th
 ## Validation Plan
 
 - Component/LiveView/template tests for button, avatar, and status usage on member pages.
+- The member design-system source-scanning test is an intentional structural guardrail
+  against hardcoded colours, legacy `--club-site-*` theming, and bespoke component
+  markup; it complements semantic rendering tests and gallery-walk screenshots rather
+  than replacing them.
 - Tests for the member delivery-status colour mapping (Delivered = sage, etc.) with staff path asserted unchanged.
 - `./bin/dev gallery-walk` visual review of all four member pages at desktop + mobile.
 - Confirm existing member messaging/delivery acceptance scenarios remain green.
