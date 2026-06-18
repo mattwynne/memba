@@ -191,13 +191,13 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "button#member-message-send-button[type='submit']",
+             "button#member-message-send-button.btn.btn-primary.btn-lg[type='submit']",
              "Send to all current members"
            )
 
     assert has_element?(
              view,
-             "#member-message-cancel-link[href='/']",
+             "#member-message-cancel-link.btn.btn-soft.btn-lg[href='/']",
              "Cancel"
            )
 

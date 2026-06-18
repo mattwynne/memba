@@ -250,7 +250,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     delivered_recipient =
       "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
 
-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
+    assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
     refute has_element?(view, "#member-receipt-group-toggle-opened")
     refute has_element?(view, delivered_rows)
     refute has_element?(view, delivered_recipient)

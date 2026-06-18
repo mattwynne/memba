@@ -145,7 +145,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
     assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
-    assert_selector(html, "button#club-site-sign-out-button[type='submit']")
+    assert_selector(html, "button#club-site-sign-out-button.btn.btn-soft.btn-sm[type='submit']")
     refute_text(html, "#club-site-footer", "Commit")
 
     assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"

@@ -148,27 +148,30 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
-            <.link
+            <.button
               id="member-compose-see-receipts-link"
               href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              variant="primary"
+              size="lg"
             >
               <.icon name="hero-eye" class="size-4" /> Check delivery
-            </.link>
-            <.link
+            </.button>
+            <.button
               id="member-compose-send-another-link"
               href={compose_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              variant="secondary"
+              size="lg"
             >
               Send another message
-            </.link>
-            <.link
+            </.button>
+            <.button
               id="member-compose-back-home-link"
               href={club_home_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
+              variant="ghost"
+              size="lg"
             >
               Back to club home
-            </.link>
+            </.button>
           </div>
         </section>
 
@@ -197,21 +200,23 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
-            <button
+            <.button
               id="member-compose-try-again-button"
               type="button"
               phx-click="try_again"
-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              variant="primary"
+              size="lg"
             >
               <.icon name="hero-arrow-path" class="size-4" /> Try again
-            </button>
-            <.link
+            </.button>
+            <.button
               id="member-compose-back-home-after-error-link"
               href={club_home_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              variant="secondary"
+              size="lg"
             >
               Back to club home
-            </.link>
+            </.button>
           </div>
         </section>
 
@@ -335,20 +340,22 @@ defmodule MembaWeb.MemberMessageLive.New do
             </p>
 
             <div class="mt-2 flex flex-col gap-3 sm:flex-row">
-              <button
+              <.button
                 id="member-message-send-button"
                 type="submit"
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                variant="primary"
+                size="lg"
               >
                 <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
-              </button>
-              <.link
+              </.button>
+              <.button
                 id="member-message-cancel-link"
                 href={club_home_path(@selected_club, @route_params)}
-                class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                variant="secondary"
+                size="lg"
               >
                 Cancel
-              </.link>
+              </.button>
             </div>
           </.form>
         </section>

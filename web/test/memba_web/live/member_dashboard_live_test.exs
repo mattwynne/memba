@@ -102,7 +102,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
+             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
              "Send club message"
            )
 
@@ -176,7 +176,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
              "Invite member"
            )
   end
@@ -201,7 +201,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
              "Invite member"
            )
 
@@ -441,7 +441,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-send-message-link[href='/messages/new']"
+             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
            )
 
     assert has_element?(
@@ -481,7 +481,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
+             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
              "Send club message"
            )
 
@@ -545,7 +545,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-empty-send-link[href='/messages/new']",
+             "#member-message-empty-send-link.btn.btn-soft[href='/messages/new']",
              "Send the first message"
            )
   end

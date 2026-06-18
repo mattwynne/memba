@@ -33,21 +33,23 @@ defmodule MembaWeb.PublicClubPageLive do
                 Sign in with the email address {@club.name} has for you to read member messages and see the current member list. Member-only details stay private.
               </p>
               <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-                <a
+                <.button
                   id="public-club-page-sign-in-link"
                   href={~p"/auth"}
-                  class="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                  variant="primary"
+                  size="lg"
                 >
                   Email me a sign-in link
-                </a>
-                <a
+                </.button>
+                <.button
                   id="public-club-page-memba-home-link"
                   href={ClubSite.root_url()}
                   aria-label="Visit Memba home"
-                  class="inline-flex items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                  variant="secondary"
+                  size="lg"
                 >
                   Visit Memba home
-                </a>
+                </.button>
               </div>
             </div>
 
