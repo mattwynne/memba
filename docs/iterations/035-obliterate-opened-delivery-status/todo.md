@@ -7,5 +7,5 @@
 - [x] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
 - [x] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
 - [x] 007 Add the historic-event replay-safety regression test.
-- [ ] 008 Re-run the baseline grep to confirm only the documented shim remains.
+- [x] 008 Re-run the baseline grep to confirm only the documented shim remains.
 - [ ] 009 Run `dev check`.
