@@ -32,6 +32,22 @@ defmodule MembaWeb.CoreComponentsTest do
       assert first_bg == second_bg
       assert first_bg in ~w(bg-sage-200 bg-sage-300 bg-sage-100 bg-sage-400 bg-sage-50)
     end
+
+    test "forwards member-page attributes while keeping shared avatar classes" do
+      html =
+        render_avatar(
+          id: "member-avatar",
+          "data-testid": "club-member-row",
+          title: "Alice Adams",
+          initials: "AA",
+          class: "shadow-sm"
+        )
+
+      assert_selector(
+        html,
+        "div#member-avatar.avatar.avatar-placeholder.shadow-sm[data-testid='club-member-row'][title='Alice Adams']"
+      )
+    end
   end
 
   describe "status_badge/1" do
@@ -72,6 +88,22 @@ defmodule MembaWeb.CoreComponentsTest do
 
       assert_selector(html, "span.badge span.rounded-full.bg-current")
       assert_class(html, "span.badge span.rounded-full.bg-current", "size-1.5")
+    end
+
+    test "forwards member receipt status attributes while keeping tone classes" do
+      html =
+        render_status_badge(
+          tone: "warning",
+          label: "Sending",
+          "data-testid": "receipt-status",
+          "data-receipt-status": "sent",
+          "aria-label": "Delivery status for Alice Adams: Sending"
+        )
+
+      assert_selector(
+        html,
+        "span.badge.badge-soft.badge-warning[data-testid='receipt-status'][data-receipt-status='sent'][aria-label='Delivery status for Alice Adams: Sending']"
+      )
     end
   end
 

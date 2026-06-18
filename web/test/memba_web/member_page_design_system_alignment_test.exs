@@ -12,6 +12,16 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
 
   @legacy_member_palette ~r/\b(?:bg|text|border|ring|decoration|placeholder|focus:border|focus:ring)-(?:blue|emerald|rose|sky|slate)-[0-9]/
 
+  @expected_component_usage [
+    {"club home template", "lib/memba_web/controllers/page_html/club.html.heex",
+     ["<.button", "<.avatar"]},
+    {"message detail template", "lib/memba_web/controllers/page_html/message.html.heex",
+     ["<.button", "<.status_badge"]},
+    {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex", ["<.button"]},
+    {"public club page LiveView", "lib/memba_web/live/public_club_page_live.ex", ["<.button"]},
+    {"club site layout", :club_site, ["<.button"]}
+  ]
+
   test "member page sources use theme tokens rather than hardcoded hex or legacy palette utilities" do
     for {label, source} <- member_page_sources() do
       refute source =~ @hardcoded_hex,
@@ -25,6 +35,17 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
     end
   end
 
+  test "member page sources call shared design-system components for buttons, avatars, and status pills" do
+    for {label, source_ref, required_components} <- @expected_component_usage do
+      source = source_for(source_ref)
+
+      for component_call <- required_components do
+        assert source =~ component_call,
+               "#{label} should render #{component_call} from the shared design system"
+      end
+    end
+  end
+
   defp member_page_sources do
     file_sources =
       Enum.map(@member_page_files, fn path ->
@@ -33,6 +54,9 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
 
     [{"MembaWeb.Layouts.club_site", club_site_source()} | file_sources]
   end
+
+  defp source_for(:club_site), do: club_site_source()
+  defp source_for(path), do: File.read!(web_path(path))
 
   defp club_site_source do
     source = File.read!(web_path("lib/memba_web/components/layouts.ex"))

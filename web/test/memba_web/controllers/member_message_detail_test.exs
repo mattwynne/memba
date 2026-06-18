@@ -164,6 +164,17 @@ defmodule MembaWeb.MemberMessageDetailTest do
         "#member-receipts-summary[data-receipt-count='4']"
       )
 
+      for {status, bg_class} <- [
+            {"delivered", "bg-sage-600"},
+            {"sent", "bg-warning"},
+            {"delivery problem", "bg-error"}
+          ] do
+        assert_selector_exists(
+          html,
+          "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='#{status}'].#{bg_class}"
+        )
+      end
+
       Enum.each(receipt_cases, fn {member, status, label, icon} ->
         group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
         status_slug = String.replace(status, " ", "-")

@@ -158,6 +158,40 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard renders the shared avatar overflow affordance for larger member lists",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for index <- 2..8 do
+      create_active_member(
+        email: "member#{index}@example.com",
+        name: "Member #{index}",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+    end
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(view, "#active-members-card[data-active-member-count='8']")
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder[title='2 more current members']",
+             "+2"
+           )
+
+    refute has_element?(view, "#active-members-empty-state")
+  end
+
   test "dashboard exposes the member invite action from the existing members list to Membership Admins",
        %{conn: conn} do
     robin =
