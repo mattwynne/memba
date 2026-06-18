@@ -55,7 +55,22 @@ if ! git diff --name-status "$base_sha"..HEAD; then
   exit 1
 fi
 echo ''
-echo '--- changed source/config/test/workflow/kaizen file excerpts ---'
+echo '--- project pattern reference docs ---'
+for reference_doc in \
+  docs/reference/domain-driven-design.md \
+  docs/reference/cqrs.md \
+  docs/reference/event-sourcing.md \
+  docs/reference/responsibility-driven-design.md; do
+  if [ -f "$reference_doc" ]; then
+    echo "=== $reference_doc ==="
+    sed -n '1,220p' "$reference_doc"
+    echo ''
+  else
+    echo "Missing reference doc: $reference_doc"
+  fi
+done
+
+echo '--- changed source/config/test/workflow/kaizen/reference file excerpts ---'
 if ! changed_files=$(git diff --name-only "$base_sha"..HEAD); then
   echo "Could not compute changed files from $base_sha to HEAD." >&2
   exit 1
@@ -64,7 +79,7 @@ fi
 if [ -z "$changed_files" ]; then
   echo 'No files differ between base sha and HEAD.'
 else
-  excerpt_files=$(printf '%s\n' "$changed_files" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\.exs|mix\.lock)|bin/|docs/iterations/|docs/adr/|docs/kaizen/|\.fabro/workflows/)' || true)
+  excerpt_files=$(printf '%s\n' "$changed_files" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\.exs|mix\.lock)|bin/|docs/iterations/|docs/adr/|docs/kaizen/|docs/reference/|\.fabro/workflows/)' || true)
   if [ -z "$excerpt_files" ]; then
     echo 'No changed files matched the excerpt filter.'
   else

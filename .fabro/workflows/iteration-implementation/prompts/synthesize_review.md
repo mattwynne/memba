@@ -17,6 +17,7 @@ Use the prior context from this workflow run:
 
 ## Acceptance standards
 
+- Treat accepted ADRs as binding. Use `docs/reference/domain-driven-design.md`, `docs/reference/cqrs.md`, `docs/reference/event-sourcing.md`, and `docs/reference/responsibility-driven-design.md` as the design-quality guidelines for domain modeling, Commanded/CQRS, event streams/projections, aggregates, and responsibility/collaboration boundaries. They guide interpretation of ADRs and code-health findings; they do not override an accepted ADR or iteration plan.
 - Accept only if the implementation satisfies the plan, avoids out-of-scope work, dev check passed, and no unresolved accepted-ADR violations remain.
 - Never accept when unresolved accepted-ADR violations remain.
 - Never downgrade a cited ADR's central decision to optional implementation strategy.

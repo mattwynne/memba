@@ -26,17 +26,30 @@ git add README.md
 git commit --quiet -m 'initial'
 base_sha=$(git rev-parse HEAD)
 
-mkdir -p .fabro/workflows/iteration-review docs/kaizen docs/misc
+mkdir -p .fabro/workflows/iteration-review docs/kaizen docs/misc docs/reference
 printf 'workflow evidence marker\n' > .fabro/workflows/iteration-review/workflow.fabro
 printf 'kaizen evidence marker\n' > docs/kaizen/example.md
 printf 'unexcerpted marker\n' > docs/misc/example.md
+printf 'domain reference marker\n' > docs/reference/domain-driven-design.md
+printf 'cqrs reference marker\n' > docs/reference/cqrs.md
+printf 'event sourcing reference marker\n' > docs/reference/event-sourcing.md
+printf 'responsibility reference marker\n' > docs/reference/responsibility-driven-design.md
 git add .
 git commit --quiet -m 'change workflow and kaizen files'
 
 output_path=$repo_dir/evidence-output.txt
 bash "$script_path" "$base_sha" > "$output_path"
 
-assert_output_contains '--- changed source/config/test/workflow/kaizen file excerpts ---'
+assert_output_contains '--- project pattern reference docs ---'
+assert_output_contains '=== docs/reference/domain-driven-design.md ==='
+assert_output_contains 'domain reference marker'
+assert_output_contains '=== docs/reference/cqrs.md ==='
+assert_output_contains 'cqrs reference marker'
+assert_output_contains '=== docs/reference/event-sourcing.md ==='
+assert_output_contains 'event sourcing reference marker'
+assert_output_contains '=== docs/reference/responsibility-driven-design.md ==='
+assert_output_contains 'responsibility reference marker'
+assert_output_contains '--- changed source/config/test/workflow/kaizen/reference file excerpts ---'
 assert_output_contains '=== .fabro/workflows/iteration-review/workflow.fabro ==='
 assert_output_contains 'workflow evidence marker'
 assert_output_contains '=== docs/kaizen/example.md ==='

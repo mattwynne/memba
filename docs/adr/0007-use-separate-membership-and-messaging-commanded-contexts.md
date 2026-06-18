@@ -6,6 +6,12 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [Domain-Driven Design](../reference/domain-driven-design.md) for bounded contexts, context maps, and public context boundaries.
+- [CQRS](../reference/cqrs.md) for explicit command-side ownership and query-side dependencies.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for keeping responsibilities and collaborations clear between Membership and Messaging.
+
 ## Context
 
 The first message deliverability slice introduces several domain concepts:

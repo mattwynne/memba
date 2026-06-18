@@ -6,6 +6,12 @@ Date: 2026-06-05
 
 accepted
 
+## Related reference guidance
+
+- [CQRS](../reference/cqrs.md) for read-model/projection responsibilities and eventual-consistency boundaries.
+- [Event Sourcing](../reference/event-sourcing.md) for projection handlers, committed read-model changes, idempotency, and replay.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for keeping publisher, projector, and subscriber responsibilities explicit.
+
 ## Context
 
 Memba uses Commanded with Ecto projections to maintain read models for membership, messaging, email deliveries, inbound email, and staff/member views.

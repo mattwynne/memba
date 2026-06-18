@@ -17,6 +17,7 @@ Do not emit shell-command/tool-call JSON; return the Markdown synthesis and fina
 
 ## Standards
 
+- Treat accepted ADRs as binding. Use `docs/reference/domain-driven-design.md`, `docs/reference/cqrs.md`, `docs/reference/event-sourcing.md`, and `docs/reference/responsibility-driven-design.md` as the design-quality guidelines for domain modeling, Commanded/CQRS, event streams/projections, aggregates, and responsibility/collaboration boundaries. They guide interpretation of ADRs and code-health findings; they do not override an accepted ADR or iteration plan.
 - Treat automated tests and implementation plan-conformance as already-owned by the implementation workflow.
 - Prefer automatic improvement over deferral. Request automatic fixes for every concrete, bounded refactoring, maintainability, project-convention, documentation, security-hardening, data-integrity-hardening, or low-risk test-quality issue that can be resolved without changing acceptance feature files or making a new product decision.
 - Verification findings are often auto-fixable: if reviewers are unsure whether an implemented rule is truly wired, reused, or protected, route **FIX** when the workflow can add/strengthen targeted automated tests, assertions, constraints, or code comments to prove the existing intended behaviour.

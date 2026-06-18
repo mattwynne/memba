@@ -6,6 +6,12 @@ Date: 2026-06-05
 
 accepted
 
+## Related reference guidance
+
+- [CQRS](../reference/cqrs.md) for read-your-writes expectations across separate command and query models.
+- [Event Sourcing](../reference/event-sourcing.md) for projection lag, checkpointing, and replay-aware synchronization.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for keeping barrier coordination separate from projector and UI responsibilities.
+
 ## Context
 
 Memba uses Commanded with Ecto projections. Events can be committed before the read models used by browser pages have caught up.

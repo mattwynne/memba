@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-workflow_path=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/workflow.fabro
+workflow_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+workflow_path=$workflow_dir/workflow.fabro
+review_prompt_path=$workflow_dir/prompts/review.md
+synthesis_prompt_path=$workflow_dir/prompts/synthesize_review.md
+collector_path=$workflow_dir/scripts/collect_implementation_evidence.sh
 
 assert_contains() {
   local expected=$1
@@ -17,6 +21,16 @@ assert_not_contains() {
 
   if grep -Fq "$unexpected" "$workflow_path"; then
     echo "Expected iteration-review workflow not to contain: $unexpected" >&2
+    exit 1
+  fi
+}
+
+assert_file_contains() {
+  local file=$1
+  local expected=$2
+
+  if ! grep -Fq "$expected" "$file"; then
+    echo "Expected $file to contain: $expected" >&2
     exit 1
   fi
 }
@@ -49,6 +63,18 @@ assert_not_contains 'gemini_review -> synthesize_review;'
 assert_contains 'git diff --no-index --quiet \"$before\" \"$after\"'
 assert_contains 'Could not compare ${kind} repair patches.'
 assert_not_contains 'cmp -s \"$before\" \"$after\"'
+
+# Reviewer prompts and collected evidence must keep Memba's chosen domain,
+# CQRS/event-sourcing, and responsibility-driven design references visible.
+for reference_doc in \
+  'docs/reference/domain-driven-design.md' \
+  'docs/reference/cqrs.md' \
+  'docs/reference/event-sourcing.md' \
+  'docs/reference/responsibility-driven-design.md'; do
+  assert_file_contains "$review_prompt_path" "$reference_doc"
+  assert_file_contains "$synthesis_prompt_path" "$reference_doc"
+  assert_file_contains "$collector_path" "$reference_doc"
+done
 
 # Code-health recording must have live repository access and must not silently
 # continue to finalization when it reports or routes a recording failure.

@@ -4,10 +4,20 @@ Use the prior context: the plan text, implementation summary, current working tr
 
 Automated tests are the behavioural feedback loop in this workflow: implementation and dev check-fix stages must get the full suite green before review starts. Your review should therefore focus primarily on refactoring, maintainability, design simplicity, and adherence to project conventions. Do not ask for feature-file edits. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback.
 
+Use the project pattern reference docs as review guidelines when the touched code involves domain modeling, Commanded, aggregates, projections, event streams, read models, or object responsibility boundaries:
+
+- `docs/reference/domain-driven-design.md`
+- `docs/reference/cqrs.md`
+- `docs/reference/event-sourcing.md`
+- `docs/reference/responsibility-driven-design.md`
+
+Treat accepted ADRs as binding project decisions. Treat these reference docs as design-quality guidance for interpreting and applying those ADRs, not as permission to override an ADR or the iteration plan.
+
 Review against these questions:
 
 0. ADR conformance
    - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.
+   - Follow signposts in those ADRs to the reference docs above; use them to check whether domain/CQRS/event-sourcing/RDD implementation choices match the patterns Memba wants.
    - Does the implementation obey accepted ADR decisions and consequences as binding constraints?
    - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?
    - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?

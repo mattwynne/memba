@@ -6,6 +6,12 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [Domain-Driven Design](../reference/domain-driven-design.md) for aggregate boundaries and invariants.
+- [Event Sourcing](../reference/event-sourcing.md) for one-stream-per-aggregate event history and replay considerations.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for keeping delivery-state responsibilities with the message aggregate unless a future ADR moves them.
+
 ## Context
 
 Memba is introducing an event-sourced domain skeleton for clubs, people, memberships, and member-to-member club messages.

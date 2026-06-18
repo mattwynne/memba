@@ -6,6 +6,12 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [Domain-Driven Design](../reference/domain-driven-design.md) for application services, aggregate boundaries, and domain events.
+- [CQRS](../reference/cqrs.md) for command-side intent and read-side recipient lookup.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for assigning recipient-resolution, message, and delivery responsibilities to the right collaborators.
+
 ## Context
 
 Memba needs to model a member sending a message to the members of a club. The message aggregate must know which email email deliveries exist so it can project member-facing status and Memba staff email delivery status.

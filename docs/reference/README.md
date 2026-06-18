@@ -7,6 +7,10 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 - [Project guidelines](project-guidelines.md) — project-level defaults: run `dev check`; use `Req` for HTTP.
 - [Fabro and devenv containers](fabro-devenv.md) — rebuilding Fabro dev images and packaging tools into `devenv container` images.
 - [Phoenix 1.8](phoenix-1-8.md) — layouts, flash, icons, inputs, routing aliases, and removed `Phoenix.View` patterns.
+- [Domain-Driven Design](domain-driven-design.md) — DDD vocabulary for bounded contexts, aggregates, ubiquitous language, domain events, and tactical modeling.
+- [CQRS](cqrs.md) — command/query separation guidance for Commanded workflows, write models, read models, and projections.
+- [Event Sourcing](event-sourcing.md) — event stream, projection, snapshot, versioning, and operational guidance.
+- [Responsibility-Driven Design](responsibility-driven-design.md) — Rebecca Wirfs-Brock style object design with responsibilities, collaborators, CRC cards, contracts, and role stereotypes.
 
 ## By task
 

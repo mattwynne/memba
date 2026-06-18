@@ -6,6 +6,11 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [Event Sourcing](../reference/event-sourcing.md) for event-store operational concerns, replay, immutability, and versioning.
+- [CQRS](../reference/cqrs.md) for separating the event-sourced write model from Ecto read models.
+
 ## Context
 
 Memba uses Commanded for CQRS/event-sourced domain workflows. The first message deliverability slice needs persistent event storage for development and test.

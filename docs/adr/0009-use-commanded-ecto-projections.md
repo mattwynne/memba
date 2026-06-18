@@ -6,6 +6,11 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [CQRS](../reference/cqrs.md) for read models, materialized views, and query-side optimization.
+- [Event Sourcing](../reference/event-sourcing.md) for projections, idempotency, replay, and checkpointing.
+
 ## Context
 
 Memba needs read models for event-sourced workflows. The first message deliverability slice needs projections for clubs, people, memberships, messages, email deliveries, member-facing email delivery queries, and Memba staff email delivery queries.

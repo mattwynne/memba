@@ -6,6 +6,12 @@ Date: 2026-05-26
 
 accepted
 
+## Related reference guidance
+
+- [Domain-Driven Design](../reference/domain-driven-design.md) for aggregate identity, invariants, and consistency boundaries.
+- [Event Sourcing](../reference/event-sourcing.md) for aggregate streams and event history keyed by stable identities.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for deciding whether identity generation and duplicate-prevention responsibilities belong to callers, application services, or aggregates.
+
 ## Context
 
 Commanded routes commands to aggregates by identity. Memba needs aggregate identities for clubs, people, memberships, and messages.

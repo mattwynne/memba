@@ -6,6 +6,13 @@ Date: 2026-05-25
 
 accepted
 
+## Related reference guidance
+
+- [Domain-Driven Design](../reference/domain-driven-design.md) for bounded contexts, aggregates, domain events, and ubiquitous language.
+- [CQRS](../reference/cqrs.md) for command/query separation, write models, read models, and projections.
+- [Event Sourcing](../reference/event-sourcing.md) for event streams, replay, projections, and versioning.
+- [Responsibility-Driven Design](../reference/responsibility-driven-design.md) for assigning object responsibilities and collaborations inside the domain model.
+
 ## Context
 
 Memba will need workflows where user intent, business rules, side effects, and read-optimized projections should be kept explicit. Membership lifecycle changes, renewal/payment flows, role changes, email workflows, and integrations are likely to benefit from a command/event model as the domain grows.
