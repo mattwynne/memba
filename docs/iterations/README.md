@@ -46,7 +46,7 @@ green than before.
 | 034 | 2026-06-17 | implementing | Member page design-system alignment | [plan](034-member-page-design-system-alignment/plan.md) |
 | 035 | 2026-06-17 | validated | Obliterate the deprecated "opened" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |
 | 036 | 2026-06-17 | validated | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |
-| 037 | 2026-06-17 | draft | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
+| 037 | 2026-06-17 | validated | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
 
 Status notes:
 

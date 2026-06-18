@@ -1,7 +1,7 @@
 # Design-system catch-up: onboarding requests + empty states & member refresh
 
 Date: 2026-06-17
-Status: draft
+Status: validated
 
 ## Goal
 
