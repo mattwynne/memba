@@ -1,0 +1,245 @@
+diff --git a/docs/iterations/035-obliterate-opened-delivery-status/todo.md b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+index dd34e06..7296cce 100644
+--- a/docs/iterations/035-obliterate-opened-delivery-status/todo.md
++++ b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+@@ -6,6 +6,6 @@
+ - [x] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
+ - [x] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
+ - [x] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
+-- [ ] 007 Add the historic-event replay-safety regression test.
++- [x] 007 Add the historic-event replay-safety regression test.
+ - [ ] 008 Re-run the baseline grep to confirm only the documented shim remains.
+ - [ ] 009 Run `dev check`.
+diff --git a/web/test/memba/messaging/email_delivery_opened_replay_test.exs b/web/test/memba/messaging/email_delivery_opened_replay_test.exs
+new file mode 100644
+index 0000000..c85c037
+--- /dev/null
++++ b/web/test/memba/messaging/email_delivery_opened_replay_test.exs
+@@ -0,0 +1,119 @@
++defmodule Memba.Messaging.EmailDeliveryOpenedReplayTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Commanded.Event.Mapper
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.EmailDeliveryOpened
++  alias Memba.Messaging.Message
++  alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
++  alias Memba.Messaging.Projectors.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjector
++  alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
++  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
++  alias Memba.Messaging.Recipient
++
++  @delivery_projectors [MemberEmailDeliveryProjector, MembaStaffEmailDeliveryProjector]
++
++  test "historic opened events replay and rebuild without changing delivery read models" do
++    message_id = Memba.ID.generate(:message)
++    club_id = Memba.ID.generate(:club)
++    sender_id = Memba.ID.generate(:person)
++    delivery_id = Memba.ID.generate(:delivery)
++
++    recipient = %Recipient{
++      delivery_id: delivery_id,
++      person_id: sender_id,
++      name: "Alice Sender",
++      email: "alice@example.com"
++    }
++
++    assert {:ok, %ExecutionResult{aggregate_version: aggregate_version}} =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 subject: "Trail day",
++                 body: "Meet at 9am.",
++                 recipients: [recipient]
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
++
++    append_historic_opened_event!(message_id, aggregate_version, delivery_id)
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++    Memba.ProjectionBarrier.await!(@delivery_projectors, checkpoint: checkpoint)
++
++    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
++
++    Memba.EventSourcedCase.stop_event_sourced_aggregate_instances!()
++
++    assert %Message{
++             delivery_statuses: %{
++               ^delivery_id => %{status: :sent, reason: nil}
++             }
++           } = App.aggregate_state(Message, message_id)
++
++    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
++    Memba.ProjectionBarrier.await!(@delivery_projectors, checkpoint: checkpoint)
++
++    assert_delivery_read_models_sent(message_id, sender_id, delivery_id)
++  end
++
++  defp append_historic_opened_event!(message_id, aggregate_version, delivery_id) do
++    opened_event_data =
++      Mapper.map_to_event_data(%EmailDeliveryOpened{
++        message_id: message_id,
++        delivery_id: delivery_id
++      })
++
++    assert :ok =
++             Commanded.EventStore.append_to_stream(
++               App,
++               message_id,
++               aggregate_version,
++               [opened_event_data]
++             )
++  end
++
++  defp assert_delivery_read_models_sent(message_id, recipient_id, delivery_id) do
++    assert [
++             %MemberEmailDeliveryProjection{
++               delivery_id: ^delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^recipient_id,
++               status: "sent"
++             }
++           ] = Messaging.list_member_email_deliverys(message_id)
++
++    assert %MemberEmailDeliveryProjection{
++             delivery_id: ^delivery_id,
++             message_id: ^message_id,
++             recipient_id: ^recipient_id,
++             status: "sent"
++           } = Messaging.get_member_email_delivery(message_id, recipient_id)
++
++    assert [
++             %MembaStaffEmailDeliveryProjection{
++               delivery_id: ^delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^recipient_id,
++               status: "sent",
++               reason: nil
++             }
++           ] = Messaging.list_operator_email_deliveries(message_id)
++
++    assert %MembaStaffEmailDeliveryProjection{
++             delivery_id: ^delivery_id,
++             message_id: ^message_id,
++             recipient_id: ^recipient_id,
++             status: "sent",
++             reason: nil
++           } = Messaging.get_memba_staff_email_delivery(message_id, recipient_id)
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 539d8fb..2edea7e 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -74,6 +74,37 @@ defmodule Memba.EventSourcedCase do
+     :ok
+   end
+ 
++  @doc """
++  Stop cached Commanded aggregate instances.
++
++  The next aggregate access will rehydrate from persisted EventStore events,
++  which is useful for replay-safety tests.
++  """
++  def stop_event_sourced_aggregate_instances! do
++    stop_commanded_aggregate_instances!()
++  end
++
++  @doc """
++  Rebuild configured event-sourced projections from the retained EventStore history.
++
++  This clears projection read models and Commanded subscription acknowledgements
++  without deleting EventStore events, then restarts the supervised projectors so
++  callers can wait for them to replay with `Memba.ProjectionBarrier`.
++  """
++  def rebuild_event_sourced_projections! do
++    projector_child_ids = stop_event_sourced_projectors!()
++
++    try do
++      reset_projection_tables_in_sandbox!()
++      reset_commanded_subscription_acks!()
++      reset_event_store_subscription_checkpoints!()
++    after
++      start_event_sourced_projectors!(projector_child_ids)
++    end
++
++    :ok
++  end
++
+   @doc """
+   Reset persistent event-sourced storage used by tests.
+ 
+@@ -128,6 +159,26 @@ defmodule Memba.EventSourcedCase do
+     Enum.each(@commanded_apps, &Commanded.Subscriptions.reset/1)
+   end
+ 
++  defp reset_event_store_subscription_checkpoints! do
++    Enum.each(@projectors, fn projector ->
++      :ok =
++        Commanded.EventStore.delete_subscription(
++          projector_commanded_app(projector),
++          :all,
++          inspect(projector)
++        )
++    end)
++  end
++
++  defp projector_commanded_app(projector) do
++    projector_name = inspect(projector)
++
++    cond do
++      String.starts_with?(projector_name, "Memba.Messaging.") -> Memba.Messaging.App
++      String.starts_with?(projector_name, "Memba.Membership.") -> Memba.Membership.App
++    end
++  end
++
+   defp reset_event_store!(conn) do
+     schema = event_store_schema()
+ 
+@@ -157,12 +208,20 @@ defmodule Memba.EventSourcedCase do
+     tables = projection_tables()
+ 
+     if tables != [] do
+-      table_names =
+-        tables
+-        |> Enum.map(&qualified_projection_table_name/1)
+-        |> Enum.join(", ")
++      query!(
++        conn,
++        "TRUNCATE TABLE #{projection_table_names(tables)} RESTART IDENTITY CASCADE;"
++      )
++    end
++  end
++
++  defp reset_projection_tables_in_sandbox! do
++    tables = projection_tables()
+ 
+-      query!(conn, "TRUNCATE TABLE #{table_names} RESTART IDENTITY CASCADE;")
++    if tables != [] do
++      Memba.Repo.query!(
++        "TRUNCATE TABLE #{projection_table_names(tables)} RESTART IDENTITY CASCADE;"
++      )
+     end
+   end
+ 
+@@ -220,6 +279,12 @@ defmodule Memba.EventSourcedCase do
+     |> Enum.join(".")
+   end
+ 
++  defp projection_table_names(tables) do
++    tables
++    |> Enum.map(&qualified_projection_table_name/1)
++    |> Enum.join(", ")
++  end
++
+   defp quote_identifier(identifier) do
+     escaped =
+       identifier
