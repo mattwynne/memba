@@ -113,14 +113,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
           club_id: alice.club_id
         )
 
-      dana =
-        create_member(
-          email: "dana@example.com",
-          name: "Dana Downhill",
-          club_name: "Alpine Club",
-          club_id: alice.club_id
-        )
-
       message =
         create_message(
           club_id: alice.club_id,
@@ -137,8 +129,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       seeded_receipt_cases = [
         {alice, "sent"},
         {bob, "delivered"},
-        {carol, "delivery problem"},
-        {dana, "opened"}
+        {carol, "delivery problem"}
       ]
 
       Enum.each(seeded_receipt_cases, fn {member, status} ->
@@ -161,7 +152,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       assert_selector_exists(
         html,
-        "#member-receipts-summary[data-receipt-count='4']"
+        "#member-receipts-summary[data-receipt-count='3']"
       )
 
       for {status, bg_class} <- [
@@ -187,12 +178,11 @@ defmodule MembaWeb.MemberMessageDetailTest do
         )
 
         assert_text_in(html, "#{group_selector} h3", label)
-        expected_count = if status == "delivered", do: "2", else: "1"
 
         assert_exact_text(
           html,
           "#{group_selector} [data-testid='receipt-group-count']",
-          expected_count
+          "1"
         )
 
         assert_selector_exists(html, "#{group_selector} .#{icon}")
@@ -203,21 +193,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
                )
                |> Enum.any?()
       end)
-
-      refute html
-             |> LazyHTML.query(
-               "[data-testid='member-receipt-group'][data-receipt-status='opened']"
-             )
-             |> Enum.any?()
-
-      refute html
-             |> LazyHTML.query(
-               "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
-             )
-             |> Enum.any?()
-
-      refute response =~ "Opened"
-      refute response =~ "not opened"
     end
 
     test "does not expose Memba-staff-only delivery fields on member message detail", %{

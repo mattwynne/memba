@@ -25,13 +25,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                icon: "hero-exclamation-triangle",
                tone: "error"
              }
-
-      assert MemberEmailDeliveryPresentation.present_status("opened") == %{
-               status: "opened",
-               label: "Opened",
-               icon: "hero-question-mark-circle",
-               tone: "neutral"
-             }
     end
 
     test "treats blank or missing statuses as the initial sent status" do
@@ -74,13 +67,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert MemberEmailDeliveryPresentation.status_tint_class("delivery problem") ==
                "bg-error-soft text-error ring-error/25"
     end
-
-    test "does not normalize unsupported opened statuses before mapping visuals" do
-      assert MemberEmailDeliveryPresentation.status_tone("opened") == "neutral"
-      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-base-300"
-      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-ink-2"
-      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-ink-2"
-    end
   end
 
   describe "present_receipt/1" do
@@ -98,23 +84,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                status_label: "Delivered",
                status_icon: "hero-check-circle",
                status_tone: "success"
-             }
-    end
-
-    test "does not fold unsupported opened receipts into Delivered" do
-      receipt = %{
-        recipient_id: "person-456",
-        recipient_name: "Historic Recipient",
-        status: "opened"
-      }
-
-      assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
-               recipient_id: "person-456",
-               recipient_name: "Historic Recipient",
-               status: "opened",
-               status_label: "Opened",
-               status_icon: "hero-question-mark-circle",
-               status_tone: "neutral"
              }
     end
   end

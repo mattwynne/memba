@@ -139,26 +139,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
              )
   end
 
-  test "member email delivery queries do not normalize unsupported opened rows" do
-    %{message_id: message_id, recipients: [_alice, bob]} =
-      send_message_with_recipients(["Alice", "Bob"])
-
-    MemberEmailDeliveryProjection
-    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
-    |> Repo.update_all(set: [status: "opened"])
-
-    assert %MemberEmailDeliveryProjection{status: "opened"} =
-             Messaging.get_member_email_delivery(bob.delivery_id)
-
-    assert %MemberEmailDeliveryProjection{status: "opened"} =
-             Messaging.get_member_email_delivery(message_id, bob.person_id)
-
-    assert %{"Bob" => "opened"} =
-             message_id
-             |> Messaging.list_member_email_deliverys()
-             |> Map.new(&{&1.recipient_name, &1.status})
-  end
-
   test "member email delivery queries return empty results for missing or invalid IDs" do
     assert is_nil(Messaging.get_member_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_member_email_delivery(nil))

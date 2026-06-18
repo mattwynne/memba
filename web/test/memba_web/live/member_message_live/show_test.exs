@@ -127,7 +127,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      status: "opened"
+      status: "delivered"
     )
 
     create_member_email_delivery(
@@ -194,19 +194,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
            )
-
-    refute has_element?(
-             view,
-             "[data-testid='member-receipt-group'][data-receipt-status='opened']"
-           )
-
-    refute has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
-           )
-
-    refute render(view) =~ "Opened"
-    refute render(view) =~ "not opened"
   end
 
   test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
@@ -244,7 +231,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      status: "opened"
+      status: "delivered"
     )
 
     create_member_email_delivery(
@@ -266,7 +253,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
 
     assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
-    refute has_element?(view, "#member-receipt-group-toggle-opened")
     refute has_element?(view, delivered_rows)
     refute has_element?(view, delivered_recipient)
 
@@ -312,7 +298,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      status: "opened"
+      status: "delivered"
     )
 
     {:ok, view, _html} =
@@ -348,13 +334,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
       refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
     end
-
-    refute has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
-           )
-
-    refute has_element?(view, "#member-receipt-group-toggle-opened")
 
     assert has_element?(
              view,

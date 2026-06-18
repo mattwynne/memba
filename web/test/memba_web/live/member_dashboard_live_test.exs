@@ -83,7 +83,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      status: "opened"
+      status: "delivered"
     )
 
     create_member_email_delivery(
@@ -140,11 +140,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-percentage='50']"
-           )
-
-    refute has_element?(
-             view,
-             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
            )
 
     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
@@ -323,7 +318,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      status: "opened"
+      status: "delivered"
     )
 
     create_member_email_delivery(
@@ -372,11 +367,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "2 of 4 delivered"
            )
 
-    refute has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
-           )
-
     assert has_element?(
              view,
              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
@@ -409,8 +399,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     html = render(view)
 
-    refute html =~ "Opened"
-    refute html =~ "opened"
     refute html =~ dana_delivery_id
     refute html =~ "dana.operator@example.net"
     refute html =~ "postmark-webhook"

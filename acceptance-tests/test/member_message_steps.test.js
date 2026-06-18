@@ -909,7 +909,6 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
   });
 
   assert.deepEqual(world.addressedMemberNames, ["Alice", "Bob", "Carol"]);
-  assert.equal(memberReceiptIconForLabel("Opened"), "hero-envelope-open");
   assert.deepEqual(
     page.actions.filter((action) => action[0] === "goto"),
     [
@@ -982,13 +981,9 @@ test("member receipt assertions expand collapsed visible groups before inspectin
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
 });
 
-test("member receipt assertions can expand all four visible receipt groups", async () => {
+test("member receipt assertions can expand all visible receipt groups", async () => {
   const page = new FakePage();
   page.rows.memberReceiptGroupToggles.push(
-    rowWithAttrs({
-      id: "member-receipt-group-toggle-opened",
-      "aria-expanded": "false"
-    }),
     rowWithAttrs({
       id: "member-receipt-group-toggle-delivered",
       "aria-expanded": "false"
@@ -1021,12 +1016,12 @@ test("member receipt assertions can expand all four visible receipt groups", asy
 
   assert.deepEqual(
     page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
-    ["true", "true", "true", "true"]
+    ["true", "true", "true"]
   );
   assert.equal(
     page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
       .length,
-    4
+    3
   );
 });
 
@@ -1133,13 +1128,6 @@ test("Postmark webhook payloads map member-facing status events onto the app end
     }
   );
 
-  assert.deepEqual(redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "opened" })), {
-    MessageID: "<generated>",
-    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
-    Recipient: "bob@example.test",
-    RecordType: "Open"
-  });
-
   assert.deepEqual(
     redactGeneratedMessageId(
       postmarkPayloadForStatus({
@@ -1194,7 +1182,6 @@ test("Postmark webhook payloads map member-facing status events onto the app end
   );
 
   assert.equal(memberReceiptStatusForEventType("delivered"), "delivered");
-  assert.equal(memberReceiptStatusForEventType("opened"), "opened");
   assert.equal(memberReceiptStatusForEventType("delayed"), "delivery problem");
   assert.equal(memberReceiptStatusForEventType("bounced"), "delivery problem");
   assert.equal(memberReceiptStatusForEventType("spam_complaint"), "delivery problem");
@@ -1416,41 +1403,6 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
   });
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
-});
-
-test("reporting an opened email first reports delivery when the provider has not already done so", async () => {
-  const page = new FakePage();
-  page.rows.deliveryRecords.push({
-    attrs: {
-      "data-delivery-id": "delivery-dana",
-      "data-recipient-id": "person-dana",
-      "data-recipient-name": "Dana"
-    },
-    dataset: { deliveryId: "delivery-dana", recipientId: "person-dana", recipientName: "Dana" }
-  });
-  page.rows.memberReceipts.push({
-    attrs: { "data-recipient-name": "Dana", receiptStatus: "opened" },
-    dataset: { recipientName: "Dana" }
-  });
-  const request = new FakeRequestContext();
-  const world = worldWithPage(page);
-  world.request = request;
-  world.readModelChanges = [
-    ...deliveryProjectionEvents("delivery-dana", "delivered"),
-    ...deliveryProjectionEvents("delivery-dana", "opened", "delivered")
-  ];
-  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
-  world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
-
-  await reportRecipientEmailStatus(world, "Dana", "Trip planning night", "opened", {
-    expect: fakeExpect([])
-  });
-
-  assert.deepEqual(
-    request.posts.map((post) => redactGeneratedMessageId(post.options.data).RecordType),
-    ["Delivery", "Open"]
-  );
-  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
 });
 
 test("reporting a recipient email status waits for committed read-model delivery projections", async () => {

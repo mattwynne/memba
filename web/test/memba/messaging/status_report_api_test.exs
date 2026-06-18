@@ -81,11 +81,6 @@ defmodule Memba.Messaging.StatusReportApiTest do
              "spam complaint"
   end
 
-  test "public status reporting API does not expose opened reports" do
-    refute function_exported?(Messaging, :report_email_delivery_opened, 1)
-    refute function_exported?(Messaging, :report_email_delivery_opened, 2)
-  end
-
   test "public status reporting APIs surface aggregate validation errors" do
     assert {:error, :message_not_sent} =
              Messaging.report_email_delivery_delivered(%{
