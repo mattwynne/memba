@@ -45,6 +45,7 @@ green than before.
 | 033 | 2026-06-13 | merged | Homepage staff bar | [plan](033-homepage-staff-bar/plan.md) |
 | 034 | 2026-06-17 | implementing | Member page design-system alignment | [plan](034-member-page-design-system-alignment/plan.md) |
 | 035 | 2026-06-17 | validated | Obliterate the deprecated "opened" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |
+| 036 | 2026-06-17 | draft | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |
 
 Status notes:
 
