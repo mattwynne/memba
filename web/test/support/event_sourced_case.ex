@@ -75,6 +75,37 @@ defmodule Memba.EventSourcedCase do
   end
 
   @doc """
+  Stop cached Commanded aggregate instances.
+
+  The next aggregate access will rehydrate from persisted EventStore events,
+  which is useful for replay-safety tests.
+  """
+  def stop_event_sourced_aggregate_instances! do
+    stop_commanded_aggregate_instances!()
+  end
+
+  @doc """
+  Rebuild configured event-sourced projections from the retained EventStore history.
+
+  This clears projection read models and Commanded subscription acknowledgements
+  without deleting EventStore events, then restarts the supervised projectors so
+  callers can wait for them to replay with `Memba.ProjectionBarrier`.
+  """
+  def rebuild_event_sourced_projections! do
+    projector_child_ids = stop_event_sourced_projectors!()
+
+    try do
+      reset_projection_tables_in_sandbox!()
+      reset_commanded_subscription_acks!()
+      reset_event_store_subscription_checkpoints!()
+    after
+      start_event_sourced_projectors!(projector_child_ids)
+    end
+
+    :ok
+  end
+
+  @doc """
   Reset persistent event-sourced storage used by tests.
 
   The reset runs outside the SQL sandbox so EventStore rows and projector writes
@@ -128,6 +159,26 @@ defmodule Memba.EventSourcedCase do
     Enum.each(@commanded_apps, &Commanded.Subscriptions.reset/1)
   end
 
+  defp reset_event_store_subscription_checkpoints! do
+    Enum.each(@projectors, fn projector ->
+      :ok =
+        Commanded.EventStore.delete_subscription(
+          projector_commanded_app(projector),
+          :all,
+          inspect(projector)
+        )
+    end)
+  end
+
+  defp projector_commanded_app(projector) do
+    projector_name = inspect(projector)
+
+    cond do
+      String.starts_with?(projector_name, "Memba.Messaging.") -> Memba.Messaging.App
+      String.starts_with?(projector_name, "Memba.Membership.") -> Memba.Membership.App
+    end
+  end
+
   defp reset_event_store!(conn) do
     schema = event_store_schema()
 
@@ -157,12 +208,20 @@ defmodule Memba.EventSourcedCase do
     tables = projection_tables()
 
     if tables != [] do
-      table_names =
-        tables
-        |> Enum.map(&qualified_projection_table_name/1)
-        |> Enum.join(", ")
+      query!(
+        conn,
+        "TRUNCATE TABLE #{projection_table_names(tables)} RESTART IDENTITY CASCADE;"
+      )
+    end
+  end
 
-      query!(conn, "TRUNCATE TABLE #{table_names} RESTART IDENTITY CASCADE;")
+  defp reset_projection_tables_in_sandbox! do
+    tables = projection_tables()
+
+    if tables != [] do
+      Memba.Repo.query!(
+        "TRUNCATE TABLE #{projection_table_names(tables)} RESTART IDENTITY CASCADE;"
+      )
     end
   end
 
@@ -218,6 +277,12 @@ defmodule Memba.EventSourcedCase do
     [prefix, table]
     |> Enum.map(&quote_identifier/1)
     |> Enum.join(".")
+  end
+
+  defp projection_table_names(tables) do
+    tables
+    |> Enum.map(&qualified_projection_table_name/1)
+    |> Enum.join(", ")
   end
 
   defp quote_identifier(identifier) do

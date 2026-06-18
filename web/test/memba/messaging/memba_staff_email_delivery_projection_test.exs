@@ -120,9 +120,11 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
            }
   end
 
-  test "Memba staff email delivery projection maps historic opened events to delivered" do
+  test "Memba staff email delivery projection ignores historic opened events" do
     %{message_id: message_id, recipients: [_alice, bob]} =
       send_message_with_recipients(["Alice", "Bob"])
+
+    handler_name = "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}"
 
     assert :ok =
              MembaStaffEmailDeliveryProjector.handle(
@@ -131,44 +133,18 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                  delivery_id: bob.delivery_id
                },
                %{
-                 handler_name: "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
+                 handler_name: handler_name,
                  event_number: 10_000
                }
              )
 
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
-             Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
-  end
-
-  test "Memba staff email delivery queries normalize historic opened rows to delivered" do
-    %{message_id: message_id, recipients: [_alice, bob]} =
-      send_message_with_recipients(["Alice", "Bob"])
-
-    MembaStaffEmailDeliveryProjection
-    |> where([delivery], delivery.delivery_id == ^bob.delivery_id)
-    |> Repo.update_all(set: [status: "opened", reason: "legacy open"])
-
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
-             Messaging.get_memba_staff_email_delivery(bob.delivery_id)
-
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
+    assert %MembaStaffEmailDeliveryProjection{status: "sent", reason: nil} =
              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
 
-    assert %{"Bob" => {"delivered", nil}} =
-             message_id
-             |> Messaging.list_operator_email_deliveries()
-             |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
-
-    assert [
-             %MembaStaffEmailDeliveryProjection{
-               recipient_name: "Bob",
-               status: "delivered",
-               reason: nil
-             }
-           ] =
-             [message_id: message_id]
-             |> Messaging.list_operator_deliveries()
-             |> Enum.filter(&(&1.recipient_name == "Bob"))
+    assert %MembaStaffEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
+             Repo.get_by(MembaStaffEmailDeliveryProjector.ProjectionVersion,
+               projection_name: handler_name
+             )
   end
 
   test "Memba staff email delivery clears prior delay reason when delivery recovers" do

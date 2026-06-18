@@ -4,9 +4,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
   alias Memba.Messaging.Recipient
-  alias Memba.Repo
 
   test "operators can review deliveries from multiple messages with problem reasons", %{
     conn: conn
@@ -129,43 +127,6 @@ defmodule MembaWeb.DeliveriesLiveTest do
     end)
   end
 
-  test "operators see historic opened delivery rows as delivered, never opened", %{
-    conn: conn
-  } do
-    %{
-      subject: subject,
-      recipients: [recipient]
-    } =
-      send_projected_message(
-        subject: "Privacy policy update",
-        recipients: ["Dana"]
-      )
-
-    set_operator_delivery_status(recipient.delivery_id, status: "opened", reason: "legacy open")
-
-    conn
-    |> sign_in_staff()
-    |> visit("/admin/deliveries")
-    |> assert_path("/admin/deliveries")
-    |> assert_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", count: 1)
-    |> assert_has(
-      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='delivered']"
-    )
-    |> refute_has(
-      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='opened']"
-    )
-    |> assert_delivery_row(recipient.delivery_id, [
-      subject,
-      recipient.name,
-      recipient.email,
-      "email",
-      "delivered",
-      "—"
-    ])
-    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "opened")
-    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "legacy open")
-  end
-
   defp send_projected_message(opts) do
     subject = Keyword.fetch!(opts, :subject)
     recipient_names = Keyword.fetch!(opts, :recipients)
@@ -207,15 +168,6 @@ defmodule MembaWeb.DeliveriesLiveTest do
       end)
 
     %{message_id: message_id, subject: subject, recipients: recipients}
-  end
-
-  defp set_operator_delivery_status(delivery_id, attrs) do
-    delivery = Repo.get!(MembaStaffEmailDeliveryProjection, delivery_id)
-
-    assert {:ok, _delivery} =
-             delivery
-             |> Ecto.Changeset.change(attrs)
-             |> Repo.update()
   end
 
   defp assert_delivery_row(session, delivery_id, expected_texts) do

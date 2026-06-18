@@ -86,9 +86,6 @@ function postmarkPayloadForStatus({
     case "delivered":
       return { ...payload, RecordType: "Delivery" };
 
-    case "opened":
-      return { ...payload, RecordType: "Open" };
-
     case "delayed":
       return {
         ...payload,
@@ -1870,9 +1867,6 @@ function memberReceiptStatusForEventType(eventType) {
     case "delivered":
       return "delivered";
 
-    case "opened":
-      return "opened";
-
     case "delayed":
     case "bounced":
     case "spam_complaint":
@@ -1893,9 +1887,6 @@ function memberReceiptIconForLabel(label) {
 
     case "Delivery problem":
       return "hero-exclamation-triangle";
-
-    case "Opened":
-      return "hero-envelope-open";
 
     default:
       throw new Error(`Unsupported member-facing email delivery label: ${label}`);
@@ -1966,17 +1957,6 @@ async function reportRecipientEmailStatus(
   const key = `${subject}:${recipientName}`;
   const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
 
-  if (eventType === "opened" && !hasSuccessfulDeliveryReport(world, key)) {
-    const deliveredPayload = postmarkPayloadForStatus({
-      deliveryId: delivery.deliveryId,
-      eventType: "delivered",
-      messageId: delivery.messageId,
-      recipientEmail: delivery.recipientEmail
-    });
-
-    await postPostmarkWebhookAndWaitForDeliveryProjections(world, deliveredPayload, delivery.deliveryId, "delivered");
-  }
-
   const payload = postmarkPayloadForStatus({
     deliveryId: delivery.deliveryId,
     eventType,
@@ -1996,12 +1976,6 @@ async function reportRecipientEmailStatus(
   };
 
   return world;
-}
-
-function hasSuccessfulDeliveryReport(world, key) {
-  const report = world.reportedDeliveryStatuses[key];
-
-  return report && ["delivered", "opened"].includes(report.eventType);
 }
 
 async function postPostmarkWebhookAndWaitForDeliveryProjections(world, payload, deliveryId, eventType) {
@@ -2029,7 +2003,6 @@ async function postPostmarkWebhookAndWaitForDeliveryProjections(world, payload, 
 function staffDeliveryStatusForEventType(eventType) {
   switch (eventType) {
     case "delivered":
-    case "opened":
       return "delivered";
 
     case "delayed":

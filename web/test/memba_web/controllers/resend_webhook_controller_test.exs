@@ -8,7 +8,7 @@ defmodule MembaWeb.ResendWebhookControllerTest do
 
   import Plug.Conn
 
-  test "maps realistic Resend delivery events with outbound tags and rejects opens", %{conn: conn} do
+  test "maps realistic Resend delivery events with outbound tags", %{conn: conn} do
     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
 
     conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))
@@ -18,21 +18,6 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert_eventually(fn ->
       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
       assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "delivered"
-    end)
-
-    conn =
-      conn
-      |> recycle()
-      |> post_resend_event(realistic_resend_payload(:opened, message, bob))
-
-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
-    assert detail =~ "Unsupported Resend webhook event type"
-
-    assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
-
-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
-               "delivered"
     end)
   end
 
@@ -123,19 +108,6 @@ defmodule MembaWeb.ResendWebhookControllerTest do
 
     assert_eventually(fn ->
       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
-    end)
-  end
-
-  test "rejects Resend open events before delivered events", %{conn: conn} do
-    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
-
-    conn = post_resend_event(conn, realistic_resend_payload(:opened, message, bob))
-
-    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
-    assert detail =~ "Unsupported Resend webhook event type"
-
-    assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
     end)
   end
 
@@ -268,11 +240,9 @@ defmodule MembaWeb.ResendWebhookControllerTest do
   end
 
   defp event_data(:delivered, _opts), do: %{}
-  defp event_data(:opened, _opts), do: %{"ip" => "203.0.113.10", "user_agent" => "Apple Mail"}
   defp event_data(_event_type, opts), do: %{"reason" => Keyword.fetch!(opts, :reason)}
 
   defp resend_event_type(:delivered), do: "email.delivered"
-  defp resend_event_type(:opened), do: "email.opened"
   defp resend_event_type(:delayed), do: "email.delivery_delayed"
   defp resend_event_type(:bounced), do: "email.bounced"
   defp resend_event_type(:spam_complaint), do: "email.complained"

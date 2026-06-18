@@ -112,9 +112,11 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
            }
   end
 
-  test "member email delivery projection maps historic opened events to delivered" do
+  test "member email delivery projection ignores historic opened events" do
     %{message_id: message_id, recipients: [_alice, bob]} =
       send_message_with_recipients(["Alice", "Bob"])
+
+    handler_name = "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}"
 
     assert :ok =
              MemberEmailDeliveryProjector.handle(
@@ -123,33 +125,18 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
                  delivery_id: bob.delivery_id
                },
                %{
-                 handler_name: "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
+                 handler_name: handler_name,
                  event_number: 10_000
                }
              )
 
-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
-             Messaging.get_member_email_delivery(message_id, bob.person_id)
-  end
-
-  test "member email delivery queries normalize historic opened rows to delivered" do
-    %{message_id: message_id, recipients: [_alice, bob]} =
-      send_message_with_recipients(["Alice", "Bob"])
-
-    MemberEmailDeliveryProjection
-    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
-    |> Repo.update_all(set: [status: "opened"])
-
-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
-             Messaging.get_member_email_delivery(bob.delivery_id)
-
-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+    assert %MemberEmailDeliveryProjection{status: "sent"} =
              Messaging.get_member_email_delivery(message_id, bob.person_id)
 
-    assert %{"Bob" => "delivered"} =
-             message_id
-             |> Messaging.list_member_email_deliverys()
-             |> Map.new(&{&1.recipient_name, &1.status})
+    assert %MemberEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
+             Repo.get_by(MemberEmailDeliveryProjector.ProjectionVersion,
+               projection_name: handler_name
+             )
   end
 
   test "member email delivery queries return empty results for missing or invalid IDs" do

@@ -52,7 +52,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       message_id: newer_message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      status: "opened"
+      status: "delivered"
     )
 
     create_member_email_delivery(

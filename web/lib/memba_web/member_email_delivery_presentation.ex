@@ -142,7 +142,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   defp normalize_status(status) when is_binary(status) do
     case status do
       "" -> @fallback_status
-      "opened" -> "delivered"
       status -> status
     end
   end

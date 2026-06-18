@@ -361,14 +361,6 @@ When(
   }
 );
 
-When("{word} opens the email for {string}", async function (recipientName, subject) {
-  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
-});
-
-Given("{word} has opened the email for {string}", async function (recipientName, subject) {
-  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
-});
-
 Then(
   "Memba staff should see {word}'s delivery for {string} as {string}",
   async function (recipientName, subject, expectedStatus) {
