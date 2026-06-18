@@ -1,7 +1,7 @@
 # Design-system catch-up: member management & auth check-email
 
 Date: 2026-06-17
-Status: implementing
+Status: validated
 
 ## Goal
 
