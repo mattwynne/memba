@@ -7,5 +7,5 @@
 - [x] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
 - [x] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
 - [x] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
-- [ ] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
+- [x] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
 - [ ] 009 Run `dev check`.
