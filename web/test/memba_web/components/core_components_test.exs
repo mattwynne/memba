@@ -138,6 +138,16 @@ defmodule MembaWeb.CoreComponentsTest do
       refute_class(html, "button", "btn-lg")
     end
 
+    test "keeps variant and size classes when callers add layout classes" do
+      html = render_button(variant: "ghost", size: "lg", class: "w-full justify-start")
+
+      assert_class(html, "button", "btn")
+      assert_class(html, "button", "btn-ghost")
+      assert_class(html, "button", "btn-lg")
+      assert_class(html, "button", "w-full")
+      assert_class(html, "button", "justify-start")
+    end
+
     test "renders disabled attribute" do
       html = render_button(disabled: true)
 

@@ -131,9 +131,14 @@ defmodule MembaWeb.MemberInvitationLive.New do
             data-current-member-id={current_member_id(@current_member)}
             class="mt-6 flex items-center gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3"
           >
-            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-base-100 text-xs font-semibold text-primary ring-1 ring-base-300">
-              {member_initials(current_member_name(@current_member))}
-            </span>
+            <.avatar
+              id="member-club-invitation-current-member-avatar"
+              data-testid="member-club-invitation-current-member-avatar"
+              initials={member_initials(current_member_name(@current_member))}
+              size={:md}
+              class="shrink-0"
+              title={current_member_name(@current_member)}
+            />
             <span class="min-w-0">
               <strong class="block truncate text-sm font-semibold text-base-content">
                 {current_member_name(@current_member)}
@@ -190,19 +195,21 @@ defmodule MembaWeb.MemberInvitationLive.New do
                 id="send-member-club-invitation-button"
                 type="submit"
                 aria-label="Send member invitation"
-                class="inline-flex items-center justify-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-base-content hover:shadow-md"
+                variant="primary"
+                size="lg"
               >
                 Send invitation
               </.button>
 
-              <.link
+              <.button
                 id="cancel-member-club-invitation-link"
                 href={club_home_path(@selected_club, @route_params)}
                 aria-label="Cancel member invitation"
-                class="inline-flex items-center justify-center rounded-full border border-base-300 bg-base-100 px-4 py-2 text-sm font-semibold text-ink-2 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:text-base-content hover:shadow-md"
+                variant="secondary"
+                size="lg"
               >
                 Cancel
-              </.link>
+              </.button>
             </div>
           </.form>
         </section>

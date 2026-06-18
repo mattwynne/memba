@@ -297,9 +297,14 @@ defmodule MembaWeb.MemberMessageLive.New do
               aria-label={"Sending as #{@current_member.name}"}
               class="flex items-center gap-3 rounded-xl border border-base-300 bg-base-100 px-4 py-3"
             >
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-base-200 text-xs font-semibold text-primary ring-1 ring-base-300">
-                {member_initials(@current_member.name)}
-              </span>
+              <.avatar
+                id="member-compose-from-avatar"
+                data-testid="member-compose-from-avatar"
+                initials={member_initials(@current_member.name)}
+                size={:md}
+                class="shrink-0"
+                title={@current_member.name}
+              />
               <span class="min-w-0">
                 <strong class="block truncate text-sm font-semibold text-base-content">
                   {@current_member.name} (you)

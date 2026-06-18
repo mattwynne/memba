@@ -181,6 +181,12 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
+             "#member-compose-from-summary #member-compose-from-avatar.avatar.avatar-placeholder[data-testid='member-compose-from-avatar'][title='Alice Adams']",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
              "input#member-message-subject-input[placeholder='Example: Saturday trail day']"
            )
 

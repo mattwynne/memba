@@ -4,6 +4,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
   @member_page_files [
     "lib/memba_web/controllers/page_html/club.html.heex",
     "lib/memba_web/controllers/page_html/message.html.heex",
+    "lib/memba_web/live/member_invitation_live/new.ex",
     "lib/memba_web/live/member_message_live/new.ex",
     "lib/memba_web/live/public_club_page_live.ex"
   ]
@@ -17,7 +18,10 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
      ["<.button", "<.avatar"]},
     {"message detail template", "lib/memba_web/controllers/page_html/message.html.heex",
      ["<.button", "<.status_badge"]},
-    {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex", ["<.button"]},
+    {"member invitation LiveView", "lib/memba_web/live/member_invitation_live/new.ex",
+     ["<.button", "<.avatar"]},
+    {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex",
+     ["<.button", "<.avatar"]},
     {"public club page LiveView", "lib/memba_web/live/public_club_page_live.ex", ["<.button"]},
     {"club site layout", :club_site, ["<.button"]}
   ]
