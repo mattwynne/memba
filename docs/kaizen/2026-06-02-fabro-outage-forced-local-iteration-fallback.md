@@ -210,3 +210,29 @@ Fabro is the standard delivery factory for these iterations. If it can stall, re
 - Isolate Fabro's control plane from run-container resource exhaustion, or give run containers strict process, CPU, memory, and timeout limits.
 - Add a watchdog for runaway repeated commands inside a run container, especially when the same focused test command appears hundreds of times.
 - Improve health-check diagnostics so operators can tell remote outage, proxy timeout, local server issue, store warmup/lockup, and sandbox resource starvation apart quickly.
+
+## Resolution
+
+Date: 2026-06-18
+
+Root cause: The 2026-06-18 recurrence had the same control-plane starvation shape as this note, but a different immediate trigger. A review run (`01KVD4QS7YWV8WXTKT4VTY0AZW`) and an implementation run (`01KVD4QTPF926TR7PRT7H792VA`) started in parallel and both remained in setup for about 4.5 hours, each running `prepare_mix.sh` / `devenv shell ... mix deps.get`. The Fabro LXC was still limited to 2 GB RAM and 1 GB swap, so the two setup containers plus the Fabro server filled memory and swap. TCP connections to Fabro still opened, but `/health`, `/api/v1/health`, `fabro inspect`, and `fabro logs` stopped returning before client timeouts. Previous workflow fixes reduced runaway loops, but they did not address the control-plane capacity problem when multiple Docker sandboxes run concurrently on the same small LXC.
+
+Fix applied:
+
+- Host recovery: terminated the obsolete stuck Fabro workers and setup commands for runs `01KVD4QS7YWV8WXTKT4VTY0AZW` and `01KVD4QTPF926TR7PRT7H792VA`; both runs then became inspectable as `failed`, reason `terminated`.
+- Host cleanup: stopped the two corresponding Docker run containers (`fabro-run-01KVD4QS7YWV8WXTKT4VTY0AZW` and `fabro-run-01KVD4QTPF926TR7PRT7H792VA`).
+- Host capacity: increased Proxmox LXC 115 (`fabro`) from 2 GB RAM / 1 GB swap / 1 core to 4 GB RAM / 2 GB swap / 2 cores with `pct set 115 -memory 4096 -swap 2048 -cores 2`.
+- `.fabro/workflows/iteration-review/workflow.toml`: added Docker resource limits (`cpu = 1`, `memory = "1024MB"`) so review sandboxes cannot individually consume the whole Fabro LXC while running alongside implementation sandboxes.
+
+Validation:
+
+- `curl -k -m 5 https://fabro.home.wynne.family/api/v1/health` — returned HTTP 200 after worker termination and after the capacity change.
+- `fabro inspect 01KVD4QTPF926TR7PRT7H792VA` — returned `failed`, reason `terminated` instead of timing out.
+- `fabro doctor` — server location and credentials passed; remaining warnings were version parity, missing Daytona sandbox, and missing Brave web search, not server health.
+- `git show origin/main:docs/iterations/README.md | grep -n "034\|035\|036\|037"` — confirmed iteration state was not left ambiguous: 034 and 035 merged; 036 and 037 validated.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with the expected existing goal-gate retry warnings.
+
+Remaining follow-up:
+
+- Add a repository-level or Fabro-level concurrency guard before deliberately running review and implementation in parallel again, or prove the new host/resource-limit configuration with two concurrent sandbox setup runs.
+- Consider a lightweight host/runbook check that reports LXC memory, swap, and pressure metrics when Fabro health times out, so operators can distinguish proxy/network failure from control-plane starvation quickly.
