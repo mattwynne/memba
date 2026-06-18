@@ -55,8 +55,11 @@ defmodule Memba.Messaging.Projectors.MembaStaffEmailDelivery do
     )
   end)
 
-  project(%EmailDeliveryOpened{} = event, fn multi ->
-    update_deliverability(multi, event.delivery_id, status: "delivered", reason: nil)
+  # Deprecated replay shim only: EmailDeliveryOpened is no longer projected into
+  # staff delivery read models. Keep this no-op projection so historic events
+  # advance projector checkpoints during replay/rebuild. Do not extend.
+  project(%EmailDeliveryOpened{}, fn multi ->
+    multi
   end)
 
   defp update_deliverability(multi, delivery_id, attrs) do

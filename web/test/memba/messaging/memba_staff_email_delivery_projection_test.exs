@@ -120,9 +120,11 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
            }
   end
 
-  test "Memba staff email delivery projection maps historic opened events to delivered" do
+  test "Memba staff email delivery projection ignores historic opened events" do
     %{message_id: message_id, recipients: [_alice, bob]} =
       send_message_with_recipients(["Alice", "Bob"])
+
+    handler_name = "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}"
 
     assert :ok =
              MembaStaffEmailDeliveryProjector.handle(
@@ -131,13 +133,18 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                  delivery_id: bob.delivery_id
                },
                %{
-                 handler_name: "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
+                 handler_name: handler_name,
                  event_number: 10_000
                }
              )
 
-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
+    assert %MembaStaffEmailDeliveryProjection{status: "sent", reason: nil} =
              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+
+    assert %MembaStaffEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
+             Repo.get_by(MembaStaffEmailDeliveryProjector.ProjectionVersion,
+               projection_name: handler_name
+             )
   end
 
   test "Memba staff email delivery queries do not normalize unsupported opened rows" do

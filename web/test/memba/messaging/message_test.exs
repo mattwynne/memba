@@ -392,7 +392,7 @@ defmodule Memba.Messaging.MessageTest do
     assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
   end
 
-  test "apply/2 records delivery status changes" do
+  test "apply/2 records delivery status changes and ignores historic opened events" do
     {message, ids} = sent_message()
     delivery_id = ids.delivery_id
 
@@ -413,17 +413,11 @@ defmodule Memba.Messaging.MessageTest do
              })
              |> Map.fetch!(:delivery_statuses)
 
-    assert %{^delivery_id => %{status: :delivered, reason: nil}} =
-             message
-             |> Message.apply(%EmailDeliveryDelivered{
+    assert message ==
+             Message.apply(message, %EmailDeliveryOpened{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              })
-             |> Message.apply(%EmailDeliveryOpened{
-               message_id: ids.message_id,
-               delivery_id: ids.delivery_id
-             })
-             |> Map.fetch!(:delivery_statuses)
   end
 
   defp valid_send_message do

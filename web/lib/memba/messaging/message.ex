@@ -116,8 +116,11 @@ defmodule Memba.Messaging.Message do
     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
   end
 
-  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{} = event) do
-    put_delivery_status(message, event.delivery_id, :delivered)
+  # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
+  # product status. Keep this no-op so historic events can rehydrate aggregates
+  # without changing current delivery state. Do not extend.
+  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{}) do
+    message
   end
 
   defp report_status(%__MODULE__{} = message, command, next_status, event_module) do
