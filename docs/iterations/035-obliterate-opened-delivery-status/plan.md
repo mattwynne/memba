@@ -1,7 +1,7 @@
 # Obliterate the deprecated "opened" email delivery status
 
 Date: 2026-06-17
-Status: implementing
+Status: validated
 
 ## Goal
 
