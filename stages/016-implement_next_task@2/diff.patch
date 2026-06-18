@@ -1,0 +1,143 @@
+diff --git a/docs/iterations/035-obliterate-opened-delivery-status/todo.md b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+index 9cbf0cf..8a6f327 100644
+--- a/docs/iterations/035-obliterate-opened-delivery-status/todo.md
++++ b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inventory every `opened`/`Opened` reference in `lib/`, `test/`, and `acceptance-tests/` (baseline grep) and classify each as remove vs retain-as-shim.
+-- [ ] 002 Delete the `ReportEmailDeliveryOpened` command and any dispatch routing/registration for it.
++- [x] 002 Delete the `ReportEmailDeliveryOpened` command and any dispatch routing/registration for it.
+ - [ ] 003 Remove the `"opened"` read-model normalization clauses in `messaging.ex`, the presentation `"opened" -> "delivered"` mapping, and the webhook `"opened"` rejection branch.
+ - [ ] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
+ - [ ] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
+diff --git a/web/lib/memba/messaging/commands/report_email_delivery_opened.ex b/web/lib/memba/messaging/commands/report_email_delivery_opened.ex
+deleted file mode 100644
+index 101daab..0000000
+--- a/web/lib/memba/messaging/commands/report_email_delivery_opened.ex
++++ /dev/null
+@@ -1,12 +0,0 @@
+-defmodule Memba.Messaging.Commands.ReportEmailDeliveryOpened do
+-  @moduledoc """
+-  DEPRECATED: Open tracking has been removed from Memba.
+-
+-  This compatibility struct is retained for historic opened-report command
+-  data, but it is no longer routed by `Memba.Messaging.Router`. Attempting to
+-  dispatch this command will raise `Commanded.Router.UnregisteredCommandError`.
+-  """
+-
+-  @enforce_keys [:message_id, :delivery_id]
+-  defstruct [:message_id, :delivery_id]
+-end
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 6a7ad15..4bc27dc 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -9,7 +9,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+@@ -77,10 +76,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+     report_email_delivery_status(context, recipient_name, subject, :delivered)
+   end
+ 
+-  step "{word} has opened the email for {string}", %{args: [recipient_name, subject]} = context do
+-    report_email_delivery_status(context, recipient_name, subject, :opened)
+-  end
+-
+   step "{word} email for {string} is reported as delayed because {string}",
+        %{args: [recipient_name, subject, reason]} = context do
+     report_email_delivery_status(context, recipient_name, subject, :delayed, reason)
+@@ -106,10 +101,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+     report_email_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
+   end
+ 
+-  step "{word} opens the email for {string}", %{args: [recipient_name, subject]} = context do
+-    report_email_delivery_status(context, recipient_name, subject, :opened)
+-  end
+-
+   step "{word} emails {string} to kmc@clubs.memba.io",
+        %{args: [sender_name, subject]} = context do
+     receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io")
+@@ -548,17 +539,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+     message = fetch_from_context!(context, :messages, subject)
+     delivery = delivery_for!(context, recipient_name, subject)
+ 
+-    if status == :opened && delivery.status == "sent" do
+-      assert :ok =
+-               App.dispatch(
+-                 %ReportEmailDeliveryDelivered{
+-                   message_id: message.message_id,
+-                   delivery_id: delivery.delivery_id
+-                 },
+-                 consistency: :strong
+-               )
+-    end
+-
+     command =
+       case status do
+         :delivered ->
+@@ -587,12 +567,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+             delivery_id: delivery.delivery_id,
+             reason: reason
+           }
+-
+-        :opened ->
+-          %ReportEmailDeliveryOpened{
+-            message_id: message.message_id,
+-            delivery_id: delivery.delivery_id
+-          }
+       end
+ 
+     assert :ok = App.dispatch(command, consistency: :strong)
+@@ -669,7 +643,6 @@ defmodule Memba.Cucumber.MessagingSteps do
+   defp member_email_delivery_status_for_label("Sending"), do: "sent"
+   defp member_email_delivery_status_for_label("Delivered"), do: "delivered"
+   defp member_email_delivery_status_for_label("Delivery problem"), do: "delivery problem"
+-  defp member_email_delivery_status_for_label("Opened"), do: "opened"
+   defp member_email_delivery_status_for_label(status), do: status
+ 
+   defp person_id_from_context!(context, person_name) do
+diff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs
+index f820c98..30e74a1 100644
+--- a/web/test/memba/messaging/send_message_dispatch_test.exs
++++ b/web/test/memba/messaging/send_message_dispatch_test.exs
+@@ -1,12 +1,9 @@
+ defmodule Memba.Messaging.SendMessageDispatchTest do
+   use Memba.EventSourcedCase, async: false
+ 
+-  import ExUnit.CaptureLog
+-
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+@@ -154,21 +151,6 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+                returning: :execution_result,
+                consistency: :strong
+              )
+-
+-    log =
+-      capture_log(fn ->
+-        assert {:error, :unregistered_command} =
+-                 App.dispatch(
+-                   %ReportEmailDeliveryOpened{
+-                     message_id: message_id,
+-                     delivery_id: delivery_id
+-                   },
+-                   returning: :execution_result,
+-                   consistency: :strong
+-                 )
+-      end)
+-
+-    assert log =~ "attempted to dispatch an unregistered command"
+   end
+ 
+   defp with_sender_recipient(%SendMessage{} = command) do
