@@ -95,32 +95,32 @@ defmodule MembaWeb.MemberInvitationLive.New do
         data-active-member-count={@active_member_count}
         class="mx-auto max-w-3xl space-y-8"
       >
-        <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8">
+        <section class="overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8">
           <.link
             id="member-club-invitation-club-home-link"
             href={club_home_path(@selected_club, @route_params)}
-            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
           >
             <.icon name="hero-arrow-left" class="size-4" /> Club home
           </.link>
 
-          <p class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]">
+          <p class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
             Member invitations
           </p>
 
-          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
             Invite a member
           </h1>
 
           <p
             id="member-club-invitation-selected-club"
             data-club-id={selected_club_id(@selected_club, @route_params)}
-            class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]"
+            class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-primary"
           >
             {selected_club_name(@selected_club)}
           </p>
 
-          <p class="mt-5 text-base leading-7 text-[var(--club-site-muted)]">
+          <p class="mt-5 text-base leading-7 text-ink-2">
             Send a one-use invitation link for {selected_club_name(@selected_club)}. The
             invitation stays scoped to this club, and invited people will become ordinary
             members after they accept.
@@ -129,16 +129,16 @@ defmodule MembaWeb.MemberInvitationLive.New do
           <div
             id="member-club-invitation-current-member"
             data-current-member-id={current_member_id(@current_member)}
-            class="mt-6 flex items-center gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3"
+            class="mt-6 flex items-center gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3"
           >
-            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-xs font-semibold text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-base-100 text-xs font-semibold text-primary ring-1 ring-base-300">
               {member_initials(current_member_name(@current_member))}
             </span>
             <span class="min-w-0">
-              <strong class="block truncate text-sm font-semibold text-[var(--club-site-ink)]">
+              <strong class="block truncate text-sm font-semibold text-base-content">
                 {current_member_name(@current_member)}
               </strong>
-              <span class="block text-xs text-[var(--club-site-muted)]">
+              <span class="block text-xs text-ink-2">
                 Inviting from this club membership
               </span>
             </span>
@@ -147,16 +147,16 @@ defmodule MembaWeb.MemberInvitationLive.New do
 
         <section
           id="member-club-invitation-form-card"
-          class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] shadow-sm"
+          class="overflow-hidden rounded-3xl border border-base-300 bg-base-100 shadow-sm"
         >
-          <div class="border-b border-[var(--club-site-line)] p-5">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]">
+          <div class="border-b border-base-300 p-5">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
               Invitation details
             </p>
-            <h2 class="mt-1 text-lg font-semibold text-[var(--club-site-ink)]">
+            <h2 class="mt-1 text-lg font-semibold text-base-content">
               Email-only member invitation
             </h2>
-            <p class="mt-1 text-sm text-[var(--club-site-muted)]">
+            <p class="mt-1 text-sm text-ink-2">
               Enter the invitee's email address. Memba sends a one-use link so the
               invited person controls that email before membership starts.
             </p>
@@ -170,7 +170,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
             phx-change="validate_invitation"
             phx-submit="send_invitation"
           >
-            <div class="rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4">
+            <div class="rounded-2xl border border-base-300 bg-base-200 p-4">
               <.input
                 name={@form[:email].name}
                 value={@form[:email].value}
@@ -190,7 +190,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
                 id="send-member-club-invitation-button"
                 type="submit"
                 aria-label="Send member invitation"
-                class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-accent)] bg-[var(--club-site-accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--club-site-ink)] hover:shadow-md"
+                class="inline-flex items-center justify-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-base-content hover:shadow-md"
               >
                 Send invitation
               </.button>
@@ -199,7 +199,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
                 id="cancel-member-club-invitation-link"
                 href={club_home_path(@selected_club, @route_params)}
                 aria-label="Cancel member invitation"
-                class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-2 text-sm font-semibold text-[var(--club-site-muted)] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:text-[var(--club-site-ink)] hover:shadow-md"
+                class="inline-flex items-center justify-center rounded-full border border-base-300 bg-base-100 px-4 py-2 text-sm font-semibold text-ink-2 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:text-base-content hover:shadow-md"
               >
                 Cancel
               </.link>

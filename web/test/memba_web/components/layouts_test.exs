@@ -114,11 +114,10 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout")
   end
 
-  test "club-site layout seam exposes neutral slate CSS custom properties without routes" do
+  test "club-site layout uses canonical Memba theme without white-label custom properties" do
     assigns = %{
       flash: %{},
-      current_identity: %{email: "alice@example.com"},
-      theme: %{"background" => "#f1f5f9", accent: "#0f766e"}
+      current_identity: %{email: "alice@example.com"}
     }
 
     html =
@@ -127,7 +126,6 @@ defmodule MembaWeb.LayoutsTest do
         flash={@flash}
         club_name="Riverside Tennis Club"
         current_identity={@current_identity}
-        theme={@theme}
       >
         <section id="club-site-layout-slot">Future club member page content</section>
       </Layouts.club_site>
@@ -150,13 +148,12 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "button#club-site-sign-out-button[type='submit']")
     refute_text(html, "#club-site-footer", "Commit")
 
-    style = only_attribute(html, "#club-site-layout", "style")
-    assert style =~ "--club-site-bg: #f1f5f9;"
-    assert style =~ "--club-site-paper: #ffffff;"
-    assert style =~ "--club-site-ink: #0f172a;"
-    assert style =~ "--club-site-muted: #64748b;"
-    assert style =~ "--club-site-accent: #0f766e;"
-    assert style =~ "--club-site-line: #e2e8f0;"
+    assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
+    assert only_attribute(html, "#club-site-layout", "class") =~ "text-base-content"
+    assert only_attribute(html, "#club-site-layout header", "class") =~ "bg-base-100"
+    assert only_attribute(html, "#club-site-layout header", "class") =~ "border-base-300"
+    refute html =~ "--club-site-"
+    assert [] = attributes(html, "#club-site-layout", "style")
   end
 
   test "root footer shows linked git commit when enabled" do
@@ -220,14 +217,16 @@ defmodule MembaWeb.LayoutsTest do
   end
 
   defp only_attribute(html, selector, attribute) do
-    attributes =
-      html
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(selector)
-      |> LazyHTML.attribute(attribute)
-
+    attributes = attributes(html, selector, attribute)
     assert [value] = attributes
     value
+  end
+
+  defp attributes(html, selector, attribute) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(attribute)
   end
 
   defp restore_system_env(key, nil), do: System.delete_env(key)

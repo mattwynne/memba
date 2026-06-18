@@ -125,24 +125,24 @@ defmodule MembaWeb.MemberMessageLive.New do
         <section
           :if={@compose_state == :sent}
           id="member-compose-success-state"
-          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 text-center shadow-sm sm:p-10"
+          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-6 text-center shadow-sm sm:p-10"
         >
           <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
             <.icon name="hero-check" class="size-8" />
           </div>
 
-          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             Club message
           </p>
 
-          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
             Your message is being sent.
           </h1>
 
           <p
             id="member-compose-success-summary"
             data-active-member-count={@active_member_count}
-            class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
+            class="mx-auto mt-4 max-w-xl text-base leading-7 text-ink-2"
           >
             Memba is sending your message to {active_member_count_summary(@active_member_count)}. You can check delivery on the message page.
           </p>
@@ -151,21 +151,21 @@ defmodule MembaWeb.MemberMessageLive.New do
             <.link
               id="member-compose-see-receipts-link"
               href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <.icon name="hero-eye" class="size-4" /> Check delivery
             </.link>
             <.link
               id="member-compose-send-another-link"
               href={compose_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
             >
               Send another message
             </.link>
             <.link
               id="member-compose-back-home-link"
               href={club_home_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
             >
               Back to club home
             </.link>
@@ -175,23 +175,23 @@ defmodule MembaWeb.MemberMessageLive.New do
         <section
           :if={@compose_state == :send_failed}
           id="member-compose-error-state"
-          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-rose-100 bg-[var(--club-site-paper)] p-6 text-center shadow-sm sm:p-10"
+          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-rose-100 bg-base-100 p-6 text-center shadow-sm sm:p-10"
         >
           <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100">
             <.icon name="hero-exclamation-triangle" class="size-8" />
           </div>
 
-          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             Club message
           </p>
 
-          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
             Your message was not sent.
           </h1>
 
           <p
             id="member-compose-error-summary"
-            class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
+            class="mx-auto mt-4 max-w-xl text-base leading-7 text-ink-2"
           >
             No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.
           </p>
@@ -201,14 +201,14 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-compose-try-again-button"
               type="button"
               phx-click="try_again"
-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <.icon name="hero-arrow-path" class="size-4" /> Try again
             </button>
             <.link
               id="member-compose-back-home-after-error-link"
               href={club_home_path(@selected_club, @route_params)}
-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
             >
               Back to club home
             </.link>
@@ -217,31 +217,31 @@ defmodule MembaWeb.MemberMessageLive.New do
 
         <section
           :if={@compose_state == :composing}
-          class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8"
+          class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm sm:p-8"
         >
           <.link
             id="member-compose-club-home-link"
             href={club_home_path(@selected_club, @route_params)}
-            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
           >
             <.icon name="hero-arrow-left" class="size-4" /> Club home
           </.link>
 
           <p
             id="member-compose-eyebrow"
-            class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]"
+            class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-ink-2"
           >
             New message
           </p>
 
-          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
             Send a message to all current members
           </h1>
 
           <p
             id="member-compose-selected-club"
             data-club-id={selected_club_id(@selected_club, @route_params)}
-            class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]"
+            class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-primary"
           >
             {selected_club_name(@selected_club)}
           </p>
@@ -267,9 +267,9 @@ defmodule MembaWeb.MemberMessageLive.New do
             :if={inbound_email_address}
             id="member-compose-inbound-email"
             data-inbound-address={inbound_email_address}
-            class="mt-4 flex gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3 text-sm leading-6 text-[var(--club-site-muted)]"
+            class="mt-4 flex gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-sm leading-6 text-ink-2"
           >
-            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
+            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-primary ring-1 ring-base-300">
               <.icon name="hero-envelope" class="size-4" />
             </span>
             <p>
@@ -277,7 +277,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               <a
                 id="member-compose-inbound-email-link"
                 href={"mailto:#{inbound_email_address}"}
-                class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
+                class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
               >
                 {inbound_email_address}
               </a>
@@ -285,21 +285,21 @@ defmodule MembaWeb.MemberMessageLive.New do
           </div>
 
           <div :if={@current_member} class="mt-6">
-            <p class="mb-2 text-sm font-semibold text-[var(--club-site-ink)]">From</p>
+            <p class="mb-2 text-sm font-semibold text-base-content">From</p>
             <div
               id="member-compose-from-summary"
               data-sender-id={@current_member.id}
               aria-label={"Sending as #{@current_member.name}"}
-              class="flex items-center gap-3 rounded-xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3"
+              class="flex items-center gap-3 rounded-xl border border-base-300 bg-base-100 px-4 py-3"
             >
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-bg)] text-xs font-semibold text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-base-200 text-xs font-semibold text-primary ring-1 ring-base-300">
                 {member_initials(@current_member.name)}
               </span>
               <span class="min-w-0">
-                <strong class="block truncate text-sm font-semibold text-[var(--club-site-ink)]">
+                <strong class="block truncate text-sm font-semibold text-base-content">
                   {@current_member.name} (you)
                 </strong>
-                <span class="block text-xs text-[var(--club-site-muted)]">Sending as yourself</span>
+                <span class="block text-xs text-ink-2">Sending as yourself</span>
               </span>
             </div>
           </div>
@@ -315,7 +315,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-message-subject-input"
               label="Subject"
               placeholder="Example: Saturday trail day"
-              class="w-full rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
+              class="w-full rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-base-content placeholder:text-ink-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
             />
             <.input
               field={@message_form[:body]}
@@ -324,7 +324,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               type="textarea"
               placeholder="Write the message members should receive."
               rows="8"
-              class="min-h-40 w-full resize-y rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
+              class="min-h-40 w-full resize-y rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-base-content placeholder:text-ink-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
             />
             <p
               :if={@body_error}
@@ -338,14 +338,14 @@ defmodule MembaWeb.MemberMessageLive.New do
               <button
                 id="member-message-send-button"
                 type="submit"
-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
               >
                 <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
               </button>
               <.link
                 id="member-message-cancel-link"
                 href={club_home_path(@selected_club, @route_params)}
-                class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
               >
                 Cancel
               </.link>
