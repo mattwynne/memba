@@ -8,4 +8,4 @@
 - [x] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
 - [x] 007 Add the historic-event replay-safety regression test.
 - [x] 008 Re-run the baseline grep to confirm only the documented shim remains.
-- [ ] 009 Run `dev check`.
+- [x] 009 Run `dev check`.
