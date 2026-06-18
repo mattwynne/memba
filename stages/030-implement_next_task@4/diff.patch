@@ -1,0 +1,178 @@
+diff --git a/docs/iterations/035-obliterate-opened-delivery-status/todo.md b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+index 24e5ed0..7f460f6 100644
+--- a/docs/iterations/035-obliterate-opened-delivery-status/todo.md
++++ b/docs/iterations/035-obliterate-opened-delivery-status/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inventory every `opened`/`Opened` reference in `lib/`, `test/`, and `acceptance-tests/` (baseline grep) and classify each as remove vs retain-as-shim.
+ - [x] 002 Delete the `ReportEmailDeliveryOpened` command and any dispatch routing/registration for it.
+ - [x] 003 Remove the `"opened"` read-model normalization clauses in `messaging.ex`, the presentation `"opened" -> "delivered"` mapping, and the webhook `"opened"` rejection branch.
+-- [ ] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
++- [x] 004 Reduce the aggregate `apply/2` for `EmailDeliveryOpened` to a documented no-op; reduce the two projectors to documented no-op handling only where replay would otherwise fail, removing all active behaviour.
+ - [ ] 005 Keep `events/email_delivery_opened.ex` as the deserialization tombstone with a deprecation comment.
+ - [ ] 006 Update/remove `"opened"` assertions and fixtures across the affected ExUnit suites and acceptance JS step/support files.
+ - [ ] 007 Add the historic-event replay-safety regression test.
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index d7b311d..5ef67fd 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -116,8 +116,11 @@ defmodule Memba.Messaging.Message do
+     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
+   end
+ 
+-  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{} = event) do
+-    put_delivery_status(message, event.delivery_id, :delivered)
++  # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
++  # product status. Keep this no-op so historic events can rehydrate aggregates
++  # without changing current delivery state. Do not extend.
++  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{}) do
++    message
+   end
+ 
+   defp report_status(%__MODULE__{} = message, command, next_status, event_module) do
+diff --git a/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex b/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
+index 6355979..3fb8f53 100644
+--- a/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
+@@ -55,8 +55,11 @@ defmodule Memba.Messaging.Projectors.MembaStaffEmailDelivery do
+     )
+   end)
+ 
+-  project(%EmailDeliveryOpened{} = event, fn multi ->
+-    update_deliverability(multi, event.delivery_id, status: "delivered", reason: nil)
++  # Deprecated replay shim only: EmailDeliveryOpened is no longer projected into
++  # staff delivery read models. Keep this no-op projection so historic events
++  # advance projector checkpoints during replay/rebuild. Do not extend.
++  project(%EmailDeliveryOpened{}, fn multi ->
++    multi
+   end)
+ 
+   defp update_deliverability(multi, delivery_id, attrs) do
+diff --git a/web/lib/memba/messaging/projectors/member_email_delivery.ex b/web/lib/memba/messaging/projectors/member_email_delivery.ex
+index d71333e..e2fee70 100644
+--- a/web/lib/memba/messaging/projectors/member_email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/member_email_delivery.ex
+@@ -45,8 +45,11 @@ defmodule Memba.Messaging.Projectors.MemberEmailDelivery do
+     update_status(multi, event.delivery_id, "delivery problem")
+   end)
+ 
+-  project(%EmailDeliveryOpened{} = event, fn multi ->
+-    update_status(multi, event.delivery_id, "delivered")
++  # Deprecated replay shim only: EmailDeliveryOpened is no longer projected into
++  # member-facing read models. Keep this no-op projection so historic events
++  # advance projector checkpoints during replay/rebuild. Do not extend.
++  project(%EmailDeliveryOpened{}, fn multi ->
++    multi
+   end)
+ 
+   defp update_status(multi, delivery_id, status) do
+diff --git a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+index a126f3f..6846884 100644
+--- a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+@@ -120,10 +120,12 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+            }
+   end
+ 
+-  test "Memba staff email delivery projection maps historic opened events to delivered" do
++  test "Memba staff email delivery projection ignores historic opened events" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+ 
++    handler_name = "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}"
++
+     assert :ok =
+              MembaStaffEmailDeliveryProjector.handle(
+                %EmailDeliveryOpened{
+@@ -131,13 +133,18 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+                  delivery_id: bob.delivery_id
+                },
+                %{
+-                 handler_name: "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
++                 handler_name: handler_name,
+                  event_number: 10_000
+                }
+              )
+ 
+-    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++    assert %MembaStaffEmailDeliveryProjection{status: "sent", reason: nil} =
+              Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
++
++    assert %MembaStaffEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
++             Repo.get_by(MembaStaffEmailDeliveryProjector.ProjectionVersion,
++               projection_name: handler_name
++             )
+   end
+ 
+   test "Memba staff email delivery queries do not normalize unsupported opened rows" do
+diff --git a/web/test/memba/messaging/member_email_delivery_projection_test.exs b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+index 3f88e0f..3b6a6cf 100644
+--- a/web/test/memba/messaging/member_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+@@ -112,10 +112,12 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+            }
+   end
+ 
+-  test "member email delivery projection maps historic opened events to delivered" do
++  test "member email delivery projection ignores historic opened events" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+ 
++    handler_name = "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}"
++
+     assert :ok =
+              MemberEmailDeliveryProjector.handle(
+                %EmailDeliveryOpened{
+@@ -123,13 +125,18 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+                  delivery_id: bob.delivery_id
+                },
+                %{
+-                 handler_name: "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
++                 handler_name: handler_name,
+                  event_number: 10_000
+                }
+              )
+ 
+-    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++    assert %MemberEmailDeliveryProjection{status: "sent"} =
+              Messaging.get_member_email_delivery(message_id, bob.person_id)
++
++    assert %MemberEmailDeliveryProjector.ProjectionVersion{last_seen_event_number: 10_000} =
++             Repo.get_by(MemberEmailDeliveryProjector.ProjectionVersion,
++               projection_name: handler_name
++             )
+   end
+ 
+   test "member email delivery queries do not normalize unsupported opened rows" do
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index 2009173..c62c331 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -392,7 +392,7 @@ defmodule Memba.Messaging.MessageTest do
+     assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
+   end
+ 
+-  test "apply/2 records delivery status changes" do
++  test "apply/2 records delivery status changes and ignores historic opened events" do
+     {message, ids} = sent_message()
+     delivery_id = ids.delivery_id
+ 
+@@ -413,17 +413,11 @@ defmodule Memba.Messaging.MessageTest do
+              })
+              |> Map.fetch!(:delivery_statuses)
+ 
+-    assert %{^delivery_id => %{status: :delivered, reason: nil}} =
+-             message
+-             |> Message.apply(%EmailDeliveryDelivered{
++    assert message ==
++             Message.apply(message, %EmailDeliveryOpened{
+                message_id: ids.message_id,
+                delivery_id: ids.delivery_id
+              })
+-             |> Message.apply(%EmailDeliveryOpened{
+-               message_id: ids.message_id,
+-               delivery_id: ids.delivery_id
+-             })
+-             |> Map.fetch!(:delivery_statuses)
+   end
+ 
+   defp valid_send_message do
