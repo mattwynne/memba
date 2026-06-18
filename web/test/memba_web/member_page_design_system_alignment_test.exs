@@ -1,4 +1,13 @@
 defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+  @moduledoc """
+  Structural guardrails for the member design-system migration.
+
+  These source scans intentionally complement rendered component tests and the
+  gallery-walk screenshots. They catch regressions back to bespoke member-page
+  styling, hardcoded colours, or the removed white-label layer, but they are not a
+  substitute for semantic rendering assertions or visual review.
+  """
+
   use ExUnit.Case, async: true
 
   @member_page_files [
