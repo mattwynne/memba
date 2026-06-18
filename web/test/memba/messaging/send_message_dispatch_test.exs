@@ -1,12 +1,9 @@
 defmodule Memba.Messaging.SendMessageDispatchTest do
   use Memba.EventSourcedCase, async: false
 
-  import ExUnit.CaptureLog
-
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -154,21 +151,6 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                returning: :execution_result,
                consistency: :strong
              )
-
-    log =
-      capture_log(fn ->
-        assert {:error, :unregistered_command} =
-                 App.dispatch(
-                   %ReportEmailDeliveryOpened{
-                     message_id: message_id,
-                     delivery_id: delivery_id
-                   },
-                   returning: :execution_result,
-                   consistency: :strong
-                 )
-      end)
-
-    assert log =~ "attempted to dispatch an unregistered command"
   end
 
   defp with_sender_recipient(%SendMessage{} = command) do

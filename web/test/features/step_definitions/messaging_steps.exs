@@ -9,7 +9,6 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
@@ -77,10 +76,6 @@ defmodule Memba.Cucumber.MessagingSteps do
     report_email_delivery_status(context, recipient_name, subject, :delivered)
   end
 
-  step "{word} has opened the email for {string}", %{args: [recipient_name, subject]} = context do
-    report_email_delivery_status(context, recipient_name, subject, :opened)
-  end
-
   step "{word} email for {string} is reported as delayed because {string}",
        %{args: [recipient_name, subject, reason]} = context do
     report_email_delivery_status(context, recipient_name, subject, :delayed, reason)
@@ -104,10 +99,6 @@ defmodule Memba.Cucumber.MessagingSteps do
   step "{word} email for {string} is reported as a spam complaint because {string}",
        %{args: [recipient_name, subject, reason]} = context do
     report_email_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
-  end
-
-  step "{word} opens the email for {string}", %{args: [recipient_name, subject]} = context do
-    report_email_delivery_status(context, recipient_name, subject, :opened)
   end
 
   step "{word} emails {string} to kmc@clubs.memba.io",
@@ -548,17 +539,6 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     delivery = delivery_for!(context, recipient_name, subject)
 
-    if status == :opened && delivery.status == "sent" do
-      assert :ok =
-               App.dispatch(
-                 %ReportEmailDeliveryDelivered{
-                   message_id: message.message_id,
-                   delivery_id: delivery.delivery_id
-                 },
-                 consistency: :strong
-               )
-    end
-
     command =
       case status do
         :delivered ->
@@ -586,12 +566,6 @@ defmodule Memba.Cucumber.MessagingSteps do
             message_id: message.message_id,
             delivery_id: delivery.delivery_id,
             reason: reason
-          }
-
-        :opened ->
-          %ReportEmailDeliveryOpened{
-            message_id: message.message_id,
-            delivery_id: delivery.delivery_id
           }
       end
 
@@ -669,7 +643,6 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp member_email_delivery_status_for_label("Sending"), do: "sent"
   defp member_email_delivery_status_for_label("Delivered"), do: "delivered"
   defp member_email_delivery_status_for_label("Delivery problem"), do: "delivery problem"
-  defp member_email_delivery_status_for_label("Opened"), do: "opened"
   defp member_email_delivery_status_for_label(status), do: status
 
   defp person_id_from_context!(context, person_name) do
