@@ -1,0 +1,449 @@
+diff --git a/docs/iterations/034-member-page-design-system-alignment/todo.md b/docs/iterations/034-member-page-design-system-alignment/todo.md
+index 7800713..5635734 100644
+--- a/docs/iterations/034-member-page-design-system-alignment/todo.md
++++ b/docs/iterations/034-member-page-design-system-alignment/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inventory the member templates/layout and their bespoke markup: `web/lib/memba_web/controllers/page_html/club.html.heex`, `message.html.heex`, the compose template, the public club page template, and `Layouts.club_site` (`--club-site-*`).
+ - [x] 002 Remove the `--club-site-*` layer: replace its variables/classes with sage tokens + daisyUI classes; simplify or retire the white-label parts of `Layouts.club_site` while keeping the member page chrome (header/footer) working in sage.
+-- [ ] 003 Replace member-page buttons with `<.button>`, mapping each to the right variant/size; preserve `href`/`navigate`/form behaviour.
++- [x] 003 Replace member-page buttons with `<.button>`, mapping each to the right variant/size; preserve `href`/`navigate`/form behaviour.
+ - [ ] 004 Replace member initials avatars with `<.avatar>`, including the club-home stack and "+N".
+ - [ ] 005 Re-map the member delivery-status colours to sage/warning/error in the member presentation/helper used by the receipt mini-bars and the message-read breakdown card (e.g. the member `status_bg_class`/`MemberEmailDeliveryPresentation` path), without touching the staff delivery path. Apply `status_badge` where a pill is the right element.
+ - [ ] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index c5db3ee..436ccc7 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -316,13 +316,14 @@ defmodule MembaWeb.Layouts do
+               Signed in as {@current_identity.email}
+             </span>
+             <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+-              <button
++              <.button
+                 id="club-site-sign-out-button"
+                 type="submit"
+-                class="rounded-full border border-base-300 bg-base-100 px-4 py-2 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++                variant="secondary"
++                size="sm"
+               >
+                 Sign out
+-              </button>
++              </.button>
+             </.form>
+           </nav>
+         </div>
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index ee4ba01..0c87136 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -61,13 +61,14 @@
+           </div>
+         </div>
+ 
+-        <.link
++        <.button
+           id="member-send-message-link"
+           href={member_compose_path(@selected_club, club_id_source)}
+-          class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-primary shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-md"
++          variant="secondary"
++          size="lg"
+         >
+           <.icon name="hero-paper-airplane" class="size-5" /> Send club message
+-        </.link>
++        </.button>
+       </div>
+     </section>
+ 
+@@ -93,13 +94,15 @@
+           <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-ink-2">
+             When a member sends a message, it will appear here.
+           </p>
+-          <.link
+-            id="member-message-empty-send-link"
+-            href={member_compose_path(@selected_club, club_id_source)}
+-            class="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-5 py-3 text-sm font-semibold text-base-content shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+-          >
+-            <.icon name="hero-paper-airplane" class="size-4" /> Send the first message
+-          </.link>
++          <div class="mt-5">
++            <.button
++              id="member-message-empty-send-link"
++              href={member_compose_path(@selected_club, club_id_source)}
++              variant="secondary"
++            >
++              <.icon name="hero-paper-airplane" class="size-4" /> Send the first message
++            </.button>
++          </div>
+         </div>
+ 
+         <article
+@@ -181,14 +184,15 @@
+           <.icon name="hero-users" class="size-5 text-primary" /> Current members
+         </h2>
+ 
+-        <.link
++        <.button
+           :if={@current_member_can_manage_members?}
+           id="member-invite-member-link"
+           href={member_invitation_path(@selected_club, club_id_source)}
+-          class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-4 py-2 text-sm font-semibold text-base-content shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
++          variant="secondary"
++          size="sm"
+         >
+           <.icon name="hero-user-plus" class="size-4 text-primary" /> Invite member
+-        </.link>
++        </.button>
+       </div>
+ 
+       <div
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index afdaa2b..e9462c8 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -131,7 +131,7 @@
+           class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+         >
+           <header>
+-            <button
++            <.button
+               type="button"
+               id={"member-receipt-group-toggle-#{status_slug(group.status)}"}
+               phx-click="toggle_receipt_group"
+@@ -140,7 +140,8 @@
+                 to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
+               }
+               aria-controls={"member-receipts-#{status_slug(group.status)}"}
+-              class="flex w-full items-center gap-3 px-5 py-4 text-left transition duration-200 hover:bg-base-200"
++              variant="ghost"
++              class="btn btn-ghost h-auto min-h-0 w-full justify-start gap-3 rounded-none px-5 py-4 text-left font-normal normal-case hover:bg-base-200"
+             >
+               <span class={[
+                 "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
+@@ -175,7 +176,7 @@
+                   class="size-4 text-ink-2"
+                 />
+               </div>
+-            </button>
++            </.button>
+           </header>
+ 
+           <div
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index 42bc1ba..6c8db21 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -148,27 +148,30 @@ defmodule MembaWeb.MemberMessageLive.New do
+           </p>
+ 
+           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+-            <.link
++            <.button
+               id="member-compose-see-receipts-link"
+               href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
+-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++              variant="primary"
++              size="lg"
+             >
+               <.icon name="hero-eye" class="size-4" /> Check delivery
+-            </.link>
+-            <.link
++            </.button>
++            <.button
+               id="member-compose-send-another-link"
+               href={compose_path(@selected_club, @route_params)}
+-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++              variant="secondary"
++              size="lg"
+             >
+               Send another message
+-            </.link>
+-            <.link
++            </.button>
++            <.button
+               id="member-compose-back-home-link"
+               href={club_home_path(@selected_club, @route_params)}
+-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
++              variant="ghost"
++              size="lg"
+             >
+               Back to club home
+-            </.link>
++            </.button>
+           </div>
+         </section>
+ 
+@@ -197,21 +200,23 @@ defmodule MembaWeb.MemberMessageLive.New do
+           </p>
+ 
+           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+-            <button
++            <.button
+               id="member-compose-try-again-button"
+               type="button"
+               phx-click="try_again"
+-              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++              variant="primary"
++              size="lg"
+             >
+               <.icon name="hero-arrow-path" class="size-4" /> Try again
+-            </button>
+-            <.link
++            </.button>
++            <.button
+               id="member-compose-back-home-after-error-link"
+               href={club_home_path(@selected_club, @route_params)}
+-              class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++              variant="secondary"
++              size="lg"
+             >
+               Back to club home
+-            </.link>
++            </.button>
+           </div>
+         </section>
+ 
+@@ -335,20 +340,22 @@ defmodule MembaWeb.MemberMessageLive.New do
+             </p>
+ 
+             <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+-              <button
++              <.button
+                 id="member-message-send-button"
+                 type="submit"
+-                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++                variant="primary"
++                size="lg"
+               >
+                 <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
+-              </button>
+-              <.link
++              </.button>
++              <.button
+                 id="member-message-cancel-link"
+                 href={club_home_path(@selected_club, @route_params)}
+-                class="inline-flex min-h-12 items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++                variant="secondary"
++                size="lg"
+               >
+                 Cancel
+-              </.link>
++              </.button>
+             </div>
+           </.form>
+         </section>
+diff --git a/web/lib/memba_web/live/public_club_page_live.ex b/web/lib/memba_web/live/public_club_page_live.ex
+index 819bf20..4d57895 100644
+--- a/web/lib/memba_web/live/public_club_page_live.ex
++++ b/web/lib/memba_web/live/public_club_page_live.ex
+@@ -33,21 +33,23 @@ defmodule MembaWeb.PublicClubPageLive do
+                 Sign in with the email address {@club.name} has for you to read member messages and see the current member list. Member-only details stay private.
+               </p>
+               <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+-                <a
++                <.button
+                   id="public-club-page-sign-in-link"
+                   href={~p"/auth"}
+-                  class="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++                  variant="primary"
++                  size="lg"
+                 >
+                   Email me a sign-in link
+-                </a>
+-                <a
++                </.button>
++                <.button
+                   id="public-club-page-memba-home-link"
+                   href={ClubSite.root_url()}
+                   aria-label="Visit Memba home"
+-                  class="inline-flex items-center justify-center rounded-full border border-base-300 bg-base-100 px-6 py-3 text-sm font-semibold text-base-content transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++                  variant="secondary"
++                  size="lg"
+                 >
+                   Visit Memba home
+-                </a>
++                </.button>
+               </div>
+             </div>
+ 
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 7bb7a85..7b11f7a 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -145,7 +145,7 @@ defmodule MembaWeb.LayoutsTest do
+ 
+     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
+     assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
+-    assert_selector(html, "button#club-site-sign-out-button[type='submit']")
++    assert_selector(html, "button#club-site-sign-out-button.btn.btn-soft.btn-sm[type='submit']")
+     refute_text(html, "#club-site-footer", "Commit")
+ 
+     assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 47618e7..47a87db 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -162,6 +162,18 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Visit Memba home"
+ 
++    assert html
++           |> LazyHTML.query(
++             "a#public-club-page-sign-in-link.btn.btn-primary.btn-lg[href='/auth']"
++           )
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "a#public-club-page-memba-home-link.btn.btn-soft.btn-lg[href='#{ClubSite.root_url()}']"
++           )
++           |> Enum.any?()
++
+     assert html
+            |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Memba"
+@@ -291,7 +303,9 @@ defmodule MembaWeb.PageControllerTest do
+            |> Enum.any?()
+ 
+     assert html
+-           |> LazyHTML.query("#member-send-message-link[href='/messages/new']")
++           |> LazyHTML.query(
++             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
++           )
+            |> Enum.any?()
+ 
+     assert html
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c6aa2ef..522f581 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -102,7 +102,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
++             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
+              "Send club message"
+            )
+ 
+@@ -176,7 +176,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
++             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+              "Invite member"
+            )
+   end
+@@ -201,7 +201,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
++             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+              "Invite member"
+            )
+ 
+@@ -441,7 +441,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-send-message-link[href='/messages/new']"
++             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+            )
+ 
+     assert has_element?(
+@@ -481,7 +481,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
++             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
+              "Send club message"
+            )
+ 
+@@ -545,7 +545,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-message-empty-send-link[href='/messages/new']",
++             "#member-message-empty-send-link.btn.btn-soft[href='/messages/new']",
+              "Send the first message"
+            )
+   end
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index a14de4b..37ffd94 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -84,19 +84,19 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-see-receipts-link[href='/messages/#{message.message_id}']",
++             "#member-compose-see-receipts-link.btn.btn-primary.btn-lg[href='/messages/#{message.message_id}']",
+              "Check delivery"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-send-another-link[href='/messages/new']",
++             "#member-compose-send-another-link.btn.btn-soft.btn-lg[href='/messages/new']",
+              "Send another message"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-back-home-link[href='/']",
++             "#member-compose-back-home-link.btn.btn-ghost.btn-lg[href='/']",
+              "Back to club home"
+            )
+ 
+@@ -178,13 +178,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+ 
+     assert has_element?(
+              view,
+-             "button#member-compose-try-again-button[type='button']",
++             "button#member-compose-try-again-button.btn.btn-primary.btn-lg[type='button']",
+              "Try again"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-back-home-after-error-link[href='/']",
++             "#member-compose-back-home-after-error-link.btn.btn-soft.btn-lg[href='/']",
+              "Back to club home"
+            )
+ 
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 2bcb44a..593856d 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -191,13 +191,13 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+ 
+     assert has_element?(
+              view,
+-             "button#member-message-send-button[type='submit']",
++             "button#member-message-send-button.btn.btn-primary.btn-lg[type='submit']",
+              "Send to all current members"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-message-cancel-link[href='/']",
++             "#member-message-cancel-link.btn.btn-soft.btn-lg[href='/']",
+              "Cancel"
+            )
+ 
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 9f446d7..e894074 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -250,7 +250,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     delivered_recipient =
+       "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+ 
+-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
++    assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
+     refute has_element?(view, "#member-receipt-group-toggle-opened")
+     refute has_element?(view, delivered_rows)
+     refute has_element?(view, delivered_recipient)
