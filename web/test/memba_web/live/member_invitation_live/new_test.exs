@@ -43,6 +43,24 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
              "#member-club-invitation-club-home-link[href='/']",
              "Club home"
            )
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-current-member-avatar.avatar.avatar-placeholder[data-testid='member-club-invitation-current-member-avatar'][title='Robin Rivers']",
+             "RR"
+           )
+
+    assert has_element?(
+             view,
+             "button#send-member-club-invitation-button.btn.btn-primary.btn-lg[type='submit']",
+             "Send invitation"
+           )
+
+    assert has_element?(
+             view,
+             "#cancel-member-club-invitation-link.btn.btn-soft.btn-lg[href='/']",
+             "Cancel"
+           )
   end
 
   test "club subdomain routed mount keeps the host-selected club after LiveView connects", %{

@@ -8,25 +8,29 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert MemberEmailDeliveryPresentation.present_status("sent") == %{
                status: "sent",
                label: "Sending",
-               icon: "hero-clock"
+               icon: "hero-clock",
+               tone: "warning"
              }
 
       assert MemberEmailDeliveryPresentation.present_status("delivered") == %{
                status: "delivered",
                label: "Delivered",
-               icon: "hero-check-circle"
+               icon: "hero-check-circle",
+               tone: "success"
              }
 
       assert MemberEmailDeliveryPresentation.present_status("delivery problem") == %{
                status: "delivery problem",
                label: "Delivery problem",
-               icon: "hero-exclamation-triangle"
+               icon: "hero-exclamation-triangle",
+               tone: "error"
              }
 
       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
                status: "delivered",
                label: "Delivered",
-               icon: "hero-check-circle"
+               icon: "hero-check-circle",
+               tone: "success"
              }
     end
 
@@ -34,14 +38,48 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert MemberEmailDeliveryPresentation.present_status(nil) == %{
                status: "sent",
                label: "Sending",
-               icon: "hero-clock"
+               icon: "hero-clock",
+               tone: "warning"
              }
 
       assert MemberEmailDeliveryPresentation.present_status("") == %{
                status: "sent",
                label: "Sending",
-               icon: "hero-clock"
+               icon: "hero-clock",
+               tone: "warning"
              }
+    end
+  end
+
+  describe "design-system status mapping" do
+    test "maps member delivery statuses to sage, warning, and error visuals" do
+      assert MemberEmailDeliveryPresentation.status_tone("delivered") == "success"
+      assert MemberEmailDeliveryPresentation.status_bg_class("delivered") == "bg-sage-600"
+      assert MemberEmailDeliveryPresentation.status_text_class("delivered") == "text-sage-700"
+
+      assert MemberEmailDeliveryPresentation.status_tint_class("delivered") ==
+               "bg-sage-50 text-sage-700 ring-sage-200"
+
+      assert MemberEmailDeliveryPresentation.status_tone("sent") == "warning"
+      assert MemberEmailDeliveryPresentation.status_bg_class("sent") == "bg-warning"
+      assert MemberEmailDeliveryPresentation.status_text_class("sent") == "text-warning"
+
+      assert MemberEmailDeliveryPresentation.status_tint_class("sent") ==
+               "bg-warning-soft text-warning ring-warning/25"
+
+      assert MemberEmailDeliveryPresentation.status_tone("delivery problem") == "error"
+      assert MemberEmailDeliveryPresentation.status_bg_class("delivery problem") == "bg-error"
+      assert MemberEmailDeliveryPresentation.status_text_class("delivery problem") == "text-error"
+
+      assert MemberEmailDeliveryPresentation.status_tint_class("delivery problem") ==
+               "bg-error-soft text-error ring-error/25"
+    end
+
+    test "normalizes historic opened statuses before mapping visuals" do
+      assert MemberEmailDeliveryPresentation.status_tone("opened") == "success"
+      assert MemberEmailDeliveryPresentation.status_bg_class("opened") == "bg-sage-600"
+      assert MemberEmailDeliveryPresentation.status_text_class("opened") == "text-sage-700"
+      assert MemberEmailDeliveryPresentation.status_tint_class("opened") =~ "text-sage-700"
     end
   end
 
@@ -58,7 +96,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                recipient_name: "Alice Adams",
                status: "delivered",
                status_label: "Delivered",
-               status_icon: "hero-check-circle"
+               status_icon: "hero-check-circle",
+               status_tone: "success"
              }
     end
 
@@ -74,7 +113,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                recipient_name: "Historic Recipient",
                status: "delivered",
                status_label: "Delivered",
-               status_icon: "hero-check-circle"
+               status_icon: "hero-check-circle",
+               status_tone: "success"
              }
     end
   end
@@ -115,6 +155,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "delivered",
                  status_label: "Delivered",
                  status_icon: "hero-check-circle",
+                 status_tone: "success",
                  description: "Email delivered",
                  count: 3,
                  percentage: 75
@@ -123,6 +164,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "sent",
                  status_label: "Sending",
                  status_icon: "hero-clock",
+                 status_tone: "warning",
                  description: "Email still sending",
                  count: 1,
                  percentage: 25
@@ -131,6 +173,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "delivery problem",
                  status_label: "Delivery problem",
                  status_icon: "hero-exclamation-triangle",
+                 status_tone: "error",
                  description: "Email not delivered",
                  count: 0,
                  percentage: 0

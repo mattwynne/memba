@@ -125,7 +125,7 @@ defmodule MembaWeb.CoreComponents do
       <.button navigate={~p"/"}>Home</.button>
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :any
+  attr :class, :any, default: nil
   attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: nil, values: [nil, "sm", "lg"]
   attr :disabled, :boolean, default: false
@@ -149,9 +149,12 @@ defmodule MembaWeb.CoreComponents do
       |> assign_new(:disabled, fn -> false end)
 
     assigns =
-      assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns.variant), Map.fetch!(sizes, assigns.size)]
-      end)
+      assign(assigns, :class, [
+        "btn",
+        Map.fetch!(variants, assigns.variant),
+        Map.fetch!(sizes, assigns.size),
+        assigns.class
+      ])
 
     rest = assigns.rest
 

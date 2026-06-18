@@ -84,19 +84,19 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "#member-compose-see-receipts-link[href='/messages/#{message.message_id}']",
+             "#member-compose-see-receipts-link.btn.btn-primary.btn-lg[href='/messages/#{message.message_id}']",
              "Check delivery"
            )
 
     assert has_element?(
              view,
-             "#member-compose-send-another-link[href='/messages/new']",
+             "#member-compose-send-another-link.btn.btn-soft.btn-lg[href='/messages/new']",
              "Send another message"
            )
 
     assert has_element?(
              view,
-             "#member-compose-back-home-link[href='/']",
+             "#member-compose-back-home-link.btn.btn-ghost.btn-lg[href='/']",
              "Back to club home"
            )
 
@@ -178,13 +178,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "button#member-compose-try-again-button[type='button']",
+             "button#member-compose-try-again-button.btn.btn-primary.btn-lg[type='button']",
              "Try again"
            )
 
     assert has_element?(
              view,
-             "#member-compose-back-home-after-error-link[href='/']",
+             "#member-compose-back-home-after-error-link.btn.btn-soft.btn-lg[href='/']",
              "Back to club home"
            )
 

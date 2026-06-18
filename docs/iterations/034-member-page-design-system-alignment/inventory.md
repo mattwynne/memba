@@ -1,0 +1,135 @@
+# Member page design-system inventory
+
+Inventory for task 001 of the iteration plan. Line numbers refer to the source
+state at the start of this iteration task.
+
+## Member surfaces in scope
+
+| Surface | Source | Notes |
+| --- | --- | --- |
+| Club home | `web/lib/memba_web/controllers/page_html/club.html.heex` | Rendered by `MembaWeb.MemberDashboardLive.render/1`. |
+| Message read | `web/lib/memba_web/controllers/page_html/message.html.heex` | Rendered by `MembaWeb.MemberMessageLive.Show.render/1` once a message is loaded. |
+| Compose | `web/lib/memba_web/live/member_message_live/new.ex` | Inline `~H` template in `render/1`. |
+| Public club page | `web/lib/memba_web/live/public_club_page_live.ex` | Inline `~H` template in `render/1`. |
+| Member chrome | `MembaWeb.Layouts.club_site/1` in `web/lib/memba_web/components/layouts.ex` | Shared header/main/footer for the member and public club pages. |
+
+## Shared white-label seam
+
+- All four surfaces render through `<Layouts.club_site>`.
+- `Layouts.club_site/1` accepts `:theme`, builds `@theme_style`, and emits
+  `--club-site-*` CSS custom properties via `club_site_theme_style/1`
+  (`layouts.ex` lines 281-287, 305-316, 378-392).
+- The current defaults are hardcoded slate/white hex values
+  (`#f8fafc`, `#ffffff`, `#0f172a`, `#64748b`, `#334155`, `#e2e8f0`).
+- The layout chrome depends on those variables for page background/text,
+  header/footer borders and paper, the club-name link, signed-in identity,
+  sign-out button, and footer Memba link (`layouts.ex` lines 319-374).
+
+## Club home template
+
+Source: `web/lib/memba_web/controllers/page_html/club.html.heex`
+
+- Uses `<Layouts.club_site>` with member identity (`lines 4-8`).
+- `--club-site-*` variables drive the hero, CTA, cards, message rows, member
+  card, links, icons, and avatar stack (`lines 17, 19, 22, 25, 32, 67, 76,
+  77, 86, 88, 91, 94, 100, 112, 121, 129, 134, 141, 144, 166, 170, 181, 182,
+  190, 192, 203, 217, 224, 230, 233, 249, 256, 263, 268`).
+- Bespoke button-like links:
+  - `member-send-message-link` primary CTA (`lines 64-70`).
+  - `member-message-empty-send-link` secondary empty-state CTA (`lines 97-103`).
+  - `member-invite-member-link` secondary manage-members CTA (`lines 186-194`).
+- Bespoke initials avatars:
+  - Message sender initials (`lines 119-124`).
+  - First-member avatar (`lines 211-221`).
+  - Active-member avatar stack (`lines 243-253`).
+  - `+N` stack overflow pill (`lines 254-259`).
+- Member delivery mini-bar uses `status_bg_class/1` for each segment
+  (`lines 143-156`), so the visual colour mapping is shared with
+  `PageHTML` helper functions.
+
+## Message read template
+
+Source: `web/lib/memba_web/controllers/page_html/message.html.heex`
+
+- Uses `<Layouts.club_site>` with member identity (`lines 1-5`).
+- `--club-site-*` variables drive the back link, hero, summary card, receipt
+  summary, receipt groups, and receipt rows (`lines 16, 21, 22, 25, 28, 29,
+  31, 38, 45, 47, 48, 54, 65, 86, 89, 90, 95, 98, 109, 112, 122, 132, 144,
+  153, 154, 159, 165, 176, 185, 203`).
+- Bespoke button:
+  - Receipt group accordion toggle is a raw `<button>` with custom hover and
+    layout classes (`lines 135-179`). This is an interactive disclosure control,
+    not a navigation/form CTA.
+- Delivery-status visuals:
+  - Summary bar segment classes come from `status_bg_class/1` (`lines 68-76`).
+  - Legend dot classes come from `status_bg_class/1` (`line 88`).
+  - Group icon tints, receipt initials, status pills, and status icons use
+    `status_tint_class/1` and `status_text_class/1` (`lines 146-150,
+    197-220`).
+  - The receipt status pill is hand-rolled markup (`lines 207-222`) and is the
+    candidate for `<.status_badge>` where the shared badge component fits.
+- The summary bar background uses `bg-slate-100` (`line 65`), outside the target
+  sage mapping.
+
+## Compose template
+
+Source: `web/lib/memba_web/live/member_message_live/new.ex` (`render/1`)
+
+- Uses `<Layouts.club_site>` with member identity (`lines 109-114`).
+- `--club-site-*` variables drive the success/error/composing cards, links,
+  copy, form fields, sender summary, and submit/cancel controls (`lines 128,
+  134, 138, 145, 154, 161, 168, 178, 184, 188, 194, 204, 211, 220, 225, 232,
+  237, 244, 270, 272, 280, 288, 293, 295, 299, 302, 318, 327, 341, 348`).
+- Bespoke button-like controls:
+  - Success-state `Check delivery`, `Send another message`, and `Back to club
+    home` links (`lines 151-171`).
+  - Error-state raw `Try again` button (`lines 200-207`) and `Back to club
+    home` link (`lines 208-214`).
+  - Composing-state back link (`lines 222-228`).
+  - Form submit raw `button` and cancel link (`lines 337-351`).
+- Bespoke initials avatar:
+  - Sender summary initials (`lines 287-304`).
+- Off-palette hardcoded Tailwind colour families in member UI:
+  - Success icon: emerald (`line 130`).
+  - Error card/icon/body error: rose (`lines 178, 180, 332`).
+  - Recipient summary: sky (`lines 252-260`).
+
+## Public club page
+
+Source: `web/lib/memba_web/live/public_club_page_live.ex`
+
+- Uses `<Layouts.club_site>` without signed-in member identity (`line 21`).
+- `--club-site-*` variables drive the card, eyebrow, heading/body copy, CTAs,
+  feature panel, and icons (`lines 23, 24, 29, 32, 39, 47, 54, 55, 56, 60,
+  67, 74`).
+- Bespoke button-like anchors:
+  - `public-club-page-sign-in-link` primary CTA (`lines 36-42`).
+  - `public-club-page-memba-home-link` secondary CTA (`lines 43-50`).
+
+## Status helper and presentation coupling
+
+Source: `web/lib/memba_web/controllers/page_html.ex`
+
+- `status_bg_class/1`, `status_text_class/1`, and `status_tint_class/1` are
+  private template helpers used by the club-home receipt mini-bars and the
+  message-read breakdown (`lines 80-96`).
+- Current member colour mapping is:
+  - Delivered: sky (`bg-sky-500`, `text-sky-700`, `bg-sky-50 ... ring-sky-200`).
+  - Sending/sent: slate (`bg-slate-*`, `text-slate-*`, `ring-slate-200`).
+  - Delivery problem: amber (`bg-amber-*`, `text-amber-*`, `ring-amber-200`).
+- `MembaWeb.MemberEmailDeliveryPresentation` owns member-facing labels, icons,
+  ordering, and descriptions for the same statuses; it does not currently own
+  CSS/tone data.
+
+## Later-task replacement targets
+
+- Remove the `--club-site-*` variable layer from `Layouts.club_site/1` and the
+  four member surfaces, replacing it with fixed sage design-system tokens and
+  daisyUI/shared component classes.
+- Replace the button-like links and raw form buttons above with
+  `MembaWeb.CoreComponents.button/1`, preserving existing `href`, `phx-click`,
+  submit, and cancel behaviour.
+- Replace initials-only avatar spans with `MembaWeb.CoreComponents.avatar/1`,
+  including the club-home stack and overflow display.
+- Move member delivery visuals to the planned sage/warning/error mapping while
+  leaving staff/admin delivery surfaces unchanged.

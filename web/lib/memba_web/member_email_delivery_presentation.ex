@@ -11,9 +11,31 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   @status_order ["delivered", "sent", "delivery problem"]
 
   @presentations %{
-    "sent" => %{label: "Sending", icon: "hero-clock"},
-    "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
-    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"}
+    "sent" => %{label: "Sending", icon: "hero-clock", tone: "warning"},
+    "delivered" => %{label: "Delivered", icon: "hero-check-circle", tone: "success"},
+    "delivery problem" => %{
+      label: "Delivery problem",
+      icon: "hero-exclamation-triangle",
+      tone: "error"
+    }
+  }
+
+  @status_bg_classes %{
+    "delivered" => "bg-sage-600",
+    "sent" => "bg-warning",
+    "delivery problem" => "bg-error"
+  }
+
+  @status_text_classes %{
+    "delivered" => "text-sage-700",
+    "sent" => "text-warning",
+    "delivery problem" => "text-error"
+  }
+
+  @status_tint_classes %{
+    "delivered" => "bg-sage-50 text-sage-700 ring-sage-200",
+    "sent" => "bg-warning-soft text-warning ring-warning/25",
+    "delivery problem" => "bg-error-soft text-error ring-error/25"
   }
 
   @descriptions %{
@@ -37,6 +59,38 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   end
 
   @doc """
+  Returns the design-system status badge tone for a member delivery status.
+  """
+  def status_tone(status), do: present_status(status).tone
+
+  @doc """
+  Returns the filled bar/dot class for member delivery summary visuals.
+  """
+  def status_bg_class(status) do
+    status
+    |> normalize_status()
+    |> then(&Map.get(@status_bg_classes, &1, "bg-base-300"))
+  end
+
+  @doc """
+  Returns the text/icon class for member delivery status accents.
+  """
+  def status_text_class(status) do
+    status
+    |> normalize_status()
+    |> then(&Map.get(@status_text_classes, &1, "text-ink-2"))
+  end
+
+  @doc """
+  Returns the soft tint class for member delivery icons and initials.
+  """
+  def status_tint_class(status) do
+    status
+    |> normalize_status()
+    |> then(&Map.get(@status_tint_classes, &1, "bg-base-200 text-ink-2 ring-base-300"))
+  end
+
+  @doc """
   Returns a template-friendly receipt map with raw status plus presentation data.
   """
   def present_receipt(receipt) do
@@ -47,7 +101,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
       recipient_name: Map.get(receipt, :recipient_name),
       status: presentation.status,
       status_label: presentation.label,
-      status_icon: presentation.icon
+      status_icon: presentation.icon,
+      status_tone: presentation.tone
     }
   end
 
@@ -95,7 +150,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   defp normalize_status(_status), do: @fallback_status
 
   defp unknown_presentation(status) do
-    %{label: humanize_status(status), icon: "hero-question-mark-circle"}
+    %{label: humanize_status(status), icon: "hero-question-mark-circle", tone: "neutral"}
   end
 
   defp humanize_status(status) do
@@ -115,6 +170,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
       status: status,
       status_label: presentation.label,
       status_icon: presentation.icon,
+      status_tone: presentation.tone,
       description: Map.fetch!(@descriptions, status),
       count: count,
       percentage: percentage(count, total_count)

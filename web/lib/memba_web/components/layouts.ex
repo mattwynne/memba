@@ -278,22 +278,8 @@ defmodule MembaWeb.Layouts do
     "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white/75 transition duration-200 hover:bg-white/10 hover:text-white"
   end
 
-  @club_site_theme_defaults %{
-    background: "#f8fafc",
-    paper: "#ffffff",
-    ink: "#0f172a",
-    muted: "#64748b",
-    accent: "#334155",
-    line: "#e2e8f0"
-  }
-
   @doc """
-  Renders the future club-site layout seam.
-
-  This layout is intentionally not wired into production routes yet. It provides
-  neutral slate defaults via CSS custom properties so a later white-label slice
-  can pass resolved club theme values without extracting layout structure from
-  the Memba staff surface.
+  Renders the member/public club-site layout in the canonical Memba theme.
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
   attr :club_name, :string, default: "Club", doc: "the club name shown in the site chrome"
@@ -302,10 +288,6 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the signed-in identity shown in club member chrome"
 
-  attr :theme, :map,
-    default: %{},
-    doc: "optional CSS color values keyed by the club-site theme names"
-
   attr :current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
@@ -313,18 +295,15 @@ defmodule MembaWeb.Layouts do
   slot :inner_block, required: true
 
   def club_site(assigns) do
-    assigns = assign(assigns, :theme_style, club_site_theme_style(assigns.theme))
-
     ~H"""
     <div
       id="club-site-layout"
       data-surface="club-site"
-      class="min-h-screen bg-[var(--club-site-bg)] text-[var(--club-site-ink)]"
-      style={@theme_style}
+      class="min-h-screen bg-base-200 text-base-content"
     >
-      <header class="border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 sm:px-6 lg:px-8">
+      <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
         <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-base-content">
             {@club_name}
           </a>
 
@@ -333,17 +312,18 @@ defmodule MembaWeb.Layouts do
             class="flex flex-wrap items-center gap-3 text-sm font-medium"
             aria-label="Club member navigation"
           >
-            <span id="club-site-current-identity" class="text-[var(--club-site-muted)]">
+            <span id="club-site-current-identity" class="text-ink-2">
               Signed in as {@current_identity.email}
             </span>
             <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-              <button
+              <.button
                 id="club-site-sign-out-button"
                 type="submit"
-                class="rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-2 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                variant="secondary"
+                size="sm"
               >
                 Sign out
-              </button>
+              </.button>
             </.form>
           </nav>
         </div>
@@ -355,15 +335,15 @@ defmodule MembaWeb.Layouts do
 
       <footer
         id="club-site-footer"
-        class="border-t border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-6 sm:px-6 lg:px-8"
+        class="border-t border-base-300 bg-base-100 px-4 py-6 sm:px-6 lg:px-8"
       >
-        <div class="mx-auto max-w-7xl text-sm font-medium text-[var(--club-site-muted)]">
+        <div class="mx-auto max-w-7xl text-sm font-medium text-ink-2">
           Powered by
           <a
             id="club-site-footer-memba-home-link"
             href={ClubSite.root_url()}
             aria-label="Visit Memba home"
-            class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
+            class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
           >
             Memba
           </a>
@@ -374,22 +354,6 @@ defmodule MembaWeb.Layouts do
     <.flash_group flash={@flash} />
     """
   end
-
-  defp club_site_theme_style(theme) do
-    Enum.map_join(@club_site_theme_defaults, " ", fn {name, default_value} ->
-      value = theme_value(theme, name, default_value)
-      "--club-site-#{css_name(name)}: #{value};"
-    end)
-  end
-
-  defp theme_value(theme, name, default_value) when is_map(theme) do
-    Map.get(theme, name) || Map.get(theme, to_string(name)) || default_value
-  end
-
-  defp theme_value(_theme, _name, default_value), do: default_value
-
-  defp css_name(:background), do: "bg"
-  defp css_name(name), do: to_string(name)
 
   @doc """
   Shows the flash group with standard titles and content.

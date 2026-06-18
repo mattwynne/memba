@@ -181,6 +181,12 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
+             "#member-compose-from-summary #member-compose-from-avatar.avatar.avatar-placeholder[data-testid='member-compose-from-avatar'][title='Alice Adams']",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
              "input#member-message-subject-input[placeholder='Example: Saturday trail day']"
            )
 
@@ -191,13 +197,13 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "button#member-message-send-button[type='submit']",
+             "button#member-message-send-button.btn.btn-primary.btn-lg[type='submit']",
              "Send to all current members"
            )
 
     assert has_element?(
              view,
-             "#member-message-cancel-link[href='/']",
+             "#member-message-cancel-link.btn.btn-soft.btn-lg[href='/']",
              "Cancel"
            )
 

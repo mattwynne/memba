@@ -83,14 +83,14 @@ defmodule MembaWeb.MemberMessageLive.Show do
         data-message-id={Map.get(@route_params, "message_id")}
         class="space-y-8"
       >
-        <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
-          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+        <section class="overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-8 shadow-sm">
+          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
             Club message
           </p>
-          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-base-content">
             Member message detail
           </h1>
-          <p class="mt-4 max-w-2xl leading-7 text-[var(--club-site-muted)]">
+          <p class="mt-4 max-w-2xl leading-7 text-ink-2">
             This LiveView surface is ready for the existing member message route to load and
             render the selected club message.
           </p>

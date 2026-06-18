@@ -1,7 +1,7 @@
 # Member page design-system alignment
 
 Date: 2026-06-17
-Status: implementing
+Status: merged
 
 ## Goal
 

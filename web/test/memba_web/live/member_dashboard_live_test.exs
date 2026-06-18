@@ -102,7 +102,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
+             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
              "Send club message"
            )
 
@@ -115,7 +115,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-sender-initials']",
+             "#member-message-#{message.message_id} [data-testid='message-sender-initials'].avatar.avatar-placeholder",
              "BB"
            )
 
@@ -153,9 +153,43 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
              "AA"
            )
+  end
+
+  test "dashboard renders the shared avatar overflow affordance for larger member lists",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for index <- 2..8 do
+      create_active_member(
+        email: "member#{index}@example.com",
+        name: "Member #{index}",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+    end
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(view, "#active-members-card[data-active-member-count='8']")
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder[title='2 more current members']",
+             "+2"
+           )
+
+    refute has_element?(view, "#active-members-empty-state")
   end
 
   test "dashboard exposes the member invite action from the existing members list to Membership Admins",
@@ -176,7 +210,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
              "Invite member"
            )
   end
@@ -201,7 +235,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
              "Invite member"
            )
 
@@ -350,12 +384,27 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'].bg-sage-600"
+           )
+
+    assert has_element?(
+             view,
              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'][data-receipt-label='Sending'][data-receipt-count='1']"
            )
 
     assert has_element?(
              view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'].bg-warning"
+           )
+
+    assert has_element?(
+             view,
              "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'][data-receipt-label='Delivery problem'][data-receipt-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'].bg-error"
            )
 
     html = render(view)
@@ -441,7 +490,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-send-message-link[href='/messages/new']"
+             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
            )
 
     assert has_element?(
@@ -481,7 +530,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link[href='/messages/new']",
+             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
              "Send club message"
            )
 
@@ -545,7 +594,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-empty-send-link[href='/messages/new']",
+             "#member-message-empty-send-link.btn.btn-soft[href='/messages/new']",
              "Send the first message"
            )
   end
@@ -579,7 +628,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
              "AA"
            )
 
@@ -587,6 +636,47 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#active-members-card-copy",
              "Memba sends club-wide messages to everyone with a current membership."
+           )
+  end
+
+  test "dashboard renders active-member stack overflow through the shared avatar component",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for index <- 2..7 do
+      create_active_member(
+        email: "member#{index}@example.com",
+        name: "Member #{index}",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+    end
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#active-members-card[data-active-member-count='7'][data-active-members-state='active-members']"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'].avatar.avatar-placeholder",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder",
+             "+1"
            )
   end
 
