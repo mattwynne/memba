@@ -8,4 +8,4 @@
 - [x] 006 Sweep the four member pages for any remaining hardcoded hex; replace with tokens/daisyUI classes.
 - [x] 007 Add/update component, LiveView, and template tests for button/avatar/status usage and the member delivery-colour mapping; keep existing member tests green.
 - [x] 008 Run `./bin/dev gallery-walk` and review the member screenshots (desktop + mobile) for visual correctness.
-- [ ] 009 Run `dev check`.
+- [x] 009 Run `dev check`.
