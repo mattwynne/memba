@@ -44,6 +44,7 @@ green than before.
 | 032 | 2026-06-13 | merged | Auth email delivery progress | [plan](032-auth-email-delivery-progress/plan.md) |
 | 033 | 2026-06-13 | merged | Homepage staff bar | [plan](033-homepage-staff-bar/plan.md) |
 | 034 | 2026-06-17 | implementing | Member page design-system alignment | [plan](034-member-page-design-system-alignment/plan.md) |
+| 035 | 2026-06-17 | draft | Obliterate the deprecated "opened" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |
 
 Status notes:
 
