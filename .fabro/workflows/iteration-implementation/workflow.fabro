@@ -84,12 +84,18 @@ digraph IterationImplementation {
         script="echo 'Iteration implementation failed before coding: resume gate found uncommitted changes. Commit, stash, or reset/clean the worktree, then retry.' >&2\nexit 1"
     ]
 
+    todo_readable [
+        label="Check Todo File",
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+        timeout="120s"
+    ]
+
     all_tasks_done [
         label="Check Task List",
-        shape=tab,
-        output_schema="routing",
-        prompt="@prompts/check_task_list.md",
-        max_visits=40
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+        timeout="120s"
     ]
 
     implement_next_task [
@@ -244,10 +250,12 @@ digraph IterationImplementation {
     resume_gate -> resume_failed
     resume_failed -> exit
 
-    sync_task_list -> all_tasks_done
-    all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=succeeded && context.task_list_complete=true"]
-    all_tasks_done -> implement_next_task [label="Tasks remain", condition="outcome=succeeded && context.task_list_complete=false && context.task_list_needs_human=false"]
-    all_tasks_done -> task_not_ready [label="Task list problem or provider failure"]
+    sync_task_list -> todo_readable
+    todo_readable -> all_tasks_done [condition="outcome=succeeded"]
+    todo_readable -> task_not_ready [label="Todo missing, empty, or unreadable"]
+    all_tasks_done -> implement_next_task [label="Tasks remain", condition="outcome=succeeded"]
+    all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=failed"]
+    all_tasks_done -> task_not_ready [label="Unexpected task-list check outcome"]
     implement_next_task -> pre_validate_snapshot [condition="outcome=succeeded"]
     implement_next_task -> task_not_ready [label="Implementation/provider failure"]
     pre_validate_snapshot -> validate_task [condition="outcome=succeeded"]
