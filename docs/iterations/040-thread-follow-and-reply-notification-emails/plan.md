@@ -33,6 +33,7 @@ Following has no purpose except deciding who is emailed, so the follow model and
 - **Narrow reply delivery:** change reply fan-out from "every current member" (039) to "current followers of the conversation," excluding the reply's author. Non-followers receive no reply email.
 - **Follow control + copy:** an in-app "follow this conversation to receive any new replies" / unfollow control on the message-detail surface, reflecting the viewer's state.
 - **Unsubscribe from email:** a stop-following link in the reply email, consistent with the in-app unfollow; unfollowing halts further reply emails for that conversation.
+- **Reply email design:** per the DS design `emails/reply-notification.html` — a branded new-reply body + "View the conversation" CTA + a footer with "you're following this conversation · stop following this conversation". **Earlier messages are emitted as a standard quoted thread** (`blockquote.gmail_quote` + "On <date>, <name> wrote:" attributions) so email clients fold it natively ("See more" in Apple Mail, "•••" in Gmail) and thread it via headers (041) — rather than building a custom fold (unreliable: `<details>` is stripped by Gmail) or inlining a branded full history (which would double the thread in clients that thread by headers).
 - **Acceptance scenarios:** revise `club_message_replies.feature` to replace the 039 "reply emailed to every current member" rule with a "followers receive replies" rule, and add follow/auto-follow/unfollow scenarios, tagged `@iteration-040`.
 
 ### Out of scope

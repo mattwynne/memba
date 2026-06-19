@@ -34,6 +34,7 @@ Decided up front so the schema is not flat and can grow. One inbound domain (`cl
 - The inbound parser splits the local part on `+`, then reads typed segments (`c.` = conversation; future `g.` = group). No suffix ⇒ club-wide (today's behaviour). Unknown/garbled ⇒ existing rejection/fallback.
 - `<token>` is an opaque, unguessable routing token mapped to the conversation (not the raw conversation id), so the address is stable and safe to expose.
 - Email headers (`In-Reply-To`/`References`) are a **secondary** confirmation, not the primary match, because the conversation is encoded in the address itself.
+- Setting `Message-ID`/`In-Reply-To`/`References` also lets email clients **thread and fold the quoted history natively** (Apple Mail "See more", Gmail "•••"), which is why the reply email (designed in 040, `emails/reply-notification.html`) emits earlier messages as a standard quote rather than a custom fold or inlined branded history.
 - The `+g.` type tag and the segment grammar are **reserved now** so adding groups/channels later is additive — no schema rewrite.
 
 ## Related Problems
