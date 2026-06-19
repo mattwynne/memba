@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-19T13:57:55.499244877Z",
-  "last_event_at": "2026-06-19T14:00:24.185322259Z",
+  "last_event_at": "2026-06-19T14:00:29.009378757Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1064,9 +1064,258 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 94,
       "checkpoint": {
-        "timestamp": "2026-06-19T14:00:25.883398017Z",
+        "timestamp": "2026-06-19T14:00:25.881491898Z",
+        "current_node": "synthesize",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "plan_needs_human": true,
+          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "codex_review_confidence": "High",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborator or a persisted outbox/handoff table, whether provider idempotency is sufficient, and where handoff failure state should live. These choices directly determine implementation shape, migrations, tests, retry semantics, and operational observability.\n\n2. **The `send_club_message/2` result contract is not concrete enough.**  \n   Acceptance criteria require a “clear result contract,” but the plan does not define the exact success, partial-failure, and total-failure return shapes. This makes it hard to objectively prove that callers can distinguish committed domain state from provider handoff failure.\n\n3. **Retry/idempotency semantics are underspecified.**  \n   The plan requires duplicate/retry safety, but does not define what local state or provider idempotency key is authoritative, when a delivery is considered already handed off, or how retries behave after partial recipient success.\n\n## Non-blocking improvements\n\n1. Name the likely test files or test modules to update once the boundary choice is resolved.\n2. Clarify whether existing user-facing flash/copy should remain exactly unchanged when handoff fails after commit, or whether internal-only logging/state is sufficient.\n3. Add a concise state transition sketch for handoff attempts if a persisted model is chosen.\n4. Clarify whether provider failure observability means logs, return values, persisted state, telemetry, admin-facing state, or some combination.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract provider delivery into a named `Memba.Messaging.EmailDeliveryHandoff` boundary.\n- Define a concrete handoff result contract that always preserves the committed `message_id` / delivery IDs.\n- Add local idempotency/retry protection per `email_delivery_id`, either via an explicit persisted handoff state or a documented decision that provider-level idempotency is sufficient and already available.\n- Cover success, total failure, partial failure, retry/duplicate safety, and inbound acceptance through ExUnit tests.\n- Keep user-facing message and delivery-status behaviour unchanged.\n\n## Required plan edits\n\n1. Resolve the boundary design: choose either a synchronous structured-result collaborator or a minimal persisted outbox/handoff table.\n2. Define the exact `send_club_message/2` return contract for:\n   - full success,\n   - provider failure before any recipient is accepted,\n   - provider failure after one or more recipients are accepted.\n3. Define the exact handoff summary shape, including delivery IDs attempted, succeeded, failed, and skipped/already-handed-off if applicable.\n4. Specify the idempotency mechanism:\n   - provider idempotency key,\n   - local persisted state,\n   - or both.\n5. Specify where handoff failure/retry state is observable.\n6. Update acceptance criteria so “observable,” “retryable,” and “duplicate/retry safety” are objectively testable against the chosen design.\n\n## Validation plan\n\nTo prove the iteration succeeded after the plan is revised and implemented:\n\n1. Run focused ExUnit tests for `Memba.Messaging.send_club_message/2` and the new handoff boundary.\n2. Verify successful sends still create message and email-delivery read models and invoke the configured provider.\n3. Simulate provider failure before any recipient succeeds and verify:\n   - the committed message state is not reported as a failed domain send,\n   - handoff failure is returned or recorded according to the chosen contract.\n4. Simulate provider failure after partial success and verify:\n   - successful delivery IDs are distinguishable from failed ones,\n   - earlier accepted recipients are not ambiguous.\n5. Retry an already-created delivery and verify no second message stream or duplicate `EmailDeliveryCreated` event is produced, and no duplicate provider send occurs according to the chosen idempotency mechanism.\n6. Verify inbound club-message acceptance uses the same outbound handoff boundary.\n7. Confirm replay/projector paths do not call external providers.\n8. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified\",\"gemini_review_required_edits\":\"Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "thread.gemini_review.current_node": "claude_review",
+          "claude_review_decision": "NOT READY",
+          "claude_review_blocking_gaps": "Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined",
+          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified",
+          "gemini_review_required_edits": "Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable",
+          "failure_signature": "",
+          "thread.start.current_node": "gemini_review",
+          "outcome": "succeeded",
+          "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}",
+          "internal.thread_id": "codex_review",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.start": 0,
+          "internal.work_dir": "/workspace/memba",
+          "current_node": "synthesize",
+          "graph.default_fidelity": "summary:high",
+          "internal.run_id": "01KVG2RXZWPXXJKCXJCXFC4RM6",
+          "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "last_stage": "synthesize",
+          "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
+          "gemini_review_decision": "NOT READY",
+          "internal.retry_count.codex_review": 0,
+          "claude_review_required_edits": "Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay",
+          "internal.retry_count.synthesize": 0,
+          "internal.retry_count.gemini_review": 0,
+          "internal.node_visit_count": 1,
+          "failure_class": "",
+          "claude_review_blocking_gap_count": 5,
+          "plan_needs_fix": false,
+          "codex_review_blocking_gap_count": 4,
+          "codex_review_decision": "NOT READY",
+          "graph.rankdir": "LR",
+          "gemini_review_blocking_gap_count": 3,
+          "internal.retry_count.claude_review": 0,
+          "claude_review_confidence": "High",
+          "plan_ready": false,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Handoff result contract unresolved**: Acceptance criteria require \"`send_club_message/2` has a clear result contract\" but the plan leaves the exact result structure (`:ok` vs. `{:ok, message_id}` vs. `{:ok, %{message_id: ..., handoff: ...}}`) unspecified. Step 4 says \"adjust so dispatch and handoff results are not conflated\" and mentions \"caller should know message_id/dispatch result even when handoff fails,\" but does not commit to the concrete shape. Without this, the implementation could wander between incompatible options.\n\n2. **Handoff boundary architectural pattern unresolved**: Open Technical Decisions leaves the core boundary design choice unresolved (synchronous collaborator vs. persisted outbox/handoff table). This is not a minor detail—it fundamentally affects modules, tests, migrations, and retry semantics. The acceptance criteria require \"provider handoff failures are observable and testable\" and \"safe duplicate/retry,\" but those constraints differ significantly between a synchronous-only collaborator and a persisted outbox. Without choosing, step 2 \"define the smallest explicit handoff contract\" cannot be concretely implemented.\n\n3. **Idempotency/duplicate-prevention strategy unresolved**: The plan acknowledges duplicate emails as a risk and lists \"duplicate/retry safety\" in acceptance criteria, but leaves the implementation strategy open: \"if provider adapter lacks idempotency, record enough local state.\" This is a critical branching point. The plan should state whether Memba will rely on provider-level idempotency keys (and which providers support them), add a local sent-attempt table, or use another mechanism. Without this decision, step 6 cannot be implemented deterministically.\n\n4. **Handoff-failure representation unresolved**: Open Technical Decisions asks \"whether handoff failure should update an existing read model or a new internal operational read model\" and notes the desire to avoid \"overloading recipient delivery status.\" The acceptance criteria require \"provider handoff failures are observable and testable\" but do not specify how. Should failures surface in the `email_deliveries` projection, a new `email_handoff_attempts` table, an in-memory result only, or elsewhere? This decision affects migration planning, query contracts, and observability.\n\n5. **Partial-recipient-failure semantics undefined**: Acceptance criteria require \"provider failure for one recipient cannot cause silent ambiguity about earlier recipients\" and tests for \"provider failure after at least one recipient has been accepted,\" but the plan does not specify what should happen in this case. Should the system:\n   - Return partial success with per-recipient status?\n   - Retry only failed recipients?\n   - Fail the entire handoff and retry all recipients later?\n   - Surface partial success in a new data structure?\n   \n   Without this decision, the \"structured handoff result\" in step 2 cannot be concretely designed.\n\n## Non-Blocking Improvements\n\n1. **Inbound acceptance integration could be more specific**: Step 7 says \"route inbound accepted club messages through the same handoff contract\" but does not name the caller module/function (likely in `Memba.Messaging.InboundEmail` or similar). Adding a line like \"adjust `Memba.Messaging.InboundEmail.accept_club_message/2` or similar caller\" would make the plan more concrete without changing scope.\n\n2. **Migration planning omitted**: If the chosen boundary design includes a persisted outbox/handoff table (one of the open options), a migration will be required. The implementation plan could note \"if persisted boundary chosen, create migration for handoff state table\" in step 5 or as a conditional substep.\n\n3. **Provider-specific idempotency key support could be researched ahead**: The plan mentions \"whether provider adapters already expose enough idempotency key support\" but does not propose a pre-implementation research task. Adding a step 0 or 1.5 to \"check Postmark/Resend adapter and API docs for idempotency key support\" would reduce mid-implementation uncertainty.\n\n## Smallest Viable Iteration\n\nThe current scope is already focused and appropriate. The smallest viable slice within this plan would be:\n\n**Email handoff boundary with synchronous-only, single-transaction retry semantics**:\n- Extract a `Memba.Messaging.EmailDeliveryHandoff` module that accepts message/delivery data and calls the provider synchronously.\n- Return `{:ok, message_id, handoff_results}` from `send_club_message/2` where `handoff_results` is a list of `{delivery_id, :sent | {:failed, reason}}`.\n- Do not add a persisted outbox table; rely on caller retry or accept that mid-send failures are reported but not automatically retried.\n- Use provider-level idempotency keys if available; otherwise, document that duplicate handoff calls may send duplicate emails (deferring duplicate prevention to a later iteration with persisted state).\n\nHowever, this smaller slice may not satisfy the acceptance criterion \"retrying handoff does not create duplicate EmailDeliveryCreated events\" if retries are invoked by replaying the entire `send_club_message/2` call. The plan should clarify whether \"retry\" means command replay (which would replay events) or handoff-only retry (which requires persisted handoff state or idempotent provider keys).\n\n## Required Plan Edits\n\n1. **Resolve handoff result contract**: In the Implementation Plan or a new \"Design Decisions\" section, specify the exact return shape for `send_club_message/2`. Example: `{:ok, %{message_id: String.t(), handoff: [%{delivery_id: String.t(), status: :sent | {:failed, reason}}]}}` or similar. State what callers should do with handoff failures.\n\n2. **Choose handoff boundary pattern**: Decide between synchronous collaborator vs. persisted outbox/handoff table and document the choice. If persisted, add migration planning to the implementation steps. If synchronous-only, clarify retry semantics (caller retries entire command vs. no automatic retry).\n\n3. **Specify idempotency/duplicate-prevention mechanism**: State whether Memba will use provider idempotency keys (and confirm which providers support them), add a local handoff-attempt table, or defer duplicate prevention to a future iteration. Add this decision to the plan and remove the corresponding open question.\n\n4. **Define handoff-failure representation**: State whether handoff failures will be recorded in a new table, surfaced only in the command result, or reflected in the existing `email_deliveries` projection with a new status/field. Remove the corresponding open question.\n\n5. **Specify partial-recipient-failure behavior**: Clarify what happens when the provider accepts some recipients but rejects others. Should the handoff return per-recipient results? Should it fail entirely? Should it retry only failed recipients? Add this to the Acceptance Criteria or Implementation Plan.\n\n6. **Clarify retry semantics vs. event replay**: In Acceptance Criteria or Implementation Plan, distinguish \"retrying handoff\" (re-attempting provider call for an existing delivery) from \"retrying send_club_message\" (replaying the domain command). State which kind of retry must not duplicate `EmailDeliveryCreated` events.\n\n## Validation Plan\n\nThe existing validation plan is reasonable but should be augmented based on the resolved decisions:\n\n- Run targeted tests for all acceptance criteria (already stated).\n- Run `dev check` (already stated).\n- Manually confirm message and delivery views populate (already stated).\n- **Add**: Manually or through tests confirm partial-recipient-failure behavior matches the documented design.\n- **Add**: If persisted handoff state is chosen, manually inspect the handoff table after a simulated failure to confirm retry can be triggered safely.\n- **Add**: If provider idempotency keys are used, confirm keys are stable across retries and match the delivery ID or another stable identifier.\n\n---\n\n## Summary\n\nThe iteration has a clear technical goal and appropriate scope. The problem is well-motivated, and the acceptance criteria are comprehensive. However, **four critical design decisions remain unresolved** (result contract, boundary pattern, idempotency strategy, handoff-failure representation, partial-recipient behavior), leaving the implementation plan underspecified. Resolving these decisions and editing the plan accordingly will make it ready for implementation.\n\nOnce the blocking gaps are resolved, the plan will be concrete, bounded, and ready for deterministic implementation.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":5,\"claude_review_blocking_gaps\":\"Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined\",\"claude_review_required_edits\":\"Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay\"}}\n```",
+          "thread.codex_review.current_node": "synthesize",
+          "gemini_review_confidence": "High"
+        },
+        "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Handoff result contract unresolved**: Acceptance criteria require \"`send_club_message/2` has a clear result contract\" but the plan leaves the exact result structure (`:ok` vs. `{:ok, message_id}` vs. `{:ok, %{message_id: ..., handoff: ...}}`) unspecified. Step 4 says \"adjust so dispatch and handoff results are not conflated\" and mentions \"caller should know message_id/dispatch result even when handoff fails,\" but does not commit to the concrete shape. Without this, the implementation could wander between incompatible options.\n\n2. **Handoff boundary architectural pattern unresolved**: Open Technical Decisions leaves the core boundary design choice unresolved (synchronous collaborator vs. persisted outbox/handoff table). This is not a minor detail—it fundamentally affects modules, tests, migrations, and retry semantics. The acceptance criteria require \"provider handoff failures are observable and testable\" and \"safe duplicate/retry,\" but those constraints differ significantly between a synchronous-only collaborator and a persisted outbox. Without choosing, step 2 \"define the smallest explicit handoff contract\" cannot be concretely implemented.\n\n3. **Idempotency/duplicate-prevention strategy unresolved**: The plan acknowledges duplicate emails as a risk and lists \"duplicate/retry safety\" in acceptance criteria, but leaves the implementation strategy open: \"if provider adapter lacks idempotency, record enough local state.\" This is a critical branching point. The plan should state whether Memba will rely on provider-level idempotency keys (and which providers support them), add a local sent-attempt table, or use another mechanism. Without this decision, step 6 cannot be implemented deterministically.\n\n4. **Handoff-failure representation unresolved**: Open Technical Decisions asks \"whether handoff failure should update an existing read model or a new internal operational read model\" and notes the desire to avoid \"overloading recipient delivery status.\" The acceptance criteria require \"provider handoff failures are observable and testable\" but do not specify how. Should failures surface in the `email_deliveries` projection, a new `email_handoff_attempts` table, an in-memory result only, or elsewhere? This decision affects migration planning, query contracts, and observability.\n\n5. **Partial-recipient-failure semantics undefined**: Acceptance criteria require \"provider failure for one recipient cannot cause silent ambiguity about earlier recipients\" and tests for \"provider failure after at least one recipient has been accepted,\" but the plan does not specify what should happen in this case. Should the system:\n   - Return partial success with per-recipient status?\n   - Retry only failed recipients?\n   - Fail the entire handoff and retry all recipients later?\n   - Surface partial success in a new data structure?\n   \n   Without this decision, the \"structured handoff result\" in step 2 cannot be concretely designed.\n\n## Non-Blocking Improvements\n\n1. **Inbound acceptance integration could be more specific**: Step 7 says \"route inbound accepted club messages through the same handoff contract\" but does not name the caller module/function (likely in `Memba.Messaging.InboundEmail` or similar). Adding a line like \"adjust `Memba.Messaging.InboundEmail.accept_club_message/2` or similar caller\" would make the plan more concrete without changing scope.\n\n2. **Migration planning omitted**: If the chosen boundary design includes a persisted outbox/handoff table (one of the open options), a migration will be required. The implementation plan could note \"if persisted boundary chosen, create migration for handoff state table\" in step 5 or as a conditional substep.\n\n3. **Provider-specific idempotency key support could be researched ahead**: The plan mentions \"whether provider adapters already expose enough idempotency key support\" but does not propose a pre-implementation research task. Adding a step 0 or 1.5 to \"check Postmark/Resend adapter and API docs for idempotency key support\" would reduce mid-implementation uncertainty.\n\n## Smallest Viable Iteration\n\nThe current scope is already focused and appropriate. The smallest viable slice within this plan would be:\n\n**Email handoff boundary with synchronous-only, single-transaction retry semantics**:\n- Extract a `Memba.Messaging.EmailDeliveryHandoff` module that accepts message/delivery data and calls the provider synchronously.\n- Return `{:ok, message_id, handoff_results}` from `send_club_message/2` where `handoff_results` is a list of `{delivery_id, :sent | {:failed, reason}}`.\n- Do not add a persisted outbox table; rely on caller retry or accept that mid-send failures are reported but not automatically retried.\n- Use provider-level idempotency keys if available; otherwise, document that duplicate handoff calls may send duplicate emails (deferring duplicate prevention to a later iteration with persisted state).\n\nHowever, this smaller slice may not satisfy the acceptance criterion \"retrying handoff does not create duplicate EmailDeliveryCreated events\" if retries are invoked by replaying the entire `send_club_message/2` call. The plan should clarify whether \"retry\" means command replay (which would replay events) or handoff-only retry (which requires persisted handoff state or idempotent provider keys).\n\n## Required Plan Edits\n\n1. **Resolve handoff result contract**: In the Implementation Plan or a new \"Design Decisions\" section, specify the exact return shape for `send_club_message/2`. Example: `{:ok, %{message_id: String.t(), handoff: [%{delivery_id: String.t(), status: :sent | {:failed, reason}}]}}` or similar. State what callers should do with handoff failures.\n\n2. **Choose handoff boundary pattern**: Decide between synchronous collaborator vs. persisted outbox/handoff table and document the choice. If persisted, add migration planning to the implementation steps. If synchronous-only, clarify retry semantics (caller retries entire command vs. no automatic retry).\n\n3. **Specify idempotency/duplicate-prevention mechanism**: State whether Memba will use provider idempotency keys (and confirm which providers support them), add a local handoff-attempt table, or defer duplicate prevention to a future iteration. Add this decision to the plan and remove the corresponding open question.\n\n4. **Define handoff-failure representation**: State whether handoff failures will be recorded in a new table, surfaced only in the command result, or reflected in the existing `email_deliveries` projection with a new status/field. Remove the corresponding open question.\n\n5. **Specify partial-recipient-failure behavior**: Clarify what happens when the provider accepts some recipients but rejects others. Should the handoff return per-recipient results? Should it fail entirely? Should it retry only failed recipients? Add this to the Acceptance Criteria or Implementation Plan.\n\n6. **Clarify retry semantics vs. event replay**: In Acceptance Criteria or Implementation Plan, distinguish \"retrying handoff\" (re-attempting provider call for an existing delivery) from \"retrying send_club_message\" (replaying the domain command). State which kind of retry must not duplicate `EmailDeliveryCreated` events.\n\n## Validation Plan\n\nThe existing validation plan is reasonable but should be augmented based on the resolved decisions:\n\n- Run targeted tests for all acceptance criteria (already stated).\n- Run `dev check` (already stated).\n- Manually confirm message and delivery views populate (already stated).\n- **Add**: Manually or through tests confirm partial-recipient-failure behavior matches the documented design.\n- **Add**: If persisted handoff state is chosen, manually inspect the handoff table after a simulated failure to confirm retry can be triggered safely.\n- **Add**: If provider idempotency keys are used, confirm keys are stable across retries and match the delivery ID or another stable identifier.\n\n---\n\n## Summary\n\nThe iteration has a clear technical goal and appropriate scope. The problem is well-motivated, and the acceptance criteria are comprehensive. However, **four critical design decisions remain unresolved** (result contract, boundary pattern, idempotency strategy, handoff-failure representation, partial-recipient behavior), leaving the implementation plan underspecified. Resolving these decisions and editing the plan accordingly will make it ready for implementation.\n\nOnce the blocking gaps are resolved, the plan will be concrete, bounded, and ready for deterministic implementation.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":5,\"claude_review_blocking_gaps\":\"Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined\",\"claude_review_required_edits\":\"Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay\"}}\n```",
+              "claude_review_blocking_gaps": "Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined",
+              "claude_review_confidence": "High",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence:",
+              "claude_review_blocking_gap_count": 5,
+              "claude_review_required_edits": "Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay",
+              "claude_review_decision": "NOT READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4288,
+                    "output_tokens": 2368,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4985,
+                    "cache_write_tokens": 6253
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6253,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 73327
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 57131,
+              "tool_time_ms": 48,
+              "active_time_ms": 57179
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "gemini_review_required_edits": "Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable",
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborator or a persisted outbox/handoff table, whether provider idempotency is sufficient, and where handoff failure state should live. These choices directly determine implementation shape, migrations, tests, retry semantics, and operational observability.\n\n2. **The `send_club_message/2` result contract is not concrete enough.**  \n   Acceptance criteria require a “clear result contract,” but the plan does not define the exact success, partial-failure, and total-failure return shapes. This makes it hard to objectively prove that callers can distinguish committed domain state from provider handoff failure.\n\n3. **Retry/idempotency semantics are underspecified.**  \n   The plan requires duplicate/retry safety, but does not define what local state or provider idempotency key is authoritative, when a delivery is considered already handed off, or how retries behave after partial recipient success.\n\n## Non-blocking improvements\n\n1. Name the likely test files or test modules to update once the boundary choice is resolved.\n2. Clarify whether existing user-facing flash/copy should remain exactly unchanged when handoff fails after commit, or whether internal-only logging/state is sufficient.\n3. Add a concise state transition sketch for handoff attempts if a persisted model is chosen.\n4. Clarify whether provider failure observability means logs, return values, persisted state, telemetry, admin-facing state, or some combination.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract provider delivery into a named `Memba.Messaging.EmailDeliveryHandoff` boundary.\n- Define a concrete handoff result contract that always preserves the committed `message_id` / delivery IDs.\n- Add local idempotency/retry protection per `email_delivery_id`, either via an explicit persisted handoff state or a documented decision that provider-level idempotency is sufficient and already available.\n- Cover success, total failure, partial failure, retry/duplicate safety, and inbound acceptance through ExUnit tests.\n- Keep user-facing message and delivery-status behaviour unchanged.\n\n## Required plan edits\n\n1. Resolve the boundary design: choose either a synchronous structured-result collaborator or a minimal persisted outbox/handoff table.\n2. Define the exact `send_club_message/2` return contract for:\n   - full success,\n   - provider failure before any recipient is accepted,\n   - provider failure after one or more recipients are accepted.\n3. Define the exact handoff summary shape, including delivery IDs attempted, succeeded, failed, and skipped/already-handed-off if applicable.\n4. Specify the idempotency mechanism:\n   - provider idempotency key,\n   - local persisted state,\n   - or both.\n5. Specify where handoff failure/retry state is observable.\n6. Update acceptance criteria so “observable,” “retryable,” and “duplicate/retry safety” are objectively testable against the chosen design.\n\n## Validation plan\n\nTo prove the iteration succeeded after the plan is revised and implemented:\n\n1. Run focused ExUnit tests for `Memba.Messaging.send_club_message/2` and the new handoff boundary.\n2. Verify successful sends still create message and email-delivery read models and invoke the configured provider.\n3. Simulate provider failure before any recipient succeeds and verify:\n   - the committed message state is not reported as a failed domain send,\n   - handoff failure is returned or recorded according to the chosen contract.\n4. Simulate provider failure after partial success and verify:\n   - successful delivery IDs are distinguishable from failed ones,\n   - earlier accepted recipients are not ambiguous.\n5. Retry an already-created delivery and verify no second message stream or duplicate `EmailDeliveryCreated` event is produced, and no duplicate provider send occurs according to the chosen idempotency mechanism.\n6. Verify inbound club-message acceptance uses the same outbound handoff boundary.\n7. Confirm replay/projector paths do not call external providers.\n8. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified\",\"gemini_review_required_edits\":\"Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable\"}}",
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 3,
+              "gemini_review_blocking_gaps": "Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborato"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6465,
+                    "output_tokens": 994,
+                    "reasoning_tokens": 564,
+                    "cache_read_tokens": 3584,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 80857
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 30824,
+              "tool_time_ms": 47,
+              "active_time_ms": 30871
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_fix": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_human": true,
+              "plan_ready": false,
+              "last_stage": "synthesize"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6824,
+                    "output_tokens": 45,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 50950
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 13128,
+              "tool_time_ms": 0,
+              "active_time_ms": 13128
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "NOT READY",
+              "last_stage": "codex_review",
+              "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
+              "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
+              "codex_review_blocking_gap_count": 4,
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synch",
+              "codex_review_confidence": "High",
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10088,
+                    "output_tokens": 1125,
+                    "reasoning_tokens": 569,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101260
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 33428,
+              "tool_time_ms": 41,
+              "active_time_ms": 33469
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "264475af4885d808d0892c0a6a88f480de5d42fb",
+        "node_visits": {
+          "claude_review": 1,
+          "synthesize": 1,
+          "start": 1,
+          "codex_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 102,
+      "checkpoint": {
+        "timestamp": "2026-06-19T14:00:29.007936191Z",
         "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
@@ -1075,6 +1324,265 @@
           "codex_review",
           "synthesize",
           "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
+          "codex_review_decision": "NOT READY",
+          "gemini_review_confidence": "High",
+          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "outcome": "succeeded",
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_blocking_gap_count": 3,
+          "failure_class": "",
+          "internal.run_id": "01KVG2RXZWPXXJKCXJCXFC4RM6",
+          "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 1,
+          "internal.thread_id": "synthesize",
+          "plan_needs_fix": false,
+          "codex_review_blocking_gap_count": 4,
+          "internal.retry_count.claude_review": 0,
+          "plan_needs_human": true,
+          "gemini_review_decision": "NOT READY",
+          "failure_signature": "",
+          "thread.codex_review.current_node": "synthesize",
+          "current_node": "synthesis_gate",
+          "thread.start.current_node": "gemini_review",
+          "graph.rankdir": "LR",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborator or a persisted outbox/handoff table, whether provider idempotency is sufficient, and where handoff failure state should live. These choices directly determine implementation shape, migrations, tests, retry semantics, and operational observability.\n\n2. **The `send_club_message/2` result contract is not concrete enough.**  \n   Acceptance criteria require a “clear result contract,” but the plan does not define the exact success, partial-failure, and total-failure return shapes. This makes it hard to objectively prove that callers can distinguish committed domain state from provider handoff failure.\n\n3. **Retry/idempotency semantics are underspecified.**  \n   The plan requires duplicate/retry safety, but does not define what local state or provider idempotency key is authoritative, when a delivery is considered already handed off, or how retries behave after partial recipient success.\n\n## Non-blocking improvements\n\n1. Name the likely test files or test modules to update once the boundary choice is resolved.\n2. Clarify whether existing user-facing flash/copy should remain exactly unchanged when handoff fails after commit, or whether internal-only logging/state is sufficient.\n3. Add a concise state transition sketch for handoff attempts if a persisted model is chosen.\n4. Clarify whether provider failure observability means logs, return values, persisted state, telemetry, admin-facing state, or some combination.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract provider delivery into a named `Memba.Messaging.EmailDeliveryHandoff` boundary.\n- Define a concrete handoff result contract that always preserves the committed `message_id` / delivery IDs.\n- Add local idempotency/retry protection per `email_delivery_id`, either via an explicit persisted handoff state or a documented decision that provider-level idempotency is sufficient and already available.\n- Cover success, total failure, partial failure, retry/duplicate safety, and inbound acceptance through ExUnit tests.\n- Keep user-facing message and delivery-status behaviour unchanged.\n\n## Required plan edits\n\n1. Resolve the boundary design: choose either a synchronous structured-result collaborator or a minimal persisted outbox/handoff table.\n2. Define the exact `send_club_message/2` return contract for:\n   - full success,\n   - provider failure before any recipient is accepted,\n   - provider failure after one or more recipients are accepted.\n3. Define the exact handoff summary shape, including delivery IDs attempted, succeeded, failed, and skipped/already-handed-off if applicable.\n4. Specify the idempotency mechanism:\n   - provider idempotency key,\n   - local persisted state,\n   - or both.\n5. Specify where handoff failure/retry state is observable.\n6. Update acceptance criteria so “observable,” “retryable,” and “duplicate/retry safety” are objectively testable against the chosen design.\n\n## Validation plan\n\nTo prove the iteration succeeded after the plan is revised and implemented:\n\n1. Run focused ExUnit tests for `Memba.Messaging.send_club_message/2` and the new handoff boundary.\n2. Verify successful sends still create message and email-delivery read models and invoke the configured provider.\n3. Simulate provider failure before any recipient succeeds and verify:\n   - the committed message state is not reported as a failed domain send,\n   - handoff failure is returned or recorded according to the chosen contract.\n4. Simulate provider failure after partial success and verify:\n   - successful delivery IDs are distinguishable from failed ones,\n   - earlier accepted recipients are not ambiguous.\n5. Retry an already-created delivery and verify no second message stream or duplicate `EmailDeliveryCreated` event is produced, and no duplicate provider send occurs according to the chosen idempotency mechanism.\n6. Verify inbound club-message acceptance uses the same outbound handoff boundary.\n7. Confirm replay/projector paths do not call external providers.\n8. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified\",\"gemini_review_required_edits\":\"Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable\"}}",
+          "claude_review_decision": "NOT READY",
+          "internal.retry_count.gemini_review": 0,
+          "claude_review_blocking_gap_count": 5,
+          "claude_review_confidence": "High",
+          "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "internal.fidelity": "summary:high",
+          "gemini_review_required_edits": "Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "plan_ready": false,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Handoff result contract unresolved**: Acceptance criteria require \"`send_club_message/2` has a clear result contract\" but the plan leaves the exact result structure (`:ok` vs. `{:ok, message_id}` vs. `{:ok, %{message_id: ..., handoff: ...}}`) unspecified. Step 4 says \"adjust so dispatch and handoff results are not conflated\" and mentions \"caller should know message_id/dispatch result even when handoff fails,\" but does not commit to the concrete shape. Without this, the implementation could wander between incompatible options.\n\n2. **Handoff boundary architectural pattern unresolved**: Open Technical Decisions leaves the core boundary design choice unresolved (synchronous collaborator vs. persisted outbox/handoff table). This is not a minor detail—it fundamentally affects modules, tests, migrations, and retry semantics. The acceptance criteria require \"provider handoff failures are observable and testable\" and \"safe duplicate/retry,\" but those constraints differ significantly between a synchronous-only collaborator and a persisted outbox. Without choosing, step 2 \"define the smallest explicit handoff contract\" cannot be concretely implemented.\n\n3. **Idempotency/duplicate-prevention strategy unresolved**: The plan acknowledges duplicate emails as a risk and lists \"duplicate/retry safety\" in acceptance criteria, but leaves the implementation strategy open: \"if provider adapter lacks idempotency, record enough local state.\" This is a critical branching point. The plan should state whether Memba will rely on provider-level idempotency keys (and which providers support them), add a local sent-attempt table, or use another mechanism. Without this decision, step 6 cannot be implemented deterministically.\n\n4. **Handoff-failure representation unresolved**: Open Technical Decisions asks \"whether handoff failure should update an existing read model or a new internal operational read model\" and notes the desire to avoid \"overloading recipient delivery status.\" The acceptance criteria require \"provider handoff failures are observable and testable\" but do not specify how. Should failures surface in the `email_deliveries` projection, a new `email_handoff_attempts` table, an in-memory result only, or elsewhere? This decision affects migration planning, query contracts, and observability.\n\n5. **Partial-recipient-failure semantics undefined**: Acceptance criteria require \"provider failure for one recipient cannot cause silent ambiguity about earlier recipients\" and tests for \"provider failure after at least one recipient has been accepted,\" but the plan does not specify what should happen in this case. Should the system:\n   - Return partial success with per-recipient status?\n   - Retry only failed recipients?\n   - Fail the entire handoff and retry all recipients later?\n   - Surface partial success in a new data structure?\n   \n   Without this decision, the \"structured handoff result\" in step 2 cannot be concretely designed.\n\n## Non-Blocking Improvements\n\n1. **Inbound acceptance integration could be more specific**: Step 7 says \"route inbound accepted club messages through the same handoff contract\" but does not name the caller module/function (likely in `Memba.Messaging.InboundEmail` or similar). Adding a line like \"adjust `Memba.Messaging.InboundEmail.accept_club_message/2` or similar caller\" would make the plan more concrete without changing scope.\n\n2. **Migration planning omitted**: If the chosen boundary design includes a persisted outbox/handoff table (one of the open options), a migration will be required. The implementation plan could note \"if persisted boundary chosen, create migration for handoff state table\" in step 5 or as a conditional substep.\n\n3. **Provider-specific idempotency key support could be researched ahead**: The plan mentions \"whether provider adapters already expose enough idempotency key support\" but does not propose a pre-implementation research task. Adding a step 0 or 1.5 to \"check Postmark/Resend adapter and API docs for idempotency key support\" would reduce mid-implementation uncertainty.\n\n## Smallest Viable Iteration\n\nThe current scope is already focused and appropriate. The smallest viable slice within this plan would be:\n\n**Email handoff boundary with synchronous-only, single-transaction retry semantics**:\n- Extract a `Memba.Messaging.EmailDeliveryHandoff` module that accepts message/delivery data and calls the provider synchronously.\n- Return `{:ok, message_id, handoff_results}` from `send_club_message/2` where `handoff_results` is a list of `{delivery_id, :sent | {:failed, reason}}`.\n- Do not add a persisted outbox table; rely on caller retry or accept that mid-send failures are reported but not automatically retried.\n- Use provider-level idempotency keys if available; otherwise, document that duplicate handoff calls may send duplicate emails (deferring duplicate prevention to a later iteration with persisted state).\n\nHowever, this smaller slice may not satisfy the acceptance criterion \"retrying handoff does not create duplicate EmailDeliveryCreated events\" if retries are invoked by replaying the entire `send_club_message/2` call. The plan should clarify whether \"retry\" means command replay (which would replay events) or handoff-only retry (which requires persisted handoff state or idempotent provider keys).\n\n## Required Plan Edits\n\n1. **Resolve handoff result contract**: In the Implementation Plan or a new \"Design Decisions\" section, specify the exact return shape for `send_club_message/2`. Example: `{:ok, %{message_id: String.t(), handoff: [%{delivery_id: String.t(), status: :sent | {:failed, reason}}]}}` or similar. State what callers should do with handoff failures.\n\n2. **Choose handoff boundary pattern**: Decide between synchronous collaborator vs. persisted outbox/handoff table and document the choice. If persisted, add migration planning to the implementation steps. If synchronous-only, clarify retry semantics (caller retries entire command vs. no automatic retry).\n\n3. **Specify idempotency/duplicate-prevention mechanism**: State whether Memba will use provider idempotency keys (and confirm which providers support them), add a local handoff-attempt table, or defer duplicate prevention to a future iteration. Add this decision to the plan and remove the corresponding open question.\n\n4. **Define handoff-failure representation**: State whether handoff failures will be recorded in a new table, surfaced only in the command result, or reflected in the existing `email_deliveries` projection with a new status/field. Remove the corresponding open question.\n\n5. **Specify partial-recipient-failure behavior**: Clarify what happens when the provider accepts some recipients but rejects others. Should the handoff return per-recipient results? Should it fail entirely? Should it retry only failed recipients? Add this to the Acceptance Criteria or Implementation Plan.\n\n6. **Clarify retry semantics vs. event replay**: In Acceptance Criteria or Implementation Plan, distinguish \"retrying handoff\" (re-attempting provider call for an existing delivery) from \"retrying send_club_message\" (replaying the domain command). State which kind of retry must not duplicate `EmailDeliveryCreated` events.\n\n## Validation Plan\n\nThe existing validation plan is reasonable but should be augmented based on the resolved decisions:\n\n- Run targeted tests for all acceptance criteria (already stated).\n- Run `dev check` (already stated).\n- Manually confirm message and delivery views populate (already stated).\n- **Add**: Manually or through tests confirm partial-recipient-failure behavior matches the documented design.\n- **Add**: If persisted handoff state is chosen, manually inspect the handoff table after a simulated failure to confirm retry can be triggered safely.\n- **Add**: If provider idempotency keys are used, confirm keys are stable across retries and match the delivery ID or another stable identifier.\n\n---\n\n## Summary\n\nThe iteration has a clear technical goal and appropriate scope. The problem is well-motivated, and the acceptance criteria are comprehensive. However, **four critical design decisions remain unresolved** (result contract, boundary pattern, idempotency strategy, handoff-failure representation, partial-recipient behavior), leaving the implementation plan underspecified. Resolving these decisions and editing the plan accordingly will make it ready for implementation.\n\nOnce the blocking gaps are resolved, the plan will be concrete, bounded, and ready for deterministic implementation.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":5,\"claude_review_blocking_gaps\":\"Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined\",\"claude_review_required_edits\":\"Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay\"}}\n```",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "codex_review_confidence": "High",
+          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified",
+          "internal.retry_count.codex_review": 0,
+          "claude_review_blocking_gaps": "Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined",
+          "internal.retry_count.synthesize": 0,
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "claude_review_required_edits": "Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "last_stage": "synthesize",
+          "graph.default_fidelity": "summary:high",
+          "thread.synthesize.current_node": "synthesis_gate"
+        },
+        "node_outcomes": {
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "gemini_review_required_edits": "Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable",
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborator or a persisted outbox/handoff table, whether provider idempotency is sufficient, and where handoff failure state should live. These choices directly determine implementation shape, migrations, tests, retry semantics, and operational observability.\n\n2. **The `send_club_message/2` result contract is not concrete enough.**  \n   Acceptance criteria require a “clear result contract,” but the plan does not define the exact success, partial-failure, and total-failure return shapes. This makes it hard to objectively prove that callers can distinguish committed domain state from provider handoff failure.\n\n3. **Retry/idempotency semantics are underspecified.**  \n   The plan requires duplicate/retry safety, but does not define what local state or provider idempotency key is authoritative, when a delivery is considered already handed off, or how retries behave after partial recipient success.\n\n## Non-blocking improvements\n\n1. Name the likely test files or test modules to update once the boundary choice is resolved.\n2. Clarify whether existing user-facing flash/copy should remain exactly unchanged when handoff fails after commit, or whether internal-only logging/state is sufficient.\n3. Add a concise state transition sketch for handoff attempts if a persisted model is chosen.\n4. Clarify whether provider failure observability means logs, return values, persisted state, telemetry, admin-facing state, or some combination.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract provider delivery into a named `Memba.Messaging.EmailDeliveryHandoff` boundary.\n- Define a concrete handoff result contract that always preserves the committed `message_id` / delivery IDs.\n- Add local idempotency/retry protection per `email_delivery_id`, either via an explicit persisted handoff state or a documented decision that provider-level idempotency is sufficient and already available.\n- Cover success, total failure, partial failure, retry/duplicate safety, and inbound acceptance through ExUnit tests.\n- Keep user-facing message and delivery-status behaviour unchanged.\n\n## Required plan edits\n\n1. Resolve the boundary design: choose either a synchronous structured-result collaborator or a minimal persisted outbox/handoff table.\n2. Define the exact `send_club_message/2` return contract for:\n   - full success,\n   - provider failure before any recipient is accepted,\n   - provider failure after one or more recipients are accepted.\n3. Define the exact handoff summary shape, including delivery IDs attempted, succeeded, failed, and skipped/already-handed-off if applicable.\n4. Specify the idempotency mechanism:\n   - provider idempotency key,\n   - local persisted state,\n   - or both.\n5. Specify where handoff failure/retry state is observable.\n6. Update acceptance criteria so “observable,” “retryable,” and “duplicate/retry safety” are objectively testable against the chosen design.\n\n## Validation plan\n\nTo prove the iteration succeeded after the plan is revised and implemented:\n\n1. Run focused ExUnit tests for `Memba.Messaging.send_club_message/2` and the new handoff boundary.\n2. Verify successful sends still create message and email-delivery read models and invoke the configured provider.\n3. Simulate provider failure before any recipient succeeds and verify:\n   - the committed message state is not reported as a failed domain send,\n   - handoff failure is returned or recorded according to the chosen contract.\n4. Simulate provider failure after partial success and verify:\n   - successful delivery IDs are distinguishable from failed ones,\n   - earlier accepted recipients are not ambiguous.\n5. Retry an already-created delivery and verify no second message stream or duplicate `EmailDeliveryCreated` event is produced, and no duplicate provider send occurs according to the chosen idempotency mechanism.\n6. Verify inbound club-message acceptance uses the same outbound handoff boundary.\n7. Confirm replay/projector paths do not call external providers.\n8. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified\",\"gemini_review_required_edits\":\"Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable\"}}",
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 3,
+              "gemini_review_blocking_gaps": "Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborato"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6465,
+                    "output_tokens": 994,
+                    "reasoning_tokens": 564,
+                    "cache_read_tokens": 3584,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 80857
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 30824,
+              "tool_time_ms": 47,
+              "active_time_ms": 30871
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Handoff result contract unresolved**: Acceptance criteria require \"`send_club_message/2` has a clear result contract\" but the plan leaves the exact result structure (`:ok` vs. `{:ok, message_id}` vs. `{:ok, %{message_id: ..., handoff: ...}}`) unspecified. Step 4 says \"adjust so dispatch and handoff results are not conflated\" and mentions \"caller should know message_id/dispatch result even when handoff fails,\" but does not commit to the concrete shape. Without this, the implementation could wander between incompatible options.\n\n2. **Handoff boundary architectural pattern unresolved**: Open Technical Decisions leaves the core boundary design choice unresolved (synchronous collaborator vs. persisted outbox/handoff table). This is not a minor detail—it fundamentally affects modules, tests, migrations, and retry semantics. The acceptance criteria require \"provider handoff failures are observable and testable\" and \"safe duplicate/retry,\" but those constraints differ significantly between a synchronous-only collaborator and a persisted outbox. Without choosing, step 2 \"define the smallest explicit handoff contract\" cannot be concretely implemented.\n\n3. **Idempotency/duplicate-prevention strategy unresolved**: The plan acknowledges duplicate emails as a risk and lists \"duplicate/retry safety\" in acceptance criteria, but leaves the implementation strategy open: \"if provider adapter lacks idempotency, record enough local state.\" This is a critical branching point. The plan should state whether Memba will rely on provider-level idempotency keys (and which providers support them), add a local sent-attempt table, or use another mechanism. Without this decision, step 6 cannot be implemented deterministically.\n\n4. **Handoff-failure representation unresolved**: Open Technical Decisions asks \"whether handoff failure should update an existing read model or a new internal operational read model\" and notes the desire to avoid \"overloading recipient delivery status.\" The acceptance criteria require \"provider handoff failures are observable and testable\" but do not specify how. Should failures surface in the `email_deliveries` projection, a new `email_handoff_attempts` table, an in-memory result only, or elsewhere? This decision affects migration planning, query contracts, and observability.\n\n5. **Partial-recipient-failure semantics undefined**: Acceptance criteria require \"provider failure for one recipient cannot cause silent ambiguity about earlier recipients\" and tests for \"provider failure after at least one recipient has been accepted,\" but the plan does not specify what should happen in this case. Should the system:\n   - Return partial success with per-recipient status?\n   - Retry only failed recipients?\n   - Fail the entire handoff and retry all recipients later?\n   - Surface partial success in a new data structure?\n   \n   Without this decision, the \"structured handoff result\" in step 2 cannot be concretely designed.\n\n## Non-Blocking Improvements\n\n1. **Inbound acceptance integration could be more specific**: Step 7 says \"route inbound accepted club messages through the same handoff contract\" but does not name the caller module/function (likely in `Memba.Messaging.InboundEmail` or similar). Adding a line like \"adjust `Memba.Messaging.InboundEmail.accept_club_message/2` or similar caller\" would make the plan more concrete without changing scope.\n\n2. **Migration planning omitted**: If the chosen boundary design includes a persisted outbox/handoff table (one of the open options), a migration will be required. The implementation plan could note \"if persisted boundary chosen, create migration for handoff state table\" in step 5 or as a conditional substep.\n\n3. **Provider-specific idempotency key support could be researched ahead**: The plan mentions \"whether provider adapters already expose enough idempotency key support\" but does not propose a pre-implementation research task. Adding a step 0 or 1.5 to \"check Postmark/Resend adapter and API docs for idempotency key support\" would reduce mid-implementation uncertainty.\n\n## Smallest Viable Iteration\n\nThe current scope is already focused and appropriate. The smallest viable slice within this plan would be:\n\n**Email handoff boundary with synchronous-only, single-transaction retry semantics**:\n- Extract a `Memba.Messaging.EmailDeliveryHandoff` module that accepts message/delivery data and calls the provider synchronously.\n- Return `{:ok, message_id, handoff_results}` from `send_club_message/2` where `handoff_results` is a list of `{delivery_id, :sent | {:failed, reason}}`.\n- Do not add a persisted outbox table; rely on caller retry or accept that mid-send failures are reported but not automatically retried.\n- Use provider-level idempotency keys if available; otherwise, document that duplicate handoff calls may send duplicate emails (deferring duplicate prevention to a later iteration with persisted state).\n\nHowever, this smaller slice may not satisfy the acceptance criterion \"retrying handoff does not create duplicate EmailDeliveryCreated events\" if retries are invoked by replaying the entire `send_club_message/2` call. The plan should clarify whether \"retry\" means command replay (which would replay events) or handoff-only retry (which requires persisted handoff state or idempotent provider keys).\n\n## Required Plan Edits\n\n1. **Resolve handoff result contract**: In the Implementation Plan or a new \"Design Decisions\" section, specify the exact return shape for `send_club_message/2`. Example: `{:ok, %{message_id: String.t(), handoff: [%{delivery_id: String.t(), status: :sent | {:failed, reason}}]}}` or similar. State what callers should do with handoff failures.\n\n2. **Choose handoff boundary pattern**: Decide between synchronous collaborator vs. persisted outbox/handoff table and document the choice. If persisted, add migration planning to the implementation steps. If synchronous-only, clarify retry semantics (caller retries entire command vs. no automatic retry).\n\n3. **Specify idempotency/duplicate-prevention mechanism**: State whether Memba will use provider idempotency keys (and confirm which providers support them), add a local handoff-attempt table, or defer duplicate prevention to a future iteration. Add this decision to the plan and remove the corresponding open question.\n\n4. **Define handoff-failure representation**: State whether handoff failures will be recorded in a new table, surfaced only in the command result, or reflected in the existing `email_deliveries` projection with a new status/field. Remove the corresponding open question.\n\n5. **Specify partial-recipient-failure behavior**: Clarify what happens when the provider accepts some recipients but rejects others. Should the handoff return per-recipient results? Should it fail entirely? Should it retry only failed recipients? Add this to the Acceptance Criteria or Implementation Plan.\n\n6. **Clarify retry semantics vs. event replay**: In Acceptance Criteria or Implementation Plan, distinguish \"retrying handoff\" (re-attempting provider call for an existing delivery) from \"retrying send_club_message\" (replaying the domain command). State which kind of retry must not duplicate `EmailDeliveryCreated` events.\n\n## Validation Plan\n\nThe existing validation plan is reasonable but should be augmented based on the resolved decisions:\n\n- Run targeted tests for all acceptance criteria (already stated).\n- Run `dev check` (already stated).\n- Manually confirm message and delivery views populate (already stated).\n- **Add**: Manually or through tests confirm partial-recipient-failure behavior matches the documented design.\n- **Add**: If persisted handoff state is chosen, manually inspect the handoff table after a simulated failure to confirm retry can be triggered safely.\n- **Add**: If provider idempotency keys are used, confirm keys are stable across retries and match the delivery ID or another stable identifier.\n\n---\n\n## Summary\n\nThe iteration has a clear technical goal and appropriate scope. The problem is well-motivated, and the acceptance criteria are comprehensive. However, **four critical design decisions remain unresolved** (result contract, boundary pattern, idempotency strategy, handoff-failure representation, partial-recipient behavior), leaving the implementation plan underspecified. Resolving these decisions and editing the plan accordingly will make it ready for implementation.\n\nOnce the blocking gaps are resolved, the plan will be concrete, bounded, and ready for deterministic implementation.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":5,\"claude_review_blocking_gaps\":\"Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined\",\"claude_review_required_edits\":\"Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay\"}}\n```",
+              "claude_review_blocking_gaps": "Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined",
+              "claude_review_confidence": "High",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence:",
+              "claude_review_blocking_gap_count": 5,
+              "claude_review_required_edits": "Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay",
+              "claude_review_decision": "NOT READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4288,
+                    "output_tokens": 2368,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4985,
+                    "cache_write_tokens": 6253
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6253,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 73327
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 57131,
+              "tool_time_ms": 48,
+              "active_time_ms": 57179
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_fix": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_human": true,
+              "plan_ready": false,
+              "last_stage": "synthesize"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6824,
+                    "output_tokens": 45,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 50950
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 13128,
+              "tool_time_ms": 0,
+              "active_time_ms": 13128
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "NOT READY",
+              "last_stage": "codex_review",
+              "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
+              "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
+              "codex_review_blocking_gap_count": 4,
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synch",
+              "codex_review_confidence": "High",
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10088,
+                    "output_tokens": 1125,
+                    "reasoning_tokens": 569,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101260
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 33428,
+              "tool_time_ms": 41,
+              "active_time_ms": 33469
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "not_ready",
+        "git_commit_sha": "6df5db0942e4bc4734a1b70d456cee6b3e61d030",
+        "node_visits": {
+          "claude_review": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "codex_review": 1,
+          "gemini_review": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-19T14:00:29.178506513Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "not_ready"
         ],
         "node_retries": {},
         "context_values": {
@@ -1090,7 +1598,8 @@
           "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "internal.retry_count.synthesize": 0,
           "internal.retry_count.synthesis_gate": 0,
-          "failure_class": "",
+          "thread.synthesis_gate.current_node": "not_ready",
+          "failure_class": "deterministic",
           "internal.retry_count.codex_review": 0,
           "thread.synthesize.current_node": "synthesis_gate",
           "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}",
@@ -1098,6 +1607,8 @@
           "thread.codex_review.current_node": "synthesize",
           "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 038 Plan Review: Email Delivery Handoff Boundary\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Handoff result contract unresolved**: Acceptance criteria require \"`send_club_message/2` has a clear result contract\" but the plan leaves the exact result structure (`:ok` vs. `{:ok, message_id}` vs. `{:ok, %{message_id: ..., handoff: ...}}`) unspecified. Step 4 says \"adjust so dispatch and handoff results are not conflated\" and mentions \"caller should know message_id/dispatch result even when handoff fails,\" but does not commit to the concrete shape. Without this, the implementation could wander between incompatible options.\n\n2. **Handoff boundary architectural pattern unresolved**: Open Technical Decisions leaves the core boundary design choice unresolved (synchronous collaborator vs. persisted outbox/handoff table). This is not a minor detail—it fundamentally affects modules, tests, migrations, and retry semantics. The acceptance criteria require \"provider handoff failures are observable and testable\" and \"safe duplicate/retry,\" but those constraints differ significantly between a synchronous-only collaborator and a persisted outbox. Without choosing, step 2 \"define the smallest explicit handoff contract\" cannot be concretely implemented.\n\n3. **Idempotency/duplicate-prevention strategy unresolved**: The plan acknowledges duplicate emails as a risk and lists \"duplicate/retry safety\" in acceptance criteria, but leaves the implementation strategy open: \"if provider adapter lacks idempotency, record enough local state.\" This is a critical branching point. The plan should state whether Memba will rely on provider-level idempotency keys (and which providers support them), add a local sent-attempt table, or use another mechanism. Without this decision, step 6 cannot be implemented deterministically.\n\n4. **Handoff-failure representation unresolved**: Open Technical Decisions asks \"whether handoff failure should update an existing read model or a new internal operational read model\" and notes the desire to avoid \"overloading recipient delivery status.\" The acceptance criteria require \"provider handoff failures are observable and testable\" but do not specify how. Should failures surface in the `email_deliveries` projection, a new `email_handoff_attempts` table, an in-memory result only, or elsewhere? This decision affects migration planning, query contracts, and observability.\n\n5. **Partial-recipient-failure semantics undefined**: Acceptance criteria require \"provider failure for one recipient cannot cause silent ambiguity about earlier recipients\" and tests for \"provider failure after at least one recipient has been accepted,\" but the plan does not specify what should happen in this case. Should the system:\n   - Return partial success with per-recipient status?\n   - Retry only failed recipients?\n   - Fail the entire handoff and retry all recipients later?\n   - Surface partial success in a new data structure?\n   \n   Without this decision, the \"structured handoff result\" in step 2 cannot be concretely designed.\n\n## Non-Blocking Improvements\n\n1. **Inbound acceptance integration could be more specific**: Step 7 says \"route inbound accepted club messages through the same handoff contract\" but does not name the caller module/function (likely in `Memba.Messaging.InboundEmail` or similar). Adding a line like \"adjust `Memba.Messaging.InboundEmail.accept_club_message/2` or similar caller\" would make the plan more concrete without changing scope.\n\n2. **Migration planning omitted**: If the chosen boundary design includes a persisted outbox/handoff table (one of the open options), a migration will be required. The implementation plan could note \"if persisted boundary chosen, create migration for handoff state table\" in step 5 or as a conditional substep.\n\n3. **Provider-specific idempotency key support could be researched ahead**: The plan mentions \"whether provider adapters already expose enough idempotency key support\" but does not propose a pre-implementation research task. Adding a step 0 or 1.5 to \"check Postmark/Resend adapter and API docs for idempotency key support\" would reduce mid-implementation uncertainty.\n\n## Smallest Viable Iteration\n\nThe current scope is already focused and appropriate. The smallest viable slice within this plan would be:\n\n**Email handoff boundary with synchronous-only, single-transaction retry semantics**:\n- Extract a `Memba.Messaging.EmailDeliveryHandoff` module that accepts message/delivery data and calls the provider synchronously.\n- Return `{:ok, message_id, handoff_results}` from `send_club_message/2` where `handoff_results` is a list of `{delivery_id, :sent | {:failed, reason}}`.\n- Do not add a persisted outbox table; rely on caller retry or accept that mid-send failures are reported but not automatically retried.\n- Use provider-level idempotency keys if available; otherwise, document that duplicate handoff calls may send duplicate emails (deferring duplicate prevention to a later iteration with persisted state).\n\nHowever, this smaller slice may not satisfy the acceptance criterion \"retrying handoff does not create duplicate EmailDeliveryCreated events\" if retries are invoked by replaying the entire `send_club_message/2` call. The plan should clarify whether \"retry\" means command replay (which would replay events) or handoff-only retry (which requires persisted handoff state or idempotent provider keys).\n\n## Required Plan Edits\n\n1. **Resolve handoff result contract**: In the Implementation Plan or a new \"Design Decisions\" section, specify the exact return shape for `send_club_message/2`. Example: `{:ok, %{message_id: String.t(), handoff: [%{delivery_id: String.t(), status: :sent | {:failed, reason}}]}}` or similar. State what callers should do with handoff failures.\n\n2. **Choose handoff boundary pattern**: Decide between synchronous collaborator vs. persisted outbox/handoff table and document the choice. If persisted, add migration planning to the implementation steps. If synchronous-only, clarify retry semantics (caller retries entire command vs. no automatic retry).\n\n3. **Specify idempotency/duplicate-prevention mechanism**: State whether Memba will use provider idempotency keys (and confirm which providers support them), add a local handoff-attempt table, or defer duplicate prevention to a future iteration. Add this decision to the plan and remove the corresponding open question.\n\n4. **Define handoff-failure representation**: State whether handoff failures will be recorded in a new table, surfaced only in the command result, or reflected in the existing `email_deliveries` projection with a new status/field. Remove the corresponding open question.\n\n5. **Specify partial-recipient-failure behavior**: Clarify what happens when the provider accepts some recipients but rejects others. Should the handoff return per-recipient results? Should it fail entirely? Should it retry only failed recipients? Add this to the Acceptance Criteria or Implementation Plan.\n\n6. **Clarify retry semantics vs. event replay**: In Acceptance Criteria or Implementation Plan, distinguish \"retrying handoff\" (re-attempting provider call for an existing delivery) from \"retrying send_club_message\" (replaying the domain command). State which kind of retry must not duplicate `EmailDeliveryCreated` events.\n\n## Validation Plan\n\nThe existing validation plan is reasonable but should be augmented based on the resolved decisions:\n\n- Run targeted tests for all acceptance criteria (already stated).\n- Run `dev check` (already stated).\n- Manually confirm message and delivery views populate (already stated).\n- **Add**: Manually or through tests confirm partial-recipient-failure behavior matches the documented design.\n- **Add**: If persisted handoff state is chosen, manually inspect the handoff table after a simulated failure to confirm retry can be triggered safely.\n- **Add**: If provider idempotency keys are used, confirm keys are stable across retries and match the delivery ID or another stable identifier.\n\n---\n\n## Summary\n\nThe iteration has a clear technical goal and appropriate scope. The problem is well-motivated, and the acceptance criteria are comprehensive. However, **four critical design decisions remain unresolved** (result contract, boundary pattern, idempotency strategy, handoff-failure representation, partial-recipient behavior), leaving the implementation plan underspecified. Resolving these decisions and editing the plan accordingly will make it ready for implementation.\n\nOnce the blocking gaps are resolved, the plan will be concrete, bounded, and ready for deterministic implementation.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":5,\"claude_review_blocking_gaps\":\"Handoff result contract unresolved; Handoff boundary pattern unresolved (sync vs. persisted outbox); Idempotency/duplicate-prevention strategy unresolved; Handoff-failure representation unresolved; Partial-recipient-failure semantics undefined\",\"claude_review_required_edits\":\"Specify send_club_message/2 result contract; Choose sync collaborator vs. persisted outbox pattern; Decide idempotency mechanism (provider keys vs. local state); Define handoff-failure representation (new table vs. command result only); Specify partial-recipient-failure behavior; Clarify retry semantics vs. event replay\"}}\n```",
           "internal.retry_count.start": 0,
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+          "internal.retry_count.not_ready": 0,
           "gemini_review_blocking_gaps": "Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified",
           "thread.start.current_node": "gemini_review",
           "gemini_review_required_edits": "Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable",
@@ -1105,12 +1616,12 @@
           "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core technical decisions remain unresolved.**  \n   The plan explicitly leaves open whether the boundary is a synchronous collaborator or a persisted outbox/handoff table, whether provider idempotency is sufficient, and where handoff failure state should live. These choices directly determine implementation shape, migrations, tests, retry semantics, and operational observability.\n\n2. **The `send_club_message/2` result contract is not concrete enough.**  \n   Acceptance criteria require a “clear result contract,” but the plan does not define the exact success, partial-failure, and total-failure return shapes. This makes it hard to objectively prove that callers can distinguish committed domain state from provider handoff failure.\n\n3. **Retry/idempotency semantics are underspecified.**  \n   The plan requires duplicate/retry safety, but does not define what local state or provider idempotency key is authoritative, when a delivery is considered already handed off, or how retries behave after partial recipient success.\n\n## Non-blocking improvements\n\n1. Name the likely test files or test modules to update once the boundary choice is resolved.\n2. Clarify whether existing user-facing flash/copy should remain exactly unchanged when handoff fails after commit, or whether internal-only logging/state is sufficient.\n3. Add a concise state transition sketch for handoff attempts if a persisted model is chosen.\n4. Clarify whether provider failure observability means logs, return values, persisted state, telemetry, admin-facing state, or some combination.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract provider delivery into a named `Memba.Messaging.EmailDeliveryHandoff` boundary.\n- Define a concrete handoff result contract that always preserves the committed `message_id` / delivery IDs.\n- Add local idempotency/retry protection per `email_delivery_id`, either via an explicit persisted handoff state or a documented decision that provider-level idempotency is sufficient and already available.\n- Cover success, total failure, partial failure, retry/duplicate safety, and inbound acceptance through ExUnit tests.\n- Keep user-facing message and delivery-status behaviour unchanged.\n\n## Required plan edits\n\n1. Resolve the boundary design: choose either a synchronous structured-result collaborator or a minimal persisted outbox/handoff table.\n2. Define the exact `send_club_message/2` return contract for:\n   - full success,\n   - provider failure before any recipient is accepted,\n   - provider failure after one or more recipients are accepted.\n3. Define the exact handoff summary shape, including delivery IDs attempted, succeeded, failed, and skipped/already-handed-off if applicable.\n4. Specify the idempotency mechanism:\n   - provider idempotency key,\n   - local persisted state,\n   - or both.\n5. Specify where handoff failure/retry state is observable.\n6. Update acceptance criteria so “observable,” “retryable,” and “duplicate/retry safety” are objectively testable against the chosen design.\n\n## Validation plan\n\nTo prove the iteration succeeded after the plan is revised and implemented:\n\n1. Run focused ExUnit tests for `Memba.Messaging.send_club_message/2` and the new handoff boundary.\n2. Verify successful sends still create message and email-delivery read models and invoke the configured provider.\n3. Simulate provider failure before any recipient succeeds and verify:\n   - the committed message state is not reported as a failed domain send,\n   - handoff failure is returned or recorded according to the chosen contract.\n4. Simulate provider failure after partial success and verify:\n   - successful delivery IDs are distinguishable from failed ones,\n   - earlier accepted recipients are not ambiguous.\n5. Retry an already-created delivery and verify no second message stream or duplicate `EmailDeliveryCreated` event is produced, and no duplicate provider send occurs according to the chosen idempotency mechanism.\n6. Verify inbound club-message acceptance uses the same outbound handoff boundary.\n7. Confirm replay/projector paths do not call external providers.\n8. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved; send_club_message/2 result contract is not concrete; retry/idempotency semantics are underspecified\",\"gemini_review_required_edits\":\"Choose boundary design; define exact send_club_message/2 and handoff result contracts; specify idempotency mechanism and observable failure/retry state; make retry and observability acceptance criteria objectively testable\"}}",
           "gemini_review_blocking_gap_count": 3,
           "claude_review_decision": "NOT READY",
-          "current_node": "synthesis_gate",
-          "internal.thread_id": "synthesize",
+          "current_node": "not_ready",
+          "internal.thread_id": "synthesis_gate",
           "plan_ready": false,
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "graph.rankdir": "LR",
-          "failure_signature": "",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
           "plan_needs_fix": false,
           "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
           "codex_review_decision": "NOT READY",
@@ -1125,12 +1636,97 @@
           "internal.retry_count.claude_review": 0,
           "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "internal.run_id": "01KVG2RXZWPXXJKCXJCXFC4RM6",
-          "outcome": "succeeded"
+          "outcome": "failed"
         },
         "node_outcomes": {
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "NOT READY",
+              "last_stage": "codex_review",
+              "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
+              "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
+              "codex_review_blocking_gap_count": 4,
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synch",
+              "codex_review_confidence": "High",
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10088,
+                    "output_tokens": 1125,
+                    "reasoning_tokens": 569,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101260
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 33428,
+              "tool_time_ms": 41,
+              "active_time_ms": 33469
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_fix": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_human": true,
+              "plan_ready": false,
+              "last_stage": "synthesize"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6824,
+                    "output_tokens": 45,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 50950
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 13128,
+              "tool_time_ms": 0,
+              "active_time_ms": 13128
+            }
           },
           "gemini_review": {
             "status": "succeeded",
@@ -1216,100 +1812,33 @@
               "active_time_ms": 57179
             }
           },
-          "codex_review": {
-            "status": "succeeded",
+          "not_ready": {
+            "status": "failed",
             "context_updates": {
-              "codex_review_decision": "NOT READY",
-              "last_stage": "codex_review",
-              "codex_review_required_edits": "Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values",
-              "codex_review_blocking_gaps": "Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified",
-              "codex_review_blocking_gap_count": 4,
-              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synch",
-              "codex_review_confidence": "High",
-              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Core handoff architecture is still undecided.**  \n   The plan explicitly leaves open whether the boundary is only an extracted synchronous collaborator or a persisted outbox/handoff table. That choice affects implementation shape, tests, retry semantics, observability, and stop condition.\n\n2. **Retry/idempotency mechanism is unresolved.**  \n   The acceptance criteria require duplicate/retry safety, but the plan does not decide whether safety comes from provider idempotency keys, local persisted handoff state, or another mechanism. This is a blocking technical decision because it is central to the iteration’s stated goal.\n\n3. **The `send_club_message/2` result contract is not concrete enough.**  \n   The plan says the function should not conflate domain dispatch with provider handoff and suggests a result “such as” `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, but it does not define the exact contract callers should rely on. Since this may affect LiveViews, controllers, inbound acceptance, and tests, the plan needs the intended shape before implementation.\n\n4. **Observable handoff failure state is not specified.**  \n   The plan requires provider handoff failures to be observable and testable, but leaves open whether that means an existing read model, a new internal operational read model, a handoff table, or structured return-only state. The implementation cannot be reliably validated without knowing where the durable/observable state lives, if any.\n\n## Non-blocking improvements\n\n1. Clarify the exact handoff summary fields expected in tests, for example attempted delivery IDs, succeeded delivery IDs, failed delivery IDs, and failure reasons.\n\n2. Name the most likely test files or test modules to update once the current code is inspected.\n\n3. Add one sentence explaining whether provider handoff failures should be user-visible in this iteration. The scope implies no UI change, but making that explicit would help prevent accidental product changes.\n\n4. Clarify whether “provider failure before any recipient is accepted” and “provider failure after at least one recipient has been accepted” refer to provider API acceptance, adapter return values, or local handoff state transitions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Extract a named `Memba.Messaging` email handoff collaborator.\n- Define a concrete `send_club_message/2` return contract that always exposes the committed message identity when the domain command succeeds.\n- Add minimal per-delivery handoff tracking or provider idempotency-key usage sufficient to prevent duplicate sends for already-successful deliveries.\n- Keep handoff synchronous for now; do not introduce a full background job system.\n- Add focused ExUnit coverage for full success, total provider failure, partial provider failure, retry/duplicate safety, and inbound accepted club-message handoff.\n\n## Required plan edits\n\n1. Decide whether this iteration will implement:\n   - synchronous collaborator only with provider-level idempotency, or\n   - synchronous collaborator plus minimal persisted local handoff state, or\n   - a tiny persisted outbox/handoff table.\n\n2. Define the exact `Memba.Messaging.send_club_message/2` result contract after this change, including:\n   - successful domain dispatch and successful handoff,\n   - successful domain dispatch and failed/partial handoff,\n   - failed domain dispatch before commit.\n\n3. Define the retry/idempotency rule in concrete terms, including what uniquely identifies one recipient delivery handoff, likely `email_delivery_id`.\n\n4. Define where handoff state/failure is observable:\n   - structured return only,\n   - existing read model,\n   - new internal read model/table,\n   - or another named mechanism.\n\n5. Update acceptance criteria to match those decisions with concrete expected state changes and return values.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Targeted automated tests showing `send_club_message/2` no longer reports the committed message-domain send as failed merely because provider handoff failed afterward.\n\n2. Tests proving the named handoff collaborator handles:\n   - all-recipient success,\n   - provider failure before any accepted recipient,\n   - provider failure after at least one accepted recipient,\n   - retry/duplicate safety for an already-created delivery.\n\n3. Tests proving inbound accepted club messages use the same outbound handoff boundary.\n\n4. Verification that event/projector replay does not call provider code.\n\n5. Verification that existing successful browser-composed and inbound-composed message flows still create message and delivery read models and still invoke the configured provider.\n\n6. `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Core handoff architecture undecided; Retry/idempotency mechanism unresolved; send_club_message/2 result contract not concrete; Observable handoff failure state not specified\",\"codex_review_required_edits\":\"Choose synchronous collaborator vs persisted handoff/outbox design; Define exact send_club_message/2 result contract; Define retry/idempotency rule keyed by delivery; Define where handoff state/failure is observable; Update acceptance criteria with concrete state changes and return values\"}}"
+              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
             },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 10088,
-                    "output_tokens": 1125,
-                    "reasoning_tokens": 569,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 101260
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
             },
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 33428,
-              "tool_time_ms": 41,
-              "active_time_ms": 33469
-            }
-          },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "synthesize": {
-            "status": "succeeded",
-            "context_updates": {
-              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
-              "plan_needs_fix": false,
-              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
-              "plan_needs_human": true,
-              "plan_ready": false,
-              "last_stage": "synthesize"
-            },
-            "notes": "Stage completed: synthesize",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 6824,
-                    "output_tokens": 45,
-                    "reasoning_tokens": 516,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 50950
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 13128,
-              "tool_time_ms": 0,
-              "active_time_ms": 13128
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
             }
           }
         },
-        "next_node_id": "not_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "gemini_review": 1,
           "codex_review": 1,
           "start": 1,
           "claude_review": 1,
           "synthesize": 1,
-          "synthesis_gate": 1
+          "synthesis_gate": 1,
+          "not_ready": 1
         }
       },
       "diff": {}
@@ -1335,6 +1864,40 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "synthesis_gate@1": {
+      "first_event_seq": 97,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-19T14:00:25.882988797Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-19T14:00:25.882481887Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "synthesize@1": {
       "first_event_seq": 87,
       "prompt": null,
@@ -1590,6 +2153,33 @@
         "warnings": []
       },
       "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-19T14:00:29.009316802Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 17,
