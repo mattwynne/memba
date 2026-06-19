@@ -1,0 +1,196 @@
+diff --git a/docs/iterations/036-ds-catchup-member-management-and-auth/surface-notes.md b/docs/iterations/036-ds-catchup-member-management-and-auth/surface-notes.md
+new file mode 100644
+index 0000000..5e0df35
+--- /dev/null
++++ b/docs/iterations/036-ds-catchup-member-management-and-auth/surface-notes.md
+@@ -0,0 +1,178 @@
++# Shipped surface notes
++
++Task 001 capture of the shipped surfaces that the DS previews must mirror.
++
++## Sources inspected
++
++- `web/lib/memba_web/router.ex`
++- `web/lib/memba_web/live/member_invitation_live/new.ex`
++- `web/lib/memba_web/live/admin/club_member_invitations_live/new.ex`
++- `web/lib/memba_web/controllers/club_member_invitation_controller.ex`
++- `web/lib/memba_web/controllers/club_member_invitation_html/profile.html.heex`
++- `web/lib/memba_web/live/auth_live/sign_in.ex`
++- `web/lib/memba/accounts/auth_email_request.ex`
++- Focused tests for invitation, profile completion, and auth-email progress.
++
++## Invite a member — member-admin variant
++
++- Route: `/members/invitations/new`, scoped by the club host/live session.
++- Page wrapper: club-site member shell.
++- Main IDs/attributes:
++  - `#member-club-invitation-new`
++  - `data-live-view="member-club-invitation-new"`
++  - `data-club-id`
++  - `data-current-member-id`
++  - `data-active-member-count`
++- Header card copy:
++  - Back link: `Club home`
++  - Eyebrow: `Member invitations`
++  - H1: `Invite a member`
++  - Club label: selected club name in uppercase primary text.
++  - Body: `Send a one-use invitation link for {club}. The invitation stays scoped to this club, and invited people will become ordinary members after they accept.`
++- Current-member context chip/card:
++  - Avatar initials from the current member name, fallback `ME`.
++  - Name fallback: `Current member`.
++  - Subcopy: `Inviting from this club membership`.
++- Form card copy:
++  - Eyebrow: `Invitation details`
++  - H2: `Email-only member invitation`
++  - Body: `Enter the invitee's email address. Memba sends a one-use link so the invited person controls that email before membership starts.`
++- Form:
++  - Form ID: `#member-club-invitation-form`
++  - `aria-label="Invite member"`
++  - One field only: required email input.
++  - Input ID: `#member-club-invitation-email-input`
++  - Label: `Email address`
++  - `aria-label="Invitee email address"`
++  - `autocomplete="email"`
++  - Placeholder: `dana@example.com`
++  - Buttons: primary `Send invitation`, secondary `Cancel`.
++- User-visible states/copy:
++  - Invalid email: field error `Enter a valid email address.`
++  - Successful first invite: flash `Invitation sent to {normalized_email}`.
++  - Duplicate pending invite resend: flash `Invitation resent to {normalized_email}`.
++  - Already active member: flash error `That email address is already an active member of this club.`
++  - Email configuration failure: `Invitation was created, but Memba could not send the email. Check auth email delivery configuration and try again.`
++  - Email delivery failure: `Invitation was created, but Memba could not send the email. Try again.`
++
++## Invite a member — staff/admin variant
++
++- Route: `/admin/clubs/:club_id/invitations/new`.
++- Page wrapper: admin shell with active section `:clubs`.
++- Main IDs/attributes:
++  - `#club-member-invitation-new`
++  - `data-admin-page="club-member-invitation-new"`
++  - `data-club-id`
++- Header copy:
++  - Back link: `← Club`
++  - Eyebrow: `Member invitations`
++  - H1: `Invite a member`
++  - Body: `Send a one-use invitation link for {club}. The invitee controls the email address and will enter their own profile details before membership starts.`
++- Context card:
++  - Eyebrow: `Club context`
++  - Shows club name and club ID.
++- Form card copy:
++  - Eyebrow: `Invitation details`
++  - H2: `Email-only member invitation`
++  - Body: `Staff provide only the email address. Memba will not create a person record or an active club membership until the invitee accepts and completes profile details.`
++- Form:
++  - Form ID: `#club-member-invitation-form`
++  - `aria-label="Invite member"`
++  - One field only: required email input.
++  - Input ID: `#club-member-invitation-email-input`
++  - Label: `Email address`
++  - `aria-label="Invitee email address"`
++  - `autocomplete="email"`
++  - Placeholder: `robin@example.com`
++  - Buttons/links: `Send invitation`, `Cancel`.
++- User-visible states/copy:
++  - Invalid email: field error `Enter a valid email address.`
++  - Successful first invite: flash `Invitation sent to {normalized_email}`.
++  - Duplicate pending invite resend: flash `Invitation resent to {normalized_email}`.
++  - Already active member: flash error `That email address is already an active member of this club.`
++  - Missing club state: page H1 `Club not found`, body `No projected club exists for this URL.`, back link `← Clubs`.
++  - Email configuration failure: `Invitation was created, but Memba could not send the email. Check auth email delivery configuration and try again.`
++  - Email delivery failure: `Invitation was created, but Memba could not send the email. Try again.`
++
++## Invited-member profile completion
++
++- Routes:
++  - Invitation callback: `/invitations/club-members/:token`
++  - Profile form: `GET /invitations/club-members/profile`
++  - Profile submit: `POST /invitations/club-members/profile`
++- Page wrapper: app shell.
++- Main IDs/attributes:
++  - `#club-member-profile-completion`
++  - `data-club-id`
++- Header copy:
++  - Eyebrow: `Member invitation`
++  - H1: `Tell us your name`
++  - Body: `You’re accepting an invitation to join {club}. We’ll use your name and {email} to create your member profile before your membership starts.`
++- Form:
++  - Form ID: `#club-member-profile-completion-form`
++  - `aria-label="Complete your profile"`
++  - Action: `/invitations/club-members/profile`
++  - Method: `post`
++  - One field only: required text input for name.
++  - Input ID: `#club-member-profile-name-input`
++  - Field name: `profile[name]`
++  - Label: `Your name`
++  - `autocomplete="name"`
++  - Placeholder: `Robin Example`
++  - Button: `Join {club}`
++- User-visible states/copy:
++  - Starting profile completion sets flash `Finish your profile to join {club}.` or fallback `Finish your profile to accept this invitation.`
++  - Blank/invalid name keeps the invitee on the form with status 422, flash and field error `Please tell us your name.`
++  - Accepted profile redirects to the invited club with flash `Welcome to {club}.` or fallback `Welcome to Memba.`
++  - Missing/invalid profile journey redirects to `/auth` with `Follow your invitation link before completing your profile.`
++  - Invalid invitation link redirects to `/auth` with `That invitation link is no longer valid. Please ask for a new invitation.`
++
++## Sign in / check email / auth-email progress
++
++- Routes:
++  - Sign in form: `/auth`
++  - Neutral check-email page: `/auth/check-email`
++  - Request-specific progress page: `/auth/check-email/:request_id`
++  - Magic-link callback: `/auth/sign-in/:token`
++- Sign-in form copy:
++  - Eyebrow: `Sign in`
++  - H1: `Sign in with your email.`
++  - Body: `Use the email address your club or group has for you. We’ll email you a private sign-in link.`
++  - Privacy note: `To protect member privacy, this page does not say whether that email address is on a club list.`
++- Sign-in form:
++  - Form ID: `#sign-in-link-form`
++  - One required email field.
++  - Input ID: `#auth_email_input`
++  - Label: `Email address`
++  - `autocomplete="email"`
++  - Placeholder: `you@example.com`
++  - Button: `Email me a sign-in link`
++- Check-email page copy:
++  - Section ID: `#auth-sign-in-sent`
++  - Eyebrow: `Check your email`
++  - H1: `Check your email for the sign-in link.`
++  - Initial notice: `If that email address can sign in to Memba, the sign-in email is on its way.`
++  - Body: `Open the email on this iPad and tap the sign-in button. The link works once and expires in 15 minutes. If it does not arrive, check your junk mail or ask for another link.`
++  - Secondary link: `Ask for another sign-in link`
++- Progress panel:
++  - Panel ID: `#auth-email-progress`
++  - Eyebrow: `Sign-in link progress`
++  - Message ID: `#auth-email-progress-message`
++- Persisted progress statuses:
++  - `created`
++  - `sent`
++  - `provider_accepted`
++  - `provider_delayed`
++  - `provider_failed`
++- User-visible progress message mapping:
++  - No request ID / invalid request: `If that email address can sign in to Memba, the sign-in email is on its way.`
++  - `created`: `Preparing your sign-in link…`
++  - `sent`, before the 60-second fallback threshold: `If this email can sign in, the link is on its way.`
++  - `provider_accepted`: `Your mailbox provider has accepted the email. It should appear shortly.`
++  - `provider_delayed` / `provider_failed`: no provider-specific problem is exposed; before 60 seconds the page stays neutral and after 60 seconds uses the fallback guidance.
++  - 60 seconds without provider acceptance: `If it does not arrive, check junk mail or ask for another link.`
++  - Expired user-facing progress: `This sign-in-link request has expired. Ask for another link.`
++- Privacy behaviour to preserve in previews:
++  - Known and unknown emails use the same route shape and neutral first response.
++  - Unknown emails do not receive a fake `provider_accepted` state.
++  - The UI must not claim the email is in the inbox; it says the mailbox provider accepted it.
+diff --git a/docs/iterations/036-ds-catchup-member-management-and-auth/todo.md b/docs/iterations/036-ds-catchup-member-management-and-auth/todo.md
+index 468b6e3..9b19800 100644
+--- a/docs/iterations/036-ds-catchup-member-management-and-auth/todo.md
++++ b/docs/iterations/036-ds-catchup-member-management-and-auth/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Read the shipped surfaces to mirror them accurately: `member_invitation_live/new.ex`, `admin/club_member_invitations_live/`, `club_member_invitation_html/profile.html.heex`, and `auth_live/sign_in.ex`; note the real fields, states, copy, and delivery-progress states.
++- [x] 001 Read the shipped surfaces to mirror them accurately: `member_invitation_live/new.ex`, `admin/club_member_invitations_live/`, `club_member_invitation_html/profile.html.heex`, and `auth_live/sign_in.ex`; note the real fields, states, copy, and delivery-progress states.
+ - [ ] 002 Confirm the repo preview location and the self-contained head block (daisyUI CDN + theme `:root` vars from `web/assets/css/app.css` + needed raw tokens), reusing the phase-2 convention and class-mapping cheat sheet.
+ - [ ] 003 Author the invite-a-member preview (member-admin + staff variants).
+ - [ ] 004 Author the profile-completion preview.
