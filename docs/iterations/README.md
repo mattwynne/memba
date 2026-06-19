@@ -46,7 +46,7 @@ green than before.
 | 034 | 2026-06-17 | merged | Member page design-system alignment | [plan](034-member-page-design-system-alignment/plan.md) |
 | 035 | 2026-06-17 | merged | Obliterate the deprecated "opened" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |
 | 036 | 2026-06-17 | merged | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |
-| 037 | 2026-06-17 | validated | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
+| 037 | 2026-06-17 | implementing | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
 | 038 | 2026-06-17 | draft | Email delivery handoff boundary | [plan](038-email-delivery-handoff-boundary/plan.md) |
 | 039 | 2026-06-19 | validated | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
 | 040 | 2026-06-19 | draft | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
