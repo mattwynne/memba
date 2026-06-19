@@ -8,5 +8,5 @@
 - [x] 006 Author the empty / first-run state preview(s).
 - [x] 007 Refresh the club-home and member-messaging/read previews to the post-034 member pages.
 - [x] 008 Render-verify each file with headless Chrome; fix any unstyled/broken components (watch for accidental Tailwind utility usage that won't resolve statically).
-- [ ] 009 Ensure `@dsCard` headers and relative asset paths are correct on every new/changed file.
+- [x] 009 Ensure `@dsCard` headers and relative asset paths are correct on every new/changed file.
 - [ ] 010 Run `dev check` to confirm the static files leave the build green.
