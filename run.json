@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-19T07:07:58.856676537Z",
-  "last_event_at": "2026-06-19T07:23:16.238578444Z",
+  "last_event_at": "2026-06-19T07:23:41.206752584Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2255,9 +2255,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 102,
       "checkpoint": {
-        "timestamp": "2026-06-19T07:23:37.944189827Z",
+        "timestamp": "2026-06-19T07:23:41.205761790Z",
         "current_node": "synthesize_review",
         "completed_nodes": [
           "start",
@@ -2269,6 +2269,317 @@
           "codex_review",
           "gemini_review",
           "synthesize_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "outcome": "succeeded",
+          "response.gemini_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\nACCEPT\n\n## Confidence\nHigh\n\n## ADR conformance\nPASS\n\nThe implementation correctly honors the project's Event Sourcing and CQRS architecture constraints:\n- **Immutability of Historic Data**: Rather than attempting to delete or alter historic events, `EmailDeliveryOpened` is preserved as a structurally valid, documented tombstone.\n- **Replay Safety**: The aggregate and projectors gracefully ignore the deprecated event via explicit no-op clauses, ensuring projection rebuilds succeed without failing on unhandled events.\n- **Read/Write Segregation**: The active command (`ReportEmailDeliveryOpened`) was entirely removed from the write model, and downstream normalization was removed from the read model.\n\n## ADR violations\nNone identified.\n\n## Blocking issues\nNone.\n\n## Bounded-safe fixes\n1. **Ensure maximally broad pattern matching on no-op projector clauses**\n   - If the newly added projector no-op clauses for `EmailDeliveryOpened` still match on a specific metadata shape (e.g., `%{email_delivery_id: _}`), loosen them to `_metadata`. This ensures robust replay even if historic events have missing or malformed metadata, as the payload is being ignored anyway.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Test-suite coupling to Commanded/EventStore database internals**\n   - **Files**: Replay-safety regression test (evidence shows `reset_event_store!/1`, `reset_projection_tables!/1` with raw SQL `TRUNCATE` commands).\n   - **Smell**: The test directly manipulates internal EventStore and projection tables using raw SQL (e.g., `TRUNCATE TABLE snapshots, subscriptions, stream_events...`).\n   - **Why it needs human judgement**: Testing projection rebuilds is highly valuable, but raw SQL manipulation tightly couples the test suite to the underlying library's schema internals. If these replay/rebuild tests become a recurring pattern, the project should centralize these destructive reset operations into a dedicated, well-named test-support module to isolate this fragility. \n\n2. **Permanent maintenance surface for a deprecated feature**\n   - **Files**: `EmailDeliveryOpened` event module, Aggregate no-op clause, Projector no-op clauses.\n   - **Smell**: The codebase must forever carry this event's structure and empty handling to satisfy the event store's append-only nature.\n   - **Why it needs human judgement**: This is the correct, safe event-sourcing implementation. However, if a future operational audit confirms zero instances of `EmailDeliveryOpened` were ever appended in production, the team could safely delete these tombstones. This is appropriately deferred by the current plan.\n\n## Suggested fixes\n- (Optional Polish) Review projector `project(%EmailDeliveryOpened{}, metadata, ...)` heads and replace specific map pattern matches on `metadata` with `_metadata` or `_` to guarantee maximum replay resilience.\n\n## Validation notes\n- `dev check` successfully completed (82 scenarios, 493 steps).\n- The removal of the `opened` status was handled cleanly at all boundaries: Webhook handlers, Write API (Commands), Read Model (Normalization), and Presentation (UI strings/mapping).\n- A robust integration test proves that historical events are safely handled: the system can parse the event from the database, the aggregate does not mutate state, and projectors do not crash upon encountering it during a full rebuild.\n- Acceptance criteria are met, and domain feature files appropriately remain un-altered implementation specs.",
+          "response.codex_review": "# Iteration Review Report: 035 — Obliterate Opened Delivery Status\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation is consistent with the project’s event-sourcing/CQRS direction and the domain-design guidance relevant to this slice:\n\n- Historic events are preserved as immutable facts rather than deleted or renamed.\n- `EmailDeliveryOpened` remains only as a replay/deserialization tombstone.\n- Aggregate/projector handling is reduced to explicit replay-safe no-ops.\n- The active command, webhook branch, read-model normalization, and presentation mapping for `\"opened\"` are removed.\n- The new regression coverage exercises replay/rebuild behaviour rather than only forward command dispatch.\n\nNo evidence suggests the implementation replaced ADR-mandated Commanded/EventStore infrastructure with local substitutes or bypassed projection/read-model boundaries.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\n1. **Consider making replay-only no-op projector clauses maximally broad**\n   - **Files:** the projector modules retaining `EmailDeliveryOpened` no-op clauses.\n   - **Issue:** If the no-op clauses still pattern-match on metadata shape such as `%{email_delivery_id: _}`, that is slightly narrower than the intent of a tombstone replay shim.\n   - **Why safe:** The event is deprecated and should have no behaviour regardless of metadata. Matching `_metadata` would make the replay shim more robust against older or malformed historic metadata without changing product behaviour.\n   - **Suggested change:** Prefer heads equivalent to:\n\n     ```elixir\n     # Historic event retained for replay only; intentionally ignored.\n     def project(%EmailDeliveryOpened{}, _metadata, _context_or_multi) do\n       :ok\n     end\n     ```\n\n     or the project’s equivalent projector callback shape.\n\n   - **Not blocking:** The current implementation passed the replay regression and full `dev check`; this is defensive polish only.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Replay regression test reaches into EventStore/projection internals**\n   - **Files:** the new replay-safety regression test containing helpers such as `reset_event_store!/1`, `reset_projection_tables!/1`, and projector rebuild orchestration.\n   - **Smell:** The test necessarily manipulates EventStore tables, projection tables, subscriptions, schemas, and rebuild mechanics directly.\n   - **Why it may need human judgement:** This is appropriate for a replay-safety regression, but if similar tests accumulate, the project may want a shared, well-named test helper for “historic event replay/rebuild” scenarios. Otherwise, future tests may duplicate fragile knowledge of EventStore table names and reset semantics.\n   - **Not blocking:** For this iteration, the test is valuable and proves the important risk: historic `EmailDeliveryOpened` events do not break projection rebuilds or mutate read models.\n\n2. **Permanent tombstone surface remains by design**\n   - **Files:**\n     - `lib/memba/messaging/events/email_delivery_opened.ex`\n     - aggregate no-op clause for `EmailDeliveryOpened`\n     - projector no-op clauses for `EmailDeliveryOpened`\n   - **Smell:** The codebase retains a deprecated event module and replay-only handlers for a status that no longer exists as product behaviour.\n   - **Why it may need human judgement:** Removing this later would require operational confidence that no production event store contains `EmailDeliveryOpened` events, plus an explicit decision about replay compatibility. Until then, the tombstone is the correct event-sourcing tradeoff.\n   - **Not blocking:** The comments and no-op implementation make the intent clear, and this exactly matches the iteration plan.\n\n## Suggested fixes\n\nOnly optional bounded-safe polish:\n\n1. If any `EmailDeliveryOpened` no-op projector clause unnecessarily constrains metadata, loosen it to ignore all metadata.\n2. If replay/rebuild regression tests become common, extract the EventStore/projection reset and rebuild helpers into a shared test-support module with a name that makes the destructive test-only behaviour explicit.\n\n## Validation notes\n\n- `dev ci` completed successfully.\n- Acceptance suite passed: **82 scenarios / 493 steps**.\n- The implementation evidence shows the active `\"opened\"` delivery behaviour was removed:\n  - deleted `ReportEmailDeliveryOpened` command path,\n  - removed read-model `\"opened\"` normalization,\n  - removed `\"opened\" -> \"delivered\"` presentation mapping,\n  - removed webhook `\"opened\"` rejection branch,\n  - removed UI/test assertions that treated `\"opened\"` as an active status.\n- Historic replay safety is covered by a regression test that persists/replays `EmailDeliveryOpened` and rebuilds projections.\n- Remaining `opened`/`Opened` references appear limited to the documented replay-only shim and intentional regression coverage.\n- Acceptance feature files appear to remain domain-focused rather than being updated as implementation specs, which is appropriate for this cleanup slice.",
+          "graph.max_node_visits": "160",
+          "internal.run_id": "01KVFB727FHYSX43XW559SAPJC",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.read_plan": 0,
+          "implementation_accepted": false,
+          "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"broaden-opened-projector-noops\",\n        \"title\": \"Br",
+          "internal.retry_count.claude_review": 0,
+          "current_node": "synthesize_review",
+          "internal.fidelity": "summary:high",
+          "thread.claude_review.current_node": "codex_review",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "failure_class": "",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "response.claude_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\n**ACCEPT**\n\n## Confidence\n**High**\n\n## ADR Conformance\n**PASS**\n\nThe implementation follows sound event sourcing, CQRS, and DDD patterns:\n\n- **Event immutability**: Historic events preserved via tombstone struct\n- **Deserialization safety**: Event module retained for EventStore replay capability  \n- **Replay safety**: Aggregate and projectors provide explicit no-op handling\n- **Command lifecycle**: Dead command cleanly removed from write side\n- **Read model consistency**: Status removed from query side normalization and presentation\n- **Domain clarity**: Deprecated status has no domain behavior, only backward-compatibility infrastructure\n\nThe tombstoning pattern is textbook-correct for event-sourced systems where you cannot delete historic events but need to stop processing a deprecated event type.\n\n## ADR Violations\nNone.\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\nNone needed. The implementation is clean, complete, and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Potential event store cleanup opportunity** (optimization, not correctness)\n   - **Files**: `lib/memba/messaging/events/email_delivery_opened.ex`, aggregate and projector no-op clauses\n   - **Smell**: The tombstone and replay-safety shim add permanent maintenance surface for a deprecated feature\n   - **Why human judgement needed**: \n     - Requires production event store analysis to confirm zero `EmailDeliveryOpened` events exist\n     - Needs decision on whether operational cost of maintaining the shim outweighs re-introduction risk\n     - Depends on event retention policy and replay frequency\n   - **Current state**: Safe and well-documented. The tombstone is cheap to maintain, has excellent deprecation notices, and poses no correctness risk.\n   - **Potential future action**: If production proves zero historic instances exist and policy ensures none will be replayed, a future iteration could remove the entire shim (event struct + no-op handlers) and close this technical debt. The plan explicitly defers this decision.\n   - **Not blocking**: The code is clean, the documentation is clear (\"DO NOT REMOVE\"), and the pattern is standard. This is optimization territory, not a quality issue.\n\n## Suggested Fixes\nNone. The implementation is ready to merge.\n\n## Validation Notes\n\n### Test Coverage\n✅ **Replay safety test is comprehensive**:\n- Persists a real historic `EmailDeliveryOpened` event to the EventStore\n- Rebuilds all projections from scratch (not just forward-dispatch)\n- Asserts read models remain valid after rebuild\n- Proves deserialization + aggregate + projectors all handle the deprecated event safely\n\n✅ **Existing test suites updated**:\n- All \"opened\" assertions removed from ExUnit tests\n- Acceptance tests unchanged (correct - they're domain specs, not implementation specs)\n- No test failures from removing the status\n\n### Implementation Evidence\n✅ **Tombstone pattern correctly applied**:\n- Event struct remains with `@derive Jason.Encoder` for deserialization\n- Module documentation clearly explains it's DEPRECATED and DO NOT REMOVE\n- No business logic, just structure\n\n✅ **No-op handlers consistent**:\n- Aggregate: `apply(%EmailDelivery{}, %EmailDeliveryOpened{})` returns delivery unchanged\n- Both projectors: `project(%EmailDeliveryOpened{}, _, %{email_delivery_id: _})` returns `:ok`\n- All handlers include inline comment \"Historic event: no-op for replay safety\"\n\n✅ **Active behavior removed**:\n- `ReportEmailDeliveryOpened` command deleted\n- Read-model `normalize_delivery_status/1` no longer has \"opened\" clause\n- No \"opened\" → \"delivered\" presentation mapping\n- Webhook rejection branch removed (implied by passing tests)\n\n✅ **Grep verification**:\n- Only remaining `opened`/`Opened` references in `lib/` are the documented shim\n- Test files only reference it in the replay safety test\n- No stray references in UI, contexts, or business logic\n\n### Dev Check Results\n✅ All stages passed:\n- 82 acceptance scenarios (493 steps) passed\n- Zero compiler warnings\n- Zero Credo issues\n- Zero formatter issues\n- Clean Dialyzer run\n- Sandbox runtime check passed\n\n### Code Quality\n**Strengths**:\n- Excellent module documentation on the tombstone event explaining deprecation and warning against removal\n- Consistent no-op pattern across aggregate and both projectors\n- Clean removal of all active \"opened\" behavior with no leftover branches\n- Comprehensive replay safety test that proves the shim works\n- No scope creep - implementation matches plan exactly\n\n**Maintainability**: High. The next developer will immediately understand:\n- Why the event struct exists (clear deprecation doc)\n- That it's a tombstone, not active code (DO NOT REMOVE warning)\n- How to handle similar deprecations in future (pattern established)\n\n## Summary\n\nThis is a textbook-correct implementation of event sourcing tombstoning. The developer:\n\n1. Preserved event deserialization capability for historic events (correct)\n2. Added explicit no-op handlers to prevent replay crashes (correct)\n3. Removed all active behavior cleanly (correct)\n4. Documented the deprecation clearly to prevent future confusion (excellent)\n5. Proved replay safety with a comprehensive rebuild test (thorough)\n6. Stayed within scope and delivered exactly what the plan specified (disciplined)\n\nThe code is production-ready, maintainable, and safe. The single judgement-worthy finding is an optimization opportunity (event store cleanup) that the plan explicitly deferred, not a quality issue.\n\n**Recommendation**: Merge with confidence.",
+          "graph.rankdir": "LR",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "internal.thread_id": "gemini_review",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"broaden-opened-projector-noops\",\n        \"title\": \"Broaden EmailDeliveryOpened replay-only projector no-op clauses\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "last_stage": "synthesize_review",
+          "command.output": "blob://sha256/d9989cf648b5a75c0478feee1e8efebb195b75170ce9bcccbf76556562292216",
+          "review_fixes_available": true,
+          "internal.node_visit_count": 1,
+          "thread.codex_review.current_node": "gemini_review",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "internal.work_dir": "/workspace/memba",
+          "review_blockers": [
+            {
+              "id": "broaden-opened-projector-noops",
+              "title": "Broaden EmailDeliveryOpened replay-only projector no-op clauses",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "failure_signature": "",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.start": 0
+        },
+        "node_outcomes": {
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "implementation_accepted": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"broaden-opened-projector-noops\",\n        \"title\": \"Br",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"broaden-opened-projector-noops\",\n        \"title\": \"Broaden EmailDeliveryOpened replay-only projector no-op clauses\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "review_fixes_available": true,
+              "review_blockers": [
+                {
+                  "id": "broaden-opened-projector-noops",
+                  "title": "Broaden EmailDeliveryOpened replay-only projector no-op clauses",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_stage": "synthesize_review"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8367,
+                    "output_tokens": 107,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 76065
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 21663,
+              "tool_time_ms": 0,
+              "active_time_ms": 21663
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report: 035 — Obliterate Opened Delivery Status\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation is consistent with the project’s event-so",
+              "response.codex_review": "# Iteration Review Report: 035 — Obliterate Opened Delivery Status\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation is consistent with the project’s event-sourcing/CQRS direction and the domain-design guidance relevant to this slice:\n\n- Historic events are preserved as immutable facts rather than deleted or renamed.\n- `EmailDeliveryOpened` remains only as a replay/deserialization tombstone.\n- Aggregate/projector handling is reduced to explicit replay-safe no-ops.\n- The active command, webhook branch, read-model normalization, and presentation mapping for `\"opened\"` are removed.\n- The new regression coverage exercises replay/rebuild behaviour rather than only forward command dispatch.\n\nNo evidence suggests the implementation replaced ADR-mandated Commanded/EventStore infrastructure with local substitutes or bypassed projection/read-model boundaries.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\n1. **Consider making replay-only no-op projector clauses maximally broad**\n   - **Files:** the projector modules retaining `EmailDeliveryOpened` no-op clauses.\n   - **Issue:** If the no-op clauses still pattern-match on metadata shape such as `%{email_delivery_id: _}`, that is slightly narrower than the intent of a tombstone replay shim.\n   - **Why safe:** The event is deprecated and should have no behaviour regardless of metadata. Matching `_metadata` would make the replay shim more robust against older or malformed historic metadata without changing product behaviour.\n   - **Suggested change:** Prefer heads equivalent to:\n\n     ```elixir\n     # Historic event retained for replay only; intentionally ignored.\n     def project(%EmailDeliveryOpened{}, _metadata, _context_or_multi) do\n       :ok\n     end\n     ```\n\n     or the project’s equivalent projector callback shape.\n\n   - **Not blocking:** The current implementation passed the replay regression and full `dev check`; this is defensive polish only.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Replay regression test reaches into EventStore/projection internals**\n   - **Files:** the new replay-safety regression test containing helpers such as `reset_event_store!/1`, `reset_projection_tables!/1`, and projector rebuild orchestration.\n   - **Smell:** The test necessarily manipulates EventStore tables, projection tables, subscriptions, schemas, and rebuild mechanics directly.\n   - **Why it may need human judgement:** This is appropriate for a replay-safety regression, but if similar tests accumulate, the project may want a shared, well-named test helper for “historic event replay/rebuild” scenarios. Otherwise, future tests may duplicate fragile knowledge of EventStore table names and reset semantics.\n   - **Not blocking:** For this iteration, the test is valuable and proves the important risk: historic `EmailDeliveryOpened` events do not break projection rebuilds or mutate read models.\n\n2. **Permanent tombstone surface remains by design**\n   - **Files:**\n     - `lib/memba/messaging/events/email_delivery_opened.ex`\n     - aggregate no-op clause for `EmailDeliveryOpened`\n     - projector no-op clauses for `EmailDeliveryOpened`\n   - **Smell:** The codebase retains a deprecated event module and replay-only handlers for a status that no longer exists as product behaviour.\n   - **Why it may need human judgement:** Removing this later would require operational confidence that no production event store contains `EmailDeliveryOpened` events, plus an explicit decision about replay compatibility. Until then, the tombstone is the correct event-sourcing tradeoff.\n   - **Not blocking:** The comments and no-op implementation make the intent clear, and this exactly matches the iteration plan.\n\n## Suggested fixes\n\nOnly optional bounded-safe polish:\n\n1. If any `EmailDeliveryOpened` no-op projector clause unnecessarily constrains metadata, loosen it to ignore all metadata.\n2. If replay/rebuild regression tests become common, extract the EventStore/projection reset and rebuild helpers into a shared test-support module with a name that makes the destructive test-only behaviour explicit.\n\n## Validation notes\n\n- `dev ci` completed successfully.\n- Acceptance suite passed: **82 scenarios / 493 steps**.\n- The implementation evidence shows the active `\"opened\"` delivery behaviour was removed:\n  - deleted `ReportEmailDeliveryOpened` command path,\n  - removed read-model `\"opened\"` normalization,\n  - removed `\"opened\" -> \"delivered\"` presentation mapping,\n  - removed webhook `\"opened\"` rejection branch,\n  - removed UI/test assertions that treated `\"opened\"` as an active status.\n- Historic replay safety is covered by a regression test that persists/replays `EmailDeliveryOpened` and rebuilds projections.\n- Remaining `opened`/`Opened` references appear limited to the documented replay-only shim and intentional regression coverage.\n- Acceptance feature files appear to remain domain-focused rather than being updated as implementation specs, which is appropriate for this cleanup slice."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6047,
+                    "output_tokens": 1002,
+                    "reasoning_tokens": 3106,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 153475
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 83775,
+              "tool_time_ms": 0,
+              "active_time_ms": 83775
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/38f6ddbb6547e4013744db0cc7c9284cffe2ed80c8e211d350d2e1ae769ffe8e"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 394106,
+              "active_time_ms": 394106
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\n**ACCEPT**\n\n## Confidence\n**High**\n\n## ADR Conformance\n**PASS**\n\nThe implementation follows sound event sourcing, CQRS, and DDD patterns:\n\n- **Event immutability**: Historic events preserved via tombstone struct\n- **Deserialization safety**: Event module retained for EventStore replay capability  \n- **Replay safety**: Aggregate and projectors provide explicit no-op handling\n- **Command lifecycle**: Dead command cleanly removed from write side\n- **Read model consistency**: Status removed from query side normalization and presentation\n- **Domain clarity**: Deprecated status has no domain behavior, only backward-compatibility infrastructure\n\nThe tombstoning pattern is textbook-correct for event-sourced systems where you cannot delete historic events but need to stop processing a deprecated event type.\n\n## ADR Violations\nNone.\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\nNone needed. The implementation is clean, complete, and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Potential event store cleanup opportunity** (optimization, not correctness)\n   - **Files**: `lib/memba/messaging/events/email_delivery_opened.ex`, aggregate and projector no-op clauses\n   - **Smell**: The tombstone and replay-safety shim add permanent maintenance surface for a deprecated feature\n   - **Why human judgement needed**: \n     - Requires production event store analysis to confirm zero `EmailDeliveryOpened` events exist\n     - Needs decision on whether operational cost of maintaining the shim outweighs re-introduction risk\n     - Depends on event retention policy and replay frequency\n   - **Current state**: Safe and well-documented. The tombstone is cheap to maintain, has excellent deprecation notices, and poses no correctness risk.\n   - **Potential future action**: If production proves zero historic instances exist and policy ensures none will be replayed, a future iteration could remove the entire shim (event struct + no-op handlers) and close this technical debt. The plan explicitly defers this decision.\n   - **Not blocking**: The code is clean, the documentation is clear (\"DO NOT REMOVE\"), and the pattern is standard. This is optimization territory, not a quality issue.\n\n## Suggested Fixes\nNone. The implementation is ready to merge.\n\n## Validation Notes\n\n### Test Coverage\n✅ **Replay safety test is comprehensive**:\n- Persists a real historic `EmailDeliveryOpened` event to the EventStore\n- Rebuilds all projections from scratch (not just forward-dispatch)\n- Asserts read models remain valid after rebuild\n- Proves deserialization + aggregate + projectors all handle the deprecated event safely\n\n✅ **Existing test suites updated**:\n- All \"opened\" assertions removed from ExUnit tests\n- Acceptance tests unchanged (correct - they're domain specs, not implementation specs)\n- No test failures from removing the status\n\n### Implementation Evidence\n✅ **Tombstone pattern correctly applied**:\n- Event struct remains with `@derive Jason.Encoder` for deserialization\n- Module documentation clearly explains it's DEPRECATED and DO NOT REMOVE\n- No business logic, just structure\n\n✅ **No-op handlers consistent**:\n- Aggregate: `apply(%EmailDelivery{}, %EmailDeliveryOpened{})` returns delivery unchanged\n- Both projectors: `project(%EmailDeliveryOpened{}, _, %{email_delivery_id: _})` returns `:ok`\n- All handlers include inline comment \"Historic event: no-op for replay safety\"\n\n✅ **Active behavior removed**:\n- `ReportEmailDeliveryOpened` command deleted\n- Read-model `normalize_delivery_status/1` no longer has \"opened\" clause\n- No \"opened\" → \"delivered\" presentation mapping\n- Webhook rejection branch removed (implied by passing tests)\n\n✅ **Grep verification**:\n- Only remaining `opened`/`Opened` references in `lib/` are the documented shim\n- Test files only reference it in the replay safety test\n- No stray references in UI, contexts, or business logic\n\n### Dev Check Results\n✅ All stages passed:\n- 82 acceptance scenarios (493 steps) passed\n- Zero compiler warnings\n- Zero Credo issues\n- Zero formatter issues\n- Clean Dialyzer run\n- Sandbox runtime check passed\n\n### Code Quality\n**Strengths**:\n- Excellent module documentation on the tombstone event explaining deprecation and warning against removal\n- Consistent no-op pattern across aggregate and both projectors\n- Clean removal of all active \"opened\" behavior with no leftover branches\n- Comprehensive replay safety test that proves the shim works\n- No scope creep - implementation matches plan exactly\n\n**Maintainability**: High. The next developer will immediately understand:\n- Why the event struct exists (clear deprecation doc)\n- That it's a tombstone, not active code (DO NOT REMOVE warning)\n- How to handle similar deprecations in future (pattern established)\n\n## Summary\n\nThis is a textbook-correct implementation of event sourcing tombstoning. The developer:\n\n1. Preserved event deserialization capability for historic events (correct)\n2. Added explicit no-op handlers to prevent replay crashes (correct)\n3. Removed all active behavior cleanly (correct)\n4. Documented the deprecation clearly to prevent future confusion (excellent)\n5. Proved replay safety with a comprehensive rebuild test (thorough)\n6. Stayed within scope and delivered exactly what the plan specified (disciplined)\n\nThe code is production-ready, maintainable, and safe. The single judgement-worthy finding is an optimization opportunity (event store cleanup) that the plan explicitly deferred, not a quality issue.\n\n**Recommendation**: Merge with confidence.",
+              "last_response": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\n**ACCEPT**\n\n## Confidence\n**High**\n\n## ADR Conformance\n**PASS**\n\nThe implementation follows sound event sourcing, CQRS, an"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5679,
+                    "output_tokens": 6308,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 111657
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 127793,
+              "tool_time_ms": 0,
+              "active_time_ms": 127793
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b508dd13eccfa086266cbf1e1ff5def9545f1daaed73d03610aa5f5041aa406"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 264841,
+              "active_time_ms": 264841
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1075f07166529dfc4e072468f54b7a317dc9b1c31dcdee83e4355f03d9a345d6"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/035-obliterate-opened-delivery-status/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 299,
+              "active_time_ms": 299
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d9989cf648b5a75c0478feee1e8efebb195b75170ce9bcccbf76556562292216"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'c4be16303bbb07a1dd1f82981e259de54887ed66'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 265,
+              "active_time_ms": 265
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\nACCEPT\n\n## Confidence\nHigh\n\n## ADR conformance\nPASS\n\nThe implementation correctly honors the project's Event Sourcing and ",
+              "last_stage": "gemini_review",
+              "response.gemini_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\nACCEPT\n\n## Confidence\nHigh\n\n## ADR conformance\nPASS\n\nThe implementation correctly honors the project's Event Sourcing and CQRS architecture constraints:\n- **Immutability of Historic Data**: Rather than attempting to delete or alter historic events, `EmailDeliveryOpened` is preserved as a structurally valid, documented tombstone.\n- **Replay Safety**: The aggregate and projectors gracefully ignore the deprecated event via explicit no-op clauses, ensuring projection rebuilds succeed without failing on unhandled events.\n- **Read/Write Segregation**: The active command (`ReportEmailDeliveryOpened`) was entirely removed from the write model, and downstream normalization was removed from the read model.\n\n## ADR violations\nNone identified.\n\n## Blocking issues\nNone.\n\n## Bounded-safe fixes\n1. **Ensure maximally broad pattern matching on no-op projector clauses**\n   - If the newly added projector no-op clauses for `EmailDeliveryOpened` still match on a specific metadata shape (e.g., `%{email_delivery_id: _}`), loosen them to `_metadata`. This ensures robust replay even if historic events have missing or malformed metadata, as the payload is being ignored anyway.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Test-suite coupling to Commanded/EventStore database internals**\n   - **Files**: Replay-safety regression test (evidence shows `reset_event_store!/1`, `reset_projection_tables!/1` with raw SQL `TRUNCATE` commands).\n   - **Smell**: The test directly manipulates internal EventStore and projection tables using raw SQL (e.g., `TRUNCATE TABLE snapshots, subscriptions, stream_events...`).\n   - **Why it needs human judgement**: Testing projection rebuilds is highly valuable, but raw SQL manipulation tightly couples the test suite to the underlying library's schema internals. If these replay/rebuild tests become a recurring pattern, the project should centralize these destructive reset operations into a dedicated, well-named test-support module to isolate this fragility. \n\n2. **Permanent maintenance surface for a deprecated feature**\n   - **Files**: `EmailDeliveryOpened` event module, Aggregate no-op clause, Projector no-op clauses.\n   - **Smell**: The codebase must forever carry this event's structure and empty handling to satisfy the event store's append-only nature.\n   - **Why it needs human judgement**: This is the correct, safe event-sourcing implementation. However, if a future operational audit confirms zero instances of `EmailDeliveryOpened` were ever appended in production, the team could safely delete these tombstones. This is appropriately deferred by the current plan.\n\n## Suggested fixes\n- (Optional Polish) Review projector `project(%EmailDeliveryOpened{}, metadata, ...)` heads and replace specific map pattern matches on `metadata` with `_metadata` or `_` to guarantee maximum replay resilience.\n\n## Validation notes\n- `dev check` successfully completed (82 scenarios, 493 steps).\n- The removal of the `opened` status was handled cleanly at all boundaries: Webhook handlers, Write API (Commands), Read Model (Normalization), and Presentation (UI strings/mapping).\n- A robust integration test proves that historical events are safely handled: the system can parse the event from the database, the aggregate does not mutate state, and projectors do not crash upon encountering it during a full rebuild.\n- Acceptance criteria are met, and domain feature files appropriately remain un-altered implementation specs."
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 8103,
+                    "output_tokens": 767,
+                    "reasoning_tokens": 1076,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 38322
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 18653,
+              "tool_time_ms": 0,
+              "active_time_ms": 18653
+            }
+          }
+        },
+        "next_node_id": "review_gate",
+        "git_commit_sha": "06e470903a71a40eea9f8390376e3ccfceaccee6",
+        "node_visits": {
+          "dev_check": 1,
+          "start": 1,
+          "synthesize_review": 1,
+          "claude_review": 1,
+          "read_plan": 1,
+          "codex_review": 1,
+          "collect_implementation_evidence": 1,
+          "gemini_review": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-19T07:23:41.248864921Z",
+        "current_node": "review_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -2304,20 +2615,22 @@
           "implementation_accepted": false,
           "thread.read_plan.current_node": "preflight_sandbox",
           "response.codex_review": "# Iteration Review Report: 035 — Obliterate Opened Delivery Status\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation is consistent with the project’s event-sourcing/CQRS direction and the domain-design guidance relevant to this slice:\n\n- Historic events are preserved as immutable facts rather than deleted or renamed.\n- `EmailDeliveryOpened` remains only as a replay/deserialization tombstone.\n- Aggregate/projector handling is reduced to explicit replay-safe no-ops.\n- The active command, webhook branch, read-model normalization, and presentation mapping for `\"opened\"` are removed.\n- The new regression coverage exercises replay/rebuild behaviour rather than only forward command dispatch.\n\nNo evidence suggests the implementation replaced ADR-mandated Commanded/EventStore infrastructure with local substitutes or bypassed projection/read-model boundaries.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\n1. **Consider making replay-only no-op projector clauses maximally broad**\n   - **Files:** the projector modules retaining `EmailDeliveryOpened` no-op clauses.\n   - **Issue:** If the no-op clauses still pattern-match on metadata shape such as `%{email_delivery_id: _}`, that is slightly narrower than the intent of a tombstone replay shim.\n   - **Why safe:** The event is deprecated and should have no behaviour regardless of metadata. Matching `_metadata` would make the replay shim more robust against older or malformed historic metadata without changing product behaviour.\n   - **Suggested change:** Prefer heads equivalent to:\n\n     ```elixir\n     # Historic event retained for replay only; intentionally ignored.\n     def project(%EmailDeliveryOpened{}, _metadata, _context_or_multi) do\n       :ok\n     end\n     ```\n\n     or the project’s equivalent projector callback shape.\n\n   - **Not blocking:** The current implementation passed the replay regression and full `dev check`; this is defensive polish only.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Replay regression test reaches into EventStore/projection internals**\n   - **Files:** the new replay-safety regression test containing helpers such as `reset_event_store!/1`, `reset_projection_tables!/1`, and projector rebuild orchestration.\n   - **Smell:** The test necessarily manipulates EventStore tables, projection tables, subscriptions, schemas, and rebuild mechanics directly.\n   - **Why it may need human judgement:** This is appropriate for a replay-safety regression, but if similar tests accumulate, the project may want a shared, well-named test helper for “historic event replay/rebuild” scenarios. Otherwise, future tests may duplicate fragile knowledge of EventStore table names and reset semantics.\n   - **Not blocking:** For this iteration, the test is valuable and proves the important risk: historic `EmailDeliveryOpened` events do not break projection rebuilds or mutate read models.\n\n2. **Permanent tombstone surface remains by design**\n   - **Files:**\n     - `lib/memba/messaging/events/email_delivery_opened.ex`\n     - aggregate no-op clause for `EmailDeliveryOpened`\n     - projector no-op clauses for `EmailDeliveryOpened`\n   - **Smell:** The codebase retains a deprecated event module and replay-only handlers for a status that no longer exists as product behaviour.\n   - **Why it may need human judgement:** Removing this later would require operational confidence that no production event store contains `EmailDeliveryOpened` events, plus an explicit decision about replay compatibility. Until then, the tombstone is the correct event-sourcing tradeoff.\n   - **Not blocking:** The comments and no-op implementation make the intent clear, and this exactly matches the iteration plan.\n\n## Suggested fixes\n\nOnly optional bounded-safe polish:\n\n1. If any `EmailDeliveryOpened` no-op projector clause unnecessarily constrains metadata, loosen it to ignore all metadata.\n2. If replay/rebuild regression tests become common, extract the EventStore/projection reset and rebuild helpers into a shared test-support module with a name that makes the destructive test-only behaviour explicit.\n\n## Validation notes\n\n- `dev ci` completed successfully.\n- Acceptance suite passed: **82 scenarios / 493 steps**.\n- The implementation evidence shows the active `\"opened\"` delivery behaviour was removed:\n  - deleted `ReportEmailDeliveryOpened` command path,\n  - removed read-model `\"opened\"` normalization,\n  - removed `\"opened\" -> \"delivered\"` presentation mapping,\n  - removed webhook `\"opened\"` rejection branch,\n  - removed UI/test assertions that treated `\"opened\"` as an active status.\n- Historic replay safety is covered by a regression test that persists/replays `EmailDeliveryOpened` and rebuilds projections.\n- Remaining `opened`/`Opened` references appear limited to the documented replay-only shim and intentional regression coverage.\n- Acceptance feature files appear to remain domain-focused rather than being updated as implementation specs, which is appropriate for this cleanup slice.",
+          "thread.synthesize_review.current_node": "review_gate",
           "internal.node_visit_count": 1,
+          "internal.retry_count.review_gate": 0,
           "internal.fidelity": "summary:high",
           "internal.run_id": "01KVFB727FHYSX43XW559SAPJC",
           "internal.retry_count.dev_check": 0,
           "review_fixes_available": true,
           "internal.retry_count.synthesize_review": 0,
           "failure_signature": "",
-          "internal.thread_id": "gemini_review",
+          "internal.thread_id": "synthesize_review",
           "last_stage": "synthesize_review",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "internal.work_dir": "/workspace/memba",
           "response.gemini_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\nACCEPT\n\n## Confidence\nHigh\n\n## ADR conformance\nPASS\n\nThe implementation correctly honors the project's Event Sourcing and CQRS architecture constraints:\n- **Immutability of Historic Data**: Rather than attempting to delete or alter historic events, `EmailDeliveryOpened` is preserved as a structurally valid, documented tombstone.\n- **Replay Safety**: The aggregate and projectors gracefully ignore the deprecated event via explicit no-op clauses, ensuring projection rebuilds succeed without failing on unhandled events.\n- **Read/Write Segregation**: The active command (`ReportEmailDeliveryOpened`) was entirely removed from the write model, and downstream normalization was removed from the read model.\n\n## ADR violations\nNone identified.\n\n## Blocking issues\nNone.\n\n## Bounded-safe fixes\n1. **Ensure maximally broad pattern matching on no-op projector clauses**\n   - If the newly added projector no-op clauses for `EmailDeliveryOpened` still match on a specific metadata shape (e.g., `%{email_delivery_id: _}`), loosen them to `_metadata`. This ensures robust replay even if historic events have missing or malformed metadata, as the payload is being ignored anyway.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Test-suite coupling to Commanded/EventStore database internals**\n   - **Files**: Replay-safety regression test (evidence shows `reset_event_store!/1`, `reset_projection_tables!/1` with raw SQL `TRUNCATE` commands).\n   - **Smell**: The test directly manipulates internal EventStore and projection tables using raw SQL (e.g., `TRUNCATE TABLE snapshots, subscriptions, stream_events...`).\n   - **Why it needs human judgement**: Testing projection rebuilds is highly valuable, but raw SQL manipulation tightly couples the test suite to the underlying library's schema internals. If these replay/rebuild tests become a recurring pattern, the project should centralize these destructive reset operations into a dedicated, well-named test-support module to isolate this fragility. \n\n2. **Permanent maintenance surface for a deprecated feature**\n   - **Files**: `EmailDeliveryOpened` event module, Aggregate no-op clause, Projector no-op clauses.\n   - **Smell**: The codebase must forever carry this event's structure and empty handling to satisfy the event store's append-only nature.\n   - **Why it needs human judgement**: This is the correct, safe event-sourcing implementation. However, if a future operational audit confirms zero instances of `EmailDeliveryOpened` were ever appended in production, the team could safely delete these tombstones. This is appropriately deferred by the current plan.\n\n## Suggested fixes\n- (Optional Polish) Review projector `project(%EmailDeliveryOpened{}, metadata, ...)` heads and replace specific map pattern matches on `metadata` with `_metadata` or `_` to guarantee maximum replay resilience.\n\n## Validation notes\n- `dev check` successfully completed (82 scenarios, 493 steps).\n- The removal of the `opened` status was handled cleanly at all boundaries: Webhook handlers, Write API (Commands), Read Model (Normalization), and Presentation (UI strings/mapping).\n- A robust integration test proves that historical events are safely handled: the system can parse the event from the database, the aggregate does not mutate state, and projectors do not crash upon encountering it during a full rebuild.\n- Acceptance criteria are met, and domain feature files appropriately remain un-altered implementation specs.",
           "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"broaden-opened-projector-noops\",\n        \"title\": \"Br",
-          "current_node": "synthesize_review",
+          "current_node": "review_gate",
           "response.claude_review": "# Iteration Review Report: 035-obliterate-opened-delivery-status\n\n## Decision\n**ACCEPT**\n\n## Confidence\n**High**\n\n## ADR Conformance\n**PASS**\n\nThe implementation follows sound event sourcing, CQRS, and DDD patterns:\n\n- **Event immutability**: Historic events preserved via tombstone struct\n- **Deserialization safety**: Event module retained for EventStore replay capability  \n- **Replay safety**: Aggregate and projectors provide explicit no-op handling\n- **Command lifecycle**: Dead command cleanly removed from write side\n- **Read model consistency**: Status removed from query side normalization and presentation\n- **Domain clarity**: Deprecated status has no domain behavior, only backward-compatibility infrastructure\n\nThe tombstoning pattern is textbook-correct for event-sourced systems where you cannot delete historic events but need to stop processing a deprecated event type.\n\n## ADR Violations\nNone.\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\nNone needed. The implementation is clean, complete, and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Potential event store cleanup opportunity** (optimization, not correctness)\n   - **Files**: `lib/memba/messaging/events/email_delivery_opened.ex`, aggregate and projector no-op clauses\n   - **Smell**: The tombstone and replay-safety shim add permanent maintenance surface for a deprecated feature\n   - **Why human judgement needed**: \n     - Requires production event store analysis to confirm zero `EmailDeliveryOpened` events exist\n     - Needs decision on whether operational cost of maintaining the shim outweighs re-introduction risk\n     - Depends on event retention policy and replay frequency\n   - **Current state**: Safe and well-documented. The tombstone is cheap to maintain, has excellent deprecation notices, and poses no correctness risk.\n   - **Potential future action**: If production proves zero historic instances exist and policy ensures none will be replayed, a future iteration could remove the entire shim (event struct + no-op handlers) and close this technical debt. The plan explicitly defers this decision.\n   - **Not blocking**: The code is clean, the documentation is clear (\"DO NOT REMOVE\"), and the pattern is standard. This is optimization territory, not a quality issue.\n\n## Suggested Fixes\nNone. The implementation is ready to merge.\n\n## Validation Notes\n\n### Test Coverage\n✅ **Replay safety test is comprehensive**:\n- Persists a real historic `EmailDeliveryOpened` event to the EventStore\n- Rebuilds all projections from scratch (not just forward-dispatch)\n- Asserts read models remain valid after rebuild\n- Proves deserialization + aggregate + projectors all handle the deprecated event safely\n\n✅ **Existing test suites updated**:\n- All \"opened\" assertions removed from ExUnit tests\n- Acceptance tests unchanged (correct - they're domain specs, not implementation specs)\n- No test failures from removing the status\n\n### Implementation Evidence\n✅ **Tombstone pattern correctly applied**:\n- Event struct remains with `@derive Jason.Encoder` for deserialization\n- Module documentation clearly explains it's DEPRECATED and DO NOT REMOVE\n- No business logic, just structure\n\n✅ **No-op handlers consistent**:\n- Aggregate: `apply(%EmailDelivery{}, %EmailDeliveryOpened{})` returns delivery unchanged\n- Both projectors: `project(%EmailDeliveryOpened{}, _, %{email_delivery_id: _})` returns `:ok`\n- All handlers include inline comment \"Historic event: no-op for replay safety\"\n\n✅ **Active behavior removed**:\n- `ReportEmailDeliveryOpened` command deleted\n- Read-model `normalize_delivery_status/1` no longer has \"opened\" clause\n- No \"opened\" → \"delivered\" presentation mapping\n- Webhook rejection branch removed (implied by passing tests)\n\n✅ **Grep verification**:\n- Only remaining `opened`/`Opened` references in `lib/` are the documented shim\n- Test files only reference it in the replay safety test\n- No stray references in UI, contexts, or business logic\n\n### Dev Check Results\n✅ All stages passed:\n- 82 acceptance scenarios (493 steps) passed\n- Zero compiler warnings\n- Zero Credo issues\n- Zero formatter issues\n- Clean Dialyzer run\n- Sandbox runtime check passed\n\n### Code Quality\n**Strengths**:\n- Excellent module documentation on the tombstone event explaining deprecation and warning against removal\n- Consistent no-op pattern across aggregate and both projectors\n- Clean removal of all active \"opened\" behavior with no leftover branches\n- Comprehensive replay safety test that proves the shim works\n- No scope creep - implementation matches plan exactly\n\n**Maintainability**: High. The next developer will immediately understand:\n- Why the event struct exists (clear deprecation doc)\n- That it's a tombstone, not active code (DO NOT REMOVE warning)\n- How to handle similar deprecations in future (pattern established)\n\n## Summary\n\nThis is a textbook-correct implementation of event sourcing tombstoning. The developer:\n\n1. Preserved event deserialization capability for historic events (correct)\n2. Added explicit no-op handlers to prevent replay crashes (correct)\n3. Removed all active behavior cleanly (correct)\n4. Documented the deprecation clearly to prevent future confusion (excellent)\n5. Proved replay safety with a comprehensive rebuild test (thorough)\n6. Stayed within scope and delivered exactly what the plan specified (disciplined)\n\nThe code is production-ready, maintainable, and safe. The single judgement-worthy finding is an optimization opportunity (event store cleanup) that the plan explicitly deferred, not a quality issue.\n\n**Recommendation**: Merge with confidence.",
           "command.output": "blob://sha256/d9989cf648b5a75c0478feee1e8efebb195b75170ce9bcccbf76556562292216",
           "internal.retry_count.preflight_sandbox": 0
@@ -2360,6 +2673,11 @@
               "tool_time_ms": 0,
               "active_time_ms": 127793
             }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
           },
           "start": {
             "status": "succeeded",
@@ -2542,7 +2860,7 @@
             }
           }
         },
-        "next_node_id": "review_gate",
+        "next_node_id": "snapshot_before_review_repair",
         "node_visits": {
           "read_plan": 1,
           "start": 1,
@@ -2552,6 +2870,7 @@
           "claude_review": 1,
           "codex_review": 1,
           "preflight_sandbox": 1,
+          "review_gate": 1,
           "collect_implementation_evidence": 1
         }
       },
@@ -2616,7 +2935,12 @@
       "first_event_seq": 95,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-19T07:23:37.935852335Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2630,15 +2954,26 @@
       "output": null,
       "started_at": "2026-06-19T07:23:16.224764829Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 21711,
+        "inference_time_ms": 21663,
+        "tool_time_ms": 0,
+        "active_time_ms": 21663
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 8367,
+        "output_tokens": 107,
+        "total_tokens": 9508,
+        "reasoning_tokens": 1034,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 76065
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "dev_check@1": {
       "first_event_seq": 45,
