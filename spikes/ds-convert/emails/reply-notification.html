@@ -1,17 +1,24 @@
 <!-- @screen-label "Email — Reply notification" -->
 <!--
   Memba · Transactional email — Reply notification (conversation)
-  Sent when someone replies to a club message conversation. Shows the NEW reply at the
-  top, then the whole conversation inline below (like a normal email thread) so the
-  reader has full context without leaving their inbox.
+  Sent when someone replies to a club message conversation.
+
+  DESIGN DECISION (2026-06-19): lean on the email client for history.
+  The branded body is just the NEW reply + a "View the conversation" CTA + footer.
+  The earlier messages are emitted as a STANDARD quoted thread (blockquote.gmail_quote
+  with "On <date>, <name> wrote:" attributions), so email clients fold it natively
+  ("See more" in Apple Mail, "•••" in Gmail) and thread it via Message-ID / In-Reply-To /
+  References headers. We deliberately do NOT inline a branded full history — that would
+  fight the client and show the thread twice in clients that thread by headers.
+
   Dynamic fields:  {{club_name}} {{club_initials}} {{replier_name}} {{replier_initials}}
                    {{conversation_subject}} {{reply_body}} {{conversation_url}}
                    {{recipient_email}} {{follow_reason}} {{stop_following_url}}
-                   history[]: {author, initials, sent_label, body, is_original}
-  Subject: Re: {{conversation_subject}}
-  From:    {{club_name}} via Memba <kootenay-alpine@memba.io>
-  Reply-To: kootenay-alpine+c.<token>@clubs.memba.io   (the conversation address — iteration 041;
-            until 041 ships, Reply-To is a no-reply and members reply in Memba)
+                   quoted_history[] (most-recent-first, nested): {author, sent_label, body}
+  Subject:   Re: {{conversation_subject}}
+  From:      {{club_name}} via Memba <kootenay-alpine@memba.io>
+  Reply-To:  kootenay-alpine+c.<token>@clubs.memba.io     (conversation address — iteration 041)
+  Headers:   Message-ID, In-Reply-To, References set so clients thread + fold (iteration 041)
 -->
 <!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -68,7 +75,7 @@
             </td>
           </tr>
 
-          <!-- subject of the conversation -->
+          <!-- conversation subject -->
           <tr>
             <td class="gutter" style="padding:20px 28px 2px;">
               <div style="font-size:11px; color:#878b76; letter-spacing:0.04em; text-transform:uppercase;">In the conversation</div>
@@ -76,7 +83,7 @@
             </td>
           </tr>
 
-          <!-- the NEW reply (prominent) -->
+          <!-- the NEW reply (the only branded message body) -->
           <tr>
             <td class="gutter" style="padding:18px 28px 4px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -101,7 +108,7 @@
 
           <!-- CTA -->
           <tr>
-            <td class="gutter" style="padding:0 28px 24px;">
+            <td class="gutter" style="padding:0 28px 22px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
                 <td align="center" style="background:#5a7050; border-radius:999px;">
                   <a href="#" style="display:inline-block; padding:12px 26px; font-size:14px; font-weight:600; color:#ffffff; text-decoration:none;">View the conversation</a>
@@ -110,40 +117,26 @@
             </td>
           </tr>
 
-          <!-- the whole conversation, inline (like a normal email thread) -->
+          <!-- quoted history: STANDARD email quote so clients fold/thread it natively -->
           <tr>
-            <td class="gutter" style="padding:4px 28px 8px; border-top:1px solid #e8e6d4;">
-              <div style="font-size:11px; color:#878b76; letter-spacing:0.04em; text-transform:uppercase; padding-top:16px;">Earlier in this conversation</div>
-            </td>
-          </tr>
-
-          <!-- original message -->
-          <tr>
-            <td class="gutter" style="padding:10px 28px 0;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                <td style="border-left:3px solid #dde3cf; padding:2px 0 2px 14px;">
-                  <div style="font-size:13.5px; color:#25291d;"><b style="font-weight:600;">Eira Sandhu</b> <span style="color:#878b76;">&middot; started the conversation &middot; 3 Jun</span></div>
-                  <div style="font-size:14px; line-height:1.55; color:#555a47; margin-top:5px;">Meeting at the trailhead 8am sharp. Bring microspikes &mdash; the north side still has ice in the gullies. We&rsquo;ll regroup at the saddle for lunch.</div>
-                </td>
-              </tr></table>
-            </td>
-          </tr>
-
-          <!-- earlier reply -->
-          <tr>
-            <td class="gutter" style="padding:14px 28px 0;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-                <td style="border-left:3px solid #dde3cf; padding:2px 0 2px 14px;">
-                  <div style="font-size:13.5px; color:#25291d;"><b style="font-weight:600;">Marta Wi&#347;niewska</b> <span style="color:#878b76;">&middot; replied &middot; 3 Jun, 9:40am</span></div>
-                  <div style="font-size:14px; line-height:1.55; color:#555a47; margin-top:5px;">Carpool from the north lot? I have three seats &mdash; reply here if you want one.</div>
-                </td>
-              </tr></table>
+            <td class="gutter" style="padding:0 28px 18px;">
+              <div class="gmail_quote" style="font-size:13.5px; line-height:1.55; color:#878b76;">
+                On 3 Jun, Marta Wi&#347;niewska wrote:
+                <blockquote class="gmail_quote" style="margin:6px 0 0; padding:2px 0 2px 14px; border-left:2px solid #d9d6bf; color:#878b76;">
+                  Carpool from the north lot? I have three seats &mdash; reply here if you want one.
+                  <br><br>
+                  On 3 Jun, Eira Sandhu wrote:
+                  <blockquote class="gmail_quote" style="margin:6px 0 0; padding:2px 0 2px 14px; border-left:2px solid #d9d6bf; color:#a4a892;">
+                    Meeting at the trailhead 8am sharp. Bring microspikes &mdash; the north side still has ice in the gullies. We&rsquo;ll regroup at the saddle for lunch.
+                  </blockquote>
+                </blockquote>
+              </div>
             </td>
           </tr>
 
           <!-- footer: Memba baseline + follow controls -->
           <tr>
-            <td class="gutter" style="padding:22px 28px 24px; border-top:1px solid #e8e6d4; margin-top:8px;">
+            <td class="gutter" style="padding:20px 28px 24px; border-top:1px solid #e8e6d4;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;"><tr>
                 <td style="padding-right:7px; vertical-align:middle;">
                   <svg width="15" height="15" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#5a7050"></rect><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="#ffffff" stroke-width="4.6" stroke-linecap="round"></path><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="#ffffff"></path><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="#ffffff"></path><circle cx="32" cy="15" r="3.7" fill="#d2925a"></circle></svg>
