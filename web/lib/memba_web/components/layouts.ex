@@ -16,6 +16,54 @@ defmodule MembaWeb.Layouts do
   defp git_commit_footer_link, do: Memba.BuildInfo.footer_commit()
 
   @doc """
+  Renders the shared public/visitor header.
+
+  Matches the marketing nav from the design system: the wordmark and link
+  cluster sit together on the left, with the sign-in / request-access actions
+  pushed to the right. Used by the public homepage and every public-chrome page
+  so visitors never see the navigation change as they move between pages.
+  """
+  def site_header(assigns) do
+    ~H"""
+    <header class="relative z-20 border-b border-line bg-paper/85 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl items-center gap-8 px-4 py-4 sm:px-6 lg:px-8">
+        <a
+          href={~p"/"}
+          class="min-w-0 shrink-0 transition duration-200 hover:opacity-80"
+          aria-label="Memba home"
+        >
+          <.logo />
+        </a>
+
+        <nav
+          class="hidden items-center gap-7 text-sm font-medium text-ink-2 md:flex"
+          aria-label="Main navigation"
+        >
+          <a href="/#features" class="transition hover:text-ink">Features</a>
+          <a href={~p"/get-started"} class="transition hover:text-ink">Pricing</a>
+          <a href={~p"/about"} class="transition hover:text-ink">About</a>
+        </nav>
+
+        <div class="ml-auto flex items-center gap-3">
+          <a
+            href={~p"/auth"}
+            class="hidden rounded-full border border-line-strong bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition duration-200 hover:-translate-y-0.5 hover:bg-white sm:inline-flex"
+          >
+            Sign in
+          </a>
+          <a
+            href={~p"/get-started"}
+            class="shrink-0 rounded-full border border-sage-600 bg-sage-600 px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+          >
+            Request access
+          </a>
+        </div>
+      </div>
+    </header>
+    """
+  end
+
+  @doc """
   Renders your app layout.
 
   This function is typically invoked from every template,
@@ -39,47 +87,7 @@ defmodule MembaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="border-b border-line bg-paper px-4 sm:px-6 lg:px-8">
-      <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <a
-          href={~p"/"}
-          class="w-fit transition duration-200 hover:opacity-80"
-          aria-label="Memba home"
-        >
-          <.logo />
-        </a>
-
-        <nav
-          class="flex flex-wrap items-center gap-3 text-sm font-medium"
-          aria-label="Public navigation"
-        >
-          <a
-            href={~p"/"}
-            class="rounded-full px-3 py-2 text-ink-2 transition duration-200 hover:bg-cream hover:text-ink"
-          >
-            Home
-          </a>
-          <a
-            href={~p"/about"}
-            class="rounded-full px-3 py-2 text-ink-2 transition duration-200 hover:bg-cream hover:text-ink"
-          >
-            About
-          </a>
-          <a
-            href={~p"/auth"}
-            class="rounded-full border border-line-strong bg-paper px-4 py-2 text-ink transition duration-200 hover:-translate-y-0.5 hover:bg-white"
-          >
-            Sign in
-          </a>
-          <a
-            href={~p"/get-started"}
-            class="rounded-full border border-sage-600 bg-sage-600 px-4 py-2 font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
-          >
-            Request access
-          </a>
-        </nav>
-      </div>
-    </header>
+    <.site_header />
 
     <main class="px-4 py-16 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-2xl space-y-4">

@@ -756,7 +756,11 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Verify your email first"
 
     assert html
-           |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+           |> LazyHTML.query("header a[aria-label='Memba home'][href='/']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("header nav[aria-label='Main navigation'] a[href='/about']")
            |> Enum.any?()
 
     assert html
@@ -785,7 +789,7 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("button#get-started-verification-submit[type='submit']")
            |> Enum.any?()
 
-    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+    refute html |> LazyHTML.query("main a[href^='mailto:hello@memba.io']") |> Enum.any?()
   end
 
   test "POST /get-started sends a magic sign-in link back to Get Started for signed-out visitors",
