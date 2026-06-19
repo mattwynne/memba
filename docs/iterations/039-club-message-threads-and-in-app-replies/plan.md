@@ -1,7 +1,7 @@
 # Club message threads and in-app replies
 
 Date: 2026-06-19
-Status: draft
+Status: validated
 
 ## Goal
 
