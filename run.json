@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-19T07:03:44.473645521Z",
-  "last_event_at": "2026-06-19T07:06:02.389691415Z",
+  "last_event_at": "2026-06-19T07:06:09.621990630Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,20 +1069,21 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-19T07:06:08.238295171Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-19T07:06:11.774948461Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
           "plan_ready": true,
           "internal.node_visit_count": 1,
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "thread.start.current_node": "gemini_review",
           "graph.default_fidelity": "summary:high",
           "claude_review_blocking_gap_count": 0,
@@ -1091,12 +1092,13 @@
           "internal.retry_count.claude_review": 0,
           "claude_review_blocking_gaps": "None",
           "claude_review_required_edits": "None",
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.synthesize": 0,
           "gemini_review_required_edits": "None",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "internal.work_dir": "/workspace/memba",
           "thread.codex_review.current_node": "synthesize",
           "plan_needs_human": false,
@@ -1114,6 +1116,7 @@
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The plan intentionally leaves a few implementation-level choices open, especially aggregate shape, follow storage, and reuse of the strong-consistency path. That is acceptable for readiness, but the implementer should decide these early before broad UI work.\n2. Acceptance criteria could explicitly mention that non-current members cannot follow/unfollow either, since scope says follow authorization is limited to current club members.\n3. Acceptance criteria could explicitly state the ordering basis for replies, e.g. posted-at/event order, to avoid ambiguity if multiple replies are close together.\n4. The plan could clarify whether former members/non-members can read the thread or whether existing message-detail authorization already covers that.\n\n## Smallest viable iteration\n\nThe planned slice is already a small, coherent iteration: in-app thread replies, ordered thread reading, member-only reply authorization, and stored follow/unfollow state, while excluding reply notification emails, reply-by-email, attachments, editing/deleting, reactions, and notification badges.\n\nIf it had to be reduced further, the smallest useful fallback would be: domain + read model + LiveView support for current members to post and read ordered in-app replies, with sender/replier auto-follow stored, deferring manual follow/unfollow UI. However, because iteration 040 depends on follow state, the current plan’s inclusion of follow/unfollow is reasonable and implementation-ready.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain tests for:\n   - Current member can reply.\n   - Non-current member cannot reply.\n   - Blank reply body is rejected.\n   - Reply is associated with the original club message thread.\n   - Sender auto-follows.\n   - Replier auto-follows.\n   - Follow/unfollow state changes persist.\n\n2. Projection/read-model tests for:\n   - Loading original message plus replies.\n   - Replies appearing in deterministic posted order.\n   - Viewer follow state being returned correctly.\n\n3. LiveView tests for:\n   - Rendering original message and replies.\n   - Showing inline body-only reply composer.\n   - Posting a valid reply.\n   - Showing validation for blank replies.\n   - Showing and toggling follow/unfollow control.\n   - Preserving delivery receipts behavior.\n\n4. Acceptance validation:\n   - `acceptance-tests/features/club_message_replies.feature` scenarios for iteration 039 pass with relevant temporary tags removed or narrowed.\n   - Existing messaging acceptance scenarios remain green.\n\n5. Final project validation:\n   - `dev check` passes before implementation delivery.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
           "codex_review_required_edits": "None",
           "internal.retry_count.codex_review": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
           "internal.retry_count.gemini_review": 0,
           "graph.rankdir": "LR",
           "internal.retry_count.start": 0,
@@ -1209,6 +1212,11 @@
               "active_time_ms": 29061
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "start": {
             "status": "succeeded",
             "usage": null
@@ -1298,13 +1306,14 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "gemini_review": 1,
           "start": 1,
           "codex_review": 1,
           "claude_review": 1,
-          "synthesize": 1
+          "synthesize": 1,
+          "synthesis_gate": 1
         }
       },
       "diff": {}
@@ -1607,7 +1616,12 @@
       "first_event_seq": 93,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-19T07:06:08.237489604Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1621,15 +1635,26 @@
       "output": null,
       "started_at": "2026-06-19T07:06:02.372799513Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 5863,
+        "inference_time_ms": 5769,
+        "tool_time_ms": 0,
+        "active_time_ms": 5769
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 5002,
+        "output_tokens": 33,
+        "total_tokens": 5211,
+        "reasoning_tokens": 176,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 31280
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "gemini_review@1": {
       "first_event_seq": 21,
