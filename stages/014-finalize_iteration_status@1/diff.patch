@@ -1,0 +1,675 @@
+diff --git a/.fabro/workflows/iteration-review/workflow.toml b/.fabro/workflows/iteration-review/workflow.toml
+index 3f21299..92542f2 100644
+--- a/.fabro/workflows/iteration-review/workflow.toml
++++ b/.fabro/workflows/iteration-review/workflow.toml
+@@ -15,6 +15,10 @@ exclude_globs = [".fabro/tmp", ".fabro/tmp/**"]
+ [environments.memba-dev]
+ provider = "docker"
+ 
++[environments.memba-dev.resources]
++cpu = 1
++memory = "1024MB"
++
+ [environments.memba-dev.image]
+ ref = "ghcr.io/mattwynne/memba-fabro-dev:latest"
+ 
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+new file mode 100644
+index 0000000..f2ff7a9
+--- /dev/null
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -0,0 +1,55 @@
++@iteration-039 @todo-domain @todo-ui
++Feature: Club message replies (thread conversations)
++  Club members want to reply to a club message and follow the conversation in Memba,
++  instead of replies scattering to private inboxes and never being tracked.
++  A reply belongs to the original message's thread. Members opt in to follow a thread;
++  the person who sent the message, and anyone who replies, follow it automatically.
++
++  Background:
++    Given Kootenay Mountaineering Club is a club
++    And Nelson Paddling Club is a club
++    And Alice, Bob, Carol, and Dana are people
++    And Pat is a person
++    And Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club
++    And Pat is a member of Nelson Paddling Club
++    And Alice sent the message "Trip planning night" to Kootenay Mountaineering Club members
++
++  Rule: A member can reply to a club message, and the reply joins that message's thread
++
++    Scenario: Bob replies to Alice's club message
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then the thread for "Trip planning night" should show Bob's reply "I can drive, three seats spare"
++      And Alice should see Bob's reply in the thread for "Trip planning night"
++
++    Scenario: Replies are shown in the order they were posted
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      And Carol replies "I'll bring the maps" to "Trip planning night"
++      Then the thread for "Trip planning night" should show "I can drive, three seats spare" before "I'll bring the maps"
++
++  Rule: The sender follows their own thread, and replying to a thread follows it
++
++    Scenario: The original sender follows the thread
++      Then Alice should be following the thread for "Trip planning night"
++
++    Scenario: Replying follows the thread
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Bob should be following the thread for "Trip planning night"
++
++  Rule: Recipients do not follow a thread until they choose to
++
++    Scenario: A recipient is not following a thread by default
++      Then Carol should not be following the thread for "Trip planning night"
++
++    Scenario: Carol follows a thread to keep up with replies
++      When Carol follows the thread for "Trip planning night"
++      Then Carol should be following the thread for "Trip planning night"
++
++    Scenario: Carol stops following a thread
++      Given Carol is following the thread for "Trip planning night"
++      When Carol stops following the thread for "Trip planning night"
++      Then Carol should not be following the thread for "Trip planning night"
++
++  Rule: Only a current member of the club can reply to its messages
++
++    Scenario: A member of another club cannot reply
++      Then Pat should not be able to reply to "Trip planning night"
+diff --git a/docs/iterations/036-ds-catchup-member-management-and-auth/plan.md b/docs/iterations/036-ds-catchup-member-management-and-auth/plan.md
+index fbeb6cd..403f23e 100644
+--- a/docs/iterations/036-ds-catchup-member-management-and-auth/plan.md
++++ b/docs/iterations/036-ds-catchup-member-management-and-auth/plan.md
+@@ -1,7 +1,7 @@
+ # Design-system catch-up: member management & auth check-email
+ 
+ Date: 2026-06-17
+-Status: validated
++Status: implementing
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/plan.md b/docs/iterations/038-email-delivery-handoff-boundary/plan.md
+new file mode 100644
+index 0000000..35a62d5
+--- /dev/null
++++ b/docs/iterations/038-email-delivery-handoff-boundary/plan.md
+@@ -0,0 +1,124 @@
++# Email delivery handoff boundary
++
++Date: 2026-06-17
++Status: draft
++
++## Goal
++
++Make outbound club-message email handoff explicit and replay-safe by separating the event-sourced message-send decision from the external email-provider side effect.
++
++After this iteration, `Memba.Messaging.send_club_message/2` should no longer commit `MessageSent` / `EmailDeliveryCreated` events and then synchronously call the provider in a way that can return `{:error, reason}` after the event stream already records the message as sent. Instead, the system should record provider handoff intent/state in an internal boundary that can be observed, tested, and safely retried without replaying domain events into duplicate emails.
++
++## Background / Context
++
++A design review against the CQRS, DDD, RDD, and event-sourcing reference pages found a strong foundation: Membership and Messaging are separate Commanded contexts, commands/events use domain language, and read models are projected. The highest-risk drift is that `Memba.Messaging.send_club_message/2` mixes a domain command with real-world email delivery side effects:
++
++1. resolve recipients from Membership projections,
++2. dispatch `SendMessage`, which commits message and delivery-created events,
++3. synchronously call the configured email provider for each recipient,
++4. return an error if provider delivery fails.
++
++That sequence can make the command result look failed after the source-of-truth event stream already says the message and delivery records exist. It also leaves provider handoff hidden inside application-service control flow rather than as a named collaboration with explicit retry/idempotency semantics.
++
++This iteration is a technical/engineering slice: it keeps user-facing message behaviour the same while making the delivery side-effect boundary safer and clearer.
++
++## Related Problems
++
++- [CQRS/event-sourcing design drift is concentrating orchestration, read-model checks, and side effects in application services](../../problems/2026-06-17-cqrs-event-sourcing-design-drift.md) — partially addresses the most important finding by extracting/naming the email-provider handoff boundary for outbound club messages. It deliberately leaves other application-service bloat and projection-backed policies for later iterations.
++- [The deprecated "opened" email delivery status should be obliterated](../../problems/2026-06-17-obliterate-opened-email-delivery-status.md) — leaves unresolved. This iteration should avoid expanding any `opened` compatibility code and should not make the handoff boundary depend on deprecated delivery-status concepts.
++
++## Scope
++
++### In scope
++
++- Design and implement a small internal email handoff boundary for outbound club-message deliveries.
++- Preserve the existing public behaviour for successful browser-composed and inbound-composed club messages.
++- Ensure provider failure after event commit is represented consistently: either as a handoff failure state/result or a retryable internal job/outbox row, not as a misleading failed `send_club_message/2` result for an already-committed message.
++- Keep provider calls outside aggregate replay and projector replay paths.
++- Add focused automated tests for successful handoff, provider failure, partial recipient failure, and duplicate/retry safety.
++- Update module names/contracts so the responsibility split is visible from code.
++- Keep existing delivery-status semantics (`sent`, `delivered`, `delayed`, `bounced`, `spam_complaint`) unchanged.
++
++### Out of scope
++
++- Removing the deprecated `opened` status (iteration 035 / separate problem note).
++- Introducing a full background job system unless a minimal in-process/outbox-style boundary is needed for this slice.
++- Changing member/staff UI copy or delivery-status presentation.
++- Redesigning inbound email acceptance/rejection workflow beyond adapting to the new outbound handoff API when it sends a club message.
++- Refactoring all of `Memba.Messaging` or `Memba.Membership` application-service bloat.
++- Solving every cross-aggregate policy consistency concern identified by the design review.
++
++## Iteration Type
++
++Technical/engineering.
++
++There is no intended new user-observable behaviour. The slice improves the internal CQRS/event-sourcing boundary around outbound email side effects while keeping message sending and delivery-status surfaces working as they do now.
++
++## Acceptance Scenarios / Feature Files
++
++Not applicable.
++
++This is an internal architectural slice with no new business rule or user-facing workflow. Existing acceptance scenarios for club-message sending and delivery-status views should continue to pass. Coverage should be added or updated in ExUnit tests around `Memba.Messaging`, the provider boundary, and any new handoff module/read model.
++
++## Acceptance Criteria
++
++- `Memba.Messaging.send_club_message/2` has a clear result contract that does not report the domain send command as failed after the message event stream has committed successfully.
++- External provider delivery is performed by a named collaborator (for example `Memba.Messaging.EmailDeliveryHandoff` or similarly explicit module), not inline inside the main Messaging application service.
++- Provider handoff failures are observable and testable without lying about the committed message state.
++- A provider failure for one recipient cannot cause silent ambiguity about earlier recipients in the same message.
++- Retrying handoff does not create a second message stream or duplicate `EmailDeliveryCreated` events.
++- Event/projector replay does not call external providers.
++- Existing successful send flows still create message and email-delivery read models and hand off email requests to the configured provider.
++- The implementation includes tests for:
++  - successful handoff for all recipients,
++  - provider failure before any recipient is accepted,
++  - provider failure after at least one recipient has been accepted,
++  - safe duplicate/retry of a handoff for an already-created delivery,
++  - inbound club-message acceptance still sends through the same outbound handoff boundary.
++- `dev check` passes.
++
++## Open Business Decisions
++
++None known.
++
++## Implementation Plan
++
++1. Inspect current outbound send paths and tests:
++   - `Memba.Messaging.send_club_message/2`, `deliver_to_provider/1`, and `email_delivery_request/3`.
++   - browser compose and inbound club-message acceptance callers.
++   - fake/local/Postmark/Resend provider test seams.
++2. Define the smallest explicit handoff contract. Prefer a module that accepts committed message/delivery data and returns a structured handoff result such as `{:ok, summary}` or `{:error, {:handoff_failed, summary}}`, where the summary names which delivery IDs were attempted/succeeded/failed.
++3. Move provider-specific iteration over recipients out of `Memba.Messaging` into the named handoff collaborator.
++4. Adjust `send_club_message/2` so command dispatch and provider handoff results are not conflated. The caller should be able to know the `message_id`/dispatch result even when handoff fails.
++5. If needed, add a small Ecto-backed handoff/read model or status field to make failure/retry observable. Keep it minimal and do not turn this slice into a full background job platform.
++6. Ensure idempotency/retry safety at the handoff boundary. If the provider adapter lacks provider-level idempotency, record enough local state to avoid sending the same delivery twice during a retry in this application.
++7. Route inbound accepted club messages through the same handoff contract without duplicating side-effect code.
++8. Remove obsolete inline helper functions from `Memba.Messaging` or leave thin delegators only where necessary for compatibility.
++9. Add/update focused tests for the acceptance criteria above.
++10. Run `dev check` and fix any regressions.
++
++## Open Technical Decisions
++
++- Whether the minimal safe boundary should be:
++  - an extracted synchronous collaborator with structured results only, or
++  - a tiny persisted outbox/handoff table with retry state.
++- Whether provider adapters already expose enough idempotency key support to prevent duplicate sends per `delivery_id`, or whether Memba must persist local sent/attempted state before retry is safe.
++- Whether handoff failure should update an existing read model or a new internal operational read model. Avoid overloading recipient delivery status (`sent/delivered/delayed/bounced/spam_complaint`) with provider-handoff implementation details unless a deliberate vocabulary decision is made.
++
++## New Capability
++
++Developers/operators can reason about outbound email provider handoff as a named, testable boundary separate from message-domain event sourcing. Provider failures after a message is committed are explicit and retryable/observable instead of being hidden behind a misleading command error.
++
++## Validation Plan
++
++- Run targeted tests around messaging send, provider adapters/fakes, and inbound club-message acceptance during implementation.
++- Run `dev check` before declaring the iteration complete.
++- Manually inspect a local/dev send flow with the fake provider to confirm existing message and delivery views still populate.
++- Manually or through tests simulate provider failure and confirm the message stream/read model state and handoff result/state are consistent.
++
++## Risks / Follow-ups
++
++- A truly robust handoff boundary may want a full outbox/background worker in a later iteration. Keep this slice small but avoid designs that make that harder.
++- Existing callers may assume `send_club_message/2` returns only `:ok`/error-style outcomes; changing the result contract may require careful compatibility updates in LiveViews, controllers, and tests.
++- If retries are introduced without provider idempotency or local sent-state recording, duplicate emails could be sent. Treat duplicate-prevention as part of the acceptance criteria.
++- Other design-review findings remain: large application-service modules, Membership projection-backed policy preflights, onboarding conversion orchestration, and deprecated `opened` compatibility cleanup.
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md b/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md
+new file mode 100644
+index 0000000..5d9decb
+--- /dev/null
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md
+@@ -0,0 +1,115 @@
++# Club message threads and in-app replies
++
++Date: 2026-06-19
++Status: validated
++
++## Goal
++
++Let a club member reply to a club message and follow the conversation **inside Memba**, so replies are tracked as part of the original message's thread instead of scattering to private inboxes. This is the foundation slice of the reply feature: the thread/reply domain model, in-app reply posting and reading, and stored follow state. No reply emails yet (iteration 040) and no inbound email replies yet (iteration 041).
++
++After this iteration:
++
++- A current member can post a reply to a club message; the reply belongs to that message's **thread**.
++- Members can read the thread (original message + replies in order) in Memba.
++- The original sender follows the thread automatically; anyone who replies follows it automatically.
++- Other recipients are **not** following by default and can opt in / out (state stored; emails come in 040).
++- Only current members of the club can reply.
++
++## Background / Context
++
++Today a club message is a one-way broadcast. The message-detail screen is a delivery-receipts dashboard, and replies sent by email go to the original human sender and are not tracked (iteration 024). The design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) chose **Model C — thread with opt-in follow**: replies live in a thread attached to the message and are visible in Memba; followers (later) receive them by email; recipients opt in.
++
++Confirmed product decisions: any current member can reply; recipients default to **not** following; the sender and repliers auto-follow. This slice builds the model and the in-app experience; delivery to followers is the next slice.
++
++The reply feature is intentionally split into three sequential, independently shippable iterations: **039 in-app threads/replies**, **040 follow + reply notification emails**, **041 reply-by-email threading**. Bundling all three is the mega-iteration shape that failed historically (see the 001–004 worked example).
++
++## Related Problems
++
++- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **partially addressed.** This slice delivers "users can reply from the message view," "replies preserve context," and "replies are tracked as part of the thread," and stores the opt-in follow state. The *receiving replies by email* part of "members can opt in to receive replies" is completed in iteration 040; replying from an email client is iteration 041.
++
++## Scope
++
++### In scope
++
++- **Domain model:** a reply that targets an existing club message's thread. The original message is the thread root; replies reference it. Reuse the event-sourced messaging aggregate/commands/events style already in `Memba.Messaging`.
++- **Posting a reply:** a command + event for a member posting a reply to a thread, with the same strong-consistency/read-your-writes behaviour as `send_club_message`.
++- **Follow state:** a per-(member, thread) follow flag. Auto-follow the thread for the sender (thread root author) and for anyone who posts a reply. Recipients default to not following. Commands/events to follow and unfollow.
++- **Authorization:** only a current member of the message's club may reply or follow.
++- **Read model + LiveView:** the member message-detail surface shows the original message, the replies in posted order, and a follow/unfollow control reflecting the viewer's follow state; an inline reply composer (body only; the reply inherits the thread subject). Reuse the existing compose validation (non-blank body).
++- **Acceptance scenarios:** `acceptance-tests/features/club_message_replies.feature` (added in planning, `@iteration-039 @todo-domain @todo-ui`) becomes executable for this slice; remove/narrow the temporary tags as the domain and browser runners can run each scenario.
++
++### Out of scope
++
++- **Reply notification emails** to followers — iteration 040.
++- **Reply-by-email** / inbound email threading (`In-Reply-To`/`References`) — iteration 041.
++- Admin-only or sender-configurable reply permissions (decided: any current member).
++- Reactions, editing/deleting replies, attachments, rich text.
++- Changing the delivery-receipts model; the message-detail screen may demote receipts to a secondary panel per the sketch, but the receipts behaviour itself is unchanged.
++- Notifications/badges for unread replies.
++
++## Iteration Type
++
++Behaviour-facing. New user-observable rules: a member can reply to a club message; replies are tracked in a thread and visible in Memba; the sender and repliers follow automatically; recipients opt in to follow; only current members can reply.
++
++## Acceptance Scenarios / Feature Files
++
++BDD decision: **Required.**
++
++`acceptance-tests/features/club_message_replies.feature` (new, `@iteration-039 @todo-domain @todo-ui`) expresses the rules: replying joins the thread; replies render in order; sender and repliers auto-follow; recipients default to not following and can follow/unfollow; non-members cannot reply. Email behaviour is deliberately excluded here (covered in 040). Existing `member_message_deliverability.feature` scenarios stay green and unchanged.
++
++## Allowed acceptance feature changes
++
++- `acceptance-tests/features/club_message_replies.feature`: implement the planned `@iteration-039` scenarios, then remove or narrow `@todo-domain`/`@todo-ui` as the domain and browser runners can execute each scenario green. Preserve the rules listed above; do not weaken the membership restriction or the opt-in default.
++
++## Acceptance Criteria
++
++- A current member can post a reply to a club message; it is stored against that message's thread and visible to other members in Memba.
++- The thread shows the original message and its replies in posted order.
++- The thread-root sender is following the thread; a member who posts a reply is following the thread.
++- A recipient who has not acted is not following; a member can follow and unfollow, and the stored state reflects this.
++- A person who is not a current member of the club cannot reply to its messages.
++- Reply body validation matches compose (no blank-body reply).
++- No reply emails are sent in this slice.
++- The new `@iteration-039` scenarios pass with the temporary tags removed/narrowed where the runners can execute them; existing messaging scenarios stay green.
++- `dev check` passes.
++
++## Open Business Decisions
++
++None outstanding. Confirmed: Model C; any current member can reply; recipients default to not following; sender and repliers auto-follow.
++
++## Implementation Plan
++
++1. Model the thread/reply in `Memba.Messaging`: decide whether the thread root is the existing message aggregate extended with replies, or a thread concept referencing it; keep it event-sourced and consistent with existing commands/events.
++2. Add command(s)/event(s) for posting a reply, with authorization that the actor is a current member of the message's club, and non-blank body validation.
++3. Add follow/unfollow command(s)/event(s) and a per-(member, thread) follow read model; auto-follow on thread creation (sender) and on reply (replier).
++4. Add/extend projector(s) and read APIs to load a thread (root + ordered replies) and a viewer's follow state.
++5. Update the member message-detail LiveView/template: render the thread and an inline reply composer (body only, inheriting the subject) and a follow/unfollow control; keep delivery receipts available (demoted per the sketch is acceptable but optional).
++6. Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
++7. Run `dev check`.
++
++## Open Technical Decisions
++
++- **Aggregate shape:** extend the existing message aggregate to hold replies, or introduce a thread aggregate keyed by the root message id. Choose the option that keeps reply ordering and authorization simplest while staying consistent with `Memba.Messaging`.
++- **Follow storage:** a dedicated follow projection vs. a field on a thread-membership read model. Pick the one that makes "is viewer following?" and (in 040) "who follows this thread?" cheap.
++- Reuse vs. extend of `send_club_message` strong-consistency path for reply posting.
++
++These are implementation details and should not need product decisions.
++
++## New Capability
++
++Members can hold a conversation on a club message inside Memba: reply, read the thread in order, and choose to follow it — the groundwork that 040 (email notifications) and 041 (reply-by-email) build on.
++
++## Validation Plan
++
++- Domain ExUnit for reply posting, auto-follow (sender + replier), follow/unfollow, membership authorization, and blank-body rejection.
++- Projection/read tests for thread loading (ordered replies) and viewer follow state.
++- LiveView tests for rendering the thread, the reply composer, and the follow control.
++- The `@iteration-039` acceptance scenarios green with temporary tags removed/narrowed where runnable.
++- Full `dev check` before delivery is complete.
++
++## Risks / Follow-ups
++
++- **Model choice ripples forward:** 040 (followers get emails) and 041 (inbound threading) depend on the thread/follow model chosen here. Keep "who follows this thread?" easy to answer so 040 is a clean add.
++- Keep this slice in-app only — resist adding email here; that scope is 040 and is what keeps this iteration shippable.
++- The message-detail screen reframing (receipts → secondary) could grow; keep it minimal and record larger UI rework as follow-up.
++- Sits behind the active WIP slot (034) and the queued 035–038; this is planning ahead.
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md
+new file mode 100644
+index 0000000..e819934
+--- /dev/null
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md
+@@ -0,0 +1,108 @@
++# Thread follow and reply notification emails
++
++Date: 2026-06-19
++Status: draft
++
++## Goal
++
++Deliver replies to the people who follow a thread, by email. This completes the "members can opt in to receive replies to a thread" part of the reply problem: when someone posts a reply (in Memba), every follower of that thread gets a reply notification email, reusing Memba's existing send/receipt machinery. Builds directly on iteration 039 (threads, in-app replies, stored follow state).
++
++After this iteration:
++
++- Posting a reply emails the reply to every current follower of the thread (not the whole club).
++- The reply notification email preserves thread context (what's being replied to) and links back to the conversation in Memba.
++- Followers can stop following from the email and in-app; unfollowing stops further reply emails.
++- Reply emails use the shared transactional layout, footer, and the `<club> via Memba` sender treatment.
++
++## Background / Context
++
++Iteration 039 establishes the thread/reply model and stores per-(member, thread) follow state, but sends no email. Model C (design sketch) requires that **followers** — the sender, anyone who replied, and recipients who opted in — receive replies by email, while non-followers do not, keeping a 142-member club from being flooded. This slice adds the delivery: turn a posted reply into emails to the thread's followers, with receipts, reusing the outbound email path used by `send_club_message` and the transactional templates from iterations 024/031.
++
++## Related Problems
++
++- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **further addressed.** Completes "members can opt in to receive replies to a thread" (the opt-in state from 039 now drives email delivery). Replying *from* an email client remains iteration 041.
++
++## Scope
++
++### In scope
++
++- On a reply being posted (the 039 event), send a **reply notification email** to each current follower of the thread, excluding the replier themselves.
++- Reply email content preserves thread context: the new reply, an indication of what it replies to (thread subject / quoted original), and a link to the conversation in Memba. Uses the shared transactional layout + standard footer + `<club name> via Memba` sender.
++- Delivery tracking for reply emails reusing the existing receipt/delivery-status machinery (so reply delivery is observable like club-message delivery).
++- **Unsubscribe / stop following** from the email (and confirm the in-app unfollow from 039 also stops emails). Unfollowing stops further reply emails for that thread.
++- Respect the opt-in default from 039: only followers receive emails; recipients who never followed do not.
++- Acceptance scenarios for follower email delivery and unfollow-stops-email, tagged `@iteration-040`.
++
++### Out of scope
++
++- Reply-by-email / inbound threading — iteration 041.
++- Digest/batching of replies; each reply emails followers individually (batching is a possible follow-up).
++- Changing who can reply or the follow defaults (set in 039).
++- Per-thread notification preferences beyond follow/unfollow (e.g. mute-but-stay-member).
++
++## Iteration Type
++
++Behaviour-facing. New user-observable rule: following a thread means you receive its replies by email; unfollowing stops them; repliers and the sender follow automatically (from 039), so they receive replies too.
++
++## Acceptance Scenarios / Feature Files
++
++BDD decision: **Required.**
++
++Extend `acceptance-tests/features/club_message_replies.feature` with `@iteration-040` scenarios for the email behaviour: a follower receives a reply by email; a non-follower does not; the replier is not emailed their own reply; unfollowing stops further reply emails; the reply email identifies the club and preserves thread context. Tag ahead-of-implementation scenarios `@iteration-040 @todo-domain @todo-ui` until the runners can execute them.
++
++## Allowed acceptance feature changes
++
++- `acceptance-tests/features/club_message_replies.feature`: add the `@iteration-040` email scenarios; implement and remove/narrow `@todo-*` as runners can execute them. Preserve the 039 rules; do not change the opt-in default or who can reply.
++
++## Acceptance Criteria
++
++- Posting a reply sends a reply notification email to every current follower of the thread, except the member who posted that reply.
++- A member who is not following the thread receives no reply email.
++- The reply email preserves thread context (subject and what is being replied to) and links to the conversation in Memba.
++- The reply email uses the shared transactional layout, standard footer, and `<club name> via Memba` sender.
++- Reply email delivery is tracked with the existing receipt/delivery-status machinery.
++- A follower can stop following from the email and in-app; after unfollowing, no further reply emails are sent for that thread.
++- The `@iteration-040` scenarios pass with temporary tags removed/narrowed; existing scenarios stay green.
++- `dev check` passes.
++
++## Open Business Decisions
++
++- **Reply-to address on the reply email:** point it at the thread (sets up 041) or at the replier (current behaviour). Recommendation: park inbound handling for 041; for now reply-to may remain the replier or a no-reply, decided in implementation, without blocking this slice.
++
++Confirmed: only followers receive reply emails; sender + repliers auto-follow (039); recipients opt in.
++
++## Implementation Plan
++
++1. Subscribe to the reply-posted event from 039 (or extend its handler) to fan out reply emails to the thread's current followers, excluding the replier.
++2. Build the reply notification email on the shared transactional layout/footer with thread context and a Memba conversation link; set the `<club> via Memba` sender.
++3. Route reply emails through the existing outbound send + receipt/delivery path so delivery is tracked.
++4. Implement stop-following from the email (tokenized unsubscribe link) consistent with the in-app unfollow; ensure unfollow halts future reply emails.
++5. Make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
++6. Run `dev check`.
++
++## Open Technical Decisions
++
++- Whether to reuse `send_club_message`'s delivery pipeline directly or a parallel reply-delivery path; prefer reuse to inherit receipts and provider handling (note any interaction with iteration 038's email-handoff boundary if it has landed).
++- Unsubscribe token mechanism (reuse existing auth/token helpers vs. a dedicated follow token).
++
++These are implementation details and should not need product decisions.
++
++## New Capability
++
++Thread followers stay in the loop by email: a reply reaches exactly the people who care (sender, repliers, opt-in followers), with full Memba branding and delivery tracking, and they can stop following at any time.
++
++## Validation Plan
++
++- Domain/integration tests: reply fan-out to followers only, replier excluded, unfollow stops delivery.
++- Email rendering tests: thread context, footer, `<club> via Memba` sender, conversation link.
++- Delivery-tracking tests for reply emails reusing the receipt machinery.
++- `@iteration-040` acceptance scenarios green; existing scenarios green.
++- Full `dev check`.
++
++## Risks / Follow-ups
++
++- **Noise control depends on the opt-in default holding.** If 039's default ever flips to follow-on-receipt, this becomes a club-wide blast — keep the default off.
++- Per-reply emails could be noisy on busy threads; digest/batching is a follow-up, not this slice.
++- Depends on 039's follow model exposing "current followers of a thread" cheaply.
++- If iteration 038 (email-handoff boundary) has landed, route reply email through that boundary rather than around it.
++- Sits behind 039 in the queue; planning ahead.
+diff --git a/docs/iterations/041-reply-by-email-threading/plan.md b/docs/iterations/041-reply-by-email-threading/plan.md
+new file mode 100644
+index 0000000..9415dd9
+--- /dev/null
++++ b/docs/iterations/041-reply-by-email-threading/plan.md
+@@ -0,0 +1,108 @@
++# Reply-by-email threading
++
++Date: 2026-06-19
++Status: draft
++
++## Goal
++
++Let members reply to a club thread straight from their email client and have that reply land in the right Memba thread. This is the final reply slice: inbound email replies are matched to their thread via standard email headers (`In-Reply-To` / `References`) and posted as replies, then fanned out to followers exactly like an in-app reply. Builds on iteration 039 (threads/replies) and 040 (follower email delivery).
++
++After this iteration:
++
++- A follower can reply to a reply notification email (or the original club-message email) from their inbox, and it appears in the Memba thread.
++- Inbound replies are matched to the thread by email headers, not by guessing from subject text.
++- An email reply follows the same rules as an in-app reply: membership-checked, attributed to the sender, fanned out to followers (040), and tracked.
++- Inbound emails that can't be matched or aren't from a current member are handled safely (rejected/ignored), reusing the existing inbound pipeline's rejection behaviour.
++
++## Background / Context
++
++Iteration 024 documented that email replies currently go to the sender and aren't tracked. Iterations 039/040 make replies first-class in Memba and emailable to followers. The remaining gap is the natural action: hitting "reply" in your mail client. Memba already has an inbound email pipeline (iteration 019, inbound club messages by email) and a club inbound address; this slice extends inbound handling to recognise **replies** to a thread using `Message-ID`/`In-Reply-To`/`References`, so the outbound reply/club-message emails must stamp stable `Message-ID`s that inbound can correlate.
++
++This is the largest and riskiest reply slice (inbound parsing, header correlation, spoofing/auth concerns), which is exactly why it is sequenced last and kept separate.
++
++## Related Problems
++
++- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **expected to resolve.** With 039 (thread + in-app reply), 040 (follower emails), and this slice (reply from the inbox), all four "Expected" bullets are met end to end.
++
++## Scope
++
++### In scope
++
++- Stamp outbound club-message and reply emails with stable `Message-ID`s and thread `References`, so inbound replies can be correlated to a thread. (Coordinate with 040's reply email and the club-message email.)
++- Extend the inbound email pipeline to detect a **reply** (has `In-Reply-To`/`References` pointing at a known thread message) and post it as a reply into that thread, attributed to the sending member.
++- Apply the same authorization as in-app replies: the sender must be a current member of the thread's club; auto-follow the replier (039); fan out to followers (040).
++- Safe handling of unmatchable inbound replies, non-member senders, and ambiguous correlation — reuse the existing inbound rejection/ignore behaviour and rejection email (iteration 019/031), with thread context where possible.
++- Acceptance scenarios for inbound reply threading, tagged `@iteration-041`.
++
++### Out of scope
++
++- Quoting/trimming heuristics beyond what's needed to store a usable reply body (basic quoted-history stripping is acceptable; perfect quote parsing is a follow-up).
++- Attachments in replies.
++- Changing in-app reply behaviour, follow defaults, or who may reply (set in 039).
++- New provider integrations beyond the existing inbound path (Postmark inbound from iteration 020).
++
++## Iteration Type
++
++Behaviour-facing. New user-observable rule: replying to a Memba thread email from your own mail client posts your reply into that thread (subject to membership), the same as replying in-app.
++
++## Acceptance Scenarios / Feature Files
++
++BDD decision: **Required.**
++
++Extend `acceptance-tests/features/club_message_replies.feature` with `@iteration-041` scenarios: a member replying by email lands in the thread and reaches followers; a reply email from a non-member is rejected; an inbound email that can't be matched to a thread is handled safely. Tag ahead-of-implementation scenarios `@iteration-041 @todo-domain @todo-ui` until runnable.
++
++## Allowed acceptance feature changes
++
++- `acceptance-tests/features/club_message_replies.feature`: add `@iteration-041` inbound-reply scenarios; implement and remove/narrow `@todo-*` as runners can execute them. Preserve all 039/040 rules.
++
++## Acceptance Criteria
++
++- Outbound club-message and reply emails carry stable `Message-ID`/`References` enabling thread correlation.
++- A current member replying by email to a thread message has their reply posted into that thread and fanned out to followers (per 040).
++- An inbound reply from someone who is not a current member of the club is rejected/ignored safely (no thread post), reusing existing inbound rejection behaviour.
++- An inbound email that cannot be correlated to a thread does not create a stray/misfiled reply; it is handled by the existing inbound fallback.
++- The email reply is attributed to the sending member and the replier auto-follows (039).
++- The `@iteration-041` scenarios pass with temporary tags removed/narrowed; existing scenarios stay green.
++- `dev check` passes.
++
++## Open Business Decisions
++
++- **Fallback when an email reply can't be matched:** reject with a thread-aware rejection email, or silently drop. Recommendation: reuse the existing inbound rejection email path so the sender gets feedback; confirm copy during implementation.
++
++Confirmed (from 039/040): membership required; auto-follow on reply; followers receive replies.
++
++## Implementation Plan
++
++1. Ensure outbound club-message (and 040 reply) emails set a stable `Message-ID` and thread `References`; persist the mapping from `Message-ID` → thread/message so inbound can correlate.
++2. Extend the inbound pipeline (iteration 019/020 Postmark inbound) to detect `In-Reply-To`/`References` and resolve the target thread.
++3. On a resolved, authorized inbound reply, post it as a reply (reusing the 039 reply command/path), attributed to the sending member; basic quoted-history stripping for the body.
++4. Apply membership authorization and the existing rejection/ignore behaviour for non-members, unmatchable, or ambiguous inbound mail.
++5. Make the `@iteration-041` scenarios executable; remove/narrow `@todo-*`.
++6. Run `dev check`.
++
++## Open Technical Decisions
++
++- **Correlation store:** how to persist `Message-ID` → thread mapping (dedicated lookup vs. derive from a structured address/plus-addressing). Prefer header correlation with a persisted map; plus-addressing is a fallback if headers prove unreliable across providers.
++- Degree of quoted-text stripping (library vs. simple heuristic) — keep minimal but usable.
++- Spoofing/authenticity: how far to trust the `From` for membership matching given the existing inbound path's assumptions; reuse whatever inbound iteration 019/020 established.
++
++These are implementation details and should not need product decisions.
++
++## New Capability
++
++The conversation closes the loop: a member can reply from wherever they read the message — in Memba or straight from their inbox — and it lands in the same tracked thread and reaches the people following it.
++
++## Validation Plan
++
++- Tests that outbound emails carry correlatable `Message-ID`/`References` and the mapping persists.
++- Inbound tests: matched member reply posts into the thread and fans out (040); non-member rejected; unmatchable handled by fallback; basic quote stripping.
++- `@iteration-041` acceptance scenarios green; existing scenarios green.
++- Full `dev check`.
++
++## Risks / Follow-ups
++
++- **Inbound correlation is the core risk:** header behaviour varies across mail clients/providers. Mitigate with persisted `Message-ID` mapping plus a safe fallback; consider plus-addressing if headers are unreliable.
++- Quoted-history bloat in stored replies; basic stripping now, better parsing as a follow-up.
++- Authenticity/spoofing of inbound `From`; lean on the existing inbound pipeline's trust model and note hardening as follow-up.
++- Depends on 039 (thread/reply) and 040 (follower fan-out + reply email shape); sequenced last for that reason.
++- Sits behind 039 and 040 in the queue; planning ahead.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 43b36ca..111c561 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -45,8 +45,12 @@ green than before.
+ | 033 | 2026-06-13 | merged | Homepage staff bar | [plan](033-homepage-staff-bar/plan.md) |
+ | 034 | 2026-06-17 | merged | Member page design-system alignment | [plan](034-member-page-design-system-alignment/plan.md) |
+ | 035 | 2026-06-17 | merged | Obliterate the deprecated "opened" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |
+-| 036 | 2026-06-17 | validated | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |
++| 036 | 2026-06-17 | implementing | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |
+ | 037 | 2026-06-17 | validated | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
++| 038 | 2026-06-17 | draft | Email delivery handoff boundary | [plan](038-email-delivery-handoff-boundary/plan.md) |
++| 039 | 2026-06-19 | validated | Club message threads and in-app replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
++| 040 | 2026-06-19 | draft | Thread follow and reply notification emails | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
++| 041 | 2026-06-19 | draft | Reply-by-email threading | [plan](041-reply-by-email-threading/plan.md) |
+ 
+ Status notes:
+ 
+diff --git a/docs/kaizen/2026-06-02-fabro-outage-forced-local-iteration-fallback.md b/docs/kaizen/2026-06-02-fabro-outage-forced-local-iteration-fallback.md
+index d2f7432..311eea4 100644
+--- a/docs/kaizen/2026-06-02-fabro-outage-forced-local-iteration-fallback.md
++++ b/docs/kaizen/2026-06-02-fabro-outage-forced-local-iteration-fallback.md
+@@ -210,3 +210,29 @@ Fabro is the standard delivery factory for these iterations. If it can stall, re
+ - Isolate Fabro's control plane from run-container resource exhaustion, or give run containers strict process, CPU, memory, and timeout limits.
+ - Add a watchdog for runaway repeated commands inside a run container, especially when the same focused test command appears hundreds of times.
+ - Improve health-check diagnostics so operators can tell remote outage, proxy timeout, local server issue, store warmup/lockup, and sandbox resource starvation apart quickly.
++
++## Resolution
++
++Date: 2026-06-18
++
++Root cause: The 2026-06-18 recurrence had the same control-plane starvation shape as this note, but a different immediate trigger. A review run (`01KVD4QS7YWV8WXTKT4VTY0AZW`) and an implementation run (`01KVD4QTPF926TR7PRT7H792VA`) started in parallel and both remained in setup for about 4.5 hours, each running `prepare_mix.sh` / `devenv shell ... mix deps.get`. The Fabro LXC was still limited to 2 GB RAM and 1 GB swap, so the two setup containers plus the Fabro server filled memory and swap. TCP connections to Fabro still opened, but `/health`, `/api/v1/health`, `fabro inspect`, and `fabro logs` stopped returning before client timeouts. Previous workflow fixes reduced runaway loops, but they did not address the control-plane capacity problem when multiple Docker sandboxes run concurrently on the same small LXC.
++
++Fix applied:
++
++- Host recovery: terminated the obsolete stuck Fabro workers and setup commands for runs `01KVD4QS7YWV8WXTKT4VTY0AZW` and `01KVD4QTPF926TR7PRT7H792VA`; both runs then became inspectable as `failed`, reason `terminated`.
++- Host cleanup: stopped the two corresponding Docker run containers (`fabro-run-01KVD4QS7YWV8WXTKT4VTY0AZW` and `fabro-run-01KVD4QTPF926TR7PRT7H792VA`).
++- Host capacity: increased Proxmox LXC 115 (`fabro`) from 2 GB RAM / 1 GB swap / 1 core to 4 GB RAM / 2 GB swap / 2 cores with `pct set 115 -memory 4096 -swap 2048 -cores 2`.
++- `.fabro/workflows/iteration-review/workflow.toml`: added Docker resource limits (`cpu = 1`, `memory = "1024MB"`) so review sandboxes cannot individually consume the whole Fabro LXC while running alongside implementation sandboxes.
++
++Validation:
++
++- `curl -k -m 5 https://fabro.home.wynne.family/api/v1/health` — returned HTTP 200 after worker termination and after the capacity change.
++- `fabro inspect 01KVD4QTPF926TR7PRT7H792VA` — returned `failed`, reason `terminated` instead of timing out.
++- `fabro doctor` — server location and credentials passed; remaining warnings were version parity, missing Daytona sandbox, and missing Brave web search, not server health.
++- `git show origin/main:docs/iterations/README.md | grep -n "034\|035\|036\|037"` — confirmed iteration state was not left ambiguous: 034 and 035 merged; 036 and 037 validated.
++- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with the expected existing goal-gate retry warnings.
++
++Remaining follow-up:
++
++- Add a repository-level or Fabro-level concurrency guard before deliberately running review and implementation in parallel again, or prove the new host/resource-limit configuration with two concurrent sandbox setup runs.
++- Consider a lightweight host/runbook check that reports LXC memory, swap, and pressure metrics when Fabro health times out, so operators can distinguish proxy/network failure from control-plane starvation quickly.
+diff --git a/docs/problems/2026-06-17-cqrs-event-sourcing-design-drift.md b/docs/problems/2026-06-17-cqrs-event-sourcing-design-drift.md
+new file mode 100644
+index 0000000..2dba549
+--- /dev/null
++++ b/docs/problems/2026-06-17-cqrs-event-sourcing-design-drift.md
+@@ -0,0 +1,40 @@
++# Problems
++
++## CQRS/event-sourcing design drift is concentrating orchestration, read-model checks, and side effects in application services
++
++Observed: 2026-06-17
++
++Status: Unresolved
++
++A design review against the CQRS, DDD, RDD, and event-sourcing reference guidance found that Memba has a strong event-sourced foundation, but some recent growth is pulling important responsibilities back into large transaction-script-style application services.
++
++The good baseline:
++
++- `Membership` and `Messaging` are separate Commanded applications with explicit routers and aggregates.
++- Commands and events mostly use domain language and past-tense event names.
++- Query models are separated into Ecto projections rather than read directly from aggregate streams.
++- Messaging calls Membership through public query APIs for recipient and sender/member lookups instead of joining Membership projection tables directly.
++- Projection barriers and read-model change publication explicitly acknowledge CQRS read-your-writes and live-update concerns.
++
++The main design drift:
++
++- `Memba.Membership` and `Memba.Messaging` have become very large application-service modules (`membership.ex` is over 1,300 lines; `messaging.ex` is nearly 900 lines). They mix public command APIs, public query APIs, command construction, duplicate read-model preflight checks, cross-aggregate orchestration, side-effect sequencing, and presentation compatibility normalization.
++- Some domain policies are enforced only by application-service preflight reads against projections, not by aggregate boundaries. Examples include duplicate club slugs, duplicate person email addresses, duplicate active memberships, active-member invitation checks, and “last Membership Admin” protection. That may be acceptable for cross-aggregate rules, but the policy ownership and consistency trade-off are not named clearly and can be raced unless protected by database constraints or a serialized process.
++- Multi-aggregate workflows are orchestrated imperatively without an explicit process manager/saga/outbox boundary. Invitation acceptance and onboarding conversion dispatch several Membership commands in sequence and then update an Ecto request/invitation projection. Failures midway can leave earlier events committed while later steps did not happen.
++- Messaging command handling is interleaved with external email side effects. `send_club_message/2` dispatches `SendMessage`, commits `MessageSent` and `EmailDeliveryCreated` events/projections, then calls the email provider. If provider delivery fails part-way through recipient delivery, the function returns an error even though the domain event stream and read models already say the message was sent and deliveries were created. That creates a mismatch between command result, event history, projection state, and real-world side effects.
++- Inbound email processing chains several decisions and side effects in one service: receive idempotency, destination resolution, sender resolution, membership authorization, attachment/body policy, message sending, acceptance/rejection recording, and rejection email delivery. These are understandable responsibilities, but they are concentrated in one module rather than named as collaborators with explicit contracts.
++- Compatibility for the deprecated `opened` delivery status still leaks across commands/events/projectors/query normalization/presentation/tests (captured separately in `2026-06-17-obliterate-opened-email-delivery-status.md`). This is also a symptom of event-versioning policy being implicit: the codebase lacks a visible rule for historic-event compatibility shims vs active domain vocabulary.
++- Several projections store free-text statuses without database check constraints, while some ordinary Ecto tables (`onboarding_requests`, `auth_email_requests`, `membership_club_invitations`) do use status constraints. The inconsistency makes replay/projection bugs easier to persist silently.
++- Naming drift such as `list_member_email_deliverys/1` and duplicated email/id normalization helpers makes public contracts less polished and raises the cost of future refactors.
++
++Expected:
++
++- Application services should remain thin use-case coordinators; important policies, collaborations, and side-effect boundaries should be named explicitly.
++- Cross-aggregate rules should state whether they are protected by aggregate design, database constraints, serialized process managers, projection preflight checks, or compensating/repair behaviour.
++- External side effects should not make an already-committed event stream look as though a failed command did not happen. Delivery handoff should have an explicit lifecycle that is replay-safe and observable.
++- Event compatibility code should be distinguished from current domain vocabulary so deprecated concepts do not keep re-entering product design.
++- Query/read-model APIs should be named and shaped deliberately; projections can be rebuilt safely and constrained consistently.
++
++Most important improvement opportunity:
++
++Separate message-send domain decisions from email-provider side effects. A small technical iteration should make email delivery handoff an explicit, observable, retryable boundary rather than an immediate post-dispatch side effect hidden inside `Memba.Messaging.send_club_message/2`.
+diff --git a/docs/problems/README.md b/docs/problems/README.md
+index ad9eea3..7aa89c3 100644
+--- a/docs/problems/README.md
++++ b/docs/problems/README.md
+@@ -33,3 +33,4 @@ Captured product problems and their current resolution status.
+ | 2026-06-08 | [Pending invitations cannot be managed](2026-06-08-pending-invitations-cannot-be-managed.md) | Unresolved | [Iteration 028](../iterations/028-staff-member-invitations/plan.md) and [iteration 029](../iterations/029-membership-admin-invitations/plan.md) support sending/resending duplicate pending invitations, but no pending-invitation management surface yet. |
+ | 2026-06-08 | [Alternate email addresses can be added without verification](2026-06-08-person-alternate-email-verification-missing.md) | Unresolved | [Iteration 028](../iterations/028-staff-member-invitations/plan.md) resolves Staff club-member direct creation, but alternate-email verification remains separate future work. |
+ | 2026-06-17 | [The deprecated "opened" email delivery status should be obliterated](2026-06-17-obliterate-opened-email-delivery-status.md) | Unresolved | Surfaced building gallery-walk dev seeds: "opened" is already deprecated (no-op report command, webhook rejects it, presentation collapses opened→delivered) but still threads through command/event/aggregate/projectors/read-models/tests. No iteration yet. |
++| 2026-06-17 | [CQRS/event-sourcing design drift is concentrating orchestration, read-model checks, and side effects in application services](2026-06-17-cqrs-event-sourcing-design-drift.md) | Unresolved | Design review against CQRS, DDD, RDD, and event-sourcing references found application-service bloat, projection-backed policy preflights, multi-aggregate workflow risks, and email-provider side effects after committed message events. No iteration yet. |
