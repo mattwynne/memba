@@ -8,4 +8,4 @@
 - [x] 006 Extend the badges card with the role / Membership-Admin chips.
 - [x] 007 Render-verify each file with headless Chrome; fix any unstyled/broken components (watch for accidental Tailwind utility usage that won't resolve statically).
 - [x] 008 Ensure `@dsCard` headers and relative asset paths are correct on every new/changed file.
-- [ ] 009 Run `dev check` to confirm the static files leave the build green.
+- [x] 009 Run `dev check` to confirm the static files leave the build green.
