@@ -1,4 +1,4 @@
-# Design sketch — replying to club messages (threads)
+# Design sketch — replying to club messages (conversations)
 
 **Date:** 2026-06-17
 **Status:** Sketch for review — not a plan, not approved. Captures the pivotal product
@@ -11,8 +11,8 @@ decision plus screen mockups so Matt can react.
 
 > - Users can reply to email messages from the message view.
 > - Replies preserve enough message context for the user to understand what they are responding to.
-> - Replies are tracked as part of the relevant thread in Memba.
-> - Members can opt in to receive replies to a thread.
+> - Replies are tracked as part of the relevant conversation in Memba.
+> - Members can opt in to receive replies to a conversation.
 
 ## 2. How messaging works today (so we change the right thing)
 
@@ -36,25 +36,25 @@ Everything else follows from this. Three models:
 
 | Model | Reply goes to… | Feel | Noise risk | Matches problem? |
 |---|---|---|---|---|
-| **A. Reply-all** | the whole club (another broadcast in the thread) | group mailing list | **High** — every reply hits 142 inboxes | Threads ✓, but no opt-in; floods everyone |
-| **B. Reply-to-sender** | only the original sender (private) | 1:1 email | Low | Not a shared thread; fails "tracked as a thread" + "opt in to receive replies" |
-| **C. Thread + opt-in follow** ⭐ | the **thread**, emailed to **followers** only | forum thread you can subscribe to | Controlled | ✓ all four bullets |
+| **A. Reply-all** | the whole club (another broadcast in the conversation) | group mailing list | **High** — every reply hits 142 inboxes | Conversations ✓, but no opt-in; floods everyone |
+| **B. Reply-to-sender** | only the original sender (private) | 1:1 email | Low | Not a shared conversation; fails "tracked as a conversation" + "opt in to receive replies" |
+| **C. Conversation + opt-in follow** ⭐ | the **conversation**, emailed to **followers** only | forum conversation you can subscribe to | Controlled | ✓ all four bullets |
 
-### Recommendation: **Model C — thread with opt-in follow**
+### Recommendation: **Model C — conversation with opt-in follow**
 
-- A reply is posted to a **thread** attached to the original message; it's visible in Memba
+- A reply is posted to a **conversation** attached to the original message; it's visible in Memba
   on the message page.
 - **Followers** receive the reply by email. Auto-followed: the original sender and anyone who
-  has replied. Everyone else **opts in** with a "Follow this thread" toggle (default off, so a
+  has replied. Everyone else **opts in** with a "Follow this conversation" toggle (default off, so a
   142-member club doesn't get mailing-list noise).
-- This is the only model that satisfies *"replies are tracked as part of the thread"* **and**
+- This is the only model that satisfies *"replies are tracked as part of the conversation"* **and**
   *"members can opt in to receive replies."*
 
 This is a genuine product call — A/B/C is the one thing I most want your read on. Mockups below assume **C**.
 
 ## 4. Screen changes
 
-### 4.1 Message detail → **conversation thread** (the big change)
+### 4.1 Message detail → **conversation view** (the big change)
 
 Reframe the detail page around reading + replying. Delivery status becomes a collapsed
 secondary panel (still one tap away for the sender, but no longer the headline).
@@ -70,7 +70,7 @@ secondary panel (still one tap away for the sender, but no longer the headline).
 │  Meeting at the trailhead 8am sharp. Bring     │
 │  microspikes — north side still has ice.       │
 │                                                │
-│  ┌─ [☑ Follow this thread]  get replies by ──┐ │
+│  ┌─ [☑ Follow this conversation]  get replies by ──┐ │
 │  │   email. You can stop any time.            │ │
 │  └────────────────────────────────────────────┘
 │                                                │
@@ -97,7 +97,7 @@ secondary panel (still one tap away for the sender, but no longer the headline).
 
 Notes:
 - **Reply composer is inline** and lightweight: just a body. No subject — replies inherit the
-  thread ("Re: Saturday ridge walk"). This reuses the blank-body validation already in compose.
+  conversation ("Re: Saturday ridge walk"). This reuses the blank-body validation already in compose.
 - **Follow toggle** sits right under the original message; replying auto-follows you.
 - **Delivery panel** collapses to a one-line summary (`status_badge` row); expanding reveals
   today's receipts UI unchanged. Sender still gets full accountability; readers aren't buried in it.
@@ -132,14 +132,15 @@ open question (see §6).
 
   [ View the conversation ]
 
-  You're following this thread.  ·  Stop following
+  You're following this conversation.  ·  Stop following
   ── Memba footer ──
 ```
 
 - Reuses the existing transactional email layout + footer + "via Memba" sender (iteration 024/031).
-- **Reply-by-email**: if we keep reply-to pointing at the thread, a follower can reply from their
-  inbox and it threads back. That needs inbound email threading (Message-ID / In-Reply-To /
-  References) — a real capability, flagged in §6, not assumed by these mockups.
+- **Reply-by-email**: if reply-to points at the conversation address, a follower can reply from their
+  inbox and it lands back in the conversation. That needs inbound email routing (the conversation-addressed
+  reply address; Message-ID / In-Reply-To / References as a secondary check) — a real capability, built in
+  iteration 041, not assumed by these mockups.
 
 ### 4.4 Compose — unchanged
 
@@ -150,11 +151,11 @@ it's the inline composer in §4.1.
 
 These are consequences to size later, not decisions:
 
-- A **thread** concept (the original message is the thread root; replies belong to it).
-- A **reply** message type that targets the thread, not a fresh broadcast.
-- A **follow/subscription** per (member, thread), with auto-follow on send/reply.
+- A **conversation** concept (the original message is the conversation root; replies belong to it).
+- A **reply** message type that targets the conversation, not a fresh broadcast.
+- A **follow/subscription** per (member, conversation), with auto-follow on send/reply.
 - Reply delivery goes to **followers**, reusing the existing send/receipt machinery.
-- Inbound email reply threading (optional, larger) if we want inbox replies to land in the thread.
+- Inbound email reply threading (optional, larger) if we want inbox replies to land in the conversation.
 
 ## 6. Open questions for Matt
 
@@ -168,9 +169,26 @@ These are consequences to size later, not decisions:
 ## 7. Suggested slicing (if we proceed)
 
 This is too big for one iteration. Likely order:
-1. **Threads + in-app replies** (read/post replies in Memba; no email yet) — smallest useful slice.
+1. **Conversations + in-app replies** (read/post replies in Memba; no email yet) — smallest useful slice.
 2. **Follow + reply notification emails** (opt-in, followers get emails).
 3. **Reply-by-email threading** (inbound References/In-Reply-To) — largest, optional.
 
-Plus a **DS** pass to add the thread/conversation previews once the model is chosen.
-```
+Plus a **DS** pass to add the conversation previews once the model is chosen.
+
+## 8. Decisions (2026-06-19) — sketch resolved
+
+The open questions in §6 are now decided; this sketch is implemented across iterations 039–041.
+
+- **Audience model: C** (conversation + opt-in follow). Terminology is **"conversation"** everywhere; the follow control reads *"follow this conversation to receive any new replies."*
+- **Who can reply:** any current member of the club.
+- **Default follow state:** off (opt-in); the original sender and anyone who replies auto-follow.
+- **Slicing (revised from §7):**
+  1. **039 — Club message conversations and replies:** post/read replies in a conversation; a reply is emailed to **all current members** (interim reply-all, reusing existing delivery). No follow yet.
+  2. **040 — Follow a conversation, send replies to followers:** introduce follow (auto for sender/repliers, opt-in for others) and **narrow** reply delivery from all members to followers. This removes 039's reply-all.
+  3. **041 — Reply by email:** inbound replies land in the conversation via a conversation-addressed reply address.
+- **Reply email address schema (extensible — room for groups/channels later):** one inbound domain `clubs.memba.io`; typed, dot-segmented local part under the club slug:
+  - `<club-slug>@clubs.memba.io` → club-wide (today).
+  - `<club-slug>+c.<token>@clubs.memba.io` → a conversation (reply target; iteration 041).
+  - `<club-slug>+g.<group>@clubs.memba.io` and `…+g.<group>.c.<token>` → **reserved** for future groups/channels.
+  - Matching is by the address token (robust); `In-Reply-To`/`References` are a secondary check.
+- **Delivery-receipts placement (§6 Q5):** still open as a UI detail; the conversation view may demote receipts to a secondary panel, decided during 039 implementation.

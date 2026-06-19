@@ -1,108 +1,112 @@
-# Thread follow and reply notification emails
+# Follow a conversation, and send replies only to followers
 
 Date: 2026-06-19
 Status: draft
 
 ## Goal
 
-Deliver replies to the people who follow a thread, by email. This completes the "members can opt in to receive replies to a thread" part of the reply problem: when someone posts a reply (in Memba), every follower of that thread gets a reply notification email, reusing Memba's existing send/receipt machinery. Builds directly on iteration 039 (threads, in-app replies, stored follow state).
+Stop emailing every reply to the whole club. Introduce **following a conversation** so that a reply reaches only the people who follow it — the original sender and anyone who has replied (automatically), plus anyone who opts in — instead of all current members. This completes the "members can opt in to receive replies to a conversation" part of the reply problem and turns Memba's replies from interim reply-all (iteration 039) into the opt-in Model C. Builds directly on iteration 039 (conversations, replies, reply-to-all email delivery).
 
 After this iteration:
 
-- Posting a reply emails the reply to every current follower of the thread (not the whole club).
-- The reply notification email preserves thread context (what's being replied to) and links back to the conversation in Memba.
-- Followers can stop following from the email and in-app; unfollowing stops further reply emails.
-- Reply emails use the shared transactional layout, footer, and the `<club> via Memba` sender treatment.
+- A conversation has **followers**. The original sender follows it; anyone who posts a reply follows it; everyone else is **not** following by default.
+- Members can "follow this conversation to receive any new replies" and stop following at any time, in Memba and from a reply email.
+- A reply is emailed **only to current followers** of the conversation (excluding the reply's author), not to every member.
+- Reply emails keep the existing delivery tracking, shared layout/footer, and `<club name> via Memba` sender.
 
 ## Background / Context
 
-Iteration 039 establishes the thread/reply model and stores per-(member, thread) follow state, but sends no email. Model C (design sketch) requires that **followers** — the sender, anyone who replied, and recipients who opted in — receive replies by email, while non-followers do not, keeping a 142-member club from being flooded. This slice adds the delivery: turn a posted reply into emails to the thread's followers, with receipts, reusing the outbound email path used by `send_club_message` and the transactional templates from iterations 024/031.
+Iteration 039 makes replies first-class and emails each reply to **all** current members (interim reply-all). That is the noisy mailing-list behaviour Memba otherwise avoids, and it is only acceptable as a short-lived first step. Model C (design sketch) narrows it: replies go to **followers** only. This slice introduces the follow concept and rewires reply delivery from "all current members" to "current followers," with the sender and repliers auto-following so they still hear the conversation, and a clear opt-in control ("follow this conversation to receive any new replies") for everyone else.
+
+Following has no purpose except deciding who is emailed, so the follow model and the narrowed delivery ship together as one coherent capability.
 
 ## Related Problems
 
-- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **further addressed.** Completes "members can opt in to receive replies to a thread" (the opt-in state from 039 now drives email delivery). Replying *from* an email client remains iteration 041.
+- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **further addressed.** Completes "members can opt in to receive replies to a conversation." Replying *from* an email client remains iteration 041.
 
 ## Scope
 
 ### In scope
 
-- On a reply being posted (the 039 event), send a **reply notification email** to each current follower of the thread, excluding the replier themselves.
-- Reply email content preserves thread context: the new reply, an indication of what it replies to (thread subject / quoted original), and a link to the conversation in Memba. Uses the shared transactional layout + standard footer + `<club name> via Memba` sender.
-- Delivery tracking for reply emails reusing the existing receipt/delivery-status machinery (so reply delivery is observable like club-message delivery).
-- **Unsubscribe / stop following** from the email (and confirm the in-app unfollow from 039 also stops emails). Unfollowing stops further reply emails for that thread.
-- Respect the opt-in default from 039: only followers receive emails; recipients who never followed do not.
-- Acceptance scenarios for follower email delivery and unfollow-stops-email, tagged `@iteration-040`.
+- **Follow model:** a per-(member, conversation) follow state. Event-sourced, consistent with `Memba.Messaging`. Commands/events to follow and unfollow.
+- **Auto-follow:** the conversation's original sender follows it; any member who posts a reply follows it. Everyone else defaults to **not** following.
+- **Narrow reply delivery:** change reply fan-out from "every current member" (039) to "current followers of the conversation," excluding the reply's author. Non-followers receive no reply email.
+- **Follow control + copy:** an in-app "follow this conversation to receive any new replies" / unfollow control on the message-detail surface, reflecting the viewer's state.
+- **Unsubscribe from email:** a stop-following link in the reply email, consistent with the in-app unfollow; unfollowing halts further reply emails for that conversation.
+- **Acceptance scenarios:** revise `club_message_replies.feature` to replace the 039 "reply emailed to every current member" rule with a "followers receive replies" rule, and add follow/auto-follow/unfollow scenarios, tagged `@iteration-040`.
 
 ### Out of scope
 
 - Reply-by-email / inbound threading — iteration 041.
-- Digest/batching of replies; each reply emails followers individually (batching is a possible follow-up).
-- Changing who can reply or the follow defaults (set in 039).
-- Per-thread notification preferences beyond follow/unfollow (e.g. mute-but-stay-member).
+- Digest/batching of replies; each reply emails followers individually (a possible follow-up).
+- Changing who can reply (set in 039: any current member) or the conversation/reply model itself.
+- Per-conversation notification preferences beyond follow/unfollow (e.g. mute-but-stay).
 
 ## Iteration Type
 
-Behaviour-facing. New user-observable rule: following a thread means you receive its replies by email; unfollowing stops them; repliers and the sender follow automatically (from 039), so they receive replies too.
+Behaviour-facing. Changed user-observable rule: a reply is emailed to the conversation's followers rather than to every member; following (auto for sender/repliers, opt-in for others) determines who receives replies; unfollowing stops them.
 
 ## Acceptance Scenarios / Feature Files
 
 BDD decision: **Required.**
 
-Extend `acceptance-tests/features/club_message_replies.feature` with `@iteration-040` scenarios for the email behaviour: a follower receives a reply by email; a non-follower does not; the replier is not emailed their own reply; unfollowing stops further reply emails; the reply email identifies the club and preserves thread context. Tag ahead-of-implementation scenarios `@iteration-040 @todo-domain @todo-ui` until the runners can execute them.
+Revise `acceptance-tests/features/club_message_replies.feature`: the 039 rule "A reply is emailed to every current member of the club" is **replaced** by "A reply is emailed to the conversation's followers," and new rules cover auto-follow (sender + repliers), opt-in default (a non-engaged member is not following), follow/unfollow, and unfollow-stops-email. Tag ahead-of-implementation scenarios `@iteration-040 @todo-domain @todo-ui` until the runners can execute them; preserve the 039 conversation/reply/membership rules.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/club_message_replies.feature`: add the `@iteration-040` email scenarios; implement and remove/narrow `@todo-*` as runners can execute them. Preserve the 039 rules; do not change the opt-in default or who can reply.
+- `acceptance-tests/features/club_message_replies.feature`:
+  - **Replace** the `@iteration-039` rule/scenario "A reply is emailed to every current member of the club" with a `@iteration-040` rule "A reply is emailed to the conversation's followers" (the documented narrowing of who receives replies).
+  - **Add** `@iteration-040` scenarios for auto-follow (sender and repliers), the opt-in default, following/unfollowing, and unfollow-stops-email.
+  - Preserve the 039 rules that a member can reply, replies join the conversation in order, and only current members can reply.
 
 ## Acceptance Criteria
 
-- Posting a reply sends a reply notification email to every current follower of the thread, except the member who posted that reply.
-- A member who is not following the thread receives no reply email.
-- The reply email preserves thread context (subject and what is being replied to) and links to the conversation in Memba.
-- The reply email uses the shared transactional layout, standard footer, and `<club name> via Memba` sender.
-- Reply email delivery is tracked with the existing receipt/delivery-status machinery.
-- A follower can stop following from the email and in-app; after unfollowing, no further reply emails are sent for that thread.
-- The `@iteration-040` scenarios pass with temporary tags removed/narrowed; existing scenarios stay green.
+- A conversation's original sender is following it; a member who posts a reply is following it; a member who has not engaged is not following it.
+- A member can follow ("follow this conversation to receive any new replies") and unfollow, in Memba and from a reply email; the stored state reflects this.
+- A reply is emailed only to the conversation's current followers, excluding the reply's author; non-followers receive no reply email.
+- After unfollowing, a member receives no further reply emails for that conversation.
+- Reply emails keep the existing delivery tracking, shared layout/footer, and `<club name> via Memba` sender.
+- The revised/added `@iteration-040` scenarios pass with temporary tags removed/narrowed; the 039 conversation/reply/membership scenarios stay green (with the reply-audience rule now superseded by the followers rule).
 - `dev check` passes.
 
 ## Open Business Decisions
 
-- **Reply-to address on the reply email:** point it at the thread (sets up 041) or at the replier (current behaviour). Recommendation: park inbound handling for 041; for now reply-to may remain the replier or a no-reply, decided in implementation, without blocking this slice.
+None outstanding on audience. **Reply-To is decided:** the conversation reply address `<club-slug>+c.<token>@clubs.memba.io` is introduced in iteration 041 (inbound routing). Since 040 ships before that routing exists, 040 sets the reply email `Reply-To` to a **no-reply / "reply in Memba" guidance**, and 041 switches it to the conversation address. This avoids shipping a `Reply-To` whose inbound handling does not yet exist. See the email address schema in [iteration 041's plan](../041-reply-by-email-threading/plan.md).
 
-Confirmed: only followers receive reply emails; sender + repliers auto-follow (039); recipients opt in.
+Confirmed: only followers receive replies; sender + repliers auto-follow; everyone else opts in (default off).
 
 ## Implementation Plan
 
-1. Subscribe to the reply-posted event from 039 (or extend its handler) to fan out reply emails to the thread's current followers, excluding the replier.
-2. Build the reply notification email on the shared transactional layout/footer with thread context and a Memba conversation link; set the `<club> via Memba` sender.
-3. Route reply emails through the existing outbound send + receipt/delivery path so delivery is tracked.
-4. Implement stop-following from the email (tokenized unsubscribe link) consistent with the in-app unfollow; ensure unfollow halts future reply emails.
-5. Make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+1. Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+2. Rewire the reply delivery introduced in 039 from "all current members" to "current followers of the conversation," excluding the author.
+3. Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state.
+4. Add a stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+5. Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
 6. Run `dev check`.
 
 ## Open Technical Decisions
 
-- Whether to reuse `send_club_message`'s delivery pipeline directly or a parallel reply-delivery path; prefer reuse to inherit receipts and provider handling (note any interaction with iteration 038's email-handoff boundary if it has landed).
+- Follow storage: a dedicated follow projection vs. a field on a conversation-membership read model. Pick the one that makes "is viewer following?" and "who follows this conversation?" cheap.
 - Unsubscribe token mechanism (reuse existing auth/token helpers vs. a dedicated follow token).
+- Whether to keep reusing 039's delivery path (now filtered to followers) or factor a shared "deliver to recipients" helper; note any interaction with iteration 038's email-handoff boundary if landed.
 
 These are implementation details and should not need product decisions.
 
 ## New Capability
 
-Thread followers stay in the loop by email: a reply reaches exactly the people who care (sender, repliers, opt-in followers), with full Memba branding and delivery tracking, and they can stop following at any time.
+Replies reach exactly the people who want them: the sender and repliers automatically, plus anyone who chooses to follow — and no one else — removing the interim reply-all and realising Model C, with unfollow always available.
 
 ## Validation Plan
 
-- Domain/integration tests: reply fan-out to followers only, replier excluded, unfollow stops delivery.
-- Email rendering tests: thread context, footer, `<club> via Memba` sender, conversation link.
-- Delivery-tracking tests for reply emails reusing the receipt machinery.
-- `@iteration-040` acceptance scenarios green; existing scenarios green.
+- Domain/integration tests: auto-follow (sender + replier), opt-in default, follow/unfollow, reply fan-out to followers only, replier excluded, unfollow stops delivery.
+- Email tests: only followers emailed; stop-following link works; footer, `<club> via Memba`, conversation context preserved.
+- Acceptance: the `@iteration-040` scenarios green; 039 conversation/reply/membership scenarios green.
 - Full `dev check`.
 
 ## Risks / Follow-ups
 
-- **Noise control depends on the opt-in default holding.** If 039's default ever flips to follow-on-receipt, this becomes a club-wide blast — keep the default off.
-- Per-reply emails could be noisy on busy threads; digest/batching is a follow-up, not this slice.
-- Depends on 039's follow model exposing "current followers of a thread" cheaply.
-- If iteration 038 (email-handoff boundary) has landed, route reply email through that boundary rather than around it.
+- **This slice is what removes the 039 reply-all noise** — sequence it close behind 039 so production does not sit long on reply-all.
+- Per-reply emails could be noisy on busy conversations; digest/batching is a follow-up, not this slice.
+- Depends on 039's conversation model exposing participants and supporting a cheap follower set.
+- If iteration 038 (email-handoff boundary) has landed, route reply emails through that boundary.
 - Sits behind 039 in the queue; planning ahead.
