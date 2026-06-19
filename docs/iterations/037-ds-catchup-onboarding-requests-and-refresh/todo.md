@@ -4,7 +4,7 @@
 - [x] 002 Confirm the repo preview location/convention from 036 and the self-contained head block (daisyUI CDN + theme `:root` vars + needed raw tokens), reusing the phase-2 convention and class-mapping cheat sheet.
 - [x] 003 Author the public account-request flow preview (including email-verification states).
 - [x] 004 Author the staff request review & convert preview.
-- [ ] 005 Author the new-request notification email preview; confirm/refresh the welcome email only if drifted.
+- [x] 005 Author the new-request notification email preview; confirm/refresh the welcome email only if drifted.
 - [ ] 006 Author the empty / first-run state preview(s).
 - [ ] 007 Refresh the club-home and member-messaging/read previews to the post-034 member pages.
 - [ ] 008 Render-verify each file with headless Chrome; fix any unstyled/broken components (watch for accidental Tailwind utility usage that won't resolve statically).
