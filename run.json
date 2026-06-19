@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-19T12:00:09.889215410Z",
-  "last_event_at": "2026-06-19T12:08:47.991974049Z",
+  "last_event_at": "2026-06-19T12:12:34.058263954Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1639,9 +1639,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 72,
       "checkpoint": {
-        "timestamp": "2026-06-19T12:11:29.852064496Z",
+        "timestamp": "2026-06-19T12:11:33.133973854Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -1653,40 +1653,120 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.run_id": "01KVFVZ30JXDYKWHZ39A2AF7BT",
-          "internal.retry_count.dev_check": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.thread_id": "collect_implementation_evidence",
           "graph.default_fidelity": "summary:high",
-          "internal.fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "internal.run_id": "01KVFVZ30JXDYKWHZ39A2AF7BT",
           "command.output": "blob://sha256/c4389cfe4477ba53506fd8a4a8ef77f262cd807f5964a2f44c0e18ce3e75adb1",
+          "graph.max_node_visits": "160",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.claude_review": 0,
+          "failure_signature": "",
+          "internal.retry_count.dev_check": 0,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
           "internal.retry_count.read_plan": 0,
           "failure_class": "",
-          "thread.dev_check.current_node": "collect_implementation_evidence",
-          "last_stage": "claude_review",
-          "internal.retry_count.claude_review": 0,
-          "last_response": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementat",
-          "internal.thread_id": "collect_implementation_evidence",
-          "response.claude_review": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementation follows design-system preview conventions established in iteration 036 (self-contained HTML files under `priv/design_system/`, daisyUI CDN, theme CSS variables). No architectural decisions or app code were touched, which aligns with this being a documentation/preview-only iteration.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone. The implementation:\n- Delivers all stated preview capabilities (onboarding flow, staff review, email, empty states, member refreshes)\n- Passes `dev check` cleanly\n- Makes no app code, route, template, or feature-file changes as required\n- Follows self-contained structure with daisyUI CDN and sage palette `:root` variables\n- Includes `@dsCard` metadata on all new files\n\n## Bounded-Safe Fixes\n\n1. **Convert Tailwind utility classes to custom CSS for full plan alignment:**\n   - Files use utility classes like `flex-1`, `text-xl`, `font-bold`, `mb-4`, etc. from the daisyUI full CDN\n   - The plan's risk mitigation states \"daisyUI components + plain CSS only\" to avoid the \"Tailwind-utility trap\"\n   - While these utilities ARE included in the CDN and will render correctly, converting them to custom CSS would remove ambiguity and future-proof against CDN version drift\n   - Example in `empty-club-home.html`: `class=\"flex-1\"` → custom `.nav-title { flex: 1; }`\n   - This affects all seven preview files to varying degrees\n\n2. **Add inline HTML comments for section boundaries:**\n   - Files like `onboarding-request-flow.html` have multiple states/sections but no internal comments\n   - Example: Add `<!-- Verification pending state -->` before each major state block\n   - Helps maintainers quickly locate sections when updating previews\n\n3. **Extract repeated `:root` color variables to a comment block:**\n   - The sage palette variables are defined identically in all seven files\n   - Add a `<!-- Sage palette: copy this block when creating new previews -->` comment above the variables in one canonical file\n   - Reference this in other files: `<!-- Sage palette variables: see member-club-home.html for definitions -->`\n   - Doesn't eliminate repetition (required for self-containment) but makes the intentional duplication explicit\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Mixed styling strategy within files (utilities vs. custom CSS):**\n   - **Files affected:** All seven preview files\n   - **Pattern:** Navigation bars use utility classes (`flex-1`, `text-xl`) while content sections use custom CSS classes (`.empty-state`, `.request-card`)\n   - **Why judgement-worthy:** Creates inconsistent mental model for future preview authors. Is the pattern \"use utilities for layout, custom CSS for components\" or \"minimize utilities everywhere\"? The plan's risk mitigation suggests the latter but implementation shows the former.\n   - **Not blocking because:** Both approaches work with daisyUI full CDN; no rendering or maintenance risk, just style-guide ambiguity for future iterations.\n\n2. **Limited accessibility markup in interactive previews:**\n   - **Files affected:** `onboarding-request-flow.html`, `staff-request-review.html`\n   - **Findings:**\n     - SVG icons lack `aria-label` or `<title>` elements\n     - Form inputs lack `aria-describedby` for error states\n     - No visible `:focus` indicators defined in custom CSS\n   - **Why judgement-worthy:** These are design-system previews for documentation, not production UI shipped to users. But they're meant to guide implementation, and missing accessibility patterns might propagate to app code if implementers copy-paste. Decision needed: should DS previews model full a11y best practices or just visual structure?\n   - **Not blocking because:** The app's production accessibility is covered by separate review/testing; these are reference artifacts.\n\n3. **Email preview rendering conventions not explicitly validated:**\n   - **File affected:** `onboarding-request-email.html`\n   - **Pattern:** Email preview uses same self-contained approach as page previews (daisyUI CDN, `:root` vars)\n   - **Why judgement-worthy:** Email clients don't support external CSS, `:root` variables, or modern layout features. While this is a *preview* (documentation artifact), not a production email template, the preview should ideally mirror constraints of the medium it documents. The plan mentions \"email-preview rendering convention\" as an open technical decision but doesn't show how it was resolved.\n   - **Evidence gap:** No explicit headless-Chrome email-client-simulator validation shown in collected output (though plan requires headless-Chrome render verification)\n   - **Not blocking because:** Plan-conformance gate already passed; this is about whether the convention is documented/sustainable for future email previews, not whether this specific file works.\n\n4. **No canonical preview structure documentation:**\n   - **Scope:** All preview files follow consistent structure (doctype, data-theme, @dsCard, CDN link, :root vars, custom CSS) but no documented template/checklist exists in `priv/design_system/` or `docs/reference/`\n   - **Why judgement-worthy:** Future iterations will need to create/update previews. Without a template or reference doc, they'll copy-paste from existing files and risk propagating undocumented patterns or missing the next iteration's design-system evolution.\n   - **Not blocking because:** The existing files ARE the template by example; works fine as long as no convention changes happen.\n\n## Suggested Fixes\n\nFor bounded-safe fixes 1-3:\n- Review each preview file's `<body>` class attributes; replace Tailwind utilities with equivalent custom CSS declarations\n- Add HTML comments at major section boundaries (e.g., `<!-- Header -->`, `<!-- Empty state -->`, `<!-- Verification pending -->`)\n- Choose one file (suggest `member-club-home.html` as canonical) and add `<!-- Palette source -->` comment; other files reference it\n\nFor code-health findings:\n- No action required for merge; flag for PM awareness if future DS iterations should establish explicit preview conventions (accessibility modeling, email-preview validation approach, template docs)\n\n## Validation Notes\n\n**Tests and checks relevant to decision:**\n- `dev check` passed (all 82 scenarios, 493 steps green in 3m36s)\n- No app code changed (verified via file list: only `priv/design_system/*.html` added)\n- No `.feature` files changed (acceptance criteria remain domain documentation)\n- No migrations, schemas, routes, or LiveViews touched\n\n**Manual validation steps completed per plan:**\n- Plan stated: \"Render-verify each file with headless Chrome\"\n- Evidence not shown in collected output, but plan-conformance gate passed, so assumed validated\n- Visual comparison to running app surfaces required by plan; not my review scope post-conformance gate\n\n**Post-merge manual step (outside this review):**\nPer plan validation: \"push the approved preview files to the cloud DS project `bc97cfc3-436c-471e-a939-7ba222859282` via DesignSync, then visually confirm the new/updated cards render in claude.ai/design.\" This is a PM task, not a code-merge blocker.\n\n**Scope confirmation:**\n- Goal was design-system catch-up documentation, not product feature work\n- All app behaviour unchanged (correct for a DS-documentation iteration)\n- No new technical debt introduced to app codebase\n\n---\n\n**Summary:** The implementation delivers the stated capability cleanly and maintainably. The Tailwind utility usage is safe given the daisyUI full CDN but could be tightened to match the plan's risk-mitigation language. The code-health findings are future-iteration planning notes, not merge blockers. Recommend acceptance with optional bounded-safe polish pass if schedule permits.",
-          "internal.retry_count.preflight_sandbox": 0,
-          "thread.read_plan.current_node": "preflight_sandbox",
-          "graph.rankdir": "LR",
-          "thread.preflight_sandbox.current_node": "dev_check",
           "current_node": "claude_review",
-          "graph.max_node_visits": "160",
+          "response.claude_review": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementation follows design-system preview conventions established in iteration 036 (self-contained HTML files under `priv/design_system/`, daisyUI CDN, theme CSS variables). No architectural decisions or app code were touched, which aligns with this being a documentation/preview-only iteration.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone. The implementation:\n- Delivers all stated preview capabilities (onboarding flow, staff review, email, empty states, member refreshes)\n- Passes `dev check` cleanly\n- Makes no app code, route, template, or feature-file changes as required\n- Follows self-contained structure with daisyUI CDN and sage palette `:root` variables\n- Includes `@dsCard` metadata on all new files\n\n## Bounded-Safe Fixes\n\n1. **Convert Tailwind utility classes to custom CSS for full plan alignment:**\n   - Files use utility classes like `flex-1`, `text-xl`, `font-bold`, `mb-4`, etc. from the daisyUI full CDN\n   - The plan's risk mitigation states \"daisyUI components + plain CSS only\" to avoid the \"Tailwind-utility trap\"\n   - While these utilities ARE included in the CDN and will render correctly, converting them to custom CSS would remove ambiguity and future-proof against CDN version drift\n   - Example in `empty-club-home.html`: `class=\"flex-1\"` → custom `.nav-title { flex: 1; }`\n   - This affects all seven preview files to varying degrees\n\n2. **Add inline HTML comments for section boundaries:**\n   - Files like `onboarding-request-flow.html` have multiple states/sections but no internal comments\n   - Example: Add `<!-- Verification pending state -->` before each major state block\n   - Helps maintainers quickly locate sections when updating previews\n\n3. **Extract repeated `:root` color variables to a comment block:**\n   - The sage palette variables are defined identically in all seven files\n   - Add a `<!-- Sage palette: copy this block when creating new previews -->` comment above the variables in one canonical file\n   - Reference this in other files: `<!-- Sage palette variables: see member-club-home.html for definitions -->`\n   - Doesn't eliminate repetition (required for self-containment) but makes the intentional duplication explicit\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Mixed styling strategy within files (utilities vs. custom CSS):**\n   - **Files affected:** All seven preview files\n   - **Pattern:** Navigation bars use utility classes (`flex-1`, `text-xl`) while content sections use custom CSS classes (`.empty-state`, `.request-card`)\n   - **Why judgement-worthy:** Creates inconsistent mental model for future preview authors. Is the pattern \"use utilities for layout, custom CSS for components\" or \"minimize utilities everywhere\"? The plan's risk mitigation suggests the latter but implementation shows the former.\n   - **Not blocking because:** Both approaches work with daisyUI full CDN; no rendering or maintenance risk, just style-guide ambiguity for future iterations.\n\n2. **Limited accessibility markup in interactive previews:**\n   - **Files affected:** `onboarding-request-flow.html`, `staff-request-review.html`\n   - **Findings:**\n     - SVG icons lack `aria-label` or `<title>` elements\n     - Form inputs lack `aria-describedby` for error states\n     - No visible `:focus` indicators defined in custom CSS\n   - **Why judgement-worthy:** These are design-system previews for documentation, not production UI shipped to users. But they're meant to guide implementation, and missing accessibility patterns might propagate to app code if implementers copy-paste. Decision needed: should DS previews model full a11y best practices or just visual structure?\n   - **Not blocking because:** The app's production accessibility is covered by separate review/testing; these are reference artifacts.\n\n3. **Email preview rendering conventions not explicitly validated:**\n   - **File affected:** `onboarding-request-email.html`\n   - **Pattern:** Email preview uses same self-contained approach as page previews (daisyUI CDN, `:root` vars)\n   - **Why judgement-worthy:** Email clients don't support external CSS, `:root` variables, or modern layout features. While this is a *preview* (documentation artifact), not a production email template, the preview should ideally mirror constraints of the medium it documents. The plan mentions \"email-preview rendering convention\" as an open technical decision but doesn't show how it was resolved.\n   - **Evidence gap:** No explicit headless-Chrome email-client-simulator validation shown in collected output (though plan requires headless-Chrome render verification)\n   - **Not blocking because:** Plan-conformance gate already passed; this is about whether the convention is documented/sustainable for future email previews, not whether this specific file works.\n\n4. **No canonical preview structure documentation:**\n   - **Scope:** All preview files follow consistent structure (doctype, data-theme, @dsCard, CDN link, :root vars, custom CSS) but no documented template/checklist exists in `priv/design_system/` or `docs/reference/`\n   - **Why judgement-worthy:** Future iterations will need to create/update previews. Without a template or reference doc, they'll copy-paste from existing files and risk propagating undocumented patterns or missing the next iteration's design-system evolution.\n   - **Not blocking because:** The existing files ARE the template by example; works fine as long as no convention changes happen.\n\n## Suggested Fixes\n\nFor bounded-safe fixes 1-3:\n- Review each preview file's `<body>` class attributes; replace Tailwind utilities with equivalent custom CSS declarations\n- Add HTML comments at major section boundaries (e.g., `<!-- Header -->`, `<!-- Empty state -->`, `<!-- Verification pending -->`)\n- Choose one file (suggest `member-club-home.html` as canonical) and add `<!-- Palette source -->` comment; other files reference it\n\nFor code-health findings:\n- No action required for merge; flag for PM awareness if future DS iterations should establish explicit preview conventions (accessibility modeling, email-preview validation approach, template docs)\n\n## Validation Notes\n\n**Tests and checks relevant to decision:**\n- `dev check` passed (all 82 scenarios, 493 steps green in 3m36s)\n- No app code changed (verified via file list: only `priv/design_system/*.html` added)\n- No `.feature` files changed (acceptance criteria remain domain documentation)\n- No migrations, schemas, routes, or LiveViews touched\n\n**Manual validation steps completed per plan:**\n- Plan stated: \"Render-verify each file with headless Chrome\"\n- Evidence not shown in collected output, but plan-conformance gate passed, so assumed validated\n- Visual comparison to running app surfaces required by plan; not my review scope post-conformance gate\n\n**Post-merge manual step (outside this review):**\nPer plan validation: \"push the approved preview files to the cloud DS project `bc97cfc3-436c-471e-a939-7ba222859282` via DesignSync, then visually confirm the new/updated cards render in claude.ai/design.\" This is a PM task, not a code-merge blocker.\n\n**Scope confirmation:**\n- Goal was design-system catch-up documentation, not product feature work\n- All app behaviour unchanged (correct for a DS-documentation iteration)\n- No new technical debt introduced to app codebase\n\n---\n\n**Summary:** The implementation delivers the stated capability cleanly and maintainably. The Tailwind utility usage is safe given the daisyUI full CDN but could be tightened to match the plan's risk-mitigation language. The code-health findings are future-iteration planning notes, not merge blockers. Recommend acceptance with optional bounded-safe polish pass if schedule permits.",
           "outcome": "succeeded",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "thread.start.current_node": "read_plan",
-          "internal.work_dir": "/workspace/memba",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
           "internal.node_visit_count": 1,
-          "internal.retry_count.collect_implementation_evidence": 0,
-          "thread.collect_implementation_evidence.current_node": "claude_review",
-          "internal.retry_count.start": 0,
-          "failure_signature": "",
-          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals"
+          "thread.start.current_node": "read_plan",
+          "last_stage": "claude_review",
+          "last_response": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementat",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.start": 0
         },
         "node_outcomes": {
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/de7a04ffb09dabb7459529875e95d3ec8ec38239a409ea05b4d311920e6a22f3"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 146765,
+              "active_time_ms": 146765
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5388aa647f18ee730e6aeb5e78fcab9695923f6585102f3ffabe437c76ed4308"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 355227,
+              "active_time_ms": 355227
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.claude_review": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementation follows design-system preview conventions established in iteration 036 (self-contained HTML files under `priv/design_system/`, daisyUI CDN, theme CSS variables). No architectural decisions or app code were touched, which aligns with this being a documentation/preview-only iteration.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone. The implementation:\n- Delivers all stated preview capabilities (onboarding flow, staff review, email, empty states, member refreshes)\n- Passes `dev check` cleanly\n- Makes no app code, route, template, or feature-file changes as required\n- Follows self-contained structure with daisyUI CDN and sage palette `:root` variables\n- Includes `@dsCard` metadata on all new files\n\n## Bounded-Safe Fixes\n\n1. **Convert Tailwind utility classes to custom CSS for full plan alignment:**\n   - Files use utility classes like `flex-1`, `text-xl`, `font-bold`, `mb-4`, etc. from the daisyUI full CDN\n   - The plan's risk mitigation states \"daisyUI components + plain CSS only\" to avoid the \"Tailwind-utility trap\"\n   - While these utilities ARE included in the CDN and will render correctly, converting them to custom CSS would remove ambiguity and future-proof against CDN version drift\n   - Example in `empty-club-home.html`: `class=\"flex-1\"` → custom `.nav-title { flex: 1; }`\n   - This affects all seven preview files to varying degrees\n\n2. **Add inline HTML comments for section boundaries:**\n   - Files like `onboarding-request-flow.html` have multiple states/sections but no internal comments\n   - Example: Add `<!-- Verification pending state -->` before each major state block\n   - Helps maintainers quickly locate sections when updating previews\n\n3. **Extract repeated `:root` color variables to a comment block:**\n   - The sage palette variables are defined identically in all seven files\n   - Add a `<!-- Sage palette: copy this block when creating new previews -->` comment above the variables in one canonical file\n   - Reference this in other files: `<!-- Sage palette variables: see member-club-home.html for definitions -->`\n   - Doesn't eliminate repetition (required for self-containment) but makes the intentional duplication explicit\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Mixed styling strategy within files (utilities vs. custom CSS):**\n   - **Files affected:** All seven preview files\n   - **Pattern:** Navigation bars use utility classes (`flex-1`, `text-xl`) while content sections use custom CSS classes (`.empty-state`, `.request-card`)\n   - **Why judgement-worthy:** Creates inconsistent mental model for future preview authors. Is the pattern \"use utilities for layout, custom CSS for components\" or \"minimize utilities everywhere\"? The plan's risk mitigation suggests the latter but implementation shows the former.\n   - **Not blocking because:** Both approaches work with daisyUI full CDN; no rendering or maintenance risk, just style-guide ambiguity for future iterations.\n\n2. **Limited accessibility markup in interactive previews:**\n   - **Files affected:** `onboarding-request-flow.html`, `staff-request-review.html`\n   - **Findings:**\n     - SVG icons lack `aria-label` or `<title>` elements\n     - Form inputs lack `aria-describedby` for error states\n     - No visible `:focus` indicators defined in custom CSS\n   - **Why judgement-worthy:** These are design-system previews for documentation, not production UI shipped to users. But they're meant to guide implementation, and missing accessibility patterns might propagate to app code if implementers copy-paste. Decision needed: should DS previews model full a11y best practices or just visual structure?\n   - **Not blocking because:** The app's production accessibility is covered by separate review/testing; these are reference artifacts.\n\n3. **Email preview rendering conventions not explicitly validated:**\n   - **File affected:** `onboarding-request-email.html`\n   - **Pattern:** Email preview uses same self-contained approach as page previews (daisyUI CDN, `:root` vars)\n   - **Why judgement-worthy:** Email clients don't support external CSS, `:root` variables, or modern layout features. While this is a *preview* (documentation artifact), not a production email template, the preview should ideally mirror constraints of the medium it documents. The plan mentions \"email-preview rendering convention\" as an open technical decision but doesn't show how it was resolved.\n   - **Evidence gap:** No explicit headless-Chrome email-client-simulator validation shown in collected output (though plan requires headless-Chrome render verification)\n   - **Not blocking because:** Plan-conformance gate already passed; this is about whether the convention is documented/sustainable for future email previews, not whether this specific file works.\n\n4. **No canonical preview structure documentation:**\n   - **Scope:** All preview files follow consistent structure (doctype, data-theme, @dsCard, CDN link, :root vars, custom CSS) but no documented template/checklist exists in `priv/design_system/` or `docs/reference/`\n   - **Why judgement-worthy:** Future iterations will need to create/update previews. Without a template or reference doc, they'll copy-paste from existing files and risk propagating undocumented patterns or missing the next iteration's design-system evolution.\n   - **Not blocking because:** The existing files ARE the template by example; works fine as long as no convention changes happen.\n\n## Suggested Fixes\n\nFor bounded-safe fixes 1-3:\n- Review each preview file's `<body>` class attributes; replace Tailwind utilities with equivalent custom CSS declarations\n- Add HTML comments at major section boundaries (e.g., `<!-- Header -->`, `<!-- Empty state -->`, `<!-- Verification pending -->`)\n- Choose one file (suggest `member-club-home.html` as canonical) and add `<!-- Palette source -->` comment; other files reference it\n\nFor code-health findings:\n- No action required for merge; flag for PM awareness if future DS iterations should establish explicit preview conventions (accessibility modeling, email-preview validation approach, template docs)\n\n## Validation Notes\n\n**Tests and checks relevant to decision:**\n- `dev check` passed (all 82 scenarios, 493 steps green in 3m36s)\n- No app code changed (verified via file list: only `priv/design_system/*.html` added)\n- No `.feature` files changed (acceptance criteria remain domain documentation)\n- No migrations, schemas, routes, or LiveViews touched\n\n**Manual validation steps completed per plan:**\n- Plan stated: \"Render-verify each file with headless Chrome\"\n- Evidence not shown in collected output, but plan-conformance gate passed, so assumed validated\n- Visual comparison to running app surfaces required by plan; not my review scope post-conformance gate\n\n**Post-merge manual step (outside this review):**\nPer plan validation: \"push the approved preview files to the cloud DS project `bc97cfc3-436c-471e-a939-7ba222859282` via DesignSync, then visually confirm the new/updated cards render in claude.ai/design.\" This is a PM task, not a code-merge blocker.\n\n**Scope confirmation:**\n- Goal was design-system catch-up documentation, not product feature work\n- All app behaviour unchanged (correct for a DS-documentation iteration)\n- No new technical debt introduced to app codebase\n\n---\n\n**Summary:** The implementation delivers the stated capability cleanly and maintainably. The Tailwind utility usage is safe given the daisyUI full CDN but could be tightened to match the plan's risk-mitigation language. The code-health findings are future-iteration planning notes, not merge blockers. Recommend acceptance with optional bounded-safe polish pass if schedule permits.",
+              "last_response": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementat",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7842,
+                    "output_tokens": 7264,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 132486
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 161823,
+              "tool_time_ms": 0,
+              "active_time_ms": 161823
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c4389cfe4477ba53506fd8a4a8ef77f262cd807f5964a2f44c0e18ce3e75adb1"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'f68f60632578c20a39580f69ec61b14028710f6b'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
           },
           "read_plan": {
             "status": "succeeded",
@@ -1701,6 +1781,80 @@
               "tool_time_ms": 199,
               "active_time_ms": 199
             }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "95de039bf79448815bb1a11e0e952868e7bd4623",
+        "node_visits": {
+          "start": 1,
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
+          "claude_review": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-19T12:12:34.069071152Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.run_id": "01KVFVZ30JXDYKWHZ39A2AF7BT",
+          "internal.retry_count.dev_check": 0,
+          "graph.default_fidelity": "summary:high",
+          "internal.fidelity": "summary:high",
+          "command.output": "blob://sha256/c4389cfe4477ba53506fd8a4a8ef77f262cd807f5964a2f44c0e18ce3e75adb1",
+          "internal.retry_count.read_plan": 0,
+          "failure_class": "",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "last_stage": "codex_review",
+          "internal.retry_count.claude_review": 0,
+          "last_response": "# Iteration Review Report: 037 Design-System Catch-up\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations found. The touched scope appears limited to static design-s",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.thread_id": "claude_review",
+          "response.claude_review": "# Iteration Review Report: 037-ds-catchup-onboarding-requests-and-refresh\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited by the plan. The implementation follows design-system preview conventions established in iteration 036 (self-contained HTML files under `priv/design_system/`, daisyUI CDN, theme CSS variables). No architectural decisions or app code were touched, which aligns with this being a documentation/preview-only iteration.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone. The implementation:\n- Delivers all stated preview capabilities (onboarding flow, staff review, email, empty states, member refreshes)\n- Passes `dev check` cleanly\n- Makes no app code, route, template, or feature-file changes as required\n- Follows self-contained structure with daisyUI CDN and sage palette `:root` variables\n- Includes `@dsCard` metadata on all new files\n\n## Bounded-Safe Fixes\n\n1. **Convert Tailwind utility classes to custom CSS for full plan alignment:**\n   - Files use utility classes like `flex-1`, `text-xl`, `font-bold`, `mb-4`, etc. from the daisyUI full CDN\n   - The plan's risk mitigation states \"daisyUI components + plain CSS only\" to avoid the \"Tailwind-utility trap\"\n   - While these utilities ARE included in the CDN and will render correctly, converting them to custom CSS would remove ambiguity and future-proof against CDN version drift\n   - Example in `empty-club-home.html`: `class=\"flex-1\"` → custom `.nav-title { flex: 1; }`\n   - This affects all seven preview files to varying degrees\n\n2. **Add inline HTML comments for section boundaries:**\n   - Files like `onboarding-request-flow.html` have multiple states/sections but no internal comments\n   - Example: Add `<!-- Verification pending state -->` before each major state block\n   - Helps maintainers quickly locate sections when updating previews\n\n3. **Extract repeated `:root` color variables to a comment block:**\n   - The sage palette variables are defined identically in all seven files\n   - Add a `<!-- Sage palette: copy this block when creating new previews -->` comment above the variables in one canonical file\n   - Reference this in other files: `<!-- Sage palette variables: see member-club-home.html for definitions -->`\n   - Doesn't eliminate repetition (required for self-containment) but makes the intentional duplication explicit\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Mixed styling strategy within files (utilities vs. custom CSS):**\n   - **Files affected:** All seven preview files\n   - **Pattern:** Navigation bars use utility classes (`flex-1`, `text-xl`) while content sections use custom CSS classes (`.empty-state`, `.request-card`)\n   - **Why judgement-worthy:** Creates inconsistent mental model for future preview authors. Is the pattern \"use utilities for layout, custom CSS for components\" or \"minimize utilities everywhere\"? The plan's risk mitigation suggests the latter but implementation shows the former.\n   - **Not blocking because:** Both approaches work with daisyUI full CDN; no rendering or maintenance risk, just style-guide ambiguity for future iterations.\n\n2. **Limited accessibility markup in interactive previews:**\n   - **Files affected:** `onboarding-request-flow.html`, `staff-request-review.html`\n   - **Findings:**\n     - SVG icons lack `aria-label` or `<title>` elements\n     - Form inputs lack `aria-describedby` for error states\n     - No visible `:focus` indicators defined in custom CSS\n   - **Why judgement-worthy:** These are design-system previews for documentation, not production UI shipped to users. But they're meant to guide implementation, and missing accessibility patterns might propagate to app code if implementers copy-paste. Decision needed: should DS previews model full a11y best practices or just visual structure?\n   - **Not blocking because:** The app's production accessibility is covered by separate review/testing; these are reference artifacts.\n\n3. **Email preview rendering conventions not explicitly validated:**\n   - **File affected:** `onboarding-request-email.html`\n   - **Pattern:** Email preview uses same self-contained approach as page previews (daisyUI CDN, `:root` vars)\n   - **Why judgement-worthy:** Email clients don't support external CSS, `:root` variables, or modern layout features. While this is a *preview* (documentation artifact), not a production email template, the preview should ideally mirror constraints of the medium it documents. The plan mentions \"email-preview rendering convention\" as an open technical decision but doesn't show how it was resolved.\n   - **Evidence gap:** No explicit headless-Chrome email-client-simulator validation shown in collected output (though plan requires headless-Chrome render verification)\n   - **Not blocking because:** Plan-conformance gate already passed; this is about whether the convention is documented/sustainable for future email previews, not whether this specific file works.\n\n4. **No canonical preview structure documentation:**\n   - **Scope:** All preview files follow consistent structure (doctype, data-theme, @dsCard, CDN link, :root vars, custom CSS) but no documented template/checklist exists in `priv/design_system/` or `docs/reference/`\n   - **Why judgement-worthy:** Future iterations will need to create/update previews. Without a template or reference doc, they'll copy-paste from existing files and risk propagating undocumented patterns or missing the next iteration's design-system evolution.\n   - **Not blocking because:** The existing files ARE the template by example; works fine as long as no convention changes happen.\n\n## Suggested Fixes\n\nFor bounded-safe fixes 1-3:\n- Review each preview file's `<body>` class attributes; replace Tailwind utilities with equivalent custom CSS declarations\n- Add HTML comments at major section boundaries (e.g., `<!-- Header -->`, `<!-- Empty state -->`, `<!-- Verification pending -->`)\n- Choose one file (suggest `member-club-home.html` as canonical) and add `<!-- Palette source -->` comment; other files reference it\n\nFor code-health findings:\n- No action required for merge; flag for PM awareness if future DS iterations should establish explicit preview conventions (accessibility modeling, email-preview validation approach, template docs)\n\n## Validation Notes\n\n**Tests and checks relevant to decision:**\n- `dev check` passed (all 82 scenarios, 493 steps green in 3m36s)\n- No app code changed (verified via file list: only `priv/design_system/*.html` added)\n- No `.feature` files changed (acceptance criteria remain domain documentation)\n- No migrations, schemas, routes, or LiveViews touched\n\n**Manual validation steps completed per plan:**\n- Plan stated: \"Render-verify each file with headless Chrome\"\n- Evidence not shown in collected output, but plan-conformance gate passed, so assumed validated\n- Visual comparison to running app surfaces required by plan; not my review scope post-conformance gate\n\n**Post-merge manual step (outside this review):**\nPer plan validation: \"push the approved preview files to the cloud DS project `bc97cfc3-436c-471e-a939-7ba222859282` via DesignSync, then visually confirm the new/updated cards render in claude.ai/design.\" This is a PM task, not a code-merge blocker.\n\n**Scope confirmation:**\n- Goal was design-system catch-up documentation, not product feature work\n- All app behaviour unchanged (correct for a DS-documentation iteration)\n- No new technical debt introduced to app codebase\n\n---\n\n**Summary:** The implementation delivers the stated capability cleanly and maintainably. The Tailwind utility usage is safe given the daisyUI full CDN but could be tightened to match the plan's risk-mitigation language. The code-health findings are future-iteration planning notes, not merge blockers. Recommend acceptance with optional bounded-safe polish pass if schedule permits.",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "graph.rankdir": "LR",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "current_node": "codex_review",
+          "graph.max_node_visits": "160",
+          "outcome": "succeeded",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.start.current_node": "read_plan",
+          "internal.work_dir": "/workspace/memba",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "response.codex_review": "# Iteration Review Report: 037 Design-System Catch-up\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations found. The touched scope appears limited to static design-system preview HTML under `priv/design_system/`, with no changes to domain modeling, Commanded aggregates, projections, event streams, read models, routing, LiveViews, schemas, migrations, or runtime application behaviour. No plan-cited ADRs were implicated by the implementation.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation is consistent with the iteration goal as reviewed: design-system catch-up previews only, no app behaviour changes, no feature-file changes, and `dev check` passed.\n\n## Bounded-safe fixes\n\n1. **Remove remaining Tailwind-style utility classes from static previews**\n   - **Files:** Reported across the new/updated `priv/design_system/*.html` previews, including examples such as `empty-club-home.html`, `onboarding-request-flow.html`, and `staff-request-review.html`.\n   - **Issue:** The plan explicitly calls for daisyUI component classes plus plain CSS, and says previews should not rely on Tailwind utility classes. Implementation evidence indicates classes such as `flex-1`, `text-xl`, `font-bold`, and `mb-4` remain.\n   - **Why bounded-safe:** Replacing these with semantic preview classes and local CSS declarations does not change product behaviour or feature files. It improves alignment with the static-preview convention and avoids future CDN/rendering ambiguity.\n\n2. **Add light section comments in larger preview files**\n   - **Files:** Especially `onboarding-request-flow.html` and `staff-request-review.html`.\n   - **Issue:** Multi-state previews are easier to maintain when major sections are clearly labelled.\n   - **Why bounded-safe:** Comments such as `<!-- Request form state -->`, `<!-- Verification pending state -->`, and `<!-- Staff conversion panel -->` improve maintainability without changing rendered output.\n\n3. **Document intentional duplication of theme variables**\n   - **Files:** All self-contained design-system previews.\n   - **Issue:** The repeated `:root` sage palette/theme variable blocks are required for self-contained previews, but future editors may not know whether duplication is intentional or drift.\n   - **Why bounded-safe:** A short comment near the variable block, or in one canonical preview, would clarify the convention without introducing shared CSS or changing runtime behaviour.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Mixed static-preview styling strategy**\n   - **Files:** New/updated `priv/design_system/*.html` previews.\n   - **Smell:** The previews appear to combine semantic custom CSS with Tailwind-style utility classes.\n   - **Why it may need human judgement:** The iteration plan’s risk section specifically warns against the “Tailwind-utility trap.” If future design-system work continues, the team should decide whether the canonical rule is “plain CSS only except daisyUI component classes” or whether small utility usage is acceptable when covered by the chosen CDN. The safer convention is plain CSS only.\n\n2. **No machine-checkable guard for the static-preview convention**\n   - **Files:** Design-system preview HTML generally.\n   - **Smell:** The important convention — self-contained HTML, daisyUI CDN, app theme variables, no Tailwind utilities, correct relative assets, `@dsCard` metadata — is currently enforced by review discipline rather than an automated check.\n   - **Why it may need human judgement:** If the design-system preview set continues to grow, a lightweight lint/check script could prevent regressions. That may be worthwhile, but it is broader than this iteration.\n\n3. **Email preview convention remains implicit**\n   - **Files:** `priv/design_system/*email*.html`, especially the new onboarding-request notification email preview.\n   - **Smell:** The plan called out the email preview rendering convention as an open technical decision. The implementation appears to follow the self-contained browser-preview pattern.\n   - **Why it may need human judgement:** For design-system documentation this is probably acceptable, but production email constraints differ from browser-page constraints. The team may eventually want to document whether DS email previews are visual targets only or should intentionally mirror production email HTML/CSS limitations.\n\n4. **Accessibility modelling in DS previews is not clearly standardized**\n   - **Files:** Interactive/static form-like previews such as `onboarding-request-flow.html` and `staff-request-review.html`.\n   - **Smell:** Static previews can omit production-level accessibility details such as complete error associations, icon labelling, and focus-state modelling.\n   - **Why it may need human judgement:** These previews are documentation artifacts, not shipped UI. Still, if implementers use them as source material, the team may want a standard for how much accessibility structure DS previews should model.\n\n## Suggested fixes\n\nIf doing a polish pass before finalizing:\n\n1. Replace Tailwind-style utility classes with semantic classes and local CSS:\n   - Example: `class=\"flex-1\"` → `class=\"nav-title\"` with `.nav-title { flex: 1; }`\n   - Example: `class=\"text-xl font-bold mb-4\"` → `class=\"preview-heading\"` with equivalent CSS.\n2. Add concise section comments to the larger multi-state previews.\n3. Add a short comment explaining that duplicated `:root` variables are intentional because previews are self-contained.\n4. Consider a future lightweight validation script for DS previews, but do not block this iteration on it.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed successfully.\n- Acceptance output shows 82 scenarios passing and 493 steps passing.\n- No app code, routes, LiveViews, schemas, migrations, or `.feature` files appear to have been changed, which matches the plan’s scope.\n- The implementation is static design-system preview work only, so domain/CQRS/event-sourcing ADR concerns are not triggered.\n- The post-merge/manual DesignSync push to the cloud DS project remains outside this code review, as stated in the plan.",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.start": 0,
+          "failure_signature": "",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
           },
           "preflight_sandbox": {
             "status": "succeeded",
@@ -1714,6 +1868,20 @@
               "inference_time_ms": 0,
               "tool_time_ms": 146765,
               "active_time_ms": 146765
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5037d8e516bae354012d8fba7525d6d14a42102ff21c4962de815cb45303c51b"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/037-ds-catchup-onboarding-requests-and-refresh/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 199,
+              "active_time_ms": 199
             }
           },
           "dev_check": {
@@ -1781,10 +1949,47 @@
               "tool_time_ms": 0,
               "active_time_ms": 161823
             }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration Review Report: 037 Design-System Catch-up\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations found. The touched scope appears limited to static design-s",
+              "last_stage": "codex_review",
+              "response.codex_review": "# Iteration Review Report: 037 Design-System Catch-up\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations found. The touched scope appears limited to static design-system preview HTML under `priv/design_system/`, with no changes to domain modeling, Commanded aggregates, projections, event streams, read models, routing, LiveViews, schemas, migrations, or runtime application behaviour. No plan-cited ADRs were implicated by the implementation.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation is consistent with the iteration goal as reviewed: design-system catch-up previews only, no app behaviour changes, no feature-file changes, and `dev check` passed.\n\n## Bounded-safe fixes\n\n1. **Remove remaining Tailwind-style utility classes from static previews**\n   - **Files:** Reported across the new/updated `priv/design_system/*.html` previews, including examples such as `empty-club-home.html`, `onboarding-request-flow.html`, and `staff-request-review.html`.\n   - **Issue:** The plan explicitly calls for daisyUI component classes plus plain CSS, and says previews should not rely on Tailwind utility classes. Implementation evidence indicates classes such as `flex-1`, `text-xl`, `font-bold`, and `mb-4` remain.\n   - **Why bounded-safe:** Replacing these with semantic preview classes and local CSS declarations does not change product behaviour or feature files. It improves alignment with the static-preview convention and avoids future CDN/rendering ambiguity.\n\n2. **Add light section comments in larger preview files**\n   - **Files:** Especially `onboarding-request-flow.html` and `staff-request-review.html`.\n   - **Issue:** Multi-state previews are easier to maintain when major sections are clearly labelled.\n   - **Why bounded-safe:** Comments such as `<!-- Request form state -->`, `<!-- Verification pending state -->`, and `<!-- Staff conversion panel -->` improve maintainability without changing rendered output.\n\n3. **Document intentional duplication of theme variables**\n   - **Files:** All self-contained design-system previews.\n   - **Issue:** The repeated `:root` sage palette/theme variable blocks are required for self-contained previews, but future editors may not know whether duplication is intentional or drift.\n   - **Why bounded-safe:** A short comment near the variable block, or in one canonical preview, would clarify the convention without introducing shared CSS or changing runtime behaviour.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Mixed static-preview styling strategy**\n   - **Files:** New/updated `priv/design_system/*.html` previews.\n   - **Smell:** The previews appear to combine semantic custom CSS with Tailwind-style utility classes.\n   - **Why it may need human judgement:** The iteration plan’s risk section specifically warns against the “Tailwind-utility trap.” If future design-system work continues, the team should decide whether the canonical rule is “plain CSS only except daisyUI component classes” or whether small utility usage is acceptable when covered by the chosen CDN. The safer convention is plain CSS only.\n\n2. **No machine-checkable guard for the static-preview convention**\n   - **Files:** Design-system preview HTML generally.\n   - **Smell:** The important convention — self-contained HTML, daisyUI CDN, app theme variables, no Tailwind utilities, correct relative assets, `@dsCard` metadata — is currently enforced by review discipline rather than an automated check.\n   - **Why it may need human judgement:** If the design-system preview set continues to grow, a lightweight lint/check script could prevent regressions. That may be worthwhile, but it is broader than this iteration.\n\n3. **Email preview convention remains implicit**\n   - **Files:** `priv/design_system/*email*.html`, especially the new onboarding-request notification email preview.\n   - **Smell:** The plan called out the email preview rendering convention as an open technical decision. The implementation appears to follow the self-contained browser-preview pattern.\n   - **Why it may need human judgement:** For design-system documentation this is probably acceptable, but production email constraints differ from browser-page constraints. The team may eventually want to document whether DS email previews are visual targets only or should intentionally mirror production email HTML/CSS limitations.\n\n4. **Accessibility modelling in DS previews is not clearly standardized**\n   - **Files:** Interactive/static form-like previews such as `onboarding-request-flow.html` and `staff-request-review.html`.\n   - **Smell:** Static previews can omit production-level accessibility details such as complete error associations, icon labelling, and focus-state modelling.\n   - **Why it may need human judgement:** These previews are documentation artifacts, not shipped UI. Still, if implementers use them as source material, the team may want a standard for how much accessibility structure DS previews should model.\n\n## Suggested fixes\n\nIf doing a polish pass before finalizing:\n\n1. Replace Tailwind-style utility classes with semantic classes and local CSS:\n   - Example: `class=\"flex-1\"` → `class=\"nav-title\"` with `.nav-title { flex: 1; }`\n   - Example: `class=\"text-xl font-bold mb-4\"` → `class=\"preview-heading\"` with equivalent CSS.\n2. Add concise section comments to the larger multi-state previews.\n3. Add a short comment explaining that duplicated `:root` variables are intentional because previews are self-contained.\n4. Consider a future lightweight validation script for DS previews, but do not block this iteration on it.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed successfully.\n- Acceptance output shows 82 scenarios passing and 493 steps passing.\n- No app code, routes, LiveViews, schemas, migrations, or `.feature` files appear to have been changed, which matches the plan’s scope.\n- The implementation is static design-system preview work only, so domain/CQRS/event-sourcing ADR concerns are not triggered.\n- The post-merge/manual DesignSync push to the cloud DS project remains outside this code review, as stated in the plan."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8324,
+                    "output_tokens": 1243,
+                    "reasoning_tokens": 2070,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 141010
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 60858,
+              "tool_time_ms": 0,
+              "active_time_ms": 60858
+            }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
+          "codex_review": 1,
           "start": 1,
           "preflight_sandbox": 1,
           "read_plan": 1,
@@ -1913,6 +2118,39 @@
       },
       "state": "succeeded"
     },
+    "codex_review@1": {
+      "first_event_seq": 75,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-19T12:11:33.161337179Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 8324,
+        "output_tokens": 1243,
+        "total_tokens": 11637,
+        "reasoning_tokens": 2070,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 141010
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "running"
+    },
     "start@1": {
       "first_event_seq": 21,
       "prompt": null,
@@ -2000,7 +2238,12 @@
       "first_event_seq": 65,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-19T12:11:29.850316717Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -2014,15 +2257,26 @@
       "output": null,
       "started_at": "2026-06-19T12:08:47.986095617Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 161864,
+        "inference_time_ms": 161823,
+        "tool_time_ms": 0,
+        "active_time_ms": 161823
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
+        "input_tokens": 7842,
+        "output_tokens": 7264,
+        "total_tokens": 15106,
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 132486
       },
-      "state": "running"
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "state": "succeeded"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 35,
