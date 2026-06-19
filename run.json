@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-19T15:47:04.888637281Z",
-  "last_event_at": "2026-06-19T15:49:24.667031818Z",
+  "last_event_at": "2026-06-19T15:49:30.051005889Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1571,9 +1571,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 112,
       "checkpoint": {
-        "timestamp": "2026-06-19T15:49:26.658684541Z",
+        "timestamp": "2026-06-19T15:49:30.049715679Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -1586,144 +1586,61 @@
         ],
         "node_retries": {},
         "context_values": {
-          "plan_needs_fix": false,
-          "thread.synthesis_gate.current_node": "publish_ready",
-          "command.output": "blob://sha256/97fcaee97d23e3ee8b9a062af6b2dfa6989f0bf9c8f6f169aedfffc2e542cb34",
-          "gemini_review_required_edits": "None",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.claude_review": 0,
-          "thread.synthesize.current_node": "synthesis_gate",
-          "internal.retry_count.codex_review": 0,
-          "internal.fidelity": "summary:high",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "thread.gemini_review.current_node": "claude_review",
-          "failure_class": "",
-          "claude_review_required_edits": "None",
-          "internal.retry_count.synthesis_gate": 0,
-          "plan_needs_human": false,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "codex_review_required_edits": "None",
-          "gemini_review_confidence": "High",
-          "internal.retry_count.publish_ready": 0,
-          "internal.retry_count.gemini_review": 0,
-          "internal.run_id": "01KVG90SQJA2K924E60GFZ7B54",
-          "codex_review_blocking_gap_count": 0,
-          "graph.default_fidelity": "summary:high",
-          "codex_review_decision": "READY",
-          "claude_review_blocking_gap_count": 0,
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/038-email-delivery-handoff-boundary/plan.md`.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify whether `attempt_count` increments on every provider call or only failed provider calls. The current criteria require incrementing on errors, but “attempt count” usually means all attempts.\n2. Clarify how operators/developers dispatch `pending` deliveries if a PubSub nudge is missed. The risks section mentions an internal retry/dispatch API, while the acceptance criteria focus mainly on retrying `failed` deliveries.\n3. Consider adding one explicit test expectation for concurrent or repeated dispatcher nudges not causing two dispatcher processes to claim the same `pending` delivery.\n4. Consider stating whether stale `dispatching` deliveries are deliberately left as a follow-up, since crashes between claim and completion can strand records.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the one already described:\n\n- `send_club_message/2` records message/delivery work and returns success without synchronous provider delivery.\n- `EmailDeliveryCreated` creates `pending` delivery records.\n- A supervised dispatcher claims `pending` deliveries, calls the provider, and records `sent` or `failed`.\n- Provider failures are per-recipient and retryable through an internal/manual API.\n- Existing browser-composed and accepted inbound club-message flows use the same async dispatch boundary.\n- Focused tests prove the new boundary and lifecycle.\n\nAutomatic retries, startup/periodic sweeps, staff retry UI, event renaming, and broader application-service refactors are correctly left out.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Tests showing `Memba.Messaging.send_club_message/2` no longer invokes the provider synchronously and still returns success after command acceptance.\n2. Projection tests showing new `EmailDelivery` records start as `pending`.\n3. Dispatcher tests showing:\n   - `pending` → `dispatching` before provider call.\n   - provider success results in `sent`.\n   - provider failure results in `failed`, persisted diagnostic detail, and incremented attempt count.\n   - one recipient failure does not block other recipient deliveries.\n4. Retry tests showing failed deliveries can be retried without new message streams or duplicate `EmailDeliveryCreated` events.\n5. Inbound club-message acceptance tests showing accepted inbound messages use the same pending-delivery/dispatcher path.\n6. Replay/projector tests or provider fake assertions proving aggregate/projector replay does not call external providers.\n7. UI/presentation checks confirming member-facing views do not expose raw infrastructure failure details while staff/operator diagnostics may show exact status/error.\n8. `dev check` passing before completion.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "current_node": "publish_ready",
-          "thread.codex_review.current_node": "synthesize",
-          "failure_signature": "",
-          "plan_ready": true,
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "codex_review_confidence": "High",
-          "graph.rankdir": "LR",
-          "gemini_review_decision": "READY",
-          "internal.retry_count.synthesize": 0,
-          "gemini_review_blocking_gap_count": 0,
-          "claude_review_confidence": "High",
-          "internal.thread_id": "synthesis_gate",
-          "thread.start.current_node": "gemini_review",
-          "last_stage": "synthesize",
-          "claude_review_blocking_gaps": "None",
-          "gemini_review_blocking_gaps": "None",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "response.claude_review": "Now I'll review this plan against the five readiness questions and provide a structured assessment.\n\n---\n\n# Iteration 038 Plan Review: Async Email Delivery Dispatch\n\n**Decision**: READY\n\n**Confidence**: High\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-blocking Improvements\n\n1. **Database schema migration callout**: While implementation step 2 mentions updating the EmailDelivery projection/read model to store dispatch diagnostics, consider explicitly noting whether this requires a migration or schema change before starting work.\n\n2. **Concurrent dispatcher invocation**: Step 6 mentions claiming logic to avoid two dispatcher invocations claiming the same pending delivery concurrently, but doesn't specify the mechanism (optimistic locking, database-level constraint, GenServer serialization). This is resolvable during implementation but could be clearer upfront.\n\n3. **Partial delivery presentation**: Acceptance criteria mention that member-facing views should not expose raw infrastructure failure details, but don't specify what members *should* see when some recipients succeed and others are still pending/failed. This is a minor copy/UX decision that can be resolved during implementation.\n\n---\n\n## Assessment Against Readiness Questions\n\n### 1. Goal Clarity ✓\n- **Clear goal**: Make email delivery dispatch explicit, async, observable, and retryable without blocking user-facing commands on provider availability.\n- **User/business outcome**: Operators get observable dispatch lifecycle; users get reliable message acceptance even during provider outages.\n- **Beneficiary**: Operators (immediate observability/retry), users (indirect reliability).\n\n### 2. Scope Focus ✓\n- **Coherent outcome**: One clear architectural slice—moving provider dispatch out of command handlers into async dispatcher.\n- **Minimal useful slice**: Yes. Could not be smaller while remaining useful. Specifically excludes automatic retry, UI polish, event renaming, and broader application-service refactoring.\n- **Boundaries clear**: Extensive in-scope/out-of-scope lists. Deliberately leaves deprecated `opened` status, staff retry UI, automatic retry scheduling, and event vocabulary migration for later work.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n- **Concrete and testable**: 18 specific acceptance criteria covering happy paths (pending→dispatching→sent), error paths (failed deliveries with diagnostics), partial failures, manual retry, inbound messages, and test coverage requirements.\n- **Edge cases**: Covers provider failure, partial recipient failure, concurrent dispatch prevention, replay safety, manual retry without duplicate events.\n- **Iteration type classification**: Explicitly classified as \"Technical/engineering\" with clear rationale.\n- **BDD/Gherkin decision**: \"Not applicable\" with explicit reasoning—internal architectural slice with no new business rule. States that existing acceptance scenarios should continue to pass and that ExUnit tests will provide coverage.\n- **Business decisions resolved**: \"None known.\" No unresolved copy, workflow, or domain policy questions.\n\n### 4. Implementation Plan and Technical Decisions ✓\n- **Clear steps**: 14 ordered implementation steps from inspection through testing and `dev check`.\n- **Named artifacts**: Mentions specific modules (`Memba.Messaging.send_club_message/2`, `EmailDeliveryDispatcher`, `Memba.Messaging.Projectors.EmailDelivery`), infrastructure (`Memba.ReadModelChanges` PubSub topic), and test seams (fake/Postmark/Resend providers).\n- **Changes specified**: Data model (add dispatch diagnostics), API (remove synchronous provider calls), background processing (supervised dispatcher), integration (PubSub subscription).\n- **Technical decisions resolved**: \"None known.\" Plan explicitly lists the five previously-open design choices that are now decided.\n\n### 5. Expected Capability and Validation ✓\n- **New capability**: Observable async dispatch lifecycle with manual retry; provider outages become failed deliveries instead of misleading command errors.\n- **Stop condition**: Clear—when acceptance criteria pass, `dev check` passes, and manual inspection confirms async dispatch flow.\n- **Validation plan**: Four-part validation including targeted tests, `dev check`, manual local inspection, and simulated provider failure.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan already represents the smallest viable iteration. Any smaller slice would leave the system in an inconsistent state:\n\n- Can't implement async dispatch without removing synchronous provider calls from commands.\n- Can't make dispatch observable without the lifecycle states.\n- Can't make dispatch retryable without attempt tracking and manual retry API.\n\nThe exclusions (automatic retry, staff UI, event renaming) are appropriate deferrals.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Validation Plan\n\nThe stated validation plan is complete:\n\n1. **Targeted tests during implementation**: Send, projection, dispatcher, providers, retry, inbound acceptance\n2. **`dev check` before completion**: Required per project workflow\n3. **Manual local inspection**: Confirm pending→dispatching→sent flow with fake provider\n4. **Simulated failure testing**: Confirm failed deliveries, diagnostics, and manual retry\n\nThis provides adequate proof that:\n- The command succeeds without provider dependency\n- Dispatch lifecycle is truthful and observable\n- Provider failures are per-delivery with retry capability\n- Existing features continue working\n\n---\n\n## Conclusion\n\nThis is a well-scoped technical iteration with clear boundaries, concrete acceptance criteria, resolved decisions, and a practical implementation path. The plan acknowledges follow-up work (automatic retry, UI polish, stronger idempotency) without letting scope creep into this slice. The author has done excellent work preparing this for implementation.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "claude_review_decision": "READY",
-          "thread.claude_review.current_node": "codex_review",
-          "internal.node_visit_count": 1,
-          "internal.retry_count.start": 0,
+          "thread.codex_review.current_node": "synthesize",
+          "codex_review_blocking_gap_count": 0,
+          "thread.start.current_node": "gemini_review",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/038-email-delivery-handoff-boundary/plan.md`.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify whether `attempt_count` increments on every provider call or only failed provider calls. The current criteria require incrementing on errors, but “attempt count” usually means all attempts.\n2. Clarify how operators/developers dispatch `pending` deliveries if a PubSub nudge is missed. The risks section mentions an internal retry/dispatch API, while the acceptance criteria focus mainly on retrying `failed` deliveries.\n3. Consider adding one explicit test expectation for concurrent or repeated dispatcher nudges not causing two dispatcher processes to claim the same `pending` delivery.\n4. Consider stating whether stale `dispatching` deliveries are deliberately left as a follow-up, since crashes between claim and completion can strand records.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the one already described:\n\n- `send_club_message/2` records message/delivery work and returns success without synchronous provider delivery.\n- `EmailDeliveryCreated` creates `pending` delivery records.\n- A supervised dispatcher claims `pending` deliveries, calls the provider, and records `sent` or `failed`.\n- Provider failures are per-recipient and retryable through an internal/manual API.\n- Existing browser-composed and accepted inbound club-message flows use the same async dispatch boundary.\n- Focused tests prove the new boundary and lifecycle.\n\nAutomatic retries, startup/periodic sweeps, staff retry UI, event renaming, and broader application-service refactors are correctly left out.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Tests showing `Memba.Messaging.send_club_message/2` no longer invokes the provider synchronously and still returns success after command acceptance.\n2. Projection tests showing new `EmailDelivery` records start as `pending`.\n3. Dispatcher tests showing:\n   - `pending` → `dispatching` before provider call.\n   - provider success results in `sent`.\n   - provider failure results in `failed`, persisted diagnostic detail, and incremented attempt count.\n   - one recipient failure does not block other recipient deliveries.\n4. Retry tests showing failed deliveries can be retried without new message streams or duplicate `EmailDeliveryCreated` events.\n5. Inbound club-message acceptance tests showing accepted inbound messages use the same pending-delivery/dispatcher path.\n6. Replay/projector tests or provider fake assertions proving aggregate/projector replay does not call external providers.\n7. UI/presentation checks confirming member-facing views do not expose raw infrastructure failure details while staff/operator diagnostics may show exact status/error.\n8. `dev check` passing before completion.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
           "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Name the internal/manual retry API more explicitly, if known, so implementation and tests can converge faster.\n2. Specify the preferred concurrency-safe claim mechanism for `pending` → `dispatching`, such as conditional update by status, transaction, lock, or equivalent.\n3. Clarify whether stale `dispatching` records are intentionally excluded from this slice, alongside the existing no-sweeper/no-automatic-retry boundary.\n4. List the expected diagnostic field names if the author wants tighter implementation guidance, e.g. `attempt_count`, `latest_provider_error`, `last_dispatch_attempted_at`, `sent_at`, `failed_at`.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the plan’s core path:\n\n- Create `EmailDelivery` records as `pending`.\n- Remove synchronous provider delivery from `Memba.Messaging.send_club_message/2`.\n- Add a supervised dispatcher that claims pending deliveries, calls the provider, and marks each delivery `sent` or `failed`.\n- Persist attempt count and latest error.\n- Add internal retry for failed deliveries.\n- Prove browser-composed and accepted inbound club messages use this same handoff path.\n\nUI polish, exact operator display formatting, and advanced recovery from stale `dispatching` records can remain outside the slice.\n\n## Required plan edits\n\n1. None required.\n\n## Validation plan\n\nSuccess can be proven with focused automated tests plus `dev check`:\n\n1. `send_club_message/2` accepts and records a message without synchronously calling the email provider.\n2. `EmailDeliveryCreated` projects per-recipient records as `pending`.\n3. The supervised dispatcher starts, receives read-model-change nudges, claims pending deliveries as `dispatching`, and calls the provider outside aggregate/projector replay.\n4. Provider acceptance moves the delivery to `sent`.\n5. Provider failure moves only the affected delivery to `failed`, increments attempt count, and stores latest diagnostic detail.\n6. Partial recipient failure does not block dispatch for other recipients.\n7. Manual/internal retry of a failed delivery does not create duplicate message streams or duplicate `EmailDeliveryCreated` events and can move the record to `sent`.\n8. Accepted inbound club-message emails use the same async dispatch path.\n9. Existing provider/webhook statuses continue to work after provider acceptance.\n10. Member-facing surfaces avoid raw infrastructure failure details while staff/operator diagnostics can expose exact status/error where appropriate.\n11. `dev check` passes.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "claude_review_confidence": "High",
+          "codex_review_blocking_gaps": "None",
+          "command.output": "blob://sha256/97fcaee97d23e3ee8b9a062af6b2dfa6989f0bf9c8f6f169aedfffc2e542cb34",
+          "internal.retry_count.gemini_review": 0,
+          "plan_needs_fix": false,
+          "gemini_review_required_edits": "None",
+          "internal.node_visit_count": 1,
+          "current_node": "publish_ready",
+          "internal.fidelity": "summary:high",
+          "gemini_review_decision": "READY",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.publish_ready": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.thread_id": "synthesis_gate",
+          "plan_ready": true,
+          "gemini_review_blocking_gaps": "None",
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_blocking_gap_count": 0,
+          "plan_needs_human": false,
+          "claude_review_decision": "READY",
+          "failure_class": "",
+          "codex_review_confidence": "High",
           "outcome": "succeeded",
-          "codex_review_blocking_gaps": "None"
+          "graph.rankdir": "LR",
+          "claude_review_required_edits": "None",
+          "internal.work_dir": "/workspace/memba",
+          "codex_review_decision": "READY",
+          "internal.retry_count.synthesize": 0,
+          "codex_review_required_edits": "None",
+          "claude_review_blocking_gaps": "None",
+          "internal.run_id": "01KVG90SQJA2K924E60GFZ7B54",
+          "last_stage": "synthesize",
+          "failure_signature": "",
+          "internal.retry_count.claude_review": 0,
+          "claude_review_blocking_gap_count": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.codex_review": 0,
+          "gemini_review_confidence": "High",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        "
         },
         "node_outcomes": {
-          "claude_review": {
+          "start": {
             "status": "succeeded",
-            "context_updates": {
-              "claude_review_confidence": "High",
-              "last_stage": "claude_review",
-              "response.claude_review": "Now I'll review this plan against the five readiness questions and provide a structured assessment.\n\n---\n\n# Iteration 038 Plan Review: Async Email Delivery Dispatch\n\n**Decision**: READY\n\n**Confidence**: High\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-blocking Improvements\n\n1. **Database schema migration callout**: While implementation step 2 mentions updating the EmailDelivery projection/read model to store dispatch diagnostics, consider explicitly noting whether this requires a migration or schema change before starting work.\n\n2. **Concurrent dispatcher invocation**: Step 6 mentions claiming logic to avoid two dispatcher invocations claiming the same pending delivery concurrently, but doesn't specify the mechanism (optimistic locking, database-level constraint, GenServer serialization). This is resolvable during implementation but could be clearer upfront.\n\n3. **Partial delivery presentation**: Acceptance criteria mention that member-facing views should not expose raw infrastructure failure details, but don't specify what members *should* see when some recipients succeed and others are still pending/failed. This is a minor copy/UX decision that can be resolved during implementation.\n\n---\n\n## Assessment Against Readiness Questions\n\n### 1. Goal Clarity ✓\n- **Clear goal**: Make email delivery dispatch explicit, async, observable, and retryable without blocking user-facing commands on provider availability.\n- **User/business outcome**: Operators get observable dispatch lifecycle; users get reliable message acceptance even during provider outages.\n- **Beneficiary**: Operators (immediate observability/retry), users (indirect reliability).\n\n### 2. Scope Focus ✓\n- **Coherent outcome**: One clear architectural slice—moving provider dispatch out of command handlers into async dispatcher.\n- **Minimal useful slice**: Yes. Could not be smaller while remaining useful. Specifically excludes automatic retry, UI polish, event renaming, and broader application-service refactoring.\n- **Boundaries clear**: Extensive in-scope/out-of-scope lists. Deliberately leaves deprecated `opened` status, staff retry UI, automatic retry scheduling, and event vocabulary migration for later work.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n- **Concrete and testable**: 18 specific acceptance criteria covering happy paths (pending→dispatching→sent), error paths (failed deliveries with diagnostics), partial failures, manual retry, inbound messages, and test coverage requirements.\n- **Edge cases**: Covers provider failure, partial recipient failure, concurrent dispatch prevention, replay safety, manual retry without duplicate events.\n- **Iteration type classification**: Explicitly classified as \"Technical/engineering\" with clear rationale.\n- **BDD/Gherkin decision**: \"Not applicable\" with explicit reasoning—internal architectural slice with no new business rule. States that existing acceptance scenarios should continue to pass and that ExUnit tests will provide coverage.\n- **Business decisions resolved**: \"None known.\" No unresolved copy, workflow, or domain policy questions.\n\n### 4. Implementation Plan and Technical Decisions ✓\n- **Clear steps**: 14 ordered implementation steps from inspection through testing and `dev check`.\n- **Named artifacts**: Mentions specific modules (`Memba.Messaging.send_club_message/2`, `EmailDeliveryDispatcher`, `Memba.Messaging.Projectors.EmailDelivery`), infrastructure (`Memba.ReadModelChanges` PubSub topic), and test seams (fake/Postmark/Resend providers).\n- **Changes specified**: Data model (add dispatch diagnostics), API (remove synchronous provider calls), background processing (supervised dispatcher), integration (PubSub subscription).\n- **Technical decisions resolved**: \"None known.\" Plan explicitly lists the five previously-open design choices that are now decided.\n\n### 5. Expected Capability and Validation ✓\n- **New capability**: Observable async dispatch lifecycle with manual retry; provider outages become failed deliveries instead of misleading command errors.\n- **Stop condition**: Clear—when acceptance criteria pass, `dev check` passes, and manual inspection confirms async dispatch flow.\n- **Validation plan**: Four-part validation including targeted tests, `dev check`, manual local inspection, and simulated provider failure.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan already represents the smallest viable iteration. Any smaller slice would leave the system in an inconsistent state:\n\n- Can't implement async dispatch without removing synchronous provider calls from commands.\n- Can't make dispatch observable without the lifecycle states.\n- Can't make dispatch retryable without attempt tracking and manual retry API.\n\nThe exclusions (automatic retry, staff UI, event renaming) are appropriate deferrals.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Validation Plan\n\nThe stated validation plan is complete:\n\n1. **Targeted tests during implementation**: Send, projection, dispatcher, providers, retry, inbound acceptance\n2. **`dev check` before completion**: Required per project workflow\n3. **Manual local inspection**: Confirm pending→dispatching→sent flow with fake provider\n4. **Simulated failure testing**: Confirm failed deliveries, diagnostics, and manual retry\n\nThis provides adequate proof that:\n- The command succeeds without provider dependency\n- Dispatch lifecycle is truthful and observable\n- Provider failures are per-delivery with retry capability\n- Existing features continue working\n\n---\n\n## Conclusion\n\nThis is a well-scoped technical iteration with clear boundaries, concrete acceptance criteria, resolved decisions, and a practical implementation path. The plan acknowledges follow-up work (automatic retry, UI polish, stronger idempotency) without letting scope creep into this slice. The author has done excellent work preparing this for implementation.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-              "claude_review_blocking_gaps": "None",
-              "claude_review_decision": "READY",
-              "last_response": "Now I'll review this plan against the five readiness questions and provide a structured assessment.\n\n---\n\n# Iteration 038 Plan Review: Async Email Delivery Dispatch\n\n**Decision**: READY\n\n**Confidence*",
-              "claude_review_required_edits": "None",
-              "claude_review_blocking_gap_count": 0
-            },
-            "notes": "Stage completed: claude_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "anthropic",
-                    "model_id": "claude-sonnet-4-5"
-                  },
-                  "tokens": {
-                    "input_tokens": 5461,
-                    "output_tokens": 1527,
-                    "reasoning_tokens": 0,
-                    "cache_read_tokens": 4971,
-                    "cache_write_tokens": 6236
-                  }
-                },
-                "facts": {
-                  "algorithm": "anthropic",
-                  "cache_write_5m_tokens": 6236,
-                  "cache_write_1h_tokens": 0
-                }
-              },
-              "total_usd_micros": 64164
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 38791,
-              "tool_time_ms": 55,
-              "active_time_ms": 38846
-            }
-          },
-          "synthesize": {
-            "status": "succeeded",
-            "context_updates": {
-              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-              "last_stage": "synthesize",
-              "plan_ready": true,
-              "plan_needs_fix": false,
-              "plan_needs_human": false,
-              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
-            },
-            "notes": "Stage completed: synthesize",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 4911,
-                    "output_tokens": 33,
-                    "reasoning_tokens": 398,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 37485
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 9737,
-              "tool_time_ms": 0,
-              "active_time_ms": 9737
-            }
-          },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
             "usage": null
           },
           "gemini_review": {
@@ -1767,9 +1684,44 @@
               "active_time_ms": 23860
             }
           },
-          "start": {
+          "synthesize": {
             "status": "succeeded",
-            "usage": null
+            "context_updates": {
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "last_stage": "synthesize",
+              "plan_ready": true,
+              "plan_needs_fix": false,
+              "plan_needs_human": false,
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4911,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 398,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 37485
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 9737,
+              "tool_time_ms": 0,
+              "active_time_ms": 9737
+            }
           },
           "codex_review": {
             "status": "succeeded",
@@ -1812,6 +1764,11 @@
               "active_time_ms": 48388
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "publish_ready": {
             "status": "succeeded",
             "context_updates": {
@@ -1825,23 +1782,178 @@
               "tool_time_ms": 1976,
               "active_time_ms": 1976
             }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_confidence": "High",
+              "last_stage": "claude_review",
+              "response.claude_review": "Now I'll review this plan against the five readiness questions and provide a structured assessment.\n\n---\n\n# Iteration 038 Plan Review: Async Email Delivery Dispatch\n\n**Decision**: READY\n\n**Confidence**: High\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-blocking Improvements\n\n1. **Database schema migration callout**: While implementation step 2 mentions updating the EmailDelivery projection/read model to store dispatch diagnostics, consider explicitly noting whether this requires a migration or schema change before starting work.\n\n2. **Concurrent dispatcher invocation**: Step 6 mentions claiming logic to avoid two dispatcher invocations claiming the same pending delivery concurrently, but doesn't specify the mechanism (optimistic locking, database-level constraint, GenServer serialization). This is resolvable during implementation but could be clearer upfront.\n\n3. **Partial delivery presentation**: Acceptance criteria mention that member-facing views should not expose raw infrastructure failure details, but don't specify what members *should* see when some recipients succeed and others are still pending/failed. This is a minor copy/UX decision that can be resolved during implementation.\n\n---\n\n## Assessment Against Readiness Questions\n\n### 1. Goal Clarity ✓\n- **Clear goal**: Make email delivery dispatch explicit, async, observable, and retryable without blocking user-facing commands on provider availability.\n- **User/business outcome**: Operators get observable dispatch lifecycle; users get reliable message acceptance even during provider outages.\n- **Beneficiary**: Operators (immediate observability/retry), users (indirect reliability).\n\n### 2. Scope Focus ✓\n- **Coherent outcome**: One clear architectural slice—moving provider dispatch out of command handlers into async dispatcher.\n- **Minimal useful slice**: Yes. Could not be smaller while remaining useful. Specifically excludes automatic retry, UI polish, event renaming, and broader application-service refactoring.\n- **Boundaries clear**: Extensive in-scope/out-of-scope lists. Deliberately leaves deprecated `opened` status, staff retry UI, automatic retry scheduling, and event vocabulary migration for later work.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n- **Concrete and testable**: 18 specific acceptance criteria covering happy paths (pending→dispatching→sent), error paths (failed deliveries with diagnostics), partial failures, manual retry, inbound messages, and test coverage requirements.\n- **Edge cases**: Covers provider failure, partial recipient failure, concurrent dispatch prevention, replay safety, manual retry without duplicate events.\n- **Iteration type classification**: Explicitly classified as \"Technical/engineering\" with clear rationale.\n- **BDD/Gherkin decision**: \"Not applicable\" with explicit reasoning—internal architectural slice with no new business rule. States that existing acceptance scenarios should continue to pass and that ExUnit tests will provide coverage.\n- **Business decisions resolved**: \"None known.\" No unresolved copy, workflow, or domain policy questions.\n\n### 4. Implementation Plan and Technical Decisions ✓\n- **Clear steps**: 14 ordered implementation steps from inspection through testing and `dev check`.\n- **Named artifacts**: Mentions specific modules (`Memba.Messaging.send_club_message/2`, `EmailDeliveryDispatcher`, `Memba.Messaging.Projectors.EmailDelivery`), infrastructure (`Memba.ReadModelChanges` PubSub topic), and test seams (fake/Postmark/Resend providers).\n- **Changes specified**: Data model (add dispatch diagnostics), API (remove synchronous provider calls), background processing (supervised dispatcher), integration (PubSub subscription).\n- **Technical decisions resolved**: \"None known.\" Plan explicitly lists the five previously-open design choices that are now decided.\n\n### 5. Expected Capability and Validation ✓\n- **New capability**: Observable async dispatch lifecycle with manual retry; provider outages become failed deliveries instead of misleading command errors.\n- **Stop condition**: Clear—when acceptance criteria pass, `dev check` passes, and manual inspection confirms async dispatch flow.\n- **Validation plan**: Four-part validation including targeted tests, `dev check`, manual local inspection, and simulated provider failure.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan already represents the smallest viable iteration. Any smaller slice would leave the system in an inconsistent state:\n\n- Can't implement async dispatch without removing synchronous provider calls from commands.\n- Can't make dispatch observable without the lifecycle states.\n- Can't make dispatch retryable without attempt tracking and manual retry API.\n\nThe exclusions (automatic retry, staff UI, event renaming) are appropriate deferrals.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Validation Plan\n\nThe stated validation plan is complete:\n\n1. **Targeted tests during implementation**: Send, projection, dispatcher, providers, retry, inbound acceptance\n2. **`dev check` before completion**: Required per project workflow\n3. **Manual local inspection**: Confirm pending→dispatching→sent flow with fake provider\n4. **Simulated failure testing**: Confirm failed deliveries, diagnostics, and manual retry\n\nThis provides adequate proof that:\n- The command succeeds without provider dependency\n- Dispatch lifecycle is truthful and observable\n- Provider failures are per-delivery with retry capability\n- Existing features continue working\n\n---\n\n## Conclusion\n\nThis is a well-scoped technical iteration with clear boundaries, concrete acceptance criteria, resolved decisions, and a practical implementation path. The plan acknowledges follow-up work (automatic retry, UI polish, stronger idempotency) without letting scope creep into this slice. The author has done excellent work preparing this for implementation.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_decision": "READY",
+              "last_response": "Now I'll review this plan against the five readiness questions and provide a structured assessment.\n\n---\n\n# Iteration 038 Plan Review: Async Email Delivery Dispatch\n\n**Decision**: READY\n\n**Confidence*",
+              "claude_review_required_edits": "None",
+              "claude_review_blocking_gap_count": 0
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5461,
+                    "output_tokens": 1527,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4971,
+                    "cache_write_tokens": 6236
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6236,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 64164
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 38791,
+              "tool_time_ms": 55,
+              "active_time_ms": 38846
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "2438e6801d9bc882f1cc2b9a3b9f9df16b628c79",
         "node_visits": {
-          "publish_ready": 1,
-          "start": 1,
+          "synthesis_gate": 1,
           "codex_review": 1,
-          "claude_review": 1,
-          "synthesize": 1,
           "gemini_review": 1,
-          "synthesis_gate": 1
+          "claude_review": 1,
+          "start": 1,
+          "synthesize": 1,
+          "publish_ready": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/038-email-delivery-handoff-boundary/plan.md b/docs/iterations/038-email-delivery-handoff-boundary/plan.md\nindex e057310..c9f6c59 100644\n--- a/docs/iterations/038-email-delivery-handoff-boundary/plan.md\n+++ b/docs/iterations/038-email-delivery-handoff-boundary/plan.md\n@@ -1,7 +1,7 @@\n # Async email delivery dispatch\n \n Date: 2026-06-19\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex cc1dfab..9d13a7a 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -47,7 +47,7 @@ green than before.\n | 035 | 2026-06-17 | merged | Obliterate the deprecated \"opened\" delivery status | [plan](035-obliterate-opened-delivery-status/plan.md) |\n | 036 | 2026-06-17 | merged | Design-system catch-up: member management & auth check-email | [plan](036-ds-catchup-member-management-and-auth/plan.md) |\n | 037 | 2026-06-17 | merged | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |\n-| 038 | 2026-06-19 | ready | Async email delivery dispatch | [plan](038-email-delivery-handoff-boundary/plan.md) |\n+| 038 | 2026-06-19 | validated | Async email delivery dispatch | [plan](038-email-delivery-handoff-boundary/plan.md) |\n | 039 | 2026-06-19 | validated | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |\n | 040 | 2026-06-19 | draft | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |\n | 041 | 2026-06-19 | draft | Reply by email | [plan](041-reply-by-email-threading/plan.md) |\n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-19T15:49:30.100991097Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 145169,
+      "inference_time_ms": 120686,
+      "tool_time_ms": 2121,
+      "active_time_ms": 122807
+    },
+    "final_git_commit_sha": "2438e6801d9bc882f1cc2b9a3b9f9df16b628c79",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 24509,
+          "inference_time_ms": 23815,
+          "tool_time_ms": 45,
+          "active_time_ms": 23860
+        },
+        "billing_usd_micros": 89700,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 39180,
+          "inference_time_ms": 38791,
+          "tool_time_ms": 55,
+          "active_time_ms": 38846
+        },
+        "billing_usd_micros": 64164,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 48727,
+          "inference_time_ms": 48343,
+          "tool_time_ms": 45,
+          "active_time_ms": 48388
+        },
+        "billing_usd_micros": 119940,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 9777,
+          "inference_time_ms": 9737,
+          "tool_time_ms": 0,
+          "active_time_ms": 9737
+        },
+        "billing_usd_micros": 37485,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1990,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1976,
+          "active_time_ms": 1976
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 32362,
+      "output_tokens": 2857,
+      "total_tokens": 48850,
+      "reasoning_tokens": 2424,
+      "cache_read_tokens": 4971,
+      "cache_write_tokens": 6236,
+      "total_usd_micros": 311289
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -2189,7 +2301,12 @@
       "first_event_seq": 105,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/038-email-delivery-handoff-boundary/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-19T15:49:26.657685368Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -2197,11 +2314,27 @@
         "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/038-email-delivery-handoff-boundary/plan.md'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/97fcaee97d23e3ee8b9a062af6b2dfa6989f0bf9c8f6f169aedfffc2e542cb34",
+        "exit_code": 0,
+        "duration_ms": 1976,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-19T15:49:24.667001236Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1990,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1976,
+        "active_time_ms": 1976
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -2210,7 +2343,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "codex_review@1": {
       "first_event_seq": 65,
@@ -2421,6 +2554,40 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 115,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-19T15:49:30.051005889Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-19T15:49:30.050989666Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     },
