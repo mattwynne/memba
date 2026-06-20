@@ -1,0 +1,162 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index e4da435..dd79b31 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current outbound send paths and tests:
+-- [ ] 002 Update the `EmailDelivery` projection/read model so newly created records start with status `pending` and can store dispatch diagnostics such as attempt count, latest error/detail, and useful timestamps.
++- [x] 002 Update the `EmailDelivery` projection/read model so newly created records start with status `pending` and can store dispatch diagnostics such as attempt count, latest error/detail, and useful timestamps.
+ - [ ] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
+ - [ ] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
+ - [ ] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
+diff --git a/web/lib/memba/messaging/projections/email_delivery.ex b/web/lib/memba/messaging/projections/email_delivery.ex
+index eb67869..741b97e 100644
+--- a/web/lib/memba/messaging/projections/email_delivery.ex
++++ b/web/lib/memba/messaging/projections/email_delivery.ex
+@@ -13,6 +13,12 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
+     field :recipient_address, :string
+     field :channel, :string
+     field :status, :string
++    field :attempt_count, :integer, default: 0
++    field :latest_error, :string
++    field :latest_detail, :string
++    field :last_dispatch_attempted_at, :utc_datetime_usec
++    field :sent_at, :utc_datetime_usec
++    field :failed_at, :utc_datetime_usec
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/lib/memba/messaging/projectors/email_delivery.ex b/web/lib/memba/messaging/projectors/email_delivery.ex
+index 99e8a8b..e6285dd 100644
+--- a/web/lib/memba/messaging/projectors/email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/email_delivery.ex
+@@ -20,7 +20,8 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
+       recipient_name: event.recipient_name,
+       recipient_address: event.recipient_email,
+       channel: "email",
+-      status: "sent"
++      status: "pending",
++      attempt_count: 0
+     })
+   end)
+ 
+diff --git a/web/priv/repo/migrations/20260620065515_add_dispatch_diagnostics_to_messaging_email_deliveries.exs b/web/priv/repo/migrations/20260620065515_add_dispatch_diagnostics_to_messaging_email_deliveries.exs
+new file mode 100644
+index 0000000..0cecdca
+--- /dev/null
++++ b/web/priv/repo/migrations/20260620065515_add_dispatch_diagnostics_to_messaging_email_deliveries.exs
+@@ -0,0 +1,14 @@
++defmodule Memba.Repo.Migrations.AddDispatchDiagnosticsToMessagingEmailDeliveries do
++  use Ecto.Migration
++
++  def change do
++    alter table(:messaging_email_deliveries) do
++      add :attempt_count, :integer, null: false, default: 0
++      add :latest_error, :text
++      add :latest_detail, :text
++      add :last_dispatch_attempted_at, :utc_datetime_usec
++      add :sent_at, :utc_datetime_usec
++      add :failed_at, :utc_datetime_usec
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index cf7d80b..47a9ec1 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -92,7 +92,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+                recipient_name: "Alice Example",
+                recipient_address: "alice@example.com",
+                channel: "email",
+-               status: "sent"
++               status: "pending",
++               attempt_count: 0,
++               latest_error: nil,
++               latest_detail: nil,
++               last_dispatch_attempted_at: nil,
++               sent_at: nil,
++               failed_at: nil
+              },
+              %{
+                message_id: ^message_id,
+@@ -100,7 +106,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+                recipient_name: "Bob Example",
+                recipient_address: "bob@example.com",
+                channel: "email",
+-               status: "sent"
++               status: "pending",
++               attempt_count: 0,
++               latest_error: nil,
++               latest_detail: nil,
++               last_dispatch_attempted_at: nil,
++               sent_at: nil,
++               failed_at: nil
+              }
+            ] = Messaging.list_recipient_deliveries(message_id)
+ 
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index 959554d..ae571da 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -61,7 +61,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
+                recipient_name: "Alice",
+                recipient_address: "alice@example.com",
+                channel: "email",
+-               status: "sent"
++               status: "pending",
++               attempt_count: 0,
++               latest_error: nil,
++               latest_detail: nil,
++               last_dispatch_attempted_at: nil,
++               sent_at: nil,
++               failed_at: nil
+              },
+              %EmailDeliveryProjection{
+                delivery_id: ^bob_delivery_id,
+@@ -70,7 +76,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
+                recipient_name: "Bob",
+                recipient_address: "bob@example.com",
+                channel: "email",
+-               status: "sent"
++               status: "pending",
++               attempt_count: 0,
++               latest_error: nil,
++               latest_detail: nil,
++               last_dispatch_attempted_at: nil,
++               sent_at: nil,
++               failed_at: nil
+              }
+            ] = Messaging.list_recipient_deliveries(message_id)
+ 
+diff --git a/web/test/memba_web/live/admin_diagnostics_live_test.exs b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+index 5673674..ec42af7 100644
+--- a/web/test/memba_web/live/admin_diagnostics_live_test.exs
++++ b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+@@ -57,10 +57,10 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+ 
+     assert_selector_exists(
+       html,
+-      "#delivery-status-#{bob.delivery_id}[data-delivery-status='sent']"
++      "#delivery-status-#{bob.delivery_id}[data-delivery-status='pending']"
+     )
+ 
+-    assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "sent")
++    assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "pending")
+     assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
+     assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
+ 
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index f3eb640..17e2698 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -81,7 +81,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+       "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
+     )
+     |> assert_has(
+-      "#delivery-records [data-testid='delivery-status'][data-delivery-status='sent']"
++      "#delivery-records [data-testid='delivery-status'][data-delivery-status='pending']"
+     )
+     |> assert_has("#member-receipts[aria-label='Member email delivery statuses']")
+     |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
