@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T06:43:04.736514229Z",
-  "last_event_at": "2026-06-20T07:41:21.043671539Z",
+  "last_event_at": "2026-06-20T07:41:44.422377787Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -13508,8 +13508,8 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-20T07:41:42.807140539Z",
-        "current_node": "validate_task",
+        "timestamp": "2026-06-20T07:41:46.109609754Z",
+        "current_node": "task_gate",
         "completed_nodes": [
           "start",
           "read_plan",
@@ -13556,7 +13556,8 @@
           "all_tasks_done",
           "implement_next_task",
           "pre_validate_snapshot",
-          "validate_task"
+          "validate_task",
+          "task_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -13580,7 +13581,7 @@
           "internal.work_dir": "/workspace/memba",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 006 Implement claiming logic that moves a pending delivery to dispatching before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.`\n\n2. **Changes made**\n   - Added DB-backed claiming to `Memba.Messaging.EmailDeliveryDispatcher`:\n     - `claim_pending_delivery/1` atomically updates a delivery from `pending` to `dispatching` using a conditional `Repo.update_all/2`.\n     - Sets `last_dispatch_attempted_at` and `updated_at` on successful claim.\n     - Returns `:not_claimed` for non-pending/nonexistent/invalid IDs.\n     - `claim_pending_email_deliveries/0` lists pending delivery IDs and claims each with the atomic single-row claim.\n   - Updated dispatcher nudge handling to claim pending deliveries when dispatch is enabled.\n   - Added `dispatch_enabled` option for the dispatcher.\n   - Updated application supervision to pass dispatcher config.\n   - Disabled app-level dispatcher DB claiming in `config/test.exs` so ordinary tests avoid SQL sandbox ownership races; focused dispatcher tests opt in with their own supervised dispatcher.\n   - Expanded `email_delivery_dispatcher_test.exs` to cover:\n     - read-model-change nudge claims pending delivery,\n     - dispatch-disabled mode leaves pending delivery alone,\n     - single pending claim,\n     - non-pending delivery not claimed,\n     - concurrent claim attempts allow only one winner,\n     - batch claiming skips already-claimed work.\n\n3. **Focused validation commands run**\n   - Formatting check:\n     - `cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix format --check-formatted lib/memba/messaging/email_delivery_dispatcher.ex lib/memba/application.ex config/test.exs test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Passed.\n   - Focused dispatcher tests:\n     - Initial plain run failed due stale `PGHOST=/tmp/devenv/postgres` while Postgres started at `/tmp/devenv-*`.\n     - Rerun:\n       - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs'`\n       - Passed: `7 tests, 0 failures`.\n   - Affected supervision/projection/status tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/app_test.exs test/memba/messaging/message_projection_test.exs test/memba/messaging/email_delivery_status_constraints_test.exs'`\n     - Passed: `9 tests, 0 failures`.\n   - Broad quick check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check --quick'`\n     - Passed: `809 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Implement claiming logic that moves a pending delivery to dispatching before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.`\n   - To:\n     - `- [x] 006 Implement claiming logic that moves a pending delivery to dispatching before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: claiming is outside aggregate command handling and does not add provider side effects to commands.\n   - ADR 0009: projections remain projection-only; claiming updates the read model from the dispatcher, not during projector replay.\n   - ADR 0016: no provider selection/adapter behavior changed.\n   - ADR 0021: dispatcher still reacts to committed read-model-change PubSub nudges.\n   - ADR 0022: did not use projection barriers or conflate them with read-model-change notifications.",
           "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "internal.retry_count.start": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - Current HEAD is a pre-validation checkpoint; the relevant implementation checkpoint is recent commit `8025b72 fabro(...): implement_next_task (succeeded)`.\n  - `git diff 8025b72^ 8025b72 -- docs/iterations/038-email-delivery-handoff-boundary/todo.md` shows exactly one ordinary task changed:\n    - `006 Implement claiming logic...` from `- [ ]` to `- [x]`.\n  - The pre-implementation todo state at `8025b72^` had tasks 001–005 checked and task 006 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n    - Adds `claim_pending_delivery/1`.\n    - Uses a conditional `Repo.update_all` where `delivery_id` matches and `status == \"pending\"` to atomically move a delivery to `\"dispatching\"`.\n    - Sets `last_dispatch_attempted_at` and `updated_at` on claim.\n    - Returns `:not_claimed` for invalid/non-pending/nonexistent IDs.\n    - Adds `claim_pending_email_deliveries/0` to claim pending records in stable order while still relying on the single-row atomic claim.\n    - Dispatcher nudge handling now claims pending deliveries when `dispatch_enabled` is true.\n  - `web/lib/memba/application.ex`\n    - Wires dispatcher `dispatch_enabled` option from config.\n  - `web/config/test.exs`\n    - Disables app-level dispatcher claiming during general tests to avoid sandbox races.\n  - `web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n    - Adds coverage for nudge-driven claiming, dispatch-disabled mode, single claim, non-pending skip, concurrent claim race, and batch claiming.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs'`\n    - Passed: `7 tests, 0 failures`.\n  - Live whitespace validation:\n    - `git diff --check 8025b72^ 8025b72`\n    - Passed.\n  - Implementor summary also reports focused related tests and `dev check --quick` passed.\n\n- ADR/plan conformance notes:\n  - Matches implementation-plan task 006 and does not check off later provider-call, success/failure transition, retry, inbound-flow, UI, or final `dev check` tasks.\n  - Uses the existing `EmailDelivery` projection/read model as the async work record, as required by the plan.\n  - Keeps claiming outside aggregate command handling and projector replay paths, consistent with CQRS/event-sourcing guidance and ADR 0002/0009.\n  - Continues to use the committed read-model-change PubSub nudge boundary from ADR 0021.\n  - Does not misuse projection barriers or conflate them with read-model-change notifications, preserving ADR 0022’s distinction.\n  - Does not introduce acceptance feature edits without plan permission.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "task_valid": true,
@@ -13592,7 +13593,7 @@
           "internal.retry_count.read_plan": 0,
           "outcome": "succeeded",
           "failure_class": "",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "thread.todo_readable.current_node": "all_tasks_done",
           "thread.sync_task_list.current_node": "todo_readable",
           "command.output": "blob://sha256/5605f93d6aa0ba546dec67364e681fe3d9f022757c139caf1ae45241bfc85591",
@@ -13803,7 +13804,7 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "start": 1,
           "implement_next_task": 6,
@@ -13816,7 +13817,7 @@
           "validate_task": 6,
           "preflight_sandbox": 1,
           "wip_gate": 1,
-          "task_gate": 5
+          "task_gate": 6
         }
       },
       "diff": {}
@@ -16843,7 +16844,12 @@
       "first_event_seq": 2071,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:41:42.798890745Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -16857,13 +16863,20 @@
       "output": null,
       "started_at": "2026-06-20T07:39:54.483997369Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 108314,
+        "inference_time_ms": 102741,
+        "tool_time_ms": 5188,
+        "active_time_ms": 107929
+      },
       "usage": {
-        "input_tokens": 266022,
-        "output_tokens": 2156,
-        "total_tokens": 489768,
-        "reasoning_tokens": 918,
-        "cache_read_tokens": 220672,
-        "cache_write_tokens": 0
+        "input_tokens": 269501,
+        "output_tokens": 2857,
+        "total_tokens": 546090,
+        "reasoning_tokens": 1348,
+        "cache_read_tokens": 272384,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1609847
       },
       "model": {
         "provider": "openai",
@@ -17002,32 +17015,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 52249,
-        "usage_percent": 19.20919117647059,
+        "input_tokens": 55191,
+        "usage_percent": 20.29080882352941,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-20T07:41:20.883160849Z",
-        "event_seq": 2162,
+        "generated_at": "2026-06-20T07:41:42.797333768Z",
+        "event_seq": 2172,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1088,
-            "usage_percent": 0.4
+            "tokens": 1079,
+            "usage_percent": 0.3966911764705882
           },
           {
             "category": "tools",
-            "tokens": 1548,
-            "usage_percent": 0.5691176470588235
+            "tokens": 1535,
+            "usage_percent": 0.5643382352941176
           },
           {
             "category": "memory",
-            "tokens": 416,
-            "usage_percent": 0.15294117647058825
+            "tokens": 412,
+            "usage_percent": 0.1514705882352941
           },
           {
             "category": "conversation",
-            "tokens": 49191,
-            "usage_percent": 18.084926470588236
+            "tokens": 52159,
+            "usage_percent": 19.17610294117647
           },
           {
             "category": "other",
@@ -17037,7 +17050,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@4": {
       "first_event_seq": 1437,
