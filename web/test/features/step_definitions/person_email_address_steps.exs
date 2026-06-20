@@ -5,6 +5,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
   step "Alice's primary email address is {string}", %{args: [primary_email]} = context do
@@ -70,12 +71,16 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
 
   step "{word} should receive the email at {string}",
        %{args: [_person_name, expected_email]} = context do
+    dispatch_pending_email_deliveries()
+
     assert Enum.any?(Fake.deliveries(), &same_email?(&1.recipient_address, expected_email))
     context
   end
 
   step "{word} should not receive the email at {string}",
        %{args: [_person_name, unexpected_email]} = context do
+    dispatch_pending_email_deliveries()
+
     refute Enum.any?(Fake.deliveries(), &same_email?(&1.recipient_address, unexpected_email))
     context
   end
@@ -263,5 +268,10 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
       end)
 
     Map.put(context, collection_key, collection)
+  end
+
+  defp dispatch_pending_email_deliveries do
+    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    :ok
   end
 end

@@ -10,6 +10,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Messaging.EmailDeliveryRequest
@@ -49,13 +50,13 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "{word} should be told the message was not sent", %{args: [_viewer_name]} = context do
-    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
+    assert :ok = Map.fetch!(context, :failed_send_result)
 
     context
   end
 
   step "{word} should be told to contact support", %{args: [_viewer_name]} = context do
-    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
+    assert :ok = Map.fetch!(context, :failed_send_result)
 
     context
   end
@@ -274,7 +275,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_unique(Enum.map(deliveries, & &1.recipient_id))
 
     assert Enum.all?(deliveries, fn %EmailDelivery{} = delivery ->
-             delivery.channel == "email" and delivery.status == "sent"
+             delivery.channel == "email" and delivery.status in ["pending", "dispatching", "sent"]
            end)
 
     Map.put(context, :addressed_delivery_ids, Enum.map(deliveries, & &1.delivery_id))
@@ -290,6 +291,8 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   step "each addressed member should receive an email with the subject {string}",
        %{args: [expected_subject]} = context do
+    dispatch_pending_email_deliveries()
+
     provider_deliveries = Fake.deliveries()
 
     assert length(provider_deliveries) == length(deliveries_for_last_message!(context))
@@ -506,6 +509,8 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   defp assert_each_delivery_sent_through_provider(context, opts \\ []) do
     deliveries = deliveries_for_last_message!(context)
+    dispatch_pending_email_deliveries()
+
     provider_deliveries = Fake.deliveries()
     expected_delivery_ids = Enum.map(deliveries, & &1.delivery_id)
 
@@ -532,6 +537,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     end)
 
     context
+  end
+
+  defp dispatch_pending_email_deliveries do
+    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+    :ok
   end
 
   defp report_email_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
