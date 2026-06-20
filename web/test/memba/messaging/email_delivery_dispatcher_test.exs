@@ -3,6 +3,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.SelectiveFailure
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -350,6 +351,83 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                sent_at: nil,
                failed_at: ^failed_at
              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+    end
+
+    test "continues dispatching other deliveries when one recipient fails" do
+      start_supervised!(SelectiveFailure)
+      SelectiveFailure.reset()
+      SelectiveFailure.fail_addresses(["failing.member@example.test"])
+      Application.put_env(:memba, :messaging_email_delivery_provider, SelectiveFailure)
+
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kootenay-mountaineering-club"
+        )
+
+      sender =
+        insert_membership_person!(
+          name: "Alice Sender",
+          email: "alice.sender@example.com"
+        )
+
+      message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: sender.person_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas."
+        )
+
+      failing_delivery =
+        insert_email_delivery!(
+          message_id: message.message_id,
+          recipient_name: "Failing Member",
+          recipient_address: "failing.member@example.test",
+          status: "pending"
+        )
+
+      successful_delivery =
+        insert_email_delivery!(
+          message_id: message.message_id,
+          recipient_name: "Successful Member",
+          recipient_address: "successful.member@example.test",
+          status: "pending"
+        )
+
+      assert [
+               %EmailDeliveryProjection{
+                 delivery_id: failing_delivery_id,
+                 status: "failed",
+                 attempt_count: 1,
+                 latest_error: "selective_failure",
+                 latest_detail: latest_detail,
+                 failed_at: %DateTime{}
+               },
+               %EmailDeliveryProjection{
+                 delivery_id: successful_delivery_id,
+                 status: "sent",
+                 attempt_count: 0,
+                 latest_error: nil,
+                 latest_detail: nil,
+                 sent_at: %DateTime{}
+               }
+             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert failing_delivery_id == failing_delivery.delivery_id
+      assert successful_delivery_id == successful_delivery.delivery_id
+      assert latest_detail =~ "failing.member@example.test"
+
+      assert [
+               %EmailDeliveryRequest{recipient_address: "failing.member@example.test"},
+               %EmailDeliveryRequest{recipient_address: "successful.member@example.test"}
+             ] = SelectiveFailure.deliveries()
+
+      assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
+               Repo.get!(EmailDeliveryProjection, failing_delivery.delivery_id)
+
+      assert %EmailDeliveryProjection{status: "sent", attempt_count: 0} =
+               Repo.get!(EmailDeliveryProjection, successful_delivery.delivery_id)
     end
   end
 
