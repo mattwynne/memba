@@ -3,8 +3,6 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
   import Phoenix.LiveViewTest
 
-  import ExUnit.CaptureLog
-
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -62,12 +60,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
 
-    assert [
-             %{message_id: message_id, club_id: ^club_id, recipient_id: ^alice_recipient_id},
-             %{message_id: message_id, club_id: ^club_id, recipient_id: ^bob_recipient_id}
-           ] = Fake.deliveries()
+    delivery_statuses =
+      message.message_id
+      |> Messaging.list_recipient_deliveries()
+      |> Enum.map(& &1.status)
 
-    assert message_id == message.message_id
+    assert length(delivery_statuses) == 2
+    assert Enum.all?(delivery_statuses, &(&1 in ["pending", "dispatching", "sent"]))
 
     assert has_element?(
              view,
@@ -129,75 +128,56 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert Fake.deliveries() == []
   end
 
-  test "send failure renders an incident state with support guidance and retry actions", %{
+  test "provider failure still accepts the message and renders the success state", %{
     conn: conn
   } do
     Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
     club_id = Memba.ID.generate(:club)
-    _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
-    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", %{club_id: club_id})
       |> live(~p"/messages/new")
 
-    log =
-      capture_log(fn ->
-        view
-        |> element("#member-message-compose-form")
-        |> render_submit(%{
-          "message" => %{
-            "subject" => "Trail notice",
-            "body" => "The bridge is out."
-          }
-        })
-      end)
-
-    assert log =~ "Member message send failed"
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Trail notice",
+        "body" => "The bridge is out."
+      }
+    })
 
     assert has_element?(
              view,
-             "#member-message-compose[data-compose-state='send_failed']"
+             "#member-message-compose[data-compose-state='sent']"
            )
 
-    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
-
-    assert has_element?(
-             view,
-             "#member-compose-error-summary",
-             "No one received this message."
-           )
-
-    assert has_element?(
-             view,
-             "#member-compose-error-summary",
-             "ask a group organizer to contact Memba"
-           )
-
-    assert has_element?(
-             view,
-             "button#member-compose-try-again-button.btn.btn-primary.btn-lg[type='button']",
-             "Try again"
-           )
-
-    assert has_element?(
-             view,
-             "#member-compose-back-home-after-error-link.btn.btn-soft.btn-lg[href='/']",
-             "Back to club home"
-           )
-
-    refute has_element?(view, "#member-compose-success-state")
+    assert has_element?(view, "#member-compose-success-state", "Your message is being sent.")
+    refute has_element?(view, "#member-compose-error-state")
     refute has_element?(view, "#member-message-compose-form")
 
-    view
-    |> element("#member-compose-try-again-button")
-    |> render_click()
+    assert [message] = Messaging.list_messages_for_club(club_id)
 
-    assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
-    assert has_element?(view, "#member-message-compose-form")
-    refute has_element?(view, "#member-compose-error-state")
+    assert [
+             %{recipient_id: alice_recipient_id, status: "sent"},
+             %{recipient_id: bob_recipient_id, status: "sent"}
+           ] = Messaging.list_member_email_deliverys(message.message_id)
+
+    assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
+
+    delivery_statuses =
+      message.message_id
+      |> Messaging.list_recipient_deliveries()
+      |> Enum.map(& &1.status)
+
+    assert length(delivery_statuses) == 2
+    assert Enum.all?(delivery_statuses, &(&1 in ["pending", "dispatching", "failed"]))
+
+    assert Fake.deliveries() == []
   end
 
   defp signed_in_club_host(conn, email, club) do

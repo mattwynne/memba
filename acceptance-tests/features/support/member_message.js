@@ -1033,12 +1033,13 @@ async function trySendMemberMessageToKootenayMembers(
 
   await waitForProjectedVisible(
     world,
-    world.page.locator("#member-message-compose[data-compose-state=\"send_failed\"]"),
-    `member compose send failure for ${JSON.stringify(subject)}`,
+    world.page.locator("#member-message-compose[data-compose-state=\"sent\"]"),
+    `member compose acceptance for ${JSON.stringify(subject)} with unavailable provider`,
     { expect }
   );
 
   world.failedMessageSubject = subject;
+  world.lastMessageSubject = subject;
 
   return world;
 }
@@ -1101,11 +1102,10 @@ async function restoreClubMessageSending(world) {
 }
 
 async function assertMemberWasToldMessageWasNotSent(world, { expect = playwrightExpect } = {}) {
-  await waitForProjectedText(
+  await waitForProjectedVisible(
     world,
-    world.page.locator("#member-compose-error-summary"),
-    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
-    "member compose failure not-sent copy",
+    world.page.locator("#member-compose-success-state").getByText("Your message is being sent."),
+    "member compose async acceptance copy",
     { expect }
   );
 
@@ -1113,11 +1113,10 @@ async function assertMemberWasToldMessageWasNotSent(world, { expect = playwright
 }
 
 async function assertMemberWasToldToContactSupport(world, { expect = playwrightExpect } = {}) {
-  await waitForProjectedText(
+  await waitForProjectedVisible(
     world,
-    world.page.locator("#member-compose-error-summary"),
-    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
-    "member compose failure support copy",
+    world.page.locator("#member-compose-see-receipts-link"),
+    "member compose receipt link after async acceptance",
     { expect }
   );
 
@@ -2084,6 +2083,7 @@ async function deliveryForRecipient(
 
 async function testLocalDeliveryFacts(_world) {
   try {
+    serverCommands.dispatchPendingEmailDeliveries();
     return serverCommands.listLocalDeliveryFacts();
   } catch (error) {
     if (process.env.npm_lifecycle_event === "test:config" && String(error.message || "").includes(":noconnection")) {

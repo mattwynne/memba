@@ -379,6 +379,21 @@ Memba.Messaging.LocalDeliveryFacts.list()
   );
 }
 
+function dispatchPendingEmailDeliveries() {
+  return runCommand(
+    `
+Memba.Messaging.EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+|> Enum.map(fn delivery ->
+  %{
+    deliveryId: delivery.delivery_id,
+    status: delivery.status
+  }
+end)
+`,
+    {}
+  );
+}
+
 function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
   return runCommand(
     `
@@ -493,6 +508,7 @@ function shortHostname() {
 
 module.exports = {
   acceptanceServerNode,
+  dispatchPendingEmailDeliveries,
   ensureClub,
   ensureClubSlug,
   ensureMember,
