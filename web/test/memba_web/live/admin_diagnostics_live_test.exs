@@ -4,7 +4,9 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
+  alias Memba.Repo
 
   test "Memba staff message detail keeps diagnostic sections and raw status values", %{conn: conn} do
     %{message_id: message_id, recipients: [alice, bob]} =
@@ -61,8 +63,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     )
 
     assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "pending")
-    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
-    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
+    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f3ecd8]")
+    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#7a5416]")
 
     assert_selector_exists(
       html,
@@ -126,6 +128,102 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     refute response =~ "Delivery problem"
   end
 
+  test "Memba staff diagnostics show exact async dispatch status and latest error", %{conn: conn} do
+    %{message_id: message_id, recipients: [recipient]} =
+      send_projected_message_with_recipients(["Dana"], subject: "Dispatch diagnostics")
+
+    dispatch_detail = "{:postmark_delivery_error, :unavailable}"
+
+    recipient.delivery_id
+    |> failed_delivery_changeset(%{
+      status: "failed",
+      attempt_count: 2,
+      latest_error: "postmark_delivery_error",
+      latest_detail: dispatch_detail
+    })
+    |> Repo.update!()
+
+    message_response =
+      conn
+      |> sign_in_staff()
+      |> get("/admin/messages/#{message_id}")
+      |> html_response(200)
+
+    message_html = LazyHTML.from_fragment(message_response)
+
+    assert_selector_exists(
+      message_html,
+      "#delivery-status-#{recipient.delivery_id}[data-delivery-status='failed']"
+    )
+
+    assert_exact_text(message_html, "#delivery-status-#{recipient.delivery_id}", "failed")
+    assert_class(message_html, "#delivery-status-#{recipient.delivery_id}", "bg-[#f6e0c9]")
+
+    assert_exact_text(
+      message_html,
+      "#delivery-attempt-count-#{recipient.delivery_id}",
+      "Attempts: 2"
+    )
+
+    assert_exact_text(
+      message_html,
+      "#delivery-latest-error-#{recipient.delivery_id}",
+      "Error: postmark_delivery_error"
+    )
+
+    assert_exact_text(
+      message_html,
+      "#delivery-latest-detail-#{recipient.delivery_id}",
+      "Detail: #{dispatch_detail}"
+    )
+
+    assert_selector_exists(
+      message_html,
+      "#receipt-status-#{recipient.delivery_id}[data-receipt-status='sent']"
+    )
+
+    overview_response =
+      conn
+      |> recycle()
+      |> sign_in_staff()
+      |> get("/admin/deliveries")
+      |> html_response(200)
+
+    overview_html = LazyHTML.from_fragment(overview_response)
+    row_selector = "[data-test-id='delivery-row-#{recipient.delivery_id}']"
+
+    assert_selector_exists(
+      overview_html,
+      "#{row_selector}[data-delivery-status='sent']"
+    )
+
+    assert_exact_text(overview_html, "#{row_selector} [data-test-id='delivery-status']", "sent")
+
+    assert_exact_text(
+      overview_html,
+      "#{row_selector} [data-test-id='delivery-dispatch-status']",
+      "failed"
+    )
+
+    assert_exact_text(
+      overview_html,
+      "#{row_selector} [data-test-id='delivery-dispatch-attempts']",
+      "attempts: 2"
+    )
+
+    assert_exact_text(
+      overview_html,
+      "#{row_selector} [data-test-id='delivery-dispatch-error']",
+      "error: postmark_delivery_error"
+    )
+
+    assert_exact_text(
+      overview_html,
+      "#{row_selector} [data-test-id='delivery-dispatch-detail']",
+      "detail: #{dispatch_detail}"
+    )
+  end
+
   defp send_projected_message_with_recipients(names, opts \\ []) do
     [sender | _rest] =
       recipients =
@@ -180,6 +278,12 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     assert expected_class in classes,
            "Expected #{selector} to include class #{expected_class}; got #{inspect(classes)}"
+  end
+
+  defp failed_delivery_changeset(delivery_id, attrs) do
+    EmailDeliveryProjection
+    |> Repo.get!(delivery_id)
+    |> Ecto.Changeset.change(attrs)
   end
 
   defp email_for(name) do

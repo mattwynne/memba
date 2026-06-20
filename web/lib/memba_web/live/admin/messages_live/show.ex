@@ -205,7 +205,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
                 aria-label={"Email delivery for #{delivery.recipient_name}"}
-                class="grid gap-3 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)]"
+                class="grid gap-3 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)]"
               >
                 <p class="font-medium text-[#15201c]">{delivery.recipient_name}</p>
                 <p class="text-sm text-[#4b5a55]">{delivery.recipient_address}</p>
@@ -222,6 +222,34 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 >
                   {delivery.status}
                 </p>
+                <div
+                  id={"delivery-dispatch-diagnostics-#{delivery.delivery_id}"}
+                  data-testid="delivery-dispatch-diagnostics"
+                  class="space-y-1 text-xs text-[#4b5a55]"
+                >
+                  <p
+                    id={"delivery-attempt-count-#{delivery.delivery_id}"}
+                    data-testid="delivery-attempt-count"
+                  >
+                    Attempts: {delivery.attempt_count || 0}
+                  </p>
+                  <p
+                    :if={present?(delivery.latest_error)}
+                    id={"delivery-latest-error-#{delivery.delivery_id}"}
+                    data-testid="delivery-latest-error"
+                    class="font-mono text-[#8a3d21]"
+                  >
+                    Error: {delivery.latest_error}
+                  </p>
+                  <p
+                    :if={present?(delivery.latest_detail)}
+                    id={"delivery-latest-detail-#{delivery.delivery_id}"}
+                    data-testid="delivery-latest-detail"
+                    class="font-mono"
+                  >
+                    Detail: {delivery.latest_detail}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -298,6 +326,10 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   defp subject_label(subject) when is_binary(subject) and subject != "", do: subject
   defp subject_label(_subject), do: "Untitled message"
 
+  defp delivery_status_class("pending"), do: "bg-[#f3ecd8] text-[#7a5416]"
+  defp delivery_status_class("dispatching"), do: "bg-[#f3ecd8] text-[#7a5416]"
+  defp delivery_status_class("failed"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+  defp delivery_status_class("sent"), do: "bg-[#e6ece4] text-[#1f4842]"
   defp delivery_status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"
   defp delivery_status_class("bounced"), do: "bg-[#f6e0c9] text-[#8a3d21]"
   defp delivery_status_class("spam complaint"), do: "bg-[#f6e0c9] text-[#8a3d21]"
@@ -307,4 +339,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   defp receipt_status_class("delivery problem"), do: "bg-[#f6e0c9] text-[#8a3d21]"
   defp receipt_status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
   defp receipt_status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
+
+  defp present?(value) when is_binary(value), do: value != ""
+  defp present?(_value), do: false
 end
