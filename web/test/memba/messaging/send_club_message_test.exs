@@ -9,14 +9,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
-  alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
+    dispatcher_was_running? = stop_email_delivery_dispatcher()
 
     Fake.reset()
 
@@ -25,12 +26,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       Fake.reset()
+      restart_email_delivery_dispatcher(dispatcher_was_running?)
     end)
 
     :ok
   end
 
-  test "resolves active club members via Membership and dispatches SendMessage" do
+  test "resolves active club members via Membership and records pending delivery work without provider handoff" do
     kootenay_club_id = Memba.ID.generate(:club)
     nelson_club_id = Memba.ID.generate(:club)
 
@@ -104,47 +106,38 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Enum.all?(delivery_ids, &Memba.ID.valid?(:delivery, &1))
     assert Enum.uniq(delivery_ids) == delivery_ids
 
+    assert Fake.deliveries() == []
+
     assert [
-             %EmailDeliveryRequest{
+             %EmailDeliveryProjection{
                message_id: ^message_id,
-               club_id: ^kootenay_club_id,
                delivery_id: alice_delivery_id,
                recipient_id: ^alice_id,
                recipient_name: "Alice",
                recipient_address: "alice@example.com",
-               sender_name: "Alice",
-               sender_address: "alice@example.com",
-               channel: :email,
-               subject: "Trip planning night",
-               body: "Bring route ideas."
+               channel: "email",
+               status: "pending"
              },
-             %EmailDeliveryRequest{
+             %EmailDeliveryProjection{
                message_id: ^message_id,
-               club_id: ^kootenay_club_id,
                delivery_id: bob_delivery_id,
                recipient_id: ^bob_id,
                recipient_name: "Bob",
                recipient_address: "bob@example.com",
-               sender_name: "Alice",
-               sender_address: "alice@example.com",
-               channel: :email,
-               subject: "Trip planning night",
-               body: "Bring route ideas."
+               channel: "email",
+               status: "pending"
              },
-             %EmailDeliveryRequest{
+             %EmailDeliveryProjection{
                message_id: ^message_id,
-               club_id: ^kootenay_club_id,
                delivery_id: carol_delivery_id,
                recipient_id: ^carol_id,
                recipient_name: "Carol",
                recipient_address: "carol@example.com",
-               sender_name: "Alice",
-               sender_address: "alice@example.com",
-               channel: :email,
-               subject: "Trip planning night",
-               body: "Bring route ideas."
+               channel: "email",
+               status: "pending"
              }
-           ] = Fake.deliveries()
+           ] =
+             pending_deliveries_for_message(message_id)
 
     assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
   end
@@ -218,27 +211,31 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
 
     assert [
-             %EmailDeliveryRequest{
+             %EmailDeliveryProjection{
                recipient_id: ^alice_id,
                recipient_name: "Alice",
-               recipient_address: "alice@example.com"
+               recipient_address: "alice@example.com",
+               status: "pending"
              },
-             %EmailDeliveryRequest{
+             %EmailDeliveryProjection{
                recipient_id: ^bob_id,
                recipient_name: "Bob",
-               recipient_address: "bob@work.example"
+               recipient_address: "bob@work.example",
+               status: "pending"
              }
-           ] = Fake.deliveries()
+           ] = pending_deliveries_for_message(message_id)
 
-    delivered_addresses =
-      Fake.deliveries()
+    recipient_addresses =
+      message_id
+      |> pending_deliveries_for_message()
       |> Enum.map(& &1.recipient_address)
 
-    refute "alice@work.example" in delivered_addresses
-    refute "bob@example.com" in delivered_addresses
+    refute "alice@work.example" in recipient_addresses
+    refute "bob@example.com" in recipient_addresses
+    assert Fake.deliveries() == []
   end
 
-  test "includes the club name in each member-message delivery request when it is available" do
+  test "accepts the message without building provider requests inline when club context is available" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
 
@@ -260,12 +257,10 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
 
-    assert [
-             %EmailDeliveryRequest{
-               club_id: ^club_id,
-               club_name: "Kootenay Mountaineering Club"
-             }
-           ] = Fake.deliveries()
+    assert [%EmailDeliveryProjection{message_id: ^message_id, status: "pending"}] =
+             pending_deliveries_for_message(message_id)
+
+    assert Fake.deliveries() == []
   end
 
   test "does not call the provider when the send command is rejected" do
@@ -285,7 +280,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Fake.deliveries() == []
   end
 
-  test "surfaces Postmark handoff failures without treating them as recipient outcomes" do
+  test "returns success after recording message work when the configured provider would fail" do
     Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
 
     Application.put_env(:memba, Memba.Mailer,
@@ -303,7 +298,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     message_id = Memba.ID.generate(:message)
 
-    assert {:error, {:postmark_delivery_error, :timeout}} =
+    assert :ok =
              Messaging.send_club_message(
                %{
                  message_id: message_id,
@@ -315,11 +310,36 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
 
-    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+    refute_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
     assert Fake.deliveries() == []
 
-    assert Messaging.get_member_email_delivery(message_id, alice.person_id).status == "sent"
-    assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status == "sent"
+    assert [%EmailDeliveryProjection{status: "pending"}] =
+             pending_deliveries_for_message(message_id)
+  end
+
+  defp pending_deliveries_for_message(message_id) do
+    EmailDeliveryProjection
+    |> where([delivery], delivery.message_id == ^message_id)
+    |> order_by([delivery], asc: delivery.recipient_name)
+    |> Repo.all()
+  end
+
+  defp stop_email_delivery_dispatcher do
+    case Supervisor.terminate_child(Memba.Supervisor, Memba.Messaging.EmailDeliveryDispatcher) do
+      :ok -> true
+      {:error, :not_found} -> false
+    end
+  end
+
+  defp restart_email_delivery_dispatcher(false), do: :ok
+
+  defp restart_email_delivery_dispatcher(true) do
+    case Supervisor.restart_child(Memba.Supervisor, Memba.Messaging.EmailDeliveryDispatcher) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+      {:error, :not_found} -> :ok
+    end
   end
 
   defp create_club(club_id, name) do
