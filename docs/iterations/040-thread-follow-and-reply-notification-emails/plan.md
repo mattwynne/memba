@@ -24,6 +24,11 @@ Following has no purpose except deciding who is emailed, so the follow model and
 
 - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **further addressed.** Completes "members can opt in to receive replies to a conversation." Replying *from* an email client remains iteration 041.
 
+## Designs
+
+- **Reply notification email** — DS card `emails/reply-notification.html` is the **final/canonical** version this iteration completes: it adds the "you're following this conversation · stop following this conversation" footer line that 039 omitted. The new-reply body, "View the conversation" CTA, and standard quoted-thread history are unchanged from 039.
+- **Conversation screen follow control** — design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) §4.1 (the "Follow this conversation to receive any new replies" toggle under the original message) and §4.3 (email footer follow/unfollow).
+
 ## Scope
 
 ### In scope

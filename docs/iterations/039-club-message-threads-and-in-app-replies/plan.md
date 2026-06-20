@@ -26,6 +26,14 @@ The reply feature is split into three sequential, independently shippable iterat
 
 - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **partially addressed.** This slice delivers "users can reply from the message view," "replies preserve context," and "replies are tracked as part of the conversation," and gets replies to members by email. The *opt-in control over who receives replies* is iteration 040; replying from an email client is iteration 041.
 
+## Designs
+
+The implementer must build against these existing designs:
+
+- **Conversation message-detail screen** — design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) §4.1: the message-detail screen reframed as a conversation (original message → inline reply composer → replies in order), with the delivery-receipts panel demoted to a secondary/collapsed position. (This screen has an ASCII mock only — no DS wireframe yet; see Risks.) §4.2 covers the club-home row gaining a reply-count signal.
+- **Reply notification email** — DS card `emails/reply-notification.html` (final version). In 039, render it **without** the "you're following · stop following" footer line (no follow concept yet — see the design sketch §8 "one canonical email design; earlier slices omit elements"). The earlier-messages quoted-thread block and "View the conversation" CTA still apply.
+- **Mobile member surfaces** — DS wireframes `wireframes/mobile-message-detail.html` and `wireframes/mobile-compose.html` show the phone-width member layout/style (sage theme, shared components) the conversation screen must match responsively.
+
 ## Scope
 
 ### In scope
@@ -109,4 +117,5 @@ Members can hold a conversation on a club message inside Memba — reply, read i
 - **Interim reply-all noise.** 039 emails replies to all current members — the noisy model Memba otherwise avoids. 040 narrows this to opt-in followers and follows immediately. Coordinate release so 039 is not long-lived in production without 040, or consciously accept short-term reply-all on club messages.
 - **Model choice ripples forward.** 040 (followers get replies) and 041 (inbound threading) depend on the conversation/reply model chosen here. Keep "who is in / follows this conversation?" easy to answer so 040 is a clean narrowing rather than a rework.
 - The message-detail screen reframing (receipts → secondary) could grow; keep it minimal and record larger UI rework as follow-up.
+- **No DS wireframe yet for the conversation screen** — only the ASCII mock in sketch §4.1. If a higher-fidelity design is wanted before/while building, mock it as a DS card first; otherwise build to §4.1 and the mobile member wireframes for layout/style.
 - Sits behind the active WIP slot and other queued iterations; this is planning ahead.

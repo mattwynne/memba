@@ -41,6 +41,10 @@ Decided up front so the schema is not flat and can grow. One inbound domain (`cl
 
 - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **expected to resolve.** With 039 (conversation + in-app reply), 040 (follower emails + opt-in follow), and this slice (reply from the inbox), all four "Expected" bullets are met end to end.
 
+## Designs
+
+- **Reply notification email** — DS card `emails/reply-notification.html`. This iteration sets its `Reply-To` to the conversation address `<club-slug>+c.<token>@clubs.memba.io` and the `Message-ID`/`References` headers; the email's earlier-messages quoted-thread block (already designed) is what email clients fold/thread once these headers are present. No new screen design — 041 is inbound routing.
+
 ## Scope
 
 ### In scope
