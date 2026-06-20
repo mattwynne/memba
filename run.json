@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T06:43:04.736514229Z",
-  "last_event_at": "2026-06-20T08:16:52.308749500Z",
+  "last_event_at": "2026-06-20T08:17:12.393489870Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -20504,8 +20504,8 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-20T08:17:10.443149451Z",
-        "current_node": "validate_task",
+        "timestamp": "2026-06-20T08:17:14.062296661Z",
+        "current_node": "task_gate",
         "completed_nodes": [
           "start",
           "read_plan",
@@ -20573,7 +20573,8 @@
           "all_tasks_done",
           "implement_next_task",
           "pre_validate_snapshot",
-          "validate_task"
+          "validate_task",
+          "task_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -20597,7 +20598,7 @@
           "internal.work_dir": "/workspace/memba",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.`\n\n2. **Changes made**\n   - Updated `Memba.Messaging.send_club_message/2` so it now:\n     - builds the `SendMessage` command,\n     - dispatches it to the Messaging Commanded app,\n     - returns the dispatch result,\n     - **does not call the email provider inline**.\n   - Removed the private `Memba.Messaging.deliver_to_provider/1` handoff.\n   - Removed the temporary `EmailDeliveryDispatcher.deliver_to_provider/1` clause that accepted a `%SendMessage{}` command and synchronously delivered all recipients.\n   - Kept provider delivery available only through dispatcher delivery records, i.e. `%EmailDeliveryProjection{}`.\n   - Updated `send_club_message_test.exs` to prove:\n     - browser/composed send records `pending` `EmailDelivery` work,\n     - provider calls are not made during `send_club_message/2`,\n     - configured provider failure no longer makes message acceptance fail.\n   - In those focused tests, the supervised dispatcher is stopped/restarted around each test to isolate and prove `send_club_message/2` itself does not perform provider handoff.\n\n3. **Focused validation commands run**\n   - Initial direct focused command:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test web/test/memba/messaging/send_club_message_test.exs`\n     - Did not reach test execution due the sandbox `PGHOST` mismatch:\n       - `Postgres did not become ready at PGHOST=/tmp/devenv/postgres PGPORT=15432`\n   - Formatting:\n     - `cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/send_club_message_test.exs`\n     - Passed.\n   - Focused send tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/send_club_message_test.exs'`\n     - Passed: `5 tests, 0 failures`.\n   - Focused send + dispatcher tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/send_club_message_test.exs test/memba/messaging/email_delivery_dispatcher_test.exs'`\n     - Passed: `16 tests, 0 failures`.\n   - Broad quick check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Failed: `813 tests, 17 failures`.\n     - The failures are remaining suite/acceptance assumptions that provider deliveries are immediately visible after send, or that provider unavailability makes message submission fail. Those expectations are now intentionally stale after task 009 and align with pending follow-up tasks for inbound flow/test adaptation and broader acceptance-criteria updates.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.`\n   - To:\n     - `- [x] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR / architecture conformance evidence**\n   - Provider side effects are no longer part of `send_club_message/2` command acceptance.\n   - Provider calls remain outside aggregate and projector replay paths.\n   - Provider dispatch remains behind the existing provider abstraction and now occurs through the dispatcher/projection path only.\n   - The command-side success contract is tied to command acceptance/recording, not provider availability.\n   - No automatic retries, sweeps, staff UI, or acceptance feature file edits were introduced in this task.",
           "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "internal.retry_count.start": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree is clean.\n  - Recent commits show `c17c5fa ... pre_validate_snapshot` on `HEAD`, with the just-completed implementation checkpoint immediately before it: `105487e ... implement_next_task`.\n  - `git diff 105487e^ 105487e -- docs/iterations/038-email-delivery-handoff-boundary/todo.md` shows exactly one ordinary task changed:\n    - `009 Remove the synchronous provider call from send_club_message/2...` from unchecked to checked.\n  - The prior todo state had tasks 001–008 checked and task 009 as the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/lib/memba/messaging.ex`\n    - `send_club_message/2` now dispatches the `SendMessage` command and returns the dispatch result without calling the provider inline.\n    - Removed the private `deliver_to_provider/1` handoff from `Memba.Messaging`.\n  - `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n    - Removed the temporary `%SendMessage{}` provider delivery clause.\n    - Provider delivery is now only exposed for projected `%EmailDeliveryProjection{}` work.\n  - `web/test/memba/messaging/send_club_message_test.exs`\n    - Updated expectations from immediate provider calls to pending `EmailDelivery` projections.\n    - Added/updated coverage that provider failures do not make message acceptance fail.\n    - Stops/restarts the supervised dispatcher around these tests to isolate `send_club_message/2` from async handoff.\n\n- Tests run/results found.\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/send_club_message_test.exs'`\n    - Passed: `5 tests, 0 failures`.\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/send_club_message_test.exs test/memba/messaging/email_delivery_dispatcher_test.exs'`\n    - Passed: `16 tests, 0 failures`.\n  - Implementor also reported formatting passed and `git diff --check` passed.\n  - Implementor reported `dev check --quick` currently fails due remaining broader suite assumptions; that aligns with later unchecked tasks 011–014 and does not invalidate this focused task.\n\n- ADR/plan conformance notes.\n  - Work matches task 009: command acceptance is no longer coupled to provider availability.\n  - Provider side effects remain outside aggregate/projector replay paths and behind the dispatcher/provider abstraction.\n  - No automatic retries, sweeps, startup dispatch, staff UI, or acceptance feature changes were introduced.\n  - Changed files do not include `*.feature` or `acceptance-tests/` files.\n  - Task is small and independently checkpointed with code and test evidence.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "task_valid": true,
@@ -20609,7 +20610,7 @@
           "internal.retry_count.read_plan": 0,
           "outcome": "succeeded",
           "failure_class": "",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "thread.todo_readable.current_node": "all_tasks_done",
           "thread.sync_task_list.current_node": "todo_readable",
           "command.output": "blob://sha256/aa3c30d03ce96d8950135bb1198ec23b2bf29926c76d42e4ffa06709629627b2",
@@ -20820,7 +20821,7 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "start": 1,
           "implement_next_task": 9,
@@ -20833,7 +20834,7 @@
           "validate_task": 9,
           "preflight_sandbox": 1,
           "wip_gate": 1,
-          "task_gate": 8
+          "task_gate": 9
         }
       },
       "diff": {}
@@ -26220,7 +26221,12 @@
       "first_event_seq": 3196,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T08:17:10.435695130Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -26234,13 +26240,20 @@
       "output": null,
       "started_at": "2026-06-20T08:15:35.178102863Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 95257,
+        "inference_time_ms": 87054,
+        "tool_time_ms": 7786,
+        "active_time_ms": 94840
+      },
       "usage": {
-        "input_tokens": 313982,
-        "output_tokens": 1122,
-        "total_tokens": 699828,
-        "reasoning_tokens": 724,
-        "cache_read_tokens": 384000,
-        "cache_write_tokens": 0
+        "input_tokens": 318461,
+        "output_tokens": 1777,
+        "total_tokens": 756340,
+        "reasoning_tokens": 902,
+        "cache_read_tokens": 435200,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1890275
       },
       "model": {
         "provider": "openai",
@@ -26379,42 +26392,42 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 55360,
-        "usage_percent": 20.352941176470587,
+        "input_tokens": 55679,
+        "usage_percent": 20.470220588235293,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-20T08:16:52.239742997Z",
-        "event_seq": 3259,
+        "generated_at": "2026-06-20T08:17:10.434849651Z",
+        "event_seq": 3263,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1154,
-            "usage_percent": 0.42426470588235293
+            "tokens": 1144,
+            "usage_percent": 0.42058823529411765
           },
           {
             "category": "tools",
-            "tokens": 1641,
-            "usage_percent": 0.6033088235294117
+            "tokens": 1627,
+            "usage_percent": 0.5981617647058823
           },
           {
             "category": "memory",
-            "tokens": 441,
-            "usage_percent": 0.16213235294117648
+            "tokens": 437,
+            "usage_percent": 0.16066176470588237
           },
           {
             "category": "conversation",
-            "tokens": 52118,
-            "usage_percent": 19.161029411764705
+            "tokens": 52464,
+            "usage_percent": 19.288235294117648
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "todo_readable@4": {
       "first_event_seq": 1241,
