@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T06:43:04.736514229Z",
-  "last_event_at": "2026-06-20T07:23:28.476027563Z",
+  "last_event_at": "2026-06-20T07:24:48.909562961Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -8779,9 +8779,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1434,
       "checkpoint": {
-        "timestamp": "2026-06-20T07:23:28.643717681Z",
+        "timestamp": "2026-06-20T07:23:31.825800494Z",
         "current_node": "pre_validate_snapshot",
         "completed_nodes": [
           "start",
@@ -8818,6 +8818,315 @@
         ],
         "node_retries": {},
         "context_values": {
+          "task_valid": true,
+          "internal.retry_count.validate_task": 0,
+          "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   - Added `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n     - Defines `Memba.Messaging.EmailDeliveryDispatcher` as a named `GenServer`.\n     - Keeps it intentionally minimal; subscription/claim/provider/retry behavior remains for later todo tasks.\n   - Updated `web/lib/memba/application.ex`\n     - Adds `Memba.Messaging.EmailDeliveryDispatcher` to the application supervision tree after messaging provider support processes and before messaging projectors.\n   - Updated `web/test/memba/messaging/app_test.exs`\n     - Adds focused assertions that the dispatcher is registered and supervised by `Memba.Supervisor`.\n\n3. **Focused validation commands run and results**\n   - TDD pre-implementation focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Failed as expected because `Process.whereis(Memba.Messaging.EmailDeliveryDispatcher)` was `nil`.\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/application.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/app_test.exs`\n     - Passed.\n   - Focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Passed: `4 tests, 0 failures`.\n   - Broad quick check after todo check-off:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `802 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n   - To:\n     - `- [x] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: Added an OTP dispatch boundary without changing command handling or event semantics.\n   - ADR 0009: Did not change projection mechanics or replay behavior.\n   - ADR 0021: Dispatcher is supervised after PubSub and before projectors, positioning it for the next task’s committed read-model-change subscription without altering publisher behavior.\n   - ADR 0016: No provider adapter/runtime-provider behavior was changed.\n   - ADR 0006: No member-facing UI/status presentation was changed.",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.thread_id": "implement_next_task",
+          "thread.task_gate.current_node": "sync_task_list",
+          "failure_signature": "",
+          "last_response": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   ",
+          "thread.read_plan.current_node": "wip_gate",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.`\n    - from `- [ ]` to `- [x]`.\n  - `15c994c^` shows task 003 was the first unchecked task when the implementor started.\n\n- Implementation artifacts found:\n  - Added migration:\n    - `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`\n    - Adds named DB check constraint `messaging_email_deliveries_status_check`.\n    - Allows dispatch lifecycle statuses: `pending`, `dispatching`, `sent`, `failed`.\n    - Preserves provider/webhook statuses: `delivered`, `delayed`, `bounced`, `spam_complaint`.\n  - Added focused test:\n    - `web/test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Verifies valid statuses insert successfully and invalid status is rejected by the named constraint.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live focused test rerun passed:\n    - `cd web && mix test test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Result: `2 tests, 0 failures`.\n  - Implementor summary also reports formatting, focused test, `dev check --quick`, and diff whitespace checks passed.\n  - `git diff --check` passed during validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 003: persistence validation for the expanded status vocabulary only.\n  - No command/event semantics, aggregate ownership, dispatcher behavior, provider side effects, retry behavior, or UI behavior were changed.\n  - ADR 0002 and 0009 respected: this is Ecto read-model/projection persistence work.\n  - ADR 0004 and 0005 respected: no message aggregate or delivery event vocabulary restructuring.\n  - ADR 0006 respected: no member-facing delivery-status expansion or provider diagnostics exposure.\n  - The checkpoint is small, concrete, and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.todo_readable": 0,
+          "failure_class": "",
+          "graph.max_node_visits": "80",
+          "outcome": "succeeded",
+          "last_stage": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "current_node": "pre_validate_snapshot",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.wip_gate": 0,
+          "task_retry_available": false,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "internal.node_visit_count": 4,
+          "internal.work_dir": "/workspace/memba",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "command.output": "blob://sha256/bb98fcd0f98b6dec15b64c620941134ddb571a8544fe6846d42ae308cc626a1e",
+          "internal.retry_count.task_gate": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "graph.rankdir": "LR"
+        },
+        "node_outcomes": {
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   ",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   - Added `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n     - Defines `Memba.Messaging.EmailDeliveryDispatcher` as a named `GenServer`.\n     - Keeps it intentionally minimal; subscription/claim/provider/retry behavior remains for later todo tasks.\n   - Updated `web/lib/memba/application.ex`\n     - Adds `Memba.Messaging.EmailDeliveryDispatcher` to the application supervision tree after messaging provider support processes and before messaging projectors.\n   - Updated `web/test/memba/messaging/app_test.exs`\n     - Adds focused assertions that the dispatcher is registered and supervised by `Memba.Supervisor`.\n\n3. **Focused validation commands run and results**\n   - TDD pre-implementation focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Failed as expected because `Process.whereis(Memba.Messaging.EmailDeliveryDispatcher)` was `nil`.\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/application.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/app_test.exs`\n     - Passed.\n   - Focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Passed: `4 tests, 0 failures`.\n   - Broad quick check after todo check-off:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `802 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n   - To:\n     - `- [x] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: Added an OTP dispatch boundary without changing command handling or event semantics.\n   - ADR 0009: Did not change projection mechanics or replay behavior.\n   - ADR 0021: Dispatcher is supervised after PubSub and before projectors, positioning it for the next task’s committed read-model-change subscription without altering publisher behavior.\n   - ADR 0016: No provider adapter/runtime-provider behavior was changed.\n   - ADR 0006: No member-facing UI/status presentation was changed."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 354861,
+                    "output_tokens": 4672,
+                    "reasoning_tokens": 2292,
+                    "cache_read_tokens": 836096,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2401273
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 210667,
+              "tool_time_ms": 115484,
+              "active_time_ms": 326151
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly ",
+              "task_valid": true,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.`\n    - from `- [ ]` to `- [x]`.\n  - `15c994c^` shows task 003 was the first unchecked task when the implementor started.\n\n- Implementation artifacts found:\n  - Added migration:\n    - `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`\n    - Adds named DB check constraint `messaging_email_deliveries_status_check`.\n    - Allows dispatch lifecycle statuses: `pending`, `dispatching`, `sent`, `failed`.\n    - Preserves provider/webhook statuses: `delivered`, `delayed`, `bounced`, `spam_complaint`.\n  - Added focused test:\n    - `web/test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Verifies valid statuses insert successfully and invalid status is rejected by the named constraint.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live focused test rerun passed:\n    - `cd web && mix test test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Result: `2 tests, 0 failures`.\n  - Implementor summary also reports formatting, focused test, `dev check --quick`, and diff whitespace checks passed.\n  - `git diff --check` passed during validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 003: persistence validation for the expanded status vocabulary only.\n  - No command/event semantics, aggregate ownership, dispatcher behavior, provider side effects, retry behavior, or UI behavior were changed.\n  - ADR 0002 and 0009 respected: this is Ecto read-model/projection persistence work.\n  - ADR 0004 and 0005 respected: no message aggregate or delivery event vocabulary restructuring.\n  - ADR 0006 respected: no member-facing delivery-status expansion or provider diagnostics exposure.\n  - The checkpoint is small, concrete, and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 179801,
+                    "output_tokens": 2296,
+                    "reasoning_tokens": 1014,
+                    "cache_read_tokens": 104960,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1050785
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 84031,
+              "tool_time_ms": 4903,
+              "active_time_ms": 88934
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ea0367a48baaab34c3202491d0e260e90a1e3e9328241e3f736555e11a91fdfd"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 101284,
+              "active_time_ms": 101284
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bb98fcd0f98b6dec15b64c620941134ddb571a8544fe6846d42ae308cc626a1e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ed63616634545322cee0f94b4cf1b4b376d3028ebf954ab62b33cb83e4b9f57f"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168,
+              "active_time_ms": 168
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/75c6c091e2df94983324e8d1be28930a39e43d62a25fc547f56f3c8ae3db5600"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3bf1969fcf6a87570d16f2dacde7fa2ebf60e22318cdcc855e8d0e402102ea2b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1830,
+              "active_time_ms": 1830
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b1d88d7a93e1a637e98fcdce10092a028da8d1c7d1fe086c021d7e49755b0c7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e760c3b5d2f58e5fbad9468b14405d7ff031c78d629681cdcd0f59048bfb6b0f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e9d9154144898118849fa4cd23f48b7f65bd67458160eba5c96e97419695698d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "f173581d4c4e1e8b7409524b89576541735fe632",
+        "node_visits": {
+          "preflight_sandbox": 1,
+          "task_gate": 3,
+          "todo_readable": 4,
+          "start": 1,
+          "validate_task": 3,
+          "wip_gate": 1,
+          "implement_next_task": 4,
+          "read_plan": 1,
+          "sync_task_list": 4,
+          "all_tasks_done": 4,
+          "resume_gate": 1,
+          "pre_validate_snapshot": 4
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 14,
+          "additions": 263,
+          "deletions": 8
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-20T07:25:05.845648562Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "task_retry_available": false,
@@ -8829,7 +9138,7 @@
           "internal.retry_count.pre_validate_snapshot": 0,
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
-          "last_stage": "implement_next_task",
+          "last_stage": "validate_task",
           "internal.retry_count.wip_gate": 0,
           "thread.start.current_node": "read_plan",
           "internal.fidelity": "summary:high",
@@ -8838,9 +9147,9 @@
           "internal.work_dir": "/workspace/memba",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   - Added `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n     - Defines `Memba.Messaging.EmailDeliveryDispatcher` as a named `GenServer`.\n     - Keeps it intentionally minimal; subscription/claim/provider/retry behavior remains for later todo tasks.\n   - Updated `web/lib/memba/application.ex`\n     - Adds `Memba.Messaging.EmailDeliveryDispatcher` to the application supervision tree after messaging provider support processes and before messaging projectors.\n   - Updated `web/test/memba/messaging/app_test.exs`\n     - Adds focused assertions that the dispatcher is registered and supervised by `Memba.Supervisor`.\n\n3. **Focused validation commands run and results**\n   - TDD pre-implementation focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Failed as expected because `Process.whereis(Memba.Messaging.EmailDeliveryDispatcher)` was `nil`.\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/application.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/app_test.exs`\n     - Passed.\n   - Focused test:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/messaging/app_test.exs'`\n     - Passed: `4 tests, 0 failures`.\n   - Broad quick check after todo check-off:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `802 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n   - To:\n     - `- [x] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: Added an OTP dispatch boundary without changing command handling or event semantics.\n   - ADR 0009: Did not change projection mechanics or replay behavior.\n   - ADR 0021: Dispatcher is supervised after PubSub and before projectors, positioning it for the next task’s committed read-model-change subscription without altering publisher behavior.\n   - ADR 0016: No provider adapter/runtime-provider behavior was changed.\n   - ADR 0006: No member-facing UI/status presentation was changed.",
           "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
-          "current_node": "pre_validate_snapshot",
+          "current_node": "validate_task",
           "internal.retry_count.start": 0,
-          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.`\n    - from `- [ ]` to `- [x]`.\n  - `15c994c^` shows task 003 was the first unchecked task when the implementor started.\n\n- Implementation artifacts found:\n  - Added migration:\n    - `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`\n    - Adds named DB check constraint `messaging_email_deliveries_status_check`.\n    - Allows dispatch lifecycle statuses: `pending`, `dispatching`, `sent`, `failed`.\n    - Preserves provider/webhook statuses: `delivered`, `delayed`, `bounced`, `spam_complaint`.\n  - Added focused test:\n    - `web/test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Verifies valid statuses insert successfully and invalid status is rejected by the named constraint.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live focused test rerun passed:\n    - `cd web && mix test test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Result: `2 tests, 0 failures`.\n  - Implementor summary also reports formatting, focused test, `dev check --quick`, and diff whitespace checks passed.\n  - `git diff --check` passed during validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 003: persistence validation for the expanded status vocabulary only.\n  - No command/event semantics, aggregate ownership, dispatcher behavior, provider side effects, retry behavior, or UI behavior were changed.\n  - ADR 0002 and 0009 respected: this is Ecto read-model/projection persistence work.\n  - ADR 0004 and 0005 respected: no message aggregate or delivery event vocabulary restructuring.\n  - ADR 0006 respected: no member-facing delivery-status expansion or provider diagnostics exposure.\n  - The checkpoint is small, concrete, and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Latest HEAD is pre-validation checkpoint `f173581`; the recent implementation checkpoint is `bfac72c`.\n  - `bfac72c` changed exactly one ordinary todo line:\n    - `004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n    - from `- [ ]` to `- [x]`.\n  - `bfac72c^` shows task 004 was the first unchecked task when implementation started.\n\n- Implementation artifacts found:\n  - Added `web/lib/memba/messaging/email_delivery_dispatcher.ex`.\n    - Defines `Memba.Messaging.EmailDeliveryDispatcher` as a named `GenServer`.\n    - Keeps behavior intentionally minimal, leaving subscription/claim/provider/retry work to subsequent tasks.\n  - Updated `web/lib/memba/application.ex`.\n    - Adds `Memba.Messaging.EmailDeliveryDispatcher` to the Phoenix application supervision tree.\n  - Updated `web/test/memba/messaging/app_test.exs`.\n    - Adds assertions that the dispatcher process is registered and supervised under `Memba.Supervisor`.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Focused test was added for dispatcher supervision.\n  - Implementor summary reports:\n    - focused pre-test failed before implementation as expected,\n    - formatting passed,\n    - focused test `test/memba/messaging/app_test.exs` passed,\n    - `dev check --quick` passed,\n    - `git diff --check` passed.\n  - Live validation rerun of the focused test was attempted but blocked by an existing Postgres `postmaster.pid`/devenv process lock, not by a compile or test failure in the implementation.\n  - Live `git diff --check bfac72c^ bfac72c` passed.\n\n- ADR/plan conformance notes:\n  - Scope matches task 004: introduces only the supervised/named dispatcher process boundary.\n  - Does not prematurely implement task 005+ behavior such as PubSub subscription, claiming, provider calls, status transitions, or retry.\n  - Preserves CQRS/event-sourcing constraints: no command/event semantics changed and no provider side effects added to aggregate or projector replay paths.\n  - No member-facing UI/status presentation changed.\n  - The checkpoint is small and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "task_valid": true,
           "graph.default_fidelity": "summary:high",
           "thread.preflight_sandbox.current_node": "resume_gate",
@@ -8850,11 +9159,11 @@
           "internal.retry_count.read_plan": 0,
           "outcome": "succeeded",
           "failure_class": "",
-          "internal.thread_id": "implement_next_task",
+          "internal.thread_id": "pre_validate_snapshot",
           "thread.todo_readable.current_node": "all_tasks_done",
           "thread.sync_task_list.current_node": "todo_readable",
           "command.output": "blob://sha256/bb98fcd0f98b6dec15b64c620941134ddb571a8544fe6846d42ae308cc626a1e",
-          "last_response": "1. **Selected todo line**\n   - `- [ ] 004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n\n2. **Changes made**\n   ",
+          "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Latest HEAD is pre-validation checkpoint `f173581`; the recent implementation checkpoint",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.retry_count.resume_gate": 0,
           "failure_signature": "",
@@ -8978,11 +9287,11 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "task_retry_available": false,
               "last_stage": "validate_task",
-              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly ",
               "task_valid": true,
-              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Recent checkpoint `15c994c fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.`\n    - from `- [ ]` to `- [x]`.\n  - `15c994c^` shows task 003 was the first unchecked task when the implementor started.\n\n- Implementation artifacts found:\n  - Added migration:\n    - `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`\n    - Adds named DB check constraint `messaging_email_deliveries_status_check`.\n    - Allows dispatch lifecycle statuses: `pending`, `dispatching`, `sent`, `failed`.\n    - Preserves provider/webhook statuses: `delivered`, `delayed`, `bounced`, `spam_complaint`.\n  - Added focused test:\n    - `web/test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Verifies valid statuses insert successfully and invalid status is rejected by the named constraint.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live focused test rerun passed:\n    - `cd web && mix test test/memba/messaging/email_delivery_status_constraints_test.exs`\n    - Result: `2 tests, 0 failures`.\n  - Implementor summary also reports formatting, focused test, `dev check --quick`, and diff whitespace checks passed.\n  - `git diff --check` passed during validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 003: persistence validation for the expanded status vocabulary only.\n  - No command/event semantics, aggregate ownership, dispatcher behavior, provider side effects, retry behavior, or UI behavior were changed.\n  - ADR 0002 and 0009 respected: this is Ecto read-model/projection persistence work.\n  - ADR 0004 and 0005 respected: no message aggregate or delivery event vocabulary restructuring.\n  - ADR 0006 respected: no member-facing delivery-status expansion or provider diagnostics exposure.\n  - The checkpoint is small, concrete, and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+              "task_retry_available": false,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Latest HEAD is pre-validation checkpoint `f173581`; the recent implementation checkpoint is `bfac72c`.\n  - `bfac72c` changed exactly one ordinary todo line:\n    - `004 Introduce a named dispatch module/process, probably Memba.Messaging.EmailDeliveryDispatcher, under the application supervision tree.`\n    - from `- [ ]` to `- [x]`.\n  - `bfac72c^` shows task 004 was the first unchecked task when implementation started.\n\n- Implementation artifacts found:\n  - Added `web/lib/memba/messaging/email_delivery_dispatcher.ex`.\n    - Defines `Memba.Messaging.EmailDeliveryDispatcher` as a named `GenServer`.\n    - Keeps behavior intentionally minimal, leaving subscription/claim/provider/retry work to subsequent tasks.\n  - Updated `web/lib/memba/application.ex`.\n    - Adds `Memba.Messaging.EmailDeliveryDispatcher` to the Phoenix application supervision tree.\n  - Updated `web/test/memba/messaging/app_test.exs`.\n    - Adds assertions that the dispatcher process is registered and supervised under `Memba.Supervisor`.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Focused test was added for dispatcher supervision.\n  - Implementor summary reports:\n    - focused pre-test failed before implementation as expected,\n    - formatting passed,\n    - focused test `test/memba/messaging/app_test.exs` passed,\n    - `dev check --quick` passed,\n    - `git diff --check` passed.\n  - Live validation rerun of the focused test was attempted but blocked by an existing Postgres `postmaster.pid`/devenv process lock, not by a compile or test failure in the implementation.\n  - Live `git diff --check bfac72c^ bfac72c` passed.\n\n- ADR/plan conformance notes:\n  - Scope matches task 004: introduces only the supervised/named dispatcher process boundary.\n  - Does not prematurely implement task 005+ behavior such as PubSub subscription, claiming, provider calls, status transitions, or retry.\n  - Preserves CQRS/event-sourcing constraints: no command/event semantics changed and no provider side effects added to aggregate or projector replay paths.\n  - No member-facing UI/status presentation changed.\n  - The checkpoint is small and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean.\n  - Latest HEAD is pre-validation checkpoint `f173581`; the recent implementation checkpoint"
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -8993,10 +9302,10 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 179801,
-                    "output_tokens": 2296,
-                    "reasoning_tokens": 1014,
-                    "cache_read_tokens": 104960,
+                    "input_tokens": 187576,
+                    "output_tokens": 1916,
+                    "reasoning_tokens": 1832,
+                    "cache_read_tokens": 117248,
                     "cache_write_tokens": 0
                   }
                 },
@@ -9004,13 +9313,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 1050785
+              "total_usd_micros": 1108944
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 84031,
-              "tool_time_ms": 4903,
-              "active_time_ms": 88934
+              "inference_time_ms": 90455,
+              "tool_time_ms": 3153,
+              "active_time_ms": 93608
             }
           },
           "task_gate": {
@@ -9061,7 +9370,7 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "task_gate",
         "node_visits": {
           "start": 1,
           "implement_next_task": 4,
@@ -9071,7 +9380,7 @@
           "todo_readable": 4,
           "all_tasks_done": 4,
           "sync_task_list": 4,
-          "validate_task": 3,
+          "validate_task": 4,
           "preflight_sandbox": 1,
           "wip_gate": 1,
           "task_gate": 3
@@ -11213,6 +11522,206 @@
       },
       "state": "succeeded"
     },
+    "validate_task@4": {
+      "first_event_seq": 1437,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T07:23:31.853472801Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 186360,
+        "output_tokens": 1391,
+        "total_tokens": 269175,
+        "reasoning_tokens": 1552,
+        "cache_read_tokens": 79872,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 37568,
+        "usage_percent": 13.811764705882354,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-20T07:24:48.791298851Z",
+        "event_seq": 1503,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1093,
+            "usage_percent": 0.40183823529411766
+          },
+          {
+            "category": "tools",
+            "tokens": 1554,
+            "usage_percent": 0.5713235294117647
+          },
+          {
+            "category": "memory",
+            "tokens": 417,
+            "usage_percent": 0.15330882352941178
+          },
+          {
+            "category": "conversation",
+            "tokens": 34497,
+            "usage_percent": 12.682720588235295
+          },
+          {
+            "category": "other",
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
+    },
     "todo_readable@4": {
       "first_event_seq": 1241,
       "prompt": null,
@@ -11478,7 +11987,12 @@
       "first_event_seq": 1427,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:23:28.642813881Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -11487,11 +12001,27 @@
         "language": "shell",
         "timeout_ms": 120000
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/bb98fcd0f98b6dec15b64c620941134ddb571a8544fe6846d42ae308cc626a1e",
+        "exit_code": 0,
+        "duration_ms": 154,
+        "termination": "exited",
+        "output_bytes": 602,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 602,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-20T07:23:28.475445081Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 167,
+        "inference_time_ms": 0,
+        "tool_time_ms": 154,
+        "active_time_ms": 154
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -11500,7 +12030,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@3": {
       "first_event_seq": 1123,
