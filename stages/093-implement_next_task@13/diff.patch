@@ -1,0 +1,299 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index c9526f2..f27a59f 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -12,5 +12,5 @@
+ - [x] 010 Add an internal/manual retry API for failed deliveries. Do not add automatic retries, startup sweeps, periodic sweeps, or staff retry UI in this slice.
+ - [x] 011 Adapt accepted inbound club-message flow so it relies on the same pending-delivery projection and dispatcher path.
+ - [x] 012 Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses: hide or soften infrastructure detail on member-facing screens, while allowing staff/operator diagnostics to show exact status/error.
+-- [ ] 013 Add/update focused tests for the acceptance criteria above.
++- [x] 013 Add/update focused tests for the acceptance criteria above.
+ - [ ] 014 Run `dev check` and fix any regressions.
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 684834e..319541b 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+ 
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
++  alias Memba.Messaging.EmailDeliveryProviders.SelectiveFailure
+   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+@@ -351,6 +352,83 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+                failed_at: ^failed_at
+              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+     end
++
++    test "continues dispatching other deliveries when one recipient fails" do
++      start_supervised!(SelectiveFailure)
++      SelectiveFailure.reset()
++      SelectiveFailure.fail_addresses(["failing.member@example.test"])
++      Application.put_env(:memba, :messaging_email_delivery_provider, SelectiveFailure)
++
++      club =
++        insert_membership_club!(
++          name: "Kootenay Mountaineering Club",
++          slug: "kootenay-mountaineering-club"
++        )
++
++      sender =
++        insert_membership_person!(
++          name: "Alice Sender",
++          email: "alice.sender@example.com"
++        )
++
++      message =
++        insert_message_projection!(
++          club_id: club.club_id,
++          sender_id: sender.person_id,
++          subject: "Trip planning night",
++          body: "Bring route ideas."
++        )
++
++      failing_delivery =
++        insert_email_delivery!(
++          message_id: message.message_id,
++          recipient_name: "Failing Member",
++          recipient_address: "failing.member@example.test",
++          status: "pending"
++        )
++
++      successful_delivery =
++        insert_email_delivery!(
++          message_id: message.message_id,
++          recipient_name: "Successful Member",
++          recipient_address: "successful.member@example.test",
++          status: "pending"
++        )
++
++      assert [
++               %EmailDeliveryProjection{
++                 delivery_id: failing_delivery_id,
++                 status: "failed",
++                 attempt_count: 1,
++                 latest_error: "selective_failure",
++                 latest_detail: latest_detail,
++                 failed_at: %DateTime{}
++               },
++               %EmailDeliveryProjection{
++                 delivery_id: successful_delivery_id,
++                 status: "sent",
++                 attempt_count: 0,
++                 latest_error: nil,
++                 latest_detail: nil,
++                 sent_at: %DateTime{}
++               }
++             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++
++      assert failing_delivery_id == failing_delivery.delivery_id
++      assert successful_delivery_id == successful_delivery.delivery_id
++      assert latest_detail =~ "failing.member@example.test"
++
++      assert [
++               %EmailDeliveryRequest{recipient_address: "failing.member@example.test"},
++               %EmailDeliveryRequest{recipient_address: "successful.member@example.test"}
++             ] = SelectiveFailure.deliveries()
++
++      assert %EmailDeliveryProjection{status: "failed", attempt_count: 1} =
++               Repo.get!(EmailDeliveryProjection, failing_delivery.delivery_id)
++
++      assert %EmailDeliveryProjection{status: "sent", attempt_count: 0} =
++               Repo.get!(EmailDeliveryProjection, successful_delivery.delivery_id)
++    end
+   end
+ 
+   describe "manual retry" do
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 63fcfdc..e7d16e9 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -9,10 +9,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
++  alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
++  @email_delivery_replay_projectors [
++    Memba.Messaging.Projectors.EmailDelivery
++  ]
++
+   setup do
+     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+@@ -317,6 +322,100 @@ defmodule Memba.Messaging.SendClubMessageTest do
+              pending_deliveries_for_message(message_id)
+   end
+ 
++  test "manual retry of a failed delivery does not append duplicate message or delivery events" do
++    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
++
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    add_member(club_id, alice.person_id)
++
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               consistency: :strong
++             )
++
++    assert [delivery] = pending_deliveries_for_message(message_id)
++    assert count_events(MessageSent) == 1
++    assert count_events(EmailDeliveryCreated) == 1
++
++    failed_at =
++      DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
++
++    delivery
++    |> Ecto.Changeset.change(
++      status: "failed",
++      attempt_count: 1,
++      latest_error: "unavailable",
++      latest_detail: ":unavailable",
++      failed_at: failed_at
++    )
++    |> Repo.update!()
++
++    assert {:ok,
++            %EmailDeliveryProjection{
++              delivery_id: delivery_id,
++              status: "sent",
++              attempt_count: 2
++            }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
++
++    assert delivery_id == delivery.delivery_id
++    assert count_events(MessageSent) == 1
++    assert count_events(EmailDeliveryCreated) == 1
++
++    assert [%EmailDeliveryRequest{message_id: ^message_id, delivery_id: ^delivery_id}] =
++             Fake.deliveries()
++  end
++
++  test "projector replay rebuilds pending delivery work without handing it to the provider" do
++    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
++
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    add_member(club_id, alice.person_id)
++
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               consistency: :strong
++             )
++
++    assert [%EmailDeliveryProjection{status: "pending"}] =
++             pending_deliveries_for_message(message_id)
++
++    assert Fake.deliveries() == []
++
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++
++    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
++    Memba.ProjectionBarrier.await!(@email_delivery_replay_projectors, checkpoint: checkpoint)
++
++    assert [%EmailDeliveryProjection{status: "pending"}] =
++             pending_deliveries_for_message(message_id)
++
++    assert Fake.deliveries() == []
++  end
++
+   defp pending_deliveries_for_message(message_id) do
+     EmailDeliveryProjection
+     |> where([delivery], delivery.message_id == ^message_id)
+@@ -398,4 +497,16 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++
++  defp count_events(event_module) when is_atom(event_module) do
++    event_type = Atom.to_string(event_module)
++
++    %{rows: [[count]]} =
++      Repo.query!(
++        ~S|SELECT count(*) FROM "event_store"."events" WHERE event_type = $1|,
++        [event_type]
++      )
++
++    count
++  end
+ end
+diff --git a/web/test/support/messaging/email_delivery_providers/selective_failure.ex b/web/test/support/messaging/email_delivery_providers/selective_failure.ex
+new file mode 100644
+index 0000000..7899134
+--- /dev/null
++++ b/web/test/support/messaging/email_delivery_providers/selective_failure.ex
+@@ -0,0 +1,48 @@
++defmodule Memba.Messaging.EmailDeliveryProviders.SelectiveFailure do
++  @moduledoc """
++  Test email delivery provider that records every request and fails configured recipients.
++  """
++
++  use Agent
++
++  alias Memba.Messaging.EmailDeliveryProvider
++  alias Memba.Messaging.EmailDeliveryRequest
++
++  @behaviour EmailDeliveryProvider
++
++  def start_link(opts \\ []) do
++    name = Keyword.get(opts, :name, __MODULE__)
++
++    Agent.start_link(fn -> %{requests: [], failing_addresses: MapSet.new()} end, name: name)
++  end
++
++  @impl EmailDeliveryProvider
++  def deliver(%EmailDeliveryRequest{} = request) do
++    Agent.get_and_update(__MODULE__, fn state ->
++      state = update_in(state.requests, &[request | &1])
++
++      result =
++        if MapSet.member?(state.failing_addresses, request.recipient_address) do
++          {:error, {:selective_failure, request.recipient_address}}
++        else
++          :ok
++        end
++
++      {result, state}
++    end)
++  end
++
++  def fail_addresses(addresses) when is_list(addresses) do
++    Agent.update(__MODULE__, fn state ->
++      %{state | failing_addresses: MapSet.new(addresses)}
++    end)
++  end
++
++  def deliveries do
++    Agent.get(__MODULE__, fn state -> Enum.reverse(state.requests) end)
++  end
++
++  def reset do
++    Agent.update(__MODULE__, fn _state -> %{requests: [], failing_addresses: MapSet.new()} end)
++  end
++end
