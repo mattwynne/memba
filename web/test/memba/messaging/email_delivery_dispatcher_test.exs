@@ -2,12 +2,29 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   use Memba.DataCase, async: false
 
   alias Memba.Messaging.EmailDeliveryDispatcher
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+  alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.ReadModelChanges
+
+  setup do
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+    Fake.reset()
+
+    on_exit(fn ->
+      restore_env(:messaging_email_delivery_provider, original_provider)
+      Fake.reset()
+    end)
+
+    :ok
+  end
 
   describe "read-model change nudges" do
     test "subscribes to read-model changes and nudges dispatch for committed email delivery creation" do
@@ -179,6 +196,80 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     end
   end
 
+  describe "provider handoff" do
+    test "builds the provider request from projected delivery and message context" do
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kootenay-mountaineering-club"
+        )
+
+      sender =
+        insert_membership_person!(
+          name: "Alice Sender",
+          email: "alice.sender@example.com"
+        )
+
+      message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: sender.person_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas."
+        )
+
+      recipient_id = Memba.ID.generate(:person)
+
+      delivery =
+        insert_email_delivery!(
+          message_id: message.message_id,
+          recipient_id: recipient_id,
+          recipient_name: "Bob Member",
+          recipient_address: "bob.member@example.com",
+          status: "dispatching"
+        )
+
+      assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
+
+      assert [
+               %EmailDeliveryRequest{
+                 message_id: message_id,
+                 club_id: club_id,
+                 delivery_id: delivery_id,
+                 recipient_id: ^recipient_id,
+                 recipient_name: "Bob Member",
+                 recipient_address: "bob.member@example.com",
+                 club_name: "Kootenay Mountaineering Club",
+                 club_slug: "kootenay-mountaineering-club",
+                 sender_name: "Alice Sender",
+                 sender_address: "alice.sender@example.com",
+                 channel: :email,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               }
+             ] = Fake.deliveries()
+
+      assert message_id == message.message_id
+      assert club_id == club.club_id
+      assert delivery_id == delivery.delivery_id
+    end
+
+    test "does not call the provider when the delivery's message projection is missing" do
+      message_id = Memba.ID.generate(:message)
+
+      delivery =
+        insert_email_delivery!(
+          message_id: message_id,
+          status: "dispatching"
+        )
+
+      assert {:error, {:missing_message_projection, ^message_id}} =
+               EmailDeliveryDispatcher.deliver_to_provider(delivery)
+
+      assert Fake.deliveries() == []
+    end
+  end
+
   defp insert_email_delivery!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
@@ -200,4 +291,21 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       updated_at: Keyword.get(attrs, :updated_at, now)
     })
   end
+
+  defp insert_message_projection!(attrs) when is_list(attrs) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.insert!(%MessageProjection{
+      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      club_id: Keyword.fetch!(attrs, :club_id),
+      sender_id: Keyword.fetch!(attrs, :sender_id),
+      subject: Keyword.fetch!(attrs, :subject),
+      body: Keyword.fetch!(attrs, :body),
+      inserted_at: Keyword.get(attrs, :inserted_at, now),
+      updated_at: Keyword.get(attrs, :updated_at, now)
+    })
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end
