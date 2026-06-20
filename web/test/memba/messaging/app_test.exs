@@ -12,6 +12,7 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
   alias Memba.Messaging.Router
 
@@ -27,6 +28,19 @@ defmodule Memba.Messaging.AppTest do
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{InboundEmailSourceProjector, _opts}, pid, :worker, [InboundEmailSourceProjector]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
+  end
+
+  test "email delivery dispatcher is supervised by the Phoenix application" do
+    assert is_pid(Process.whereis(EmailDeliveryDispatcher))
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {EmailDeliveryDispatcher, pid, :worker, [EmailDeliveryDispatcher]}
              when is_pid(pid) ->
                true
 
