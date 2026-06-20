@@ -1,0 +1,88 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index 1f73993..b9d995a 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current outbound send paths and tests:
+ - [x] 002 Update the `EmailDelivery` projection/read model so newly created records start with status `pending` and can store dispatch diagnostics such as attempt count, latest error/detail, and useful timestamps.
+ - [x] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
+-- [ ] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
++- [x] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
+ - [ ] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
+ - [ ] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.
+ - [ ] 007 Move request-building/provider-call logic out of `Memba.Messaging` into the dispatcher or a focused collaborator used by the dispatcher.
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 96a314c..09fc02b 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -15,6 +15,7 @@ defmodule Memba.Application do
+       Memba.Messaging.App,
+       Memba.Messaging.EmailDeliveryProviders.Fake,
+       Memba.Messaging.LocalDeliveryFacts,
++      Memba.Messaging.EmailDeliveryDispatcher,
+       Memba.Messaging.Projectors.Message,
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+new file mode 100644
+index 0000000..c97daef
+--- /dev/null
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -0,0 +1,25 @@
++defmodule Memba.Messaging.EmailDeliveryDispatcher do
++  @moduledoc """
++  OTP process responsible for asynchronous email delivery dispatch.
++
++  Later iteration tasks add read-model-change subscription, claiming, provider
++  delivery, and retry behaviour. This process is intentionally minimal here so
++  the application has a named supervised dispatch boundary before that behaviour
++  is attached.
++  """
++
++  use GenServer
++
++  @name __MODULE__
++
++  def start_link(opts \\ []) do
++    name = Keyword.get(opts, :name, @name)
++
++    GenServer.start_link(__MODULE__, %{}, name: name)
++  end
++
++  @impl GenServer
++  def init(state) do
++    {:ok, state}
++  end
++end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index f6f4ed8..5f56140 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.AppTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
+   alias Memba.Messaging.Router
+ 
+@@ -35,6 +36,19 @@ defmodule Memba.Messaging.AppTest do
+            end)
+   end
+ 
++  test "email delivery dispatcher is supervised by the Phoenix application" do
++    assert is_pid(Process.whereis(EmailDeliveryDispatcher))
++
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {EmailDeliveryDispatcher, pid, :worker, [EmailDeliveryDispatcher]}
++             when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
++  end
++
+   test "Messaging Commanded app includes the Messaging router" do
+     expected_commands =
+       MapSet.new([
