@@ -1,0 +1,417 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index 5bdc47e..c9526f2 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -11,6 +11,6 @@
+ - [x] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.
+ - [x] 010 Add an internal/manual retry API for failed deliveries. Do not add automatic retries, startup sweeps, periodic sweeps, or staff retry UI in this slice.
+ - [x] 011 Adapt accepted inbound club-message flow so it relies on the same pending-delivery projection and dispatcher path.
+-- [ ] 012 Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses: hide or soften infrastructure detail on member-facing screens, while allowing staff/operator diagnostics to show exact status/error.
++- [x] 012 Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses: hide or soften infrastructure detail on member-facing screens, while allowing staff/operator diagnostics to show exact status/error.
+ - [ ] 013 Add/update focused tests for the acceptance criteria above.
+ - [ ] 014 Run `dev check` and fix any regressions.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index f4427e2..f2626d8 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -454,12 +454,18 @@ defmodule Memba.Messaging do
+   defp operator_deliveries_query(opts) do
+     query =
+       from deliverability in MembaStaffEmailDeliveryProjection,
++        left_join: dispatch in EmailDeliveryProjection,
++        on: dispatch.delivery_id == deliverability.delivery_id,
+         join: message in MessageProjection,
+         on: message.message_id == deliverability.message_id,
+         order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
+         select_merge: %{
+           message_subject: message.subject,
+-          event_at: deliverability.updated_at
++          event_at: deliverability.updated_at,
++          dispatch_status: dispatch.status,
++          dispatch_attempt_count: dispatch.attempt_count,
++          dispatch_latest_error: dispatch.latest_error,
++          dispatch_latest_detail: dispatch.latest_detail
+         }
+ 
+     case Keyword.fetch(opts, :message_id) do
+diff --git a/web/lib/memba/messaging/projections/memba_staff_email_delivery.ex b/web/lib/memba/messaging/projections/memba_staff_email_delivery.ex
+index 77e5247..dfa2bbf 100644
+--- a/web/lib/memba/messaging/projections/memba_staff_email_delivery.ex
++++ b/web/lib/memba/messaging/projections/memba_staff_email_delivery.ex
+@@ -19,6 +19,10 @@ defmodule Memba.Messaging.Projections.MembaStaffEmailDelivery do
+     field :reason, :string
+     field :message_subject, :string, virtual: true
+     field :event_at, :utc_datetime_usec, virtual: true
++    field :dispatch_status, :string, virtual: true
++    field :dispatch_attempt_count, :integer, virtual: true
++    field :dispatch_latest_error, :string, virtual: true
++    field :dispatch_latest_detail, :string, virtual: true
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/lib/memba_web/live/admin/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+index 01059ac..408d657 100644
+--- a/web/lib/memba_web/live/admin/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -108,7 +108,8 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+                   <th scope="col" class="px-4 py-3">Recipient</th>
+                   <th scope="col" class="px-4 py-3">Club</th>
+                   <th scope="col" class="px-4 py-3">Message</th>
+-                  <th scope="col" class="px-4 py-3">Status</th>
++                  <th scope="col" class="px-4 py-3">Provider status</th>
++                  <th scope="col" class="px-4 py-3">Dispatch</th>
+                   <th scope="col" class="px-4 py-3">Provider event</th>
+                   <th scope="col" class="px-4 py-3">Time</th>
+                   <th scope="col" class="px-4 py-3">Message ID</th>
+@@ -120,7 +121,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+                 phx-update="stream"
+               >
+                 <tr id="deliveries-empty" class="hidden only:table-row">
+-                  <td colspan="7" class="px-4 py-6 text-center text-sm text-[#7d877f]">
++                  <td colspan="8" class="px-4 py-6 text-center text-sm text-[#7d877f]">
+                     No email deliveries.
+                   </td>
+                 </tr>
+@@ -157,6 +158,35 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+                       tone={status_tone(delivery.status)}
+                     />
+                   </td>
++                  <td
++                    data-test-id="delivery-dispatch"
++                    class="max-w-sm px-4 py-3.5 text-xs text-[#4b5a55]"
++                  >
++                    <div class="space-y-1">
++                      <.status_badge
++                        data-test-id="delivery-dispatch-status"
++                        label={dispatch_status(delivery)}
++                        tone={dispatch_status_tone(dispatch_status(delivery))}
++                      />
++                      <p data-test-id="delivery-dispatch-attempts">
++                        attempts: {dispatch_attempt_count(delivery)}
++                      </p>
++                      <p
++                        :if={present?(delivery.dispatch_latest_error)}
++                        data-test-id="delivery-dispatch-error"
++                        class="font-mono text-[#8a3d21]"
++                      >
++                        error: {delivery.dispatch_latest_error}
++                      </p>
++                      <p
++                        :if={present?(delivery.dispatch_latest_detail)}
++                        data-test-id="delivery-dispatch-detail"
++                        class="font-mono"
++                      >
++                        detail: {delivery.dispatch_latest_detail}
++                      </p>
++                    </div>
++                  </td>
+                   <td
+                     data-test-id="delivery-reason"
+                     class="max-w-sm px-4 py-3.5 font-mono text-xs text-[#4b5a55]"
+@@ -210,6 +240,24 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   defp status_tone("delivered"), do: "info"
+   defp status_tone(_status), do: "neutral"
+ 
++  defp dispatch_status(%{dispatch_status: status}) when is_binary(status) and status != "",
++    do: status
++
++  defp dispatch_status(_delivery), do: "unknown"
++
++  defp dispatch_status_tone("pending"), do: "warning"
++  defp dispatch_status_tone("dispatching"), do: "warning"
++  defp dispatch_status_tone("failed"), do: "error"
++  defp dispatch_status_tone("sent"), do: "success"
++  defp dispatch_status_tone("delivered"), do: "info"
++  defp dispatch_status_tone(_status), do: "neutral"
++
++  defp dispatch_attempt_count(%{dispatch_attempt_count: count}) when is_integer(count), do: count
++  defp dispatch_attempt_count(_delivery), do: 0
++
++  defp present?(value) when is_binary(value), do: value != ""
++  defp present?(_value), do: false
++
+   defp status_label(status), do: status |> to_string() |> String.capitalize()
+ 
+   defp refresh_deliveries(socket) do
+diff --git a/web/lib/memba_web/live/admin/messages_live/show.ex b/web/lib/memba_web/live/admin/messages_live/show.ex
+index 66d6f5d..e80664f 100644
+--- a/web/lib/memba_web/live/admin/messages_live/show.ex
++++ b/web/lib/memba_web/live/admin/messages_live/show.ex
+@@ -205,7 +205,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+                 data-recipient-id={delivery.recipient_id}
+                 data-recipient-name={delivery.recipient_name}
+                 aria-label={"Email delivery for #{delivery.recipient_name}"}
+-                class="grid gap-3 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)]"
++                class="grid gap-3 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)]"
+               >
+                 <p class="font-medium text-[#15201c]">{delivery.recipient_name}</p>
+                 <p class="text-sm text-[#4b5a55]">{delivery.recipient_address}</p>
+@@ -222,6 +222,34 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+                 >
+                   {delivery.status}
+                 </p>
++                <div
++                  id={"delivery-dispatch-diagnostics-#{delivery.delivery_id}"}
++                  data-testid="delivery-dispatch-diagnostics"
++                  class="space-y-1 text-xs text-[#4b5a55]"
++                >
++                  <p
++                    id={"delivery-attempt-count-#{delivery.delivery_id}"}
++                    data-testid="delivery-attempt-count"
++                  >
++                    Attempts: {delivery.attempt_count || 0}
++                  </p>
++                  <p
++                    :if={present?(delivery.latest_error)}
++                    id={"delivery-latest-error-#{delivery.delivery_id}"}
++                    data-testid="delivery-latest-error"
++                    class="font-mono text-[#8a3d21]"
++                  >
++                    Error: {delivery.latest_error}
++                  </p>
++                  <p
++                    :if={present?(delivery.latest_detail)}
++                    id={"delivery-latest-detail-#{delivery.delivery_id}"}
++                    data-testid="delivery-latest-detail"
++                    class="font-mono"
++                  >
++                    Detail: {delivery.latest_detail}
++                  </p>
++                </div>
+               </div>
+             </div>
+           </section>
+@@ -298,6 +326,10 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+   defp subject_label(subject) when is_binary(subject) and subject != "", do: subject
+   defp subject_label(_subject), do: "Untitled message"
+ 
++  defp delivery_status_class("pending"), do: "bg-[#f3ecd8] text-[#7a5416]"
++  defp delivery_status_class("dispatching"), do: "bg-[#f3ecd8] text-[#7a5416]"
++  defp delivery_status_class("failed"), do: "bg-[#f6e0c9] text-[#8a3d21]"
++  defp delivery_status_class("sent"), do: "bg-[#e6ece4] text-[#1f4842]"
+   defp delivery_status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"
+   defp delivery_status_class("bounced"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+   defp delivery_status_class("spam complaint"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+@@ -307,4 +339,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+   defp receipt_status_class("delivery problem"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+   defp receipt_status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
+   defp receipt_status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
++
++  defp present?(value) when is_binary(value), do: value != ""
++  defp present?(_value), do: false
+ end
+diff --git a/web/lib/memba_web/member_email_delivery_presentation.ex b/web/lib/memba_web/member_email_delivery_presentation.ex
+index e93ac99..a1cc16b 100644
+--- a/web/lib/memba_web/member_email_delivery_presentation.ex
++++ b/web/lib/memba_web/member_email_delivery_presentation.ex
+@@ -9,6 +9,15 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+ 
+   @fallback_status "sent"
+   @status_order ["delivered", "sent", "delivery problem"]
++  @status_aliases %{
++    "pending" => "sent",
++    "dispatching" => "sent",
++    "failed" => "sent",
++    "delayed" => "delivery problem",
++    "bounced" => "delivery problem",
++    "spam_complaint" => "delivery problem",
++    "spam complaint" => "delivery problem"
++  }
+ 
+   @presentations %{
+     "sent" => %{label: "Sending", icon: "hero-clock", tone: "warning"},
+@@ -47,9 +56,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   @doc """
+   Returns the member-facing label and icon for an internal status.
+ 
+-  Blank or missing statuses are treated as the projection's initial `sent`
+-  status. Unknown statuses keep their internal value available to callers while
+-  falling back to readable copy and a neutral icon.
++  Blank or missing statuses are treated as the member projection's initial
++  `sent` status. Detailed provider outcomes and async dispatch infrastructure
++  states are folded into the small member-facing vocabulary before any copy is
++  shown.
+   """
+   def present_status(status) do
+     status = normalize_status(status)
+@@ -142,7 +152,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   defp normalize_status(status) when is_binary(status) do
+     case status do
+       "" -> @fallback_status
+-      status -> status
++      status -> Map.get(@status_aliases, status, status)
+     end
+   end
+ 
+diff --git a/web/test/memba_web/live/admin_diagnostics_live_test.exs b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+index ec42af7..55d7eb1 100644
+--- a/web/test/memba_web/live/admin_diagnostics_live_test.exs
++++ b/web/test/memba_web/live/admin_diagnostics_live_test.exs
+@@ -4,7 +4,9 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Recipient
++  alias Memba.Repo
+ 
+   test "Memba staff message detail keeps diagnostic sections and raw status values", %{conn: conn} do
+     %{message_id: message_id, recipients: [alice, bob]} =
+@@ -61,8 +63,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+     )
+ 
+     assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "pending")
+-    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
+-    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
++    assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f3ecd8]")
++    assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#7a5416]")
+ 
+     assert_selector_exists(
+       html,
+@@ -126,6 +128,102 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+     refute response =~ "Delivery problem"
+   end
+ 
++  test "Memba staff diagnostics show exact async dispatch status and latest error", %{conn: conn} do
++    %{message_id: message_id, recipients: [recipient]} =
++      send_projected_message_with_recipients(["Dana"], subject: "Dispatch diagnostics")
++
++    dispatch_detail = "{:postmark_delivery_error, :unavailable}"
++
++    recipient.delivery_id
++    |> failed_delivery_changeset(%{
++      status: "failed",
++      attempt_count: 2,
++      latest_error: "postmark_delivery_error",
++      latest_detail: dispatch_detail
++    })
++    |> Repo.update!()
++
++    message_response =
++      conn
++      |> sign_in_staff()
++      |> get("/admin/messages/#{message_id}")
++      |> html_response(200)
++
++    message_html = LazyHTML.from_fragment(message_response)
++
++    assert_selector_exists(
++      message_html,
++      "#delivery-status-#{recipient.delivery_id}[data-delivery-status='failed']"
++    )
++
++    assert_exact_text(message_html, "#delivery-status-#{recipient.delivery_id}", "failed")
++    assert_class(message_html, "#delivery-status-#{recipient.delivery_id}", "bg-[#f6e0c9]")
++
++    assert_exact_text(
++      message_html,
++      "#delivery-attempt-count-#{recipient.delivery_id}",
++      "Attempts: 2"
++    )
++
++    assert_exact_text(
++      message_html,
++      "#delivery-latest-error-#{recipient.delivery_id}",
++      "Error: postmark_delivery_error"
++    )
++
++    assert_exact_text(
++      message_html,
++      "#delivery-latest-detail-#{recipient.delivery_id}",
++      "Detail: #{dispatch_detail}"
++    )
++
++    assert_selector_exists(
++      message_html,
++      "#receipt-status-#{recipient.delivery_id}[data-receipt-status='sent']"
++    )
++
++    overview_response =
++      conn
++      |> recycle()
++      |> sign_in_staff()
++      |> get("/admin/deliveries")
++      |> html_response(200)
++
++    overview_html = LazyHTML.from_fragment(overview_response)
++    row_selector = "[data-test-id='delivery-row-#{recipient.delivery_id}']"
++
++    assert_selector_exists(
++      overview_html,
++      "#{row_selector}[data-delivery-status='sent']"
++    )
++
++    assert_exact_text(overview_html, "#{row_selector} [data-test-id='delivery-status']", "sent")
++
++    assert_exact_text(
++      overview_html,
++      "#{row_selector} [data-test-id='delivery-dispatch-status']",
++      "failed"
++    )
++
++    assert_exact_text(
++      overview_html,
++      "#{row_selector} [data-test-id='delivery-dispatch-attempts']",
++      "attempts: 2"
++    )
++
++    assert_exact_text(
++      overview_html,
++      "#{row_selector} [data-test-id='delivery-dispatch-error']",
++      "error: postmark_delivery_error"
++    )
++
++    assert_exact_text(
++      overview_html,
++      "#{row_selector} [data-test-id='delivery-dispatch-detail']",
++      "detail: #{dispatch_detail}"
++    )
++  end
++
+   defp send_projected_message_with_recipients(names, opts \\ []) do
+     [sender | _rest] =
+       recipients =
+@@ -182,6 +280,12 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
+            "Expected #{selector} to include class #{expected_class}; got #{inspect(classes)}"
+   end
+ 
++  defp failed_delivery_changeset(delivery_id, attrs) do
++    EmailDeliveryProjection
++    |> Repo.get!(delivery_id)
++    |> Ecto.Changeset.change(attrs)
++  end
++
+   defp email_for(name) do
+     normalized_name =
+       name
+diff --git a/web/test/memba_web/member_email_delivery_presentation_test.exs b/web/test/memba_web/member_email_delivery_presentation_test.exs
+index 4ef1495..dc9ef63 100644
+--- a/web/test/memba_web/member_email_delivery_presentation_test.exs
++++ b/web/test/memba_web/member_email_delivery_presentation_test.exs
+@@ -27,6 +27,26 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+              }
+     end
+ 
++    test "folds detailed provider and dispatch states into member-facing statuses" do
++      for status <- ["pending", "dispatching", "failed"] do
++        assert MemberEmailDeliveryPresentation.present_status(status) == %{
++                 status: "sent",
++                 label: "Sending",
++                 icon: "hero-clock",
++                 tone: "warning"
++               }
++      end
++
++      for status <- ["delayed", "bounced", "spam_complaint", "spam complaint"] do
++        assert MemberEmailDeliveryPresentation.present_status(status) == %{
++                 status: "delivery problem",
++                 label: "Delivery problem",
++                 icon: "hero-exclamation-triangle",
++                 tone: "error"
++               }
++      end
++    end
++
+     test "treats blank or missing statuses as the initial sent status" do
+       assert MemberEmailDeliveryPresentation.present_status(nil) == %{
+                status: "sent",
