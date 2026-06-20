@@ -3,6 +3,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
@@ -34,10 +35,32 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
       )
 
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kootenay-mountaineering-club"
+        )
+
+      sender =
+        insert_membership_person!(
+          name: "Alice Sender",
+          email: "alice.sender@example.com"
+        )
+
+      message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: sender.person_id,
+          subject: "Dispatch nudge",
+          body: "Dispatch this message."
+        )
+
+      recipient_id = Memba.ID.generate(:person)
+
       event = %EmailDeliveryCreated{
-        message_id: "msg_dispatch_nudge",
-        delivery_id: "del_dispatch_nudge",
-        recipient_id: "per_dispatch_nudge",
+        message_id: message.message_id,
+        delivery_id: Memba.ID.generate(:delivery),
+        recipient_id: recipient_id,
         recipient_name: "Ada Member",
         recipient_email: "ada@example.test"
       }
@@ -72,7 +95,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
       assert claimed_delivery_id == event.delivery_id
 
-      assert %EmailDeliveryProjection{status: "dispatching"} =
+      assert %EmailDeliveryProjection{status: "sent", sent_at: %DateTime{}} =
                Repo.get!(EmailDeliveryProjection, event.delivery_id)
     end
 
@@ -270,6 +293,65 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     end
   end
 
+  describe "dispatch outcomes" do
+    test "marks a claimed delivery as sent when the provider accepts it" do
+      %{message: message, delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      assert [
+               %EmailDeliveryProjection{
+                 delivery_id: delivery_id,
+                 status: "sent",
+                 attempt_count: 0,
+                 latest_error: nil,
+                 latest_detail: nil,
+                 sent_at: %DateTime{} = sent_at,
+                 failed_at: nil
+               }
+             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert delivery_id == delivery.delivery_id
+      assert DateTime.compare(sent_at, delivery.inserted_at) in [:gt, :eq]
+
+      assert [%EmailDeliveryRequest{message_id: message_id, delivery_id: ^delivery_id}] =
+               Fake.deliveries()
+
+      assert message_id == message.message_id
+
+      assert %EmailDeliveryProjection{status: "sent", sent_at: ^sent_at} =
+               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+    end
+
+    test "marks a claimed delivery as failed and persists diagnostics when the provider errors" do
+      Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      assert [
+               %EmailDeliveryProjection{
+                 delivery_id: delivery_id,
+                 status: "failed",
+                 attempt_count: 1,
+                 latest_error: "unavailable",
+                 latest_detail: ":unavailable",
+                 sent_at: nil,
+                 failed_at: %DateTime{} = failed_at
+               }
+             ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+      assert delivery_id == delivery.delivery_id
+      assert DateTime.compare(failed_at, delivery.inserted_at) in [:gt, :eq]
+
+      assert %EmailDeliveryProjection{
+               status: "failed",
+               attempt_count: 1,
+               latest_error: "unavailable",
+               latest_detail: ":unavailable",
+               sent_at: nil,
+               failed_at: ^failed_at
+             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+    end
+  end
+
   defp insert_email_delivery!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
@@ -290,6 +372,41 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       inserted_at: Keyword.get(attrs, :inserted_at, now),
       updated_at: Keyword.get(attrs, :updated_at, now)
     })
+  end
+
+  defp insert_dispatchable_delivery!(attrs) when is_list(attrs) do
+    club =
+      insert_membership_club!(
+        name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club"),
+        slug: Keyword.get(attrs, :club_slug, "kootenay-mountaineering-club")
+      )
+
+    sender =
+      insert_membership_person!(
+        name: Keyword.get(attrs, :sender_name, "Alice Sender"),
+        email: Keyword.get(attrs, :sender_email, "alice.sender@example.com")
+      )
+
+    message =
+      insert_message_projection!(
+        club_id: club.club_id,
+        sender_id: sender.person_id,
+        subject: Keyword.get(attrs, :subject, "Trip planning night"),
+        body: Keyword.get(attrs, :body, "Bring route ideas.")
+      )
+
+    delivery =
+      insert_email_delivery!(
+        message_id: message.message_id,
+        recipient_id:
+          Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
+        recipient_name: Keyword.get(attrs, :recipient_name, "Bob Member"),
+        recipient_address: Keyword.get(attrs, :recipient_address, "bob.member@example.com"),
+        status: Keyword.fetch!(attrs, :status),
+        attempt_count: Keyword.get(attrs, :attempt_count, 0)
+      )
+
+    %{club: club, sender: sender, message: message, delivery: delivery}
   end
 
   defp insert_message_projection!(attrs) when is_list(attrs) do
