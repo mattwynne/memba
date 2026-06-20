@@ -4,9 +4,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   The dispatcher subscribes to committed read-model changes and treats new
   `EmailDelivery` projection records as a nudge to look for pending delivery
-  work. It also owns the provider handoff request-building boundary so command
-  application services do not call email providers directly. Later iteration
-  tasks add persisted success/failure outcomes and retry behaviour.
+  work. It also owns the provider handoff request-building boundary and
+  persisted dispatch outcomes so command application services do not call email
+  providers directly. Later iteration tasks add retry behaviour.
   """
 
   use GenServer
@@ -28,6 +28,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   @name __MODULE__
   @pending_status "pending"
   @dispatching_status "dispatching"
+  @sent_status "sent"
+  @failed_status "failed"
 
   @doc """
   Atomically claim one pending email delivery for provider dispatch.
@@ -76,6 +78,30 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
         :not_claimed -> []
       end
     end)
+  end
+
+  @doc """
+  Claim all currently pending email deliveries and dispatch each claimed record.
+
+  Provider acceptance marks a claimed delivery as `sent`. Provider/request
+  errors mark the individual delivery as `failed`, increment the persisted
+  attempt count, and store the latest error diagnostics. Each claimed delivery
+  is handled independently so one failure does not prevent later claimed
+  deliveries from being attempted.
+  """
+  def dispatch_pending_email_deliveries do
+    claim_pending_email_deliveries()
+    |> Enum.map(&dispatch_claimed_delivery/1)
+  end
+
+  @doc """
+  Hand one already-claimed delivery to the provider and persist the outcome.
+  """
+  def dispatch_claimed_delivery(%EmailDeliveryProjection{} = delivery) do
+    case deliver_to_provider(delivery) do
+      :ok -> mark_delivery_sent(delivery)
+      {:error, reason} -> mark_delivery_failed(delivery, reason)
+    end
   end
 
   @doc """
@@ -156,17 +182,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
-    claimed_deliveries = claim_pending_email_deliveries(state)
+    claimed_deliveries = dispatch_pending_email_deliveries(state)
 
     notify_dispatch_observer(state, payload, claimed_deliveries)
 
     {:noreply, state}
   end
 
-  defp claim_pending_email_deliveries(%{dispatch_enabled: true}),
-    do: claim_pending_email_deliveries()
+  defp dispatch_pending_email_deliveries(%{dispatch_enabled: true}),
+    do: dispatch_pending_email_deliveries()
 
-  defp claim_pending_email_deliveries(%{dispatch_enabled: false}), do: []
+  defp dispatch_pending_email_deliveries(%{dispatch_enabled: false}), do: []
 
   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
 
@@ -182,6 +208,68 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
     :ok
   end
+
+  defp mark_delivery_sent(%EmailDeliveryProjection{} = delivery) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    delivery
+    |> outcome_query()
+    |> Repo.update_all(
+      set: [
+        status: @sent_status,
+        latest_error: nil,
+        latest_detail: nil,
+        sent_at: now,
+        failed_at: nil,
+        updated_at: now
+      ]
+    )
+
+    Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+  end
+
+  defp mark_delivery_failed(%EmailDeliveryProjection{} = delivery, reason) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    {latest_error, latest_detail} = delivery_error_diagnostics(reason)
+
+    delivery
+    |> outcome_query()
+    |> Repo.update_all(
+      set: [
+        status: @failed_status,
+        latest_error: latest_error,
+        latest_detail: latest_detail,
+        failed_at: now,
+        updated_at: now
+      ],
+      inc: [attempt_count: 1]
+    )
+
+    Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+  end
+
+  defp outcome_query(%EmailDeliveryProjection{} = delivery) do
+    from projected_delivery in EmailDeliveryProjection,
+      where:
+        projected_delivery.delivery_id == ^delivery.delivery_id and
+          projected_delivery.status == ^@dispatching_status
+  end
+
+  defp delivery_error_diagnostics(reason) do
+    {delivery_error_name(reason), inspect(reason, limit: 50, printable_limit: 2_000)}
+  end
+
+  defp delivery_error_name(reason) when is_atom(reason), do: Atom.to_string(reason)
+
+  defp delivery_error_name(reason) when is_binary(reason), do: reason
+
+  defp delivery_error_name(reason) when is_tuple(reason) and tuple_size(reason) > 0 do
+    reason
+    |> elem(0)
+    |> delivery_error_name()
+  end
+
+  defp delivery_error_name(reason), do: inspect(reason, limit: 10, printable_limit: 200)
 
   defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do
     with %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),
