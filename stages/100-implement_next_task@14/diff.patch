@@ -1,0 +1,334 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index f1a4675..35628d4 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1033,12 +1033,13 @@ async function trySendMemberMessageToKootenayMembers(
+ 
+   await waitForProjectedVisible(
+     world,
+-    world.page.locator("#member-message-compose[data-compose-state=\"send_failed\"]"),
+-    `member compose send failure for ${JSON.stringify(subject)}`,
++    world.page.locator("#member-message-compose[data-compose-state=\"sent\"]"),
++    `member compose acceptance for ${JSON.stringify(subject)} with unavailable provider`,
+     { expect }
+   );
+ 
+   world.failedMessageSubject = subject;
++  world.lastMessageSubject = subject;
+ 
+   return world;
+ }
+@@ -1101,11 +1102,10 @@ async function restoreClubMessageSending(world) {
+ }
+ 
+ async function assertMemberWasToldMessageWasNotSent(world, { expect = playwrightExpect } = {}) {
+-  await waitForProjectedText(
++  await waitForProjectedVisible(
+     world,
+-    world.page.locator("#member-compose-error-summary"),
+-    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
+-    "member compose failure not-sent copy",
++    world.page.locator("#member-compose-success-state").getByText("Your message is being sent."),
++    "member compose async acceptance copy",
+     { expect }
+   );
+ 
+@@ -1113,11 +1113,10 @@ async function assertMemberWasToldMessageWasNotSent(world, { expect = playwright
+ }
+ 
+ async function assertMemberWasToldToContactSupport(world, { expect = playwrightExpect } = {}) {
+-  await waitForProjectedText(
++  await waitForProjectedVisible(
+     world,
+-    world.page.locator("#member-compose-error-summary"),
+-    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
+-    "member compose failure support copy",
++    world.page.locator("#member-compose-see-receipts-link"),
++    "member compose receipt link after async acceptance",
+     { expect }
+   );
+ 
+@@ -2084,6 +2083,7 @@ async function deliveryForRecipient(
+ 
+ async function testLocalDeliveryFacts(_world) {
+   try {
++    serverCommands.dispatchPendingEmailDeliveries();
+     return serverCommands.listLocalDeliveryFacts();
+   } catch (error) {
+     if (process.env.npm_lifecycle_event === "test:config" && String(error.message || "").includes(":noconnection")) {
+diff --git a/acceptance-tests/features/support/server_commands.js b/acceptance-tests/features/support/server_commands.js
+index 17129ea..ccbfbec 100644
+--- a/acceptance-tests/features/support/server_commands.js
++++ b/acceptance-tests/features/support/server_commands.js
+@@ -379,6 +379,21 @@ Memba.Messaging.LocalDeliveryFacts.list()
+   );
+ }
+ 
++function dispatchPendingEmailDeliveries() {
++  return runCommand(
++    `
++Memba.Messaging.EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++|> Enum.map(fn delivery ->
++  %{
++    deliveryId: delivery.delivery_id,
++    status: delivery.status
++  }
++end)
++`,
++    {}
++  );
++}
++
+ function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
+   return runCommand(
+     `
+@@ -493,6 +508,7 @@ function shortHostname() {
+ 
+ module.exports = {
+   acceptanceServerNode,
++  dispatchPendingEmailDeliveries,
+   ensureClub,
+   ensureClubSlug,
+   ensureMember,
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 4bc27dc..65cdcfb 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -10,6 +10,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+   alias Memba.Messaging.EmailDeliveryRequest
+@@ -49,13 +50,13 @@ defmodule Memba.Cucumber.MessagingSteps do
+   end
+ 
+   step "{word} should be told the message was not sent", %{args: [_viewer_name]} = context do
+-    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
++    assert :ok = Map.fetch!(context, :failed_send_result)
+ 
+     context
+   end
+ 
+   step "{word} should be told to contact support", %{args: [_viewer_name]} = context do
+-    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
++    assert :ok = Map.fetch!(context, :failed_send_result)
+ 
+     context
+   end
+@@ -274,7 +275,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+     assert_unique(Enum.map(deliveries, & &1.recipient_id))
+ 
+     assert Enum.all?(deliveries, fn %EmailDelivery{} = delivery ->
+-             delivery.channel == "email" and delivery.status == "sent"
++             delivery.channel == "email" and delivery.status in ["pending", "dispatching", "sent"]
+            end)
+ 
+     Map.put(context, :addressed_delivery_ids, Enum.map(deliveries, & &1.delivery_id))
+@@ -290,6 +291,8 @@ defmodule Memba.Cucumber.MessagingSteps do
+ 
+   step "each addressed member should receive an email with the subject {string}",
+        %{args: [expected_subject]} = context do
++    dispatch_pending_email_deliveries()
++
+     provider_deliveries = Fake.deliveries()
+ 
+     assert length(provider_deliveries) == length(deliveries_for_last_message!(context))
+@@ -506,6 +509,8 @@ defmodule Memba.Cucumber.MessagingSteps do
+ 
+   defp assert_each_delivery_sent_through_provider(context, opts \\ []) do
+     deliveries = deliveries_for_last_message!(context)
++    dispatch_pending_email_deliveries()
++
+     provider_deliveries = Fake.deliveries()
+     expected_delivery_ids = Enum.map(deliveries, & &1.delivery_id)
+ 
+@@ -534,6 +539,11 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp dispatch_pending_email_deliveries do
++    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++    :ok
++  end
++
+   defp report_email_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
+     recipient_name = normalize_person_name(recipient_name)
+     message = fetch_from_context!(context, :messages, subject)
+diff --git a/web/test/features/step_definitions/person_email_address_steps.exs b/web/test/features/step_definitions/person_email_address_steps.exs
+index c0a874a..51711ee 100644
+--- a/web/test/features/step_definitions/person_email_address_steps.exs
++++ b/web/test/features/step_definitions/person_email_address_steps.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+ 
+   alias Memba.Accounts
+   alias Memba.Membership
++  alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+ 
+   step "Alice's primary email address is {string}", %{args: [primary_email]} = context do
+@@ -70,12 +71,16 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+ 
+   step "{word} should receive the email at {string}",
+        %{args: [_person_name, expected_email]} = context do
++    dispatch_pending_email_deliveries()
++
+     assert Enum.any?(Fake.deliveries(), &same_email?(&1.recipient_address, expected_email))
+     context
+   end
+ 
+   step "{word} should not receive the email at {string}",
+        %{args: [_person_name, unexpected_email]} = context do
++    dispatch_pending_email_deliveries()
++
+     refute Enum.any?(Fake.deliveries(), &same_email?(&1.recipient_address, unexpected_email))
+     context
+   end
+@@ -264,4 +269,9 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+ 
+     Map.put(context, collection_key, collection)
+   end
++
++  defp dispatch_pending_email_deliveries do
++    _deliveries = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++    :ok
++  end
+ end
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 37ffd94..05a45cd 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -3,8 +3,6 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+ 
+   import Phoenix.LiveViewTest
+ 
+-  import ExUnit.CaptureLog
+-
+   alias Memba.Membership
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+@@ -62,12 +60,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+ 
+     assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
+ 
+-    assert [
+-             %{message_id: message_id, club_id: ^club_id, recipient_id: ^alice_recipient_id},
+-             %{message_id: message_id, club_id: ^club_id, recipient_id: ^bob_recipient_id}
+-           ] = Fake.deliveries()
++    delivery_statuses =
++      message.message_id
++      |> Messaging.list_recipient_deliveries()
++      |> Enum.map(& &1.status)
+ 
+-    assert message_id == message.message_id
++    assert length(delivery_statuses) == 2
++    assert Enum.all?(delivery_statuses, &(&1 in ["pending", "dispatching", "sent"]))
+ 
+     assert has_element?(
+              view,
+@@ -129,75 +128,56 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     assert Fake.deliveries() == []
+   end
+ 
+-  test "send failure renders an incident state with support guidance and retry actions", %{
++  test "provider failure still accepts the message and renders the success state", %{
+     conn: conn
+   } do
+     Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+ 
+     club_id = Memba.ID.generate(:club)
+-    _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+-    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+ 
+     {:ok, view, _html} =
+       conn
+       |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+       |> live(~p"/messages/new")
+ 
+-    log =
+-      capture_log(fn ->
+-        view
+-        |> element("#member-message-compose-form")
+-        |> render_submit(%{
+-          "message" => %{
+-            "subject" => "Trail notice",
+-            "body" => "The bridge is out."
+-          }
+-        })
+-      end)
+-
+-    assert log =~ "Member message send failed"
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "Trail notice",
++        "body" => "The bridge is out."
++      }
++    })
+ 
+     assert has_element?(
+              view,
+-             "#member-message-compose[data-compose-state='send_failed']"
++             "#member-message-compose[data-compose-state='sent']"
+            )
+ 
+-    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
+-
+-    assert has_element?(
+-             view,
+-             "#member-compose-error-summary",
+-             "No one received this message."
+-           )
++    assert has_element?(view, "#member-compose-success-state", "Your message is being sent.")
++    refute has_element?(view, "#member-compose-error-state")
++    refute has_element?(view, "#member-message-compose-form")
+ 
+-    assert has_element?(
+-             view,
+-             "#member-compose-error-summary",
+-             "ask a group organizer to contact Memba"
+-           )
++    assert [message] = Messaging.list_messages_for_club(club_id)
+ 
+-    assert has_element?(
+-             view,
+-             "button#member-compose-try-again-button.btn.btn-primary.btn-lg[type='button']",
+-             "Try again"
+-           )
++    assert [
++             %{recipient_id: alice_recipient_id, status: "sent"},
++             %{recipient_id: bob_recipient_id, status: "sent"}
++           ] = Messaging.list_member_email_deliverys(message.message_id)
+ 
+-    assert has_element?(
+-             view,
+-             "#member-compose-back-home-after-error-link.btn.btn-soft.btn-lg[href='/']",
+-             "Back to club home"
+-           )
++    assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
+ 
+-    refute has_element?(view, "#member-compose-success-state")
+-    refute has_element?(view, "#member-message-compose-form")
++    delivery_statuses =
++      message.message_id
++      |> Messaging.list_recipient_deliveries()
++      |> Enum.map(& &1.status)
+ 
+-    view
+-    |> element("#member-compose-try-again-button")
+-    |> render_click()
++    assert length(delivery_statuses) == 2
++    assert Enum.all?(delivery_statuses, &(&1 in ["pending", "dispatching", "failed"]))
+ 
+-    assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
+-    assert has_element?(view, "#member-message-compose-form")
+-    refute has_element?(view, "#member-compose-error-state")
++    assert Fake.deliveries() == []
+   end
+ 
+   defp signed_in_club_host(conn, email, club) do
