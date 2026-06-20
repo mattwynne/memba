@@ -1,0 +1,401 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index 157c27e..57b59af 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
+ - [x] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
+ - [x] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
+-- [ ] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.
++- [x] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.
+ - [ ] 007 Move request-building/provider-call logic out of `Memba.Messaging` into the dispatcher or a focused collaborator used by the dispatcher.
+ - [ ] 008 On provider success, update the delivery to `sent`; on provider error, update it to `failed`, increment attempt count, and persist the latest error/detail.
+ - [ ] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.
+diff --git a/web/config/test.exs b/web/config/test.exs
+index 473c4b1..eded21c 100644
+--- a/web/config/test.exs
++++ b/web/config/test.exs
+@@ -73,6 +73,11 @@ end
+ # Disable swoosh api client as it is only required for production adapters
+ config :swoosh, :api_client, false
+ 
++# The supervised dispatcher stays running in tests so supervision wiring is
++# covered, but focused tests opt into DB-backed claiming with their own
++# sandbox-shared dispatcher process.
++config :memba, :email_delivery_dispatcher_dispatch_enabled, false
++
+ # Print only warnings and errors during test
+ config :logger, level: :warning
+ 
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 09fc02b..27eb075 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -15,7 +15,9 @@ defmodule Memba.Application do
+       Memba.Messaging.App,
+       Memba.Messaging.EmailDeliveryProviders.Fake,
+       Memba.Messaging.LocalDeliveryFacts,
+-      Memba.Messaging.EmailDeliveryDispatcher,
++      {Memba.Messaging.EmailDeliveryDispatcher,
++       dispatch_enabled:
++         Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
+       Memba.Messaging.Projectors.Message,
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index 65868ac..d39c377 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -10,11 +10,66 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+   use GenServer
+ 
++  import Ecto.Query
++
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
++  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.ReadModelChanges
++  alias Memba.Repo
+ 
+   @name __MODULE__
++  @pending_status "pending"
++  @dispatching_status "dispatching"
++
++  @doc """
++  Atomically claim one pending email delivery for provider dispatch.
++
++  A delivery is claimable only while its status is `pending`. The conditional
++  update makes concurrent callers race on the database row: exactly one caller
++  can move a given delivery to `dispatching`; later callers get `:not_claimed`.
++  """
++  def claim_pending_delivery(delivery_id) when is_binary(delivery_id) do
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    claim_query =
++      from delivery in EmailDeliveryProjection,
++        where: delivery.delivery_id == ^delivery_id and delivery.status == ^@pending_status
++
++    case Repo.update_all(claim_query,
++           set: [
++             status: @dispatching_status,
++             last_dispatch_attempted_at: now,
++             updated_at: now
++           ]
++         ) do
++      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
++      {0, nil} -> :not_claimed
++    end
++  end
++
++  def claim_pending_delivery(_delivery_id), do: :not_claimed
++
++  @doc """
++  Claim all currently pending email deliveries.
++
++  This is a best-effort nudge handler, not a periodic sweep. It first reads the
++  pending delivery IDs, then claims each ID with `claim_pending_delivery/1` so
++  concurrent dispatcher invocations cannot claim the same delivery twice.
++  """
++  def claim_pending_email_deliveries do
++    EmailDeliveryProjection
++    |> where([delivery], delivery.status == ^@pending_status)
++    |> order_by([delivery], asc: delivery.inserted_at, asc: delivery.delivery_id)
++    |> select([delivery], delivery.delivery_id)
++    |> Repo.all()
++    |> Enum.flat_map(fn delivery_id ->
++      case claim_pending_delivery(delivery_id) do
++        {:ok, %EmailDeliveryProjection{} = delivery} -> [delivery]
++        :not_claimed -> []
++      end
++    end)
++  end
+ 
+   def start_link(opts \\ []) do
+     {name, opts} = Keyword.pop(opts, :name, @name)
+@@ -31,6 +86,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+     :ok = Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+ 
+     state = %{
++      dispatch_enabled: Keyword.get(opts, :dispatch_enabled, true),
+       dispatch_observer: Keyword.get(opts, :dispatch_observer)
+     }
+ 
+@@ -56,17 +112,28 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   end
+ 
+   def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
+-    notify_dispatch_observer(state, payload)
++    claimed_deliveries = claim_pending_email_deliveries(state)
++
++    notify_dispatch_observer(state, payload, claimed_deliveries)
+ 
+     {:noreply, state}
+   end
+ 
+-  defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload), do: :ok
++  defp claim_pending_email_deliveries(%{dispatch_enabled: true}),
++    do: claim_pending_email_deliveries()
++
++  defp claim_pending_email_deliveries(%{dispatch_enabled: false}), do: []
++
++  defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
+ 
+-  defp notify_dispatch_observer(%{dispatch_observer: observer}, payload) when is_pid(observer) do
++  defp notify_dispatch_observer(%{dispatch_observer: observer}, payload, claimed_deliveries)
++       when is_pid(observer) do
+     send(
+       observer,
+-      {:email_delivery_dispatch_requested, Map.put(payload, :source, :read_model_change)}
++      {:email_delivery_dispatch_requested,
++       payload
++       |> Map.put(:source, :read_model_change)
++       |> Map.put(:claimed_delivery_ids, Enum.map(claimed_deliveries, & &1.delivery_id))}
+     )
+ 
+     :ok
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 265c671..cf7460a 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -1,63 +1,203 @@
+ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+-  use ExUnit.Case, async: false
++  use Memba.DataCase, async: false
+ 
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.EmailDeliveryDelivered
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
++  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.ReadModelChanges
+ 
+-  test "subscribes to read-model changes and nudges dispatch for committed email delivery creation" do
+-    name = :"#{__MODULE__}.email_delivery_created"
++  describe "read-model change nudges" do
++    test "subscribes to read-model changes and nudges dispatch for committed email delivery creation" do
++      name = :"#{__MODULE__}.email_delivery_created"
+ 
+-    start_supervised!({EmailDeliveryDispatcher, name: name, dispatch_observer: self()})
++      start_supervised!(
++        {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
++      )
+ 
+-    event = %EmailDeliveryCreated{
+-      message_id: "msg_dispatch_nudge",
+-      delivery_id: "del_dispatch_nudge",
+-      recipient_id: "per_dispatch_nudge",
+-      recipient_name: "Ada Member",
+-      recipient_email: "ada@example.test"
+-    }
++      event = %EmailDeliveryCreated{
++        message_id: "msg_dispatch_nudge",
++        delivery_id: "del_dispatch_nudge",
++        recipient_id: "per_dispatch_nudge",
++        recipient_name: "Ada Member",
++        recipient_email: "ada@example.test"
++      }
+ 
+-    changes = %{
+-      messaging_email_delivery: %{
++      insert_email_delivery!(
+         delivery_id: event.delivery_id,
+         message_id: event.message_id,
++        recipient_id: event.recipient_id,
++        recipient_name: event.recipient_name,
++        recipient_address: event.recipient_email,
+         status: "pending"
++      )
++
++      changes = %{
++        messaging_email_delivery: %{
++          delivery_id: event.delivery_id,
++          message_id: event.message_id,
++          status: "pending"
++        }
+       }
+-    }
+ 
+-    assert :ok = ReadModelChanges.publish(EmailDeliveryProjector, event, %{}, changes)
++      assert :ok = ReadModelChanges.publish(EmailDeliveryProjector, event, %{}, changes)
++
++      assert_receive {:email_delivery_dispatch_requested,
++                      %{
++                        source: :read_model_change,
++                        projector: EmailDeliveryProjector,
++                        source_event: ^event,
++                        changes: ^changes,
++                        claimed_delivery_ids: [claimed_delivery_id]
++                      }}
++
++      assert claimed_delivery_id == event.delivery_id
++
++      assert %EmailDeliveryProjection{status: "dispatching"} =
++               Repo.get!(EmailDeliveryProjection, event.delivery_id)
++    end
++
++    test "ignores unrelated read-model changes" do
++      name = :"#{__MODULE__}.unrelated_changes"
++
++      start_supervised!({EmailDeliveryDispatcher, name: name, dispatch_observer: self()})
++
++      event = %EmailDeliveryDelivered{
++        message_id: "msg_unrelated",
++        delivery_id: "del_unrelated"
++      }
++
++      assert :ok =
++               ReadModelChanges.publish(
++                 MemberEmailDeliveryProjector,
++                 event,
++                 %{},
++                 %{messaging_member_email_delivery: %{delivery_id: event.delivery_id}}
++               )
++
++      refute_receive {:email_delivery_dispatch_requested, _}
++    end
++
++    test "can leave read-model-change nudges observable without claiming in tests" do
++      name = :"#{__MODULE__}.dispatch_disabled"
++
++      start_supervised!(
++        {EmailDeliveryDispatcher, name: name, dispatch_enabled: false, dispatch_observer: self()}
++      )
++
++      event = %EmailDeliveryCreated{
++        message_id: "msg_dispatch_disabled",
++        delivery_id: "del_dispatch_disabled",
++        recipient_id: "per_dispatch_disabled",
++        recipient_name: "Disabled Dispatcher",
++        recipient_email: "disabled-dispatcher@example.test"
++      }
++
++      insert_email_delivery!(
++        delivery_id: event.delivery_id,
++        message_id: event.message_id,
++        recipient_id: event.recipient_id,
++        recipient_name: event.recipient_name,
++        recipient_address: event.recipient_email,
++        status: "pending"
++      )
++
++      assert :ok = ReadModelChanges.publish(EmailDeliveryProjector, event, %{}, %{})
+ 
+-    assert_receive {:email_delivery_dispatch_requested,
+-                    %{
+-                      source: :read_model_change,
+-                      projector: EmailDeliveryProjector,
+-                      source_event: ^event,
+-                      changes: ^changes
+-                    }}
++      assert_receive {:email_delivery_dispatch_requested,
++                      %{claimed_delivery_ids: [], source_event: ^event}}
++
++      assert %EmailDeliveryProjection{status: "pending"} =
++               Repo.get!(EmailDeliveryProjection, event.delivery_id)
++    end
+   end
+ 
+-  test "ignores unrelated read-model changes" do
+-    name = :"#{__MODULE__}.unrelated_changes"
++  describe "claiming" do
++    test "atomically moves one pending delivery to dispatching" do
++      delivery =
++        insert_email_delivery!(
++          delivery_id: "del_claim_once",
++          status: "pending",
++          last_dispatch_attempted_at: nil
++        )
++
++      assert {:ok,
++              %EmailDeliveryProjection{
++                delivery_id: "del_claim_once",
++                status: "dispatching",
++                attempt_count: 0,
++                last_dispatch_attempted_at: %DateTime{} = attempted_at
++              }} = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
++
++      assert DateTime.compare(attempted_at, delivery.inserted_at) in [:gt, :eq]
++    end
++
++    test "does not claim a delivery that is no longer pending" do
++      delivery = insert_email_delivery!(delivery_id: "del_already_sent", status: "sent")
++
++      assert :not_claimed = EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id)
++
++      assert %EmailDeliveryProjection{status: "sent", last_dispatch_attempted_at: nil} =
++               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
++    end
+ 
+-    start_supervised!({EmailDeliveryDispatcher, name: name, dispatch_observer: self()})
++    test "allows only one concurrent claimant for a pending delivery" do
++      delivery = insert_email_delivery!(delivery_id: "del_concurrent_claim", status: "pending")
+ 
+-    event = %EmailDeliveryDelivered{
+-      message_id: "msg_unrelated",
+-      delivery_id: "del_unrelated"
+-    }
++      results =
++        1..2
++        |> Task.async_stream(
++          fn _index -> EmailDeliveryDispatcher.claim_pending_delivery(delivery.delivery_id) end,
++          max_concurrency: 2,
++          timeout: 1_000
++        )
++        |> Enum.map(fn {:ok, result} -> result end)
++
++      assert 1 == Enum.count(results, &match?({:ok, %EmailDeliveryProjection{}}, &1))
++      assert 1 == Enum.count(results, &(&1 == :not_claimed))
++
++      assert %EmailDeliveryProjection{status: "dispatching"} =
++               Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
++    end
++
++    test "claims pending deliveries while skipping already-claimed work" do
++      first = insert_email_delivery!(delivery_id: "del_claim_all_first", status: "pending")
++      second = insert_email_delivery!(delivery_id: "del_claim_all_second", status: "dispatching")
++
++      assert [%EmailDeliveryProjection{delivery_id: claimed_id, status: "dispatching"}] =
++               EmailDeliveryDispatcher.claim_pending_email_deliveries()
++
++      assert claimed_id == first.delivery_id
++
++      assert %EmailDeliveryProjection{status: "dispatching"} =
++               Repo.get!(EmailDeliveryProjection, first.delivery_id)
++
++      assert %EmailDeliveryProjection{status: "dispatching", last_dispatch_attempted_at: nil} =
++               Repo.get!(EmailDeliveryProjection, second.delivery_id)
++    end
++  end
+ 
+-    assert :ok =
+-             ReadModelChanges.publish(
+-               MemberEmailDeliveryProjector,
+-               event,
+-               %{},
+-               %{messaging_member_email_delivery: %{delivery_id: event.delivery_id}}
+-             )
++  defp insert_email_delivery!(attrs) when is_list(attrs) do
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+ 
+-    refute_receive {:email_delivery_dispatch_requested, _}
++    Repo.insert!(%EmailDeliveryProjection{
++      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
++      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
++      recipient_name: Keyword.get(attrs, :recipient_name, "Ada Member"),
++      recipient_address: Keyword.get(attrs, :recipient_address, "ada@example.test"),
++      channel: Keyword.get(attrs, :channel, "email"),
++      status: Keyword.fetch!(attrs, :status),
++      attempt_count: Keyword.get(attrs, :attempt_count, 0),
++      latest_error: Keyword.get(attrs, :latest_error),
++      latest_detail: Keyword.get(attrs, :latest_detail),
++      last_dispatch_attempted_at: Keyword.get(attrs, :last_dispatch_attempted_at),
++      sent_at: Keyword.get(attrs, :sent_at),
++      failed_at: Keyword.get(attrs, :failed_at),
++      inserted_at: Keyword.get(attrs, :inserted_at, now),
++      updated_at: Keyword.get(attrs, :updated_at, now)
++    })
+   end
+ end
