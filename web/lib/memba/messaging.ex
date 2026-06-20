@@ -15,8 +15,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.EmailDeliveryProvider
-  alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
@@ -845,40 +844,6 @@ defmodule Memba.Messaging do
   end
 
   defp deliver_to_provider(%SendMessage{} = command) do
-    club = Membership.get_club(command.club_id)
-
-    Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->
-      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient, club)) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
+    EmailDeliveryDispatcher.deliver_to_provider(command)
   end
-
-  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient, club) do
-    sender = Membership.get_person(command.sender_id)
-    sender_address = Membership.get_person_primary_email(command.sender_id)
-
-    %EmailDeliveryRequest{
-      message_id: command.message_id,
-      club_id: command.club_id,
-      delivery_id: recipient.delivery_id,
-      recipient_id: recipient.person_id,
-      recipient_name: recipient.name,
-      recipient_address: recipient.email,
-      club_name: club_name(club),
-      club_slug: club_slug(club),
-      sender_name: sender.name,
-      sender_address: sender_address,
-      channel: :email,
-      subject: command.subject,
-      body: command.body
-    }
-  end
-
-  defp club_name(%{name: name}), do: name
-  defp club_name(_club), do: nil
-
-  defp club_slug(%{slug: slug}), do: slug
-  defp club_slug(_club), do: nil
 end
