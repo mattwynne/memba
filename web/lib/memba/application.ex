@@ -15,7 +15,9 @@ defmodule Memba.Application do
       Memba.Messaging.App,
       Memba.Messaging.EmailDeliveryProviders.Fake,
       Memba.Messaging.LocalDeliveryFacts,
-      Memba.Messaging.EmailDeliveryDispatcher,
+      {Memba.Messaging.EmailDeliveryDispatcher,
+       dispatch_enabled:
+         Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
       Memba.Messaging.Projectors.Message,
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,

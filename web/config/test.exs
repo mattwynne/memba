@@ -73,6 +73,11 @@ end
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+# The supervised dispatcher stays running in tests so supervision wiring is
+# covered, but focused tests opt into DB-backed claiming with their own
+# sandbox-shared dispatcher process.
+config :memba, :email_delivery_dispatcher_dispatch_enabled, false
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
