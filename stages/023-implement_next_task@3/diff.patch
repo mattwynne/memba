@@ -1,0 +1,92 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index dd79b31..1f73993 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect current outbound send paths and tests:
+ - [x] 002 Update the `EmailDelivery` projection/read model so newly created records start with status `pending` and can store dispatch diagnostics such as attempt count, latest error/detail, and useful timestamps.
+-- [ ] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
++- [x] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
+ - [ ] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
+ - [ ] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
+ - [ ] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.
+diff --git a/web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs b/web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs
+new file mode 100644
+index 0000000..5c693f8
+--- /dev/null
++++ b/web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs
+@@ -0,0 +1,10 @@
++defmodule Memba.Repo.Migrations.AddStatusConstraintsToMessagingEmailDeliveries do
++  use Ecto.Migration
++
++  def change do
++    create constraint(:messaging_email_deliveries, :messaging_email_deliveries_status_check,
++             check:
++               "status IN ('pending', 'dispatching', 'sent', 'failed', 'delivered', 'delayed', 'bounced', 'spam_complaint')"
++           )
++  end
++end
+diff --git a/web/test/memba/messaging/email_delivery_status_constraints_test.exs b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+new file mode 100644
+index 0000000..d64047e
+--- /dev/null
++++ b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+@@ -0,0 +1,57 @@
++defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
++
++  @valid_statuses ~w(pending dispatching sent failed delivered delayed bounced spam_complaint)
++
++  test "database constraint allows dispatch lifecycle and provider webhook statuses" do
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    rows =
++      @valid_statuses
++      |> Enum.with_index()
++      |> Enum.map(fn {status, index} ->
++        email_delivery_row(
++          status: status,
++          recipient_name: "Recipient #{index}",
++          recipient_address: "recipient-#{index}@example.test",
++          inserted_at: now,
++          updated_at: now
++        )
++      end)
++
++    assert {inserted_count, nil} = Repo.insert_all(EmailDeliveryProjection, rows)
++    assert inserted_count == length(@valid_statuses)
++  end
++
++  test "database constraint rejects statuses outside the delivery vocabulary" do
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    assert_raise Postgrex.Error, ~r/messaging_email_deliveries_status_check/, fn ->
++      Repo.insert_all(EmailDeliveryProjection, [
++        email_delivery_row(
++          status: "not-a-delivery-status",
++          recipient_name: "Invalid Recipient",
++          recipient_address: "invalid-recipient@example.test",
++          inserted_at: now,
++          updated_at: now
++        )
++      ])
++    end
++  end
++
++  defp email_delivery_row(attrs) when is_list(attrs) do
++    %{
++      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
++      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      recipient_address: Keyword.fetch!(attrs, :recipient_address),
++      channel: "email",
++      status: Keyword.fetch!(attrs, :status),
++      inserted_at: Keyword.fetch!(attrs, :inserted_at),
++      updated_at: Keyword.fetch!(attrs, :updated_at)
++    }
++  end
++end
