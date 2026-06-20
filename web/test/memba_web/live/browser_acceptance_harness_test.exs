@@ -81,7 +81,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
       "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
     )
     |> assert_has(
-      "#delivery-records [data-testid='delivery-status'][data-delivery-status='sent']"
+      "#delivery-records [data-testid='delivery-status'][data-delivery-status='pending']"
     )
     |> assert_has("#member-receipts[aria-label='Member email delivery statuses']")
     |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")

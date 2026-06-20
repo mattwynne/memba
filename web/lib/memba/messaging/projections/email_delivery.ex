@@ -13,6 +13,12 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
     field :recipient_address, :string
     field :channel, :string
     field :status, :string
+    field :attempt_count, :integer, default: 0
+    field :latest_error, :string
+    field :latest_detail, :string
+    field :last_dispatch_attempted_at, :utc_datetime_usec
+    field :sent_at, :utc_datetime_usec
+    field :failed_at, :utc_datetime_usec
 
     timestamps(type: :utc_datetime_usec)
   end

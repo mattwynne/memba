@@ -61,7 +61,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
                recipient_name: "Alice",
                recipient_address: "alice@example.com",
                channel: "email",
-               status: "sent"
+               status: "pending",
+               attempt_count: 0,
+               latest_error: nil,
+               latest_detail: nil,
+               last_dispatch_attempted_at: nil,
+               sent_at: nil,
+               failed_at: nil
              },
              %EmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
@@ -70,7 +76,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
                recipient_name: "Bob",
                recipient_address: "bob@example.com",
                channel: "email",
-               status: "sent"
+               status: "pending",
+               attempt_count: 0,
+               latest_error: nil,
+               latest_detail: nil,
+               last_dispatch_attempted_at: nil,
+               sent_at: nil,
+               failed_at: nil
              }
            ] = Messaging.list_recipient_deliveries(message_id)
 
