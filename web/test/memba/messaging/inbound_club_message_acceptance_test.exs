@@ -92,7 +92,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                recipient_name: "Alice Example",
                recipient_address: "alice@example.com",
                channel: "email",
-               status: "sent"
+               status: "pending",
+               attempt_count: 0,
+               latest_error: nil,
+               latest_detail: nil,
+               last_dispatch_attempted_at: nil,
+               sent_at: nil,
+               failed_at: nil
              },
              %{
                message_id: ^message_id,
@@ -100,7 +106,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                recipient_name: "Bob Example",
                recipient_address: "bob@example.com",
                channel: "email",
-               status: "sent"
+               status: "pending",
+               attempt_count: 0,
+               latest_error: nil,
+               latest_detail: nil,
+               last_dispatch_attempted_at: nil,
+               sent_at: nil,
+               failed_at: nil
              }
            ] = Messaging.list_recipient_deliveries(message_id)
 

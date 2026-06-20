@@ -57,10 +57,10 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     assert_selector_exists(
       html,
-      "#delivery-status-#{bob.delivery_id}[data-delivery-status='sent']"
+      "#delivery-status-#{bob.delivery_id}[data-delivery-status='pending']"
     )
 
-    assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "sent")
+    assert_exact_text(html, "#delivery-status-#{bob.delivery_id}", "pending")
     assert_class(html, "#delivery-status-#{bob.delivery_id}", "bg-[#f7f6f3]")
     assert_class(html, "#delivery-status-#{bob.delivery_id}", "text-[#4b5a55]")
 

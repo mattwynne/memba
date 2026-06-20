@@ -20,7 +20,8 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
       recipient_name: event.recipient_name,
       recipient_address: event.recipient_email,
       channel: "email",
-      status: "sent"
+      status: "pending",
+      attempt_count: 0
     })
   end)
 
