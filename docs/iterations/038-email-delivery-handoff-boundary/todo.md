@@ -10,7 +10,7 @@
 - [x] 008 On provider success, update the delivery to `sent`; on provider error, update it to `failed`, increment attempt count, and persist the latest error/detail.
 - [x] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.
 - [x] 010 Add an internal/manual retry API for failed deliveries. Do not add automatic retries, startup sweeps, periodic sweeps, or staff retry UI in this slice.
-- [ ] 011 Adapt accepted inbound club-message flow so it relies on the same pending-delivery projection and dispatcher path.
+- [x] 011 Adapt accepted inbound club-message flow so it relies on the same pending-delivery projection and dispatcher path.
 - [ ] 012 Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses: hide or soften infrastructure detail on member-facing screens, while allowing staff/operator diagnostics to show exact status/error.
 - [ ] 013 Add/update focused tests for the acceptance criteria above.
 - [ ] 014 Run `dev check` and fix any regressions.

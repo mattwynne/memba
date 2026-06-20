@@ -73,7 +73,8 @@ defmodule Memba.Messaging do
 
   This wraps the same `send_club_message/2` path used by browser-composed club
   messages, so accepted inbound email creates the same message event, recipient
-  delivery events, projections, and outbound provider handoffs.
+  delivery events, and pending delivery projections for the dispatcher to hand
+  off to the provider.
   """
   def receive_inbound_club_email(attrs, dispatch_opts \\ [])
 
