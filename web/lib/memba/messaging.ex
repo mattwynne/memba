@@ -15,7 +15,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
@@ -38,13 +37,13 @@ defmodule Memba.Messaging do
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
-  to the Messaging Commanded application.
+  to the Messaging Commanded application. Provider delivery happens
+  asynchronously from projected `EmailDelivery` records.
   """
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- send_club_message_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts),
-         :ok <- deliver_to_provider(command) do
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -841,9 +840,5 @@ defmodule Memba.Messaging do
       name: name,
       email: email
     }
-  end
-
-  defp deliver_to_provider(%SendMessage{} = command) do
-    EmailDeliveryDispatcher.deliver_to_provider(command)
   end
 end

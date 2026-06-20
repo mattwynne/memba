@@ -14,14 +14,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   import Ecto.Query
 
   alias Memba.Membership
-  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Messaging.Recipient
   alias Memba.ReadModelChanges
   alias Memba.Repo
 
@@ -112,11 +110,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   per-recipient delivery data and the `Message` projection supplies message,
   club, and sender IDs. Membership's public query API enriches the request with
   sender and club display context.
-
-  A temporary `SendMessage` clause preserves the existing synchronous caller
-  while keeping provider request-building and adapter calls out of
-  `Memba.Messaging`. A later iteration task removes that synchronous caller once
-  dispatcher success/failure persistence is in place.
   """
   def deliver_to_provider(work)
 
@@ -124,21 +117,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     with {:ok, request} <- email_delivery_request(delivery) do
       EmailDeliveryProvider.deliver(request)
     end
-  end
-
-  def deliver_to_provider(%SendMessage{} = command) do
-    club = Membership.get_club(command.club_id)
-    sender = Membership.get_person(command.sender_id)
-    sender_address = Membership.get_person_primary_email(command.sender_id)
-
-    Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->
-      request = email_delivery_request(command, recipient, club, sender, sender_address)
-
-      case EmailDeliveryProvider.deliver(request) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
   end
 
   def start_link(opts \\ []) do
@@ -297,30 +275,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
       nil -> {:error, {:missing_message_projection, delivery.message_id}}
       {:error, _reason} = error -> error
     end
-  end
-
-  defp email_delivery_request(
-         %SendMessage{} = command,
-         %Recipient{} = recipient,
-         club,
-         sender,
-         sender_address
-       ) do
-    %EmailDeliveryRequest{
-      message_id: command.message_id,
-      club_id: command.club_id,
-      delivery_id: recipient.delivery_id,
-      recipient_id: recipient.person_id,
-      recipient_name: recipient.name,
-      recipient_address: recipient.email,
-      club_name: club_name(club),
-      club_slug: club_slug(club),
-      sender_name: sender.name,
-      sender_address: sender_address,
-      channel: :email,
-      subject: command.subject,
-      body: command.body
-    }
   end
 
   defp request_channel("email"), do: {:ok, :email}
