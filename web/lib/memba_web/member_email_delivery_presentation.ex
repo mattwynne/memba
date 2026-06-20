@@ -9,6 +9,15 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
 
   @fallback_status "sent"
   @status_order ["delivered", "sent", "delivery problem"]
+  @status_aliases %{
+    "pending" => "sent",
+    "dispatching" => "sent",
+    "failed" => "sent",
+    "delayed" => "delivery problem",
+    "bounced" => "delivery problem",
+    "spam_complaint" => "delivery problem",
+    "spam complaint" => "delivery problem"
+  }
 
   @presentations %{
     "sent" => %{label: "Sending", icon: "hero-clock", tone: "warning"},
@@ -47,9 +56,10 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   @doc """
   Returns the member-facing label and icon for an internal status.
 
-  Blank or missing statuses are treated as the projection's initial `sent`
-  status. Unknown statuses keep their internal value available to callers while
-  falling back to readable copy and a neutral icon.
+  Blank or missing statuses are treated as the member projection's initial
+  `sent` status. Detailed provider outcomes and async dispatch infrastructure
+  states are folded into the small member-facing vocabulary before any copy is
+  shown.
   """
   def present_status(status) do
     status = normalize_status(status)
@@ -142,7 +152,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   defp normalize_status(status) when is_binary(status) do
     case status do
       "" -> @fallback_status
-      status -> status
+      status -> Map.get(@status_aliases, status, status)
     end
   end
 

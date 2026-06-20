@@ -454,12 +454,18 @@ defmodule Memba.Messaging do
   defp operator_deliveries_query(opts) do
     query =
       from deliverability in MembaStaffEmailDeliveryProjection,
+        left_join: dispatch in EmailDeliveryProjection,
+        on: dispatch.delivery_id == deliverability.delivery_id,
         join: message in MessageProjection,
         on: message.message_id == deliverability.message_id,
         order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
         select_merge: %{
           message_subject: message.subject,
-          event_at: deliverability.updated_at
+          event_at: deliverability.updated_at,
+          dispatch_status: dispatch.status,
+          dispatch_attempt_count: dispatch.attempt_count,
+          dispatch_latest_error: dispatch.latest_error,
+          dispatch_latest_detail: dispatch.latest_detail
         }
 
     case Keyword.fetch(opts, :message_id) do

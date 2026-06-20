@@ -108,7 +108,8 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                   <th scope="col" class="px-4 py-3">Recipient</th>
                   <th scope="col" class="px-4 py-3">Club</th>
                   <th scope="col" class="px-4 py-3">Message</th>
-                  <th scope="col" class="px-4 py-3">Status</th>
+                  <th scope="col" class="px-4 py-3">Provider status</th>
+                  <th scope="col" class="px-4 py-3">Dispatch</th>
                   <th scope="col" class="px-4 py-3">Provider event</th>
                   <th scope="col" class="px-4 py-3">Time</th>
                   <th scope="col" class="px-4 py-3">Message ID</th>
@@ -120,7 +121,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                 phx-update="stream"
               >
                 <tr id="deliveries-empty" class="hidden only:table-row">
-                  <td colspan="7" class="px-4 py-6 text-center text-sm text-[#7d877f]">
+                  <td colspan="8" class="px-4 py-6 text-center text-sm text-[#7d877f]">
                     No email deliveries.
                   </td>
                 </tr>
@@ -156,6 +157,35 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                       label={delivery.status}
                       tone={status_tone(delivery.status)}
                     />
+                  </td>
+                  <td
+                    data-test-id="delivery-dispatch"
+                    class="max-w-sm px-4 py-3.5 text-xs text-[#4b5a55]"
+                  >
+                    <div class="space-y-1">
+                      <.status_badge
+                        data-test-id="delivery-dispatch-status"
+                        label={dispatch_status(delivery)}
+                        tone={dispatch_status_tone(dispatch_status(delivery))}
+                      />
+                      <p data-test-id="delivery-dispatch-attempts">
+                        attempts: {dispatch_attempt_count(delivery)}
+                      </p>
+                      <p
+                        :if={present?(delivery.dispatch_latest_error)}
+                        data-test-id="delivery-dispatch-error"
+                        class="font-mono text-[#8a3d21]"
+                      >
+                        error: {delivery.dispatch_latest_error}
+                      </p>
+                      <p
+                        :if={present?(delivery.dispatch_latest_detail)}
+                        data-test-id="delivery-dispatch-detail"
+                        class="font-mono"
+                      >
+                        detail: {delivery.dispatch_latest_detail}
+                      </p>
+                    </div>
                   </td>
                   <td
                     data-test-id="delivery-reason"
@@ -209,6 +239,24 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp status_tone("spam complaint"), do: "error"
   defp status_tone("delivered"), do: "info"
   defp status_tone(_status), do: "neutral"
+
+  defp dispatch_status(%{dispatch_status: status}) when is_binary(status) and status != "",
+    do: status
+
+  defp dispatch_status(_delivery), do: "unknown"
+
+  defp dispatch_status_tone("pending"), do: "warning"
+  defp dispatch_status_tone("dispatching"), do: "warning"
+  defp dispatch_status_tone("failed"), do: "error"
+  defp dispatch_status_tone("sent"), do: "success"
+  defp dispatch_status_tone("delivered"), do: "info"
+  defp dispatch_status_tone(_status), do: "neutral"
+
+  defp dispatch_attempt_count(%{dispatch_attempt_count: count}) when is_integer(count), do: count
+  defp dispatch_attempt_count(_delivery), do: 0
+
+  defp present?(value) when is_binary(value), do: value != ""
+  defp present?(_value), do: false
 
   defp status_label(status), do: status |> to_string() |> String.capitalize()
 

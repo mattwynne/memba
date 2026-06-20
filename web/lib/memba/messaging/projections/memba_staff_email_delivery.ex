@@ -19,6 +19,10 @@ defmodule Memba.Messaging.Projections.MembaStaffEmailDelivery do
     field :reason, :string
     field :message_subject, :string, virtual: true
     field :event_at, :utc_datetime_usec, virtual: true
+    field :dispatch_status, :string, virtual: true
+    field :dispatch_attempt_count, :integer, virtual: true
+    field :dispatch_latest_error, :string, virtual: true
+    field :dispatch_latest_detail, :string, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end

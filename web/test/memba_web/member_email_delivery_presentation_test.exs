@@ -27,6 +27,26 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
              }
     end
 
+    test "folds detailed provider and dispatch states into member-facing statuses" do
+      for status <- ["pending", "dispatching", "failed"] do
+        assert MemberEmailDeliveryPresentation.present_status(status) == %{
+                 status: "sent",
+                 label: "Sending",
+                 icon: "hero-clock",
+                 tone: "warning"
+               }
+      end
+
+      for status <- ["delayed", "bounced", "spam_complaint", "spam complaint"] do
+        assert MemberEmailDeliveryPresentation.present_status(status) == %{
+                 status: "delivery problem",
+                 label: "Delivery problem",
+                 icon: "hero-exclamation-triangle",
+                 tone: "error"
+               }
+      end
+    end
+
     test "treats blank or missing statuses as the initial sent status" do
       assert MemberEmailDeliveryPresentation.present_status(nil) == %{
                status: "sent",
