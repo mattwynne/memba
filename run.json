@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T07:39:27.324902140Z",
-  "last_event_at": "2026-06-20T07:41:57.558320206Z",
+  "last_event_at": "2026-06-20T07:42:02.333642943Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1571,9 +1571,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 112,
       "checkpoint": {
-        "timestamp": "2026-06-20T07:41:59.348006928Z",
+        "timestamp": "2026-06-20T07:42:02.333513825Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -1586,57 +1586,57 @@
         ],
         "node_retries": {},
         "context_values": {
-          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name expected modules/projections/routes/templates once the current 039 implementation shape is fully known, but the current level of specificity is sufficient for implementation.\n2. The plan could explicitly state what happens if a former member later rejoins with a historical follow state, but the current acceptance criteria are clear enough for the in-scope rule: only current club-member followers receive reply emails.\n3. If the workflow expects plan metadata to reflect review state, the `Status: draft` line may need updating by the appropriate validation stage, but that is not a readiness blocker.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the slice already described:\n\n- Add per-conversation follow state.\n- Auto-follow the original sender and repliers.\n- Allow current members to follow/unfollow in the app.\n- Send reply emails only to current club-member followers, excluding the reply author.\n- Include a signed stop-follow link in reply emails.\n- Cover the changed behaviour in the shared `club_message_replies.feature`.\n\nThis should not be reduced to “follow state only” because following has no user value unless reply delivery is narrowed at the same time.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nProve the iteration succeeded with:\n\n1. Domain/integration tests for sender/replier auto-follow, default non-follow state, idempotent follow/unfollow, current-member-only follow permissions, and follower-only reply delivery.\n2. Email tests proving only eligible followers receive reply notifications, the author is excluded, former/non-current members are excluded, and stop-follow links work only for the intended recipient/conversation.\n3. Negative tests for invalid, tampered, expired-if-applicable, and wrong-scope stop-follow links showing they change no state and reveal no existence information.\n4. Updated `acceptance-tests/features/club_message_replies.feature` scenarios tagged for iteration 040, replacing the 039 reply-all audience rule with the follower-delivery rule.\n5. Confirmation that preserved 039 conversation/reply/membership scenarios remain green.\n6. Final `dev check` passing.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "outcome": "succeeded",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "codex_review_blocking_gaps": "None",
-          "codex_review_confidence": "High",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.retry_count.publish_ready": 0,
-          "gemini_review_blocking_gap_count": 0,
-          "failure_signature": "",
-          "response.claude_review": "Now I'll analyze the plan against all readiness criteria:\n\n---\n\n# Iteration 040 Plan Validation Report\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Clarity on reply-email footer variant**: The plan mentions two sources for the reply email design (DS card `emails/reply-notification.html` and wireframe `wireframes/member-conversation.html`) and references the design sketch. While the footer line \"you're following this conversation · stop following this conversation\" is clear, it could briefly note whether the unsubscribe link and the inline \"stop following\" text are the same action or separate.\n\n2. **`Reply-To` field specificity**: The plan states that 040 sets the reply email `Reply-To` to \"no-reply / 'reply in Memba' guidance\" but doesn't specify the exact value (e.g., `noreply@memba.io` or similar). This is a minor clarity point for implementers.\n\n3. **Follow read-model timing**: The plan says \"auto-follow the sender on conversation creation and a replier on reply (from the 039 events)\" but doesn't clarify whether the follow-model projection handler observes those existing 039 events or whether auto-follow is a side-effect issued by the same command handlers. Both are valid; the plan leaves implementers to choose.\n\n## Smallest Viable Iteration\n\nThe plan is already focused on a single coherent outcome: **narrowing reply delivery from all-members to followers-only, with auto-follow and opt-in control**. It cannot be meaningfully smaller while remaining useful:\n\n- The follow model and the narrowed delivery must ship together (the plan explicitly states \"following has no purpose except deciding who is emailed\").\n- Auto-follow for sender/repliers is necessary to preserve basic conversation continuity.\n- The in-app and email unfollow controls are both essential: the in-app control is the primary opt-in/opt-out surface; the email link is standard unsubscribe hygiene.\n\nThis is a minimal coherent slice that completes Model C's reply-audience narrowing.\n\n## Required Plan Edits\n\nNone.\n\n## Validation Plan\n\nThe plan provides a clear validation approach:\n\n**Domain/integration tests** cover:\n- Auto-follow (sender + replier)\n- Opt-in default (non-engaged members not following)\n- Follow/unfollow commands\n- Idempotent repeated operations\n- Current-member-only in-app permissions\n- Reply fan-out to current club-member followers only\n- Former/non-current followers excluded from delivery\n- Replier excluded from delivery\n- Unfollow stops delivery\n\n**Email tests** cover:\n- Only current club-member followers emailed\n- Stop-following link works for intended recipient/conversation\n- Already-unfollowed links are safe (idempotent)\n- Invalid/tampered/expired/wrong-scope links change nothing\n- Footer, sender, and conversation context preserved\n\n**Acceptance tests**:\n- New `@iteration-040` scenarios in `club_message_replies.feature` pass\n- Existing 039 scenarios remain green with the updated rule\n\n**Stop condition**: `dev check` passes.\n\n---\n\n## Readiness Assessment Detail\n\n### 1. Goal Clarity ✅\n\n**Goal clearly articulated**: Yes. The goal states \"Stop emailing every reply to the whole club. Introduce **following a conversation** so that a reply reaches only the people who follow it.\" The user/business outcome is explicit: replies reach only followers (sender, repliers, and opt-ins), not all members, removing reply-all noise while preserving conversation continuity.\n\n**User/business outcome, not just tasks**: Yes. The \"After this iteration\" section describes observable behaviour changes from the member's perspective (followers, follow/unfollow control, narrowed delivery).\n\n**Intended beneficiary clear**: Yes. Club members (avoiding unwanted reply emails) and the conversation participants (still connected).\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome**: Yes. The iteration introduces following and rewires reply delivery to use it. These ship together because, as the plan notes, \"following has no purpose except deciding who is emailed.\"\n\n**Could it be smaller while still useful?**: No. The follow model, auto-follow, narrowed delivery, and opt-in/opt-out controls are all necessary to replace the interim reply-all with the intended Model C behaviour. Removing any component would leave the iteration incomplete or broken.\n\n**Non-goals and boundaries clear**: Yes. The \"Out of scope\" section explicitly defers reply-by-email (041), digest/batching, changing who can reply, and per-conversation notification preferences beyond follow/unfollow.\n\n### 3. Acceptance Criteria, BDD Scenario Decision, and Business Decisions ✅\n\n**Acceptance criteria concrete, clear, complete, testable**: Yes. The criteria cover:\n- **Happy paths**: auto-follow, in-app follow/unfollow, email stop-follow, narrowed delivery to followers\n- **Edge cases**: repeated follow/unfollow (idempotent), already-unfollowed stop-follow link (safe), non-engaged member default (not following)\n- **Permissions**: only current members can follow/unfollow in-app; former/non-current members excluded from delivery\n- **Error states**: invalid/tampered/expired/wrong-scope stop-follow links change nothing\n- **Data/state changes**: follower set changes, reply fan-out narrowed, unfollow halts emails\n\n**BDD classification**: Yes. The plan classifies this as \"Behaviour-facing\" with rationale (changed user-observable rule for reply delivery and following).\n\n**Feature file decision**: Yes. The plan includes an \"Acceptance Scenarios / Feature Files\" section stating \"BDD decision: **Required.**\" It names the shared feature file (`club_message_replies.feature`), specifies which rules are replaced and which are added, and provides tagging guidance (`@iteration-040 @todo-domain @todo-ui` ahead of implementation).\n\n**Business decisions unresolved**: No. The \"Open Business Decisions\" section states \"None outstanding on audience.\" The `Reply-To` field decision is documented (no-reply guidance until 041), and the delivery audience and follow defaults are confirmed.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear, ordered, specific**: Yes. The 6-step implementation plan proceeds logically:\n1. Add follow model + auto-follow\n2. Rewire reply delivery to followers\n3. Add in-app control\n4. Add email stop-follow link\n5. Revise acceptance tests\n6. Run `dev check`\n\n**Files, modules, migrations, tests, interfaces named where useful**: Yes. The plan names:\n- Feature file: `acceptance-tests/features/club_message_replies.feature`\n- DS design cards: `emails/reply-notification.html`, `wireframes/member-conversation.html`\n- Relevant design sketch document\n- Expected consistency with `Memba.Messaging` (event-sourced)\n- Reference to iteration 039's delivery path and 038's email-handoff boundary\n\n**Data model, API, UI, workflow changes clear**: Yes. The plan specifies:\n- Data model: per-(member, conversation) follow state; follow/unfollow commands/events\n- Workflow: auto-follow on conversation creation and reply\n- UI: in-app follow/unfollow control on message-detail surface\n- API: signed stop-follow link (one-click unsubscribe)\n- Email: updated footer with \"you're following · stop following\" and quoted thread history\n\n**Technical decisions unresolved**: No. The \"Open Technical Decisions\" section states \"None that require product decisions before implementation\" and documents the implementation choices left to the implementer (follow storage, token helper, delivery path factoring), all with clear constraints.\n\n### 5. Expected Capability and Validation ✅\n\n**What we can do after**: Clear. \"Replies reach exactly the people who want them: the sender and repliers automatically, plus anyone who chooses to follow — and no one else — removing the interim reply-all and realising Model C.\"\n\n**How we prove success**: Clear. The validation plan covers domain/integration tests, email tests, acceptance scenarios, and `dev check`.\n\n**Clear stop condition**: Yes. `dev check` passes, including the revised `@iteration-040` scenarios in `club_message_replies.feature`.\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It clearly articulates a focused, coherent iteration that completes Model C's reply-audience narrowing. The goal, scope, acceptance criteria, BDD decision, implementation steps, and validation plan are all concrete and complete. Business and technical decisions are resolved or documented with clear constraints. The plan is appropriately sized: introducing following and narrowing delivery must ship together, and all components (auto-follow, opt-in control, email unsubscribe, narrowed fan-out) are necessary.\n\nThe non-blocking improvements noted above are minor clarity points that do not hinder implementation and can be resolved during code review or as the implementer makes concrete choices within the documented constraints.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "internal.retry_count.gemini_review": 0,
-          "internal.retry_count.start": 0,
-          "internal.thread_id": "synthesis_gate",
           "thread.claude_review.current_node": "codex_review",
-          "gemini_review_confidence": "High",
-          "gemini_review_required_edits": "None",
-          "graph.rankdir": "LR",
-          "codex_review_required_edits": "None",
-          "gemini_review_blocking_gaps": "None",
-          "claude_review_blocking_gaps": "None",
-          "codex_review_decision": "READY",
-          "current_node": "publish_ready",
-          "claude_review_blocking_gap_count": 0,
-          "plan_needs_fix": false,
-          "plan_ready": true,
-          "internal.retry_count.synthesis_gate": 0,
-          "internal.work_dir": "/workspace/memba",
-          "internal.run_id": "01KVHZGN4B06JHXDQ3W5G8N5BG",
-          "internal.retry_count.synthesize": 0,
+          "failure_signature": "",
+          "codex_review_blocking_gaps": "None",
           "thread.synthesis_gate.current_node": "publish_ready",
-          "failure_class": "",
-          "internal.node_visit_count": 1,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "internal.fidelity": "summary:high",
-          "thread.gemini_review.current_node": "claude_review",
-          "claude_review_decision": "READY",
-          "claude_review_confidence": "High",
-          "claude_review_required_edits": "None",
-          "internal.retry_count.claude_review": 0,
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md`.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name likely concrete Phoenix/EventStore modules, projections, mailer templates, routes, and LiveView/controller surfaces once implementation context is known.\n2. The stop-follow token section intentionally leaves expiry mechanics to implementation. That is acceptable, but the implementer should document the actual chosen token helper/expiry behavior in tests or code comments.\n3. The acceptance feature update plan is clear; implementation may benefit from explicitly splitting `@todo-domain` and `@todo-ui` removal into staged commits/tasks.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the planned slice:\n\n- Add conversation follow state.\n- Auto-follow the original sender and repliers.\n- Let current members follow/unfollow in-app.\n- Change reply email fan-out from all current members to current club-member followers, excluding the author.\n- Include a signed stop-follow link in reply emails.\n- Validate with updated acceptance scenarios and `dev check`.\n\nRemoving any of those would either preserve the noisy reply-all behavior, omit the opt-in outcome, or leave recipients unable to stop notifications from email.\n\n## Required plan edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Updated `acceptance-tests/features/club_message_replies.feature` scenarios covering:\n   - Sender auto-follow.\n   - Replier auto-follow.\n   - Non-engaged members not following by default.\n   - Current members following/unfollowing.\n   - Replies emailed only to current club-member followers.\n   - Reply author excluded from delivery.\n   - Former/non-current members excluded from delivery.\n   - In-app unfollow stops later reply emails.\n   - Email stop-follow link unfollows the intended recipient/conversation.\n   - Invalid/tampered/wrong-scope/expired stop-follow links change nothing.\n\n2. Domain/integration tests for:\n   - Idempotent follow/unfollow.\n   - Follow read model/projection correctness.\n   - Auto-follow from conversation creation and reply events.\n   - Recipient selection from current club-member followers only.\n\n3. Email tests for:\n   - Existing delivery tracking preserved.\n   - Shared layout/footer preserved.\n   - `<club name> via Memba` sender preserved.\n   - Stop-follow footer link present and scoped correctly.\n\n4. UI/browser tests for:\n   - Follow/unfollow control visible with correct copy and state.\n   - Current members can follow/unfollow.\n   - Non-current/former members cannot newly follow.\n\n5. Final stop condition:\n   - Revised `@iteration-040` scenarios pass with temporary tags removed or narrowed appropriately.\n   - Relevant 039 conversation/reply/membership scenarios remain green with the reply-audience rule superseded.\n   - `dev check` passes.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "codex_review_required_edits": "None",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "internal.retry_count.codex_review": 0,
-          "codex_review_blocking_gap_count": 0,
-          "plan_needs_human": false,
-          "thread.start.current_node": "gemini_review",
+          "internal.retry_count.start": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "outcome": "succeeded",
+          "response.claude_review": "Now I'll analyze the plan against all readiness criteria:\n\n---\n\n# Iteration 040 Plan Validation Report\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Clarity on reply-email footer variant**: The plan mentions two sources for the reply email design (DS card `emails/reply-notification.html` and wireframe `wireframes/member-conversation.html`) and references the design sketch. While the footer line \"you're following this conversation · stop following this conversation\" is clear, it could briefly note whether the unsubscribe link and the inline \"stop following\" text are the same action or separate.\n\n2. **`Reply-To` field specificity**: The plan states that 040 sets the reply email `Reply-To` to \"no-reply / 'reply in Memba' guidance\" but doesn't specify the exact value (e.g., `noreply@memba.io` or similar). This is a minor clarity point for implementers.\n\n3. **Follow read-model timing**: The plan says \"auto-follow the sender on conversation creation and a replier on reply (from the 039 events)\" but doesn't clarify whether the follow-model projection handler observes those existing 039 events or whether auto-follow is a side-effect issued by the same command handlers. Both are valid; the plan leaves implementers to choose.\n\n## Smallest Viable Iteration\n\nThe plan is already focused on a single coherent outcome: **narrowing reply delivery from all-members to followers-only, with auto-follow and opt-in control**. It cannot be meaningfully smaller while remaining useful:\n\n- The follow model and the narrowed delivery must ship together (the plan explicitly states \"following has no purpose except deciding who is emailed\").\n- Auto-follow for sender/repliers is necessary to preserve basic conversation continuity.\n- The in-app and email unfollow controls are both essential: the in-app control is the primary opt-in/opt-out surface; the email link is standard unsubscribe hygiene.\n\nThis is a minimal coherent slice that completes Model C's reply-audience narrowing.\n\n## Required Plan Edits\n\nNone.\n\n## Validation Plan\n\nThe plan provides a clear validation approach:\n\n**Domain/integration tests** cover:\n- Auto-follow (sender + replier)\n- Opt-in default (non-engaged members not following)\n- Follow/unfollow commands\n- Idempotent repeated operations\n- Current-member-only in-app permissions\n- Reply fan-out to current club-member followers only\n- Former/non-current followers excluded from delivery\n- Replier excluded from delivery\n- Unfollow stops delivery\n\n**Email tests** cover:\n- Only current club-member followers emailed\n- Stop-following link works for intended recipient/conversation\n- Already-unfollowed links are safe (idempotent)\n- Invalid/tampered/expired/wrong-scope links change nothing\n- Footer, sender, and conversation context preserved\n\n**Acceptance tests**:\n- New `@iteration-040` scenarios in `club_message_replies.feature` pass\n- Existing 039 scenarios remain green with the updated rule\n\n**Stop condition**: `dev check` passes.\n\n---\n\n## Readiness Assessment Detail\n\n### 1. Goal Clarity ✅\n\n**Goal clearly articulated**: Yes. The goal states \"Stop emailing every reply to the whole club. Introduce **following a conversation** so that a reply reaches only the people who follow it.\" The user/business outcome is explicit: replies reach only followers (sender, repliers, and opt-ins), not all members, removing reply-all noise while preserving conversation continuity.\n\n**User/business outcome, not just tasks**: Yes. The \"After this iteration\" section describes observable behaviour changes from the member's perspective (followers, follow/unfollow control, narrowed delivery).\n\n**Intended beneficiary clear**: Yes. Club members (avoiding unwanted reply emails) and the conversation participants (still connected).\n\n### 2. Scope Focus ✅\n\n**Focused on one coherent outcome**: Yes. The iteration introduces following and rewires reply delivery to use it. These ship together because, as the plan notes, \"following has no purpose except deciding who is emailed.\"\n\n**Could it be smaller while still useful?**: No. The follow model, auto-follow, narrowed delivery, and opt-in/opt-out controls are all necessary to replace the interim reply-all with the intended Model C behaviour. Removing any component would leave the iteration incomplete or broken.\n\n**Non-goals and boundaries clear**: Yes. The \"Out of scope\" section explicitly defers reply-by-email (041), digest/batching, changing who can reply, and per-conversation notification preferences beyond follow/unfollow.\n\n### 3. Acceptance Criteria, BDD Scenario Decision, and Business Decisions ✅\n\n**Acceptance criteria concrete, clear, complete, testable**: Yes. The criteria cover:\n- **Happy paths**: auto-follow, in-app follow/unfollow, email stop-follow, narrowed delivery to followers\n- **Edge cases**: repeated follow/unfollow (idempotent), already-unfollowed stop-follow link (safe), non-engaged member default (not following)\n- **Permissions**: only current members can follow/unfollow in-app; former/non-current members excluded from delivery\n- **Error states**: invalid/tampered/expired/wrong-scope stop-follow links change nothing\n- **Data/state changes**: follower set changes, reply fan-out narrowed, unfollow halts emails\n\n**BDD classification**: Yes. The plan classifies this as \"Behaviour-facing\" with rationale (changed user-observable rule for reply delivery and following).\n\n**Feature file decision**: Yes. The plan includes an \"Acceptance Scenarios / Feature Files\" section stating \"BDD decision: **Required.**\" It names the shared feature file (`club_message_replies.feature`), specifies which rules are replaced and which are added, and provides tagging guidance (`@iteration-040 @todo-domain @todo-ui` ahead of implementation).\n\n**Business decisions unresolved**: No. The \"Open Business Decisions\" section states \"None outstanding on audience.\" The `Reply-To` field decision is documented (no-reply guidance until 041), and the delivery audience and follow defaults are confirmed.\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Steps clear, ordered, specific**: Yes. The 6-step implementation plan proceeds logically:\n1. Add follow model + auto-follow\n2. Rewire reply delivery to followers\n3. Add in-app control\n4. Add email stop-follow link\n5. Revise acceptance tests\n6. Run `dev check`\n\n**Files, modules, migrations, tests, interfaces named where useful**: Yes. The plan names:\n- Feature file: `acceptance-tests/features/club_message_replies.feature`\n- DS design cards: `emails/reply-notification.html`, `wireframes/member-conversation.html`\n- Relevant design sketch document\n- Expected consistency with `Memba.Messaging` (event-sourced)\n- Reference to iteration 039's delivery path and 038's email-handoff boundary\n\n**Data model, API, UI, workflow changes clear**: Yes. The plan specifies:\n- Data model: per-(member, conversation) follow state; follow/unfollow commands/events\n- Workflow: auto-follow on conversation creation and reply\n- UI: in-app follow/unfollow control on message-detail surface\n- API: signed stop-follow link (one-click unsubscribe)\n- Email: updated footer with \"you're following · stop following\" and quoted thread history\n\n**Technical decisions unresolved**: No. The \"Open Technical Decisions\" section states \"None that require product decisions before implementation\" and documents the implementation choices left to the implementer (follow storage, token helper, delivery path factoring), all with clear constraints.\n\n### 5. Expected Capability and Validation ✅\n\n**What we can do after**: Clear. \"Replies reach exactly the people who want them: the sender and repliers automatically, plus anyone who chooses to follow — and no one else — removing the interim reply-all and realising Model C.\"\n\n**How we prove success**: Clear. The validation plan covers domain/integration tests, email tests, acceptance scenarios, and `dev check`.\n\n**Clear stop condition**: Yes. `dev check` passes, including the revised `@iteration-040` scenarios in `club_message_replies.feature`.\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It clearly articulates a focused, coherent iteration that completes Model C's reply-audience narrowing. The goal, scope, acceptance criteria, BDD decision, implementation steps, and validation plan are all concrete and complete. Business and technical decisions are resolved or documented with clear constraints. The plan is appropriately sized: introducing following and narrowing delivery must ship together, and all components (auto-follow, opt-in control, email unsubscribe, narrowed fan-out) are necessary.\n\nThe non-blocking improvements noted above are minor clarity points that do not hinder implementation and can be resolved during code review or as the implementer makes concrete choices within the documented constraints.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
           "thread.synthesize.current_node": "synthesis_gate",
+          "internal.fidelity": "summary:high",
+          "last_stage": "synthesize",
+          "internal.retry_count.synthesize": 0,
+          "gemini_review_required_edits": "None",
+          "internal.run_id": "01KVHZGN4B06JHXDQ3W5G8N5BG",
+          "claude_review_confidence": "High",
+          "internal.thread_id": "synthesis_gate",
+          "claude_review_required_edits": "None",
+          "claude_review_decision": "READY",
+          "codex_review_blocking_gap_count": 0,
           "command.output": "blob://sha256/8b0329161a2b4b104aebeb3907b263777ee96edf4363d7dfa69bb21572a5f440",
+          "gemini_review_confidence": "High",
+          "failure_class": "",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md`.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name likely concrete Phoenix/EventStore modules, projections, mailer templates, routes, and LiveView/controller surfaces once implementation context is known.\n2. The stop-follow token section intentionally leaves expiry mechanics to implementation. That is acceptable, but the implementer should document the actual chosen token helper/expiry behavior in tests or code comments.\n3. The acceptance feature update plan is clear; implementation may benefit from explicitly splitting `@todo-domain` and `@todo-ui` removal into staged commits/tasks.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the planned slice:\n\n- Add conversation follow state.\n- Auto-follow the original sender and repliers.\n- Let current members follow/unfollow in-app.\n- Change reply email fan-out from all current members to current club-member followers, excluding the author.\n- Include a signed stop-follow link in reply emails.\n- Validate with updated acceptance scenarios and `dev check`.\n\nRemoving any of those would either preserve the noisy reply-all behavior, omit the opt-in outcome, or leave recipients unable to stop notifications from email.\n\n## Required plan edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Updated `acceptance-tests/features/club_message_replies.feature` scenarios covering:\n   - Sender auto-follow.\n   - Replier auto-follow.\n   - Non-engaged members not following by default.\n   - Current members following/unfollowing.\n   - Replies emailed only to current club-member followers.\n   - Reply author excluded from delivery.\n   - Former/non-current members excluded from delivery.\n   - In-app unfollow stops later reply emails.\n   - Email stop-follow link unfollows the intended recipient/conversation.\n   - Invalid/tampered/wrong-scope/expired stop-follow links change nothing.\n\n2. Domain/integration tests for:\n   - Idempotent follow/unfollow.\n   - Follow read model/projection correctness.\n   - Auto-follow from conversation creation and reply events.\n   - Recipient selection from current club-member followers only.\n\n3. Email tests for:\n   - Existing delivery tracking preserved.\n   - Shared layout/footer preserved.\n   - `<club name> via Memba` sender preserved.\n   - Stop-follow footer link present and scoped correctly.\n\n4. UI/browser tests for:\n   - Follow/unfollow control visible with correct copy and state.\n   - Current members can follow/unfollow.\n   - Non-current/former members cannot newly follow.\n\n5. Final stop condition:\n   - Revised `@iteration-040` scenarios pass with temporary tags removed or narrowed appropriately.\n   - Relevant 039 conversation/reply/membership scenarios remain green with the reply-audience rule superseded.\n   - `dev check` passes.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name expected modules/projections/routes/templates once the current 039 implementation shape is fully known, but the current level of specificity is sufficient for implementation.\n2. The plan could explicitly state what happens if a former member later rejoins with a historical follow state, but the current acceptance criteria are clear enough for the in-scope rule: only current club-member followers receive reply emails.\n3. If the workflow expects plan metadata to reflect review state, the `Status: draft` line may need updating by the appropriate validation stage, but that is not a readiness blocker.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the slice already described:\n\n- Add per-conversation follow state.\n- Auto-follow the original sender and repliers.\n- Allow current members to follow/unfollow in the app.\n- Send reply emails only to current club-member followers, excluding the reply author.\n- Include a signed stop-follow link in reply emails.\n- Cover the changed behaviour in the shared `club_message_replies.feature`.\n\nThis should not be reduced to “follow state only” because following has no user value unless reply delivery is narrowed at the same time.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nProve the iteration succeeded with:\n\n1. Domain/integration tests for sender/replier auto-follow, default non-follow state, idempotent follow/unfollow, current-member-only follow permissions, and follower-only reply delivery.\n2. Email tests proving only eligible followers receive reply notifications, the author is excluded, former/non-current members are excluded, and stop-follow links work only for the intended recipient/conversation.\n3. Negative tests for invalid, tampered, expired-if-applicable, and wrong-scope stop-follow links showing they change no state and reveal no existence information.\n4. Updated `acceptance-tests/features/club_message_replies.feature` scenarios tagged for iteration 040, replacing the 039 reply-all audience rule with the follower-delivery rule.\n5. Confirmation that preserved 039 conversation/reply/membership scenarios remain green.\n6. Final `dev check` passing.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_blocking_gap_count": 0,
+          "thread.start.current_node": "gemini_review",
+          "gemini_review_decision": "READY",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "thread.codex_review.current_node": "synthesize",
           "graph.default_fidelity": "summary:high",
-          "last_stage": "synthesize",
-          "gemini_review_decision": "READY"
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.synthesis_gate": 0,
+          "plan_needs_human": false,
+          "codex_review_confidence": "High",
+          "current_node": "publish_ready",
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "claude_review_blocking_gap_count": 0,
+          "internal.retry_count.publish_ready": 0,
+          "plan_ready": true,
+          "plan_needs_fix": false,
+          "internal.node_visit_count": 1,
+          "internal.retry_count.claude_review": 0,
+          "claude_review_blocking_gaps": "None",
+          "codex_review_decision": "READY",
+          "internal.retry_count.gemini_review": 0
         },
         "node_outcomes": {
           "publish_ready": {
@@ -1652,15 +1652,6 @@
               "tool_time_ms": 1776,
               "active_time_ms": 1776
             }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
           },
           "claude_review": {
             "status": "succeeded",
@@ -1705,46 +1696,14 @@
               "active_time_ms": 60682
             }
           },
-          "gemini_review": {
+          "start": {
             "status": "succeeded",
-            "context_updates": {
-              "gemini_review_decision": "READY",
-              "last_stage": "gemini_review",
-              "gemini_review_confidence": "High",
-              "gemini_review_blocking_gap_count": 0,
-              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name expected modules/projections/routes/templates once the current 039 implementation shape is fully known, but the current level of specificity is sufficient for implementation.\n2. The plan could explicitly state what happens if a former member later rejoins with a historical follow state, but the current acceptance criteria are clear enough for the in-scope rule: only current club-member followers receive reply emails.\n3. If the workflow expects plan metadata to reflect review state, the `Status: draft` line may need updating by the appropriate validation stage, but that is not a readiness blocker.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the slice already described:\n\n- Add per-conversation follow state.\n- Auto-follow the original sender and repliers.\n- Allow current members to follow/unfollow in the app.\n- Send reply emails only to current club-member followers, excluding the reply author.\n- Include a signed stop-follow link in reply emails.\n- Cover the changed behaviour in the shared `club_message_replies.feature`.\n\nThis should not be reduced to “follow state only” because following has no user value unless reply delivery is narrowed at the same time.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nProve the iteration succeeded with:\n\n1. Domain/integration tests for sender/replier auto-follow, default non-follow state, idempotent follow/unfollow, current-member-only follow permissions, and follower-only reply delivery.\n2. Email tests proving only eligible followers receive reply notifications, the author is excluded, former/non-current members are excluded, and stop-follow links work only for the intended recipient/conversation.\n3. Negative tests for invalid, tampered, expired-if-applicable, and wrong-scope stop-follow links showing they change no state and reveal no existence information.\n4. Updated `acceptance-tests/features/club_message_replies.feature` scenarios tagged for iteration 040, replacing the 039 reply-all audience rule with the follower-delivery rule.\n5. Confirmation that preserved 039 conversation/reply/membership scenarios remain green.\n6. Final `dev check` passing.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-              "gemini_review_blocking_gaps": "None",
-              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None",
-              "gemini_review_required_edits": "None"
-            },
-            "notes": "Stage completed: gemini_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 11187,
-                    "output_tokens": 584,
-                    "reasoning_tokens": 1084,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 105975
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 36459,
-              "tool_time_ms": 50,
-              "active_time_ms": 36509
-            }
+            "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "synthesize": {
             "status": "succeeded",
@@ -1825,23 +1784,176 @@
               "tool_time_ms": 48,
               "active_time_ms": 23218
             }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 0,
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could optionally name expected modules/projections/routes/templates once the current 039 implementation shape is fully known, but the current level of specificity is sufficient for implementation.\n2. The plan could explicitly state what happens if a former member later rejoins with a historical follow state, but the current acceptance criteria are clear enough for the in-scope rule: only current club-member followers receive reply emails.\n3. If the workflow expects plan metadata to reflect review state, the `Status: draft` line may need updating by the appropriate validation stage, but that is not a readiness blocker.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the slice already described:\n\n- Add per-conversation follow state.\n- Auto-follow the original sender and repliers.\n- Allow current members to follow/unfollow in the app.\n- Send reply emails only to current club-member followers, excluding the reply author.\n- Include a signed stop-follow link in reply emails.\n- Cover the changed behaviour in the shared `club_message_replies.feature`.\n\nThis should not be reduced to “follow state only” because following has no user value unless reply delivery is narrowed at the same time.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nProve the iteration succeeded with:\n\n1. Domain/integration tests for sender/replier auto-follow, default non-follow state, idempotent follow/unfollow, current-member-only follow permissions, and follower-only reply delivery.\n2. Email tests proving only eligible followers receive reply notifications, the author is excluded, former/non-current members are excluded, and stop-follow links work only for the intended recipient/conversation.\n3. Negative tests for invalid, tampered, expired-if-applicable, and wrong-scope stop-follow links showing they change no state and reveal no existence information.\n4. Updated `acceptance-tests/features/club_message_replies.feature` scenarios tagged for iteration 040, replacing the 039 reply-all audience rule with the follower-delivery rule.\n5. Confirmation that preserved 039 conversation/reply/membership scenarios remain green.\n6. Final `dev check` passing.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_blocking_gaps": "None",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–135.\n\n## Blocking gaps\n\n1. None",
+              "gemini_review_required_edits": "None"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 11187,
+                    "output_tokens": 584,
+                    "reasoning_tokens": 1084,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 105975
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 36459,
+              "tool_time_ms": 50,
+              "active_time_ms": 36509
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "59981083b54dd6fbbd4ea9ca7ade9da6a182bfdd",
         "node_visits": {
-          "gemini_review": 1,
-          "synthesis_gate": 1,
-          "synthesize": 1,
-          "codex_review": 1,
-          "publish_ready": 1,
           "claude_review": 1,
-          "start": 1
+          "codex_review": 1,
+          "synthesis_gate": 1,
+          "gemini_review": 1,
+          "publish_ready": 1,
+          "start": 1,
+          "synthesize": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md\nindex df41b86..a515be0 100644\n--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md\n+++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md\n@@ -1,7 +1,7 @@\n # Follow a conversation, and send replies only to followers\n \n Date: 2026-06-19\n-Status: draft\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex 09f31fd..9aaacda 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -49,7 +49,7 @@ green than before.\n | 037 | 2026-06-17 | merged | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |\n | 038 | 2026-06-19 | implementing | Async email delivery dispatch | [plan](038-email-delivery-handoff-boundary/plan.md) |\n | 039 | 2026-06-19 | validated | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |\n-| 040 | 2026-06-19 | draft | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |\n+| 040 | 2026-06-19 | validated | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |\n | 041 | 2026-06-19 | draft | Reply by email | [plan](041-reply-by-email-threading/plan.md) |\n \n Status notes:\n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-20T07:42:02.398458069Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 155011,
+      "inference_time_ms": 131459,
+      "tool_time_ms": 1928,
+      "active_time_ms": 133387
+    },
+    "final_git_commit_sha": "59981083b54dd6fbbd4ea9ca7ade9da6a182bfdd",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 36855,
+          "inference_time_ms": 36459,
+          "tool_time_ms": 50,
+          "active_time_ms": 36509
+        },
+        "billing_usd_micros": 105975,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 61010,
+          "inference_time_ms": 60628,
+          "tool_time_ms": 54,
+          "active_time_ms": 60682
+        },
+        "billing_usd_micros": 76968,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 23542,
+          "inference_time_ms": 23170,
+          "tool_time_ms": 48,
+          "active_time_ms": 23218
+        },
+        "billing_usd_micros": 91855,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 11240,
+          "inference_time_ms": 11202,
+          "tool_time_ms": 0,
+          "active_time_ms": 11202
+        },
+        "billing_usd_micros": 45265,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1789,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1776,
+          "active_time_ms": 1776
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 33661,
+      "output_tokens": 3684,
+      "total_tokens": 50802,
+      "reasoning_tokens": 2076,
+      "cache_read_tokens": 5054,
+      "cache_write_tokens": 6327,
+      "total_usd_micros": 320063
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -1861,29 +1973,43 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
-    "synthesis_gate@1": {
-      "first_event_seq": 97,
+    "publish_ready@1": {
+      "first_event_seq": 105,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Conditional node evaluated: synthesis_gate",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'",
         "failure_reason": null,
-        "timestamp": "2026-06-20T07:41:54.457111644Z"
+        "timestamp": "2026-06-20T07:41:59.347577404Z"
       },
       "provider_used": null,
       "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/8b0329161a2b4b104aebeb3907b263777ee96edf4363d7dfa69bb21572a5f440",
+        "exit_code": 0,
+        "duration_ms": 1776,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-20T07:41:54.456977922Z",
-      "handler": "conditional",
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-20T07:41:57.558280614Z",
+      "handler": "command",
       "timing": {
-        "wall_time_ms": 0,
+        "wall_time_ms": 1789,
         "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
+        "tool_time_ms": 1776,
+        "active_time_ms": 1776
       },
       "usage": {
         "input_tokens": 0,
@@ -1894,33 +2020,6 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
-    },
-    "publish_ready@1": {
-      "first_event_seq": 105,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'",
-        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'",
-        "language": "shell"
-      },
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-20T07:41:57.558280614Z",
-      "handler": "command",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "running"
     },
     "start@1": {
       "first_event_seq": 17,
@@ -2162,6 +2261,279 @@
             "category": "other",
             "tokens": 7,
             "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 97,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:41:54.457111644Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T07:41:54.456977922Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "claude_review@1": {
+      "first_event_seq": 43,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:41:10.449427976Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T07:40:09.438538497Z",
+      "handler": "agent",
+      "timing": {
+        "wall_time_ms": 61010,
+        "inference_time_ms": 60628,
+        "tool_time_ms": 54,
+        "active_time_ms": 60682
+      },
+      "usage": {
+        "input_tokens": 5442,
+        "output_tokens": 2360,
+        "total_tokens": 19183,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 5054,
+        "cache_write_tokens": 6327,
+        "total_usd_micros": 76968
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "AskUserQuestion",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskCreate",
+          "description": "Create pending tasks in the current session. Use concise subjects, descriptions, optional activeForm text, and metadata. Check TaskList first to avoid duplicate tasks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskGet",
+          "description": "Get one task by taskId, including subject, status, description, owner, blockedBy, and blocks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskList",
+          "description": "List tasks for the current session, including status, owner, and blocking dependencies. Use TaskGet with a taskId for full description and dependency details.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskUpdate",
+          "description": "Update an existing task's status, text, owner, metadata, or dependencies. Valid statuses are pending, in_progress, completed, and deleted. After completing a task, call TaskList to find newly unblocked work.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "edit_file",
+          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "context_window_tokens": 200000,
+        "input_tokens": 10487,
+        "usage_percent": 5.2435,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-20T07:41:10.448531291Z",
+        "event_seq": 55,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1882,
+            "usage_percent": 0.941
+          },
+          {
+            "category": "tools",
+            "tokens": 2150,
+            "usage_percent": 1.075
+          },
+          {
+            "category": "memory",
+            "tokens": 846,
+            "usage_percent": 0.423
+          },
+          {
+            "category": "conversation",
+            "tokens": 5601,
+            "usage_percent": 2.8005
+          },
+          {
+            "category": "other",
+            "tokens": 8,
+            "usage_percent": 0.004
           }
         ],
         "warnings": []
@@ -2424,242 +2796,37 @@
       },
       "state": "succeeded"
     },
-    "claude_review@1": {
-      "first_event_seq": 43,
+    "exit@1": {
+      "first_event_seq": 115,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Stage completed: claude_review",
+        "notes": null,
         "failure_reason": null,
-        "timestamp": "2026-06-20T07:41:10.449427976Z"
+        "timestamp": "2026-06-20T07:42:02.333642943Z"
       },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "anthropic",
-        "model": "claude-sonnet-4-5",
-        "reasoning_effort": "high"
-      },
+      "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-20T07:40:09.438538497Z",
-      "handler": "agent",
+      "started_at": "2026-06-20T07:42:02.333629187Z",
+      "handler": "exit",
       "timing": {
-        "wall_time_ms": 61010,
-        "inference_time_ms": 60628,
-        "tool_time_ms": 54,
-        "active_time_ms": 60682
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
-        "input_tokens": 5442,
-        "output_tokens": 2360,
-        "total_tokens": 19183,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
         "reasoning_tokens": 0,
-        "cache_read_tokens": 5054,
-        "cache_write_tokens": 6327,
-        "total_usd_micros": 76968
-      },
-      "model": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "AskUserQuestion",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskCreate",
-          "description": "Create pending tasks in the current session. Use concise subjects, descriptions, optional activeForm text, and metadata. Check TaskList first to avoid duplicate tasks.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskGet",
-          "description": "Get one task by taskId, including subject, status, description, owner, blockedBy, and blocks.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskList",
-          "description": "List tasks for the current session, including status, owner, and blocking dependencies. Use TaskGet with a taskId for full description and dependency details.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskUpdate",
-          "description": "Update an existing task's status, text, owner, metadata, or dependencies. Valid statuses are pending, in_progress, completed, and deleted. After completing a task, call TaskList to find newly unblocked work.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "edit_file",
-          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": false
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "anthropic",
-        "model": "claude-sonnet-4-5",
-        "context_window_tokens": 200000,
-        "input_tokens": 10487,
-        "usage_percent": 5.2435,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-20T07:41:10.448531291Z",
-        "event_seq": 55,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1882,
-            "usage_percent": 0.941
-          },
-          {
-            "category": "tools",
-            "tokens": 2150,
-            "usage_percent": 1.075
-          },
-          {
-            "category": "memory",
-            "tokens": 846,
-            "usage_percent": 0.423
-          },
-          {
-            "category": "conversation",
-            "tokens": 5601,
-            "usage_percent": 2.8005
-          },
-          {
-            "category": "other",
-            "tokens": 8,
-            "usage_percent": 0.004
-          }
-        ],
-        "warnings": []
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     }
