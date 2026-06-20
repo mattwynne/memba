@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T07:26:10.204631068Z",
-  "last_event_at": "2026-06-20T07:29:26.672688840Z",
+  "last_event_at": "2026-06-20T07:29:42.661697973Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1066,14 +1066,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-20T07:29:41.253268558Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-20T07:29:44.284660527Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1084,6 +1085,8 @@
           "plan_needs_fix": false,
           "claude_review_confidence": "High",
           "thread.start.current_node": "gemini_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.synthesis_gate": 0,
           "outcome": "succeeded",
           "claude_review_blocking_gaps": "None",
           "codex_review_blocking_gaps": "Reply-email stop-follow workflow/token behaviour is unresolved; Reply-recipient eligibility around current club membership/authorization is ambiguous",
@@ -1111,12 +1114,12 @@
           "graph.rankdir": "LR",
           "internal.retry_count.gemini_review": 0,
           "thread.codex_review.current_node": "synthesize",
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "internal.run_id": "01KVHYRARQ390FNNBMTBKT9W4W",
           "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–118.\n\nThe plan is strong and close to ready: the goal, user outcome, feature-file decision, and main behavioural rules are clear. However, two readiness gaps remain blocking because they affect security/workflow correctness for an in-scope email action and recipient authorization.\n\n## Blocking gaps\n\n1. **Reply-email stop-follow workflow/token behaviour is unresolved.**  \n   The plan explicitly includes “stop following from a reply email,” but the unsubscribe token mechanism is still listed as an open technical decision. The acceptance criteria also do not specify whether the link is one-click, login-required, token-scoped, expiring, reusable, idempotent, or how invalid/expired/forged links behave. Because this is an email-originated state-changing action, this is a security/workflow decision that should be resolved before implementation.\n\n2. **Reply-recipient eligibility is ambiguous around membership/authorization boundaries.**  \n   The plan says replies go to “current followers,” but it does not explicitly state that recipients must also be current club members / authorized conversation participants. Iteration 039’s rule was “all current members”; replacing that with “followers” should preserve the current-member boundary unless intentionally changed. Acceptance criteria should cover or explicitly exclude cases like a former member who still has a follow record.\n\n## Non-blocking improvements\n\n1. Resolve or reframe the other open technical decisions. Follow storage and delivery-helper factoring can probably be left to implementation if the plan explicitly says they are implementer choices and gives constraints, but leaving them under “Open Technical Decisions” weakens readiness.\n\n2. Add likely implementation touchpoints where useful: event/command modules, projections/read models, email template/module, message-detail LiveView/component, route/controller for email stop-follow, and relevant tests.\n\n3. Add explicit idempotency expectations for follow/unfollow commands: following twice and unfollowing twice should not create inconsistent state or duplicate delivery.\n\n4. Clarify whether auto-follow is derived from existing conversation/reply events, emitted as explicit follow events, or both. This matters for projections/backfills if iteration 039 conversations already exist.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Per-conversation follow state.\n- Auto-follow original sender and repliers.\n- In-app follow/unfollow control.\n- Reply fan-out only to current club members who are currently following, excluding the reply author.\n- Tests/acceptance coverage for the follower delivery rule.\n\nThe email stop-follow link can remain in this iteration only if its token/workflow/security semantics are specified. Otherwise, it should be split into a follow-up slice.\n\n## Required plan edits\n\n1. Add a concrete “Reply email stop-follow behaviour” section specifying:\n   - Whether the link is one-click or requires sign-in.\n   - Token scope: member + conversation + club.\n   - Expiry/reuse policy.\n   - Idempotent behaviour when already unfollowed.\n   - Invalid/expired/forged token behaviour.\n   - Whether the response leaks conversation/member existence.\n   - Required tests.\n\n2. Clarify delivery eligibility as something like:  \n   “A reply email is sent only to current club members who are currently following the conversation, excluding the reply author.”\n\n3. Add acceptance criteria/scenarios for the membership boundary, for example:\n   - A former/non-current member with a previous follow state does not receive reply emails.\n   - An invalid stop-follow link does not change follow state.\n   - A valid stop-follow link only unfollows the intended recipient from the intended conversation.\n\n4. Update `Open Technical Decisions` so that blocking decisions are either resolved or explicitly delegated with safe constraints. At minimum, resolve the unsubscribe token/workflow decision before implementation starts.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Domain/integration tests cover:\n   - Original sender auto-follows.\n   - Replier auto-follows.\n   - Non-engaged current member is not following by default.\n   - Member can follow and unfollow.\n   - Follow/unfollow is idempotent.\n   - Replies are emailed only to current club-member followers.\n   - Reply author is excluded.\n   - Former/non-current members do not receive emails.\n   - Unfollow stops future emails.\n\n2. Email/security tests cover:\n   - Reply email contains the correct follow status/footer and stop-follow link.\n   - Valid stop-follow link changes only the intended member/conversation state.\n   - Already-unfollowed link is safe/idempotent.\n   - Invalid/expired/forged links do not change state.\n   - Existing delivery tracking, layout/footer, and `<club name> via Memba` sender remain intact.\n\n3. Acceptance:\n   - Revised `acceptance-tests/features/club_message_replies.feature` scenarios tagged for iteration 040 pass with temporary todo tags removed or narrowed.\n   - Preserved 039 conversation/reply/membership scenarios remain green, except for the superseded reply-audience rule.\n\n4. Final stop condition:\n   - All relevant tests pass.\n   - `dev check` passes.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Reply-email stop-follow workflow/token behaviour is unresolved; Reply-recipient eligibility around current club membership/authorization is ambiguous\",\"codex_review_required_edits\":\"Specify stop-follow link token/workflow/security/idempotency/error behaviour and tests; Clarify delivery only to current club-member followers excluding author and add membership-boundary acceptance coverage\"}}",
           "claude_review_blocking_gap_count": 0,
           "plan_needs_human": true,
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–118.\n\n## Blocking gaps\n\n1. **Core technical decisions are explicitly unresolved.**  \n   The plan’s `## Open Technical Decisions` section leaves follow storage, unsubscribe token mechanism, and reply-delivery factoring undecided. These are not merely incidental details: they affect data modeling, migrations/projections, security, email links, tests, and integration boundaries.\n\n2. **Email stop-follow/unsubscribe behavior is not specified enough to implement safely.**  \n   The plan requires members to stop following from a reply email, but does not define the authorization/token behavior, invalid/expired token handling, idempotency, whether login is required, success/failure UX, or behavior for former/non-current members.\n\n3. **Follow/unfollow permissions and edge/error states are incomplete.**  \n   Acceptance criteria cover happy paths and delivery outcomes, but do not objectively specify who may follow/unfollow a conversation, what happens if a non-member or removed member attempts it, or how repeated follow/unfollow commands behave.\n\n## Non-blocking improvements\n\n1. Name likely implementation files/modules/tests where possible, especially the messaging command/event modules, follow projection/read model, reply delivery path, email template, LiveView/controller surface, and acceptance/browser tests.\n2. Add explicit UI state expectations for the message-detail follow control: initial state, followed state, unfollowed state, loading/error behavior if relevant.\n3. Clarify whether the no-reply `Reply-To` guidance from the business decision should be asserted in tests for this iteration.\n4. Add a brief migration/projection backfill note if existing conversations from iteration 039 may exist when this lands.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Persist per-member/per-conversation follow state.\n- Auto-follow the original sender and anyone who replies.\n- Let a current member follow/unfollow from the conversation screen.\n- Deliver new reply emails only to current followers, excluding the reply author.\n- Provide one defined, secure email stop-follow mechanism.\n- Prove the rule through domain/integration tests and the revised `club_message_replies.feature`.\n\nDo not include digesting, batching, inbound reply-by-email, custom thread folding, or broader delivery-path refactoring unless required by the chosen implementation.\n\n## Required plan edits\n\n1. Resolve the `Open Technical Decisions` section by choosing:\n   - the follow storage/projection approach,\n   - the unsubscribe token/authentication approach,\n   - whether reply delivery reuses the 039 path or introduces a shared delivery helper.\n2. Add concrete acceptance criteria for email stop-follow behavior:\n   - valid link,\n   - invalid/expired/tampered link,\n   - already-unfollowed link,\n   - whether login is required,\n   - success/failure user-visible outcome.\n3. Add follow/unfollow permission criteria:\n   - only current members can follow/unfollow,\n   - behavior for former/non-members,\n   - idempotent repeated follow/unfollow behavior.\n4. Update the validation plan to include tests for those permission and token/error cases.\n\n## Validation plan\n\nSuccess should be proven by:\n\n- Domain tests for auto-following sender/repliers, default non-follow state, manual follow/unfollow, idempotency, and permission rejection.\n- Delivery tests showing replies go only to current followers and exclude the reply author.\n- Email tests for footer copy, stop-follow link generation, valid stop-follow behavior, invalid/tampered token behavior, and no further emails after unfollowing.\n- UI/browser tests for the conversation follow/unfollow control state transitions.\n- Acceptance scenarios in `club_message_replies.feature` covering follower-only delivery, auto-follow, opt-in default, follow/unfollow, and unfollow-stops-email.\n- Existing 039 conversation/reply/membership scenarios remaining green, with the old reply-all audience rule superseded.\n- `dev check` passing.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Core technical decisions are explicitly unresolved; Email stop-follow/unsubscribe behavior is not specified enough to implement safely; Follow/unfollow permissions and edge/error states are incomplete\",\"gemini_review_required_edits\":\"Resolve follow storage, unsubscribe token/authentication, and reply delivery implementation choices; Add concrete acceptance criteria for valid, invalid, expired/tampered, and repeated email stop-follow links; Add current-member permissions and idempotency criteria for follow/unfollow; Update validation plan with tests for permission and token/error cases\"}}",
           "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "claude_review_required_edits": "None",
@@ -1125,6 +1128,11 @@
           "internal.retry_count.claude_review": 0
         },
         "node_outcomes": {
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1294,11 +1302,12 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "not_ready",
         "node_visits": {
           "gemini_review": 1,
           "claude_review": 1,
           "synthesize": 1,
+          "synthesis_gate": 1,
           "start": 1,
           "codex_review": 1
         }
@@ -2027,7 +2036,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:29:41.253026495Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2041,15 +2055,26 @@
       "output": null,
       "started_at": "2026-06-20T07:29:26.654929333Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 14596,
+        "inference_time_ms": 14515,
+        "tool_time_ms": 0,
+        "active_time_ms": 14515
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 7438,
+        "output_tokens": 45,
+        "total_tokens": 7999,
+        "reasoning_tokens": 516,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 54020
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     }
   }
 }
