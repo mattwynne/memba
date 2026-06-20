@@ -562,14 +562,148 @@
     }
   },
   "web_url": "https://fabro.home.wynne.family/runs/01KVHWTWHRW3WV068TMNZPQBB9",
-  "start": null,
-  "status": {
-    "kind": "starting"
+  "start": {
+    "start_time": "2026-06-20T06:52:37.172345629Z",
+    "run_branch": "fabro/run/01KVHWTWHRW3WV068TMNZPQBB9",
+    "base_sha": "90134f8ebf5b313e76e43e912c50800ab2687545"
   },
-  "status_updated_at": "2026-06-20T06:52:32.853782082Z",
-  "last_event_at": "2026-06-20T06:52:36.616546442Z",
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-06-20T06:52:37.172366705Z",
+  "last_event_at": "2026-06-20T06:52:42.082700392Z",
   "pending_control": null,
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "seq": 20,
+      "checkpoint": {
+        "timestamp": "2026-06-20T06:52:38.954354186Z",
+        "current_node": "start",
+        "completed_nodes": [
+          "start"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "graph.default_fidelity": "summary:high",
+          "current_node": "start",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "failure_signature": "",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01KVHWTWHRW3WV068TMNZPQBB9",
+          "internal.thread_id": null,
+          "outcome": "succeeded",
+          "internal.fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "gemini_review",
+        "node_visits": {
+          "start": 1
+        }
+      },
+      "diff": {}
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-20T06:53:42.985196055Z",
+        "current_node": "gemini_review",
+        "completed_nodes": [
+          "start",
+          "gemini_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.start.current_node": "gemini_review",
+          "gemini_review_required_edits": "Resolve follow storage, unsubscribe token, and delivery-path decisions; Add acceptance criteria/scenarios for current-member-only delivery/following, former members, and invalid or unauthorized unsubscribe links; Name expected modules/migrations/routes/templates/tests",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–113.\n\n## Blocking gaps\n\n1. **Open technical decisions are still unresolved and affect implementation shape.**  \n   The plan explicitly leaves follow storage/read-model shape, unsubscribe token mechanism, and reply-delivery factoring open. At least the first two affect schema/projections, security boundaries, routes/controllers, tests, and acceptance behaviour. This is not just refactoring latitude; implementers need a settled direction or explicit constraints before starting.\n\n2. **Permission/member-lifecycle and error-state behaviour is not fully specified.**  \n   The plan says replies go to “current followers,” but does not clearly state whether the actual recipient set is `followers ∩ current club members`, what happens if a follower later leaves the club, or whether non-current members may follow/unfollow. It also does not define invalid/expired/unauthorized email unsubscribe link behaviour. These are important privacy and permissions edge cases for notification email delivery.\n\n## Non-blocking improvements\n\n1. Name likely implementation files/modules more concretely, such as the messaging command/event modules, projection/read model, email template, mailer/delivery code, route/controller or LiveView handler, and tests.\n2. Clarify idempotency expectations for repeated follow/unfollow commands.\n3. Define exact user-facing copy for followed/unfollowed states and the email stop-following link.\n4. Clarify whether “unfollow” removes the follow relationship or records an explicit unfollow state, especially after auto-follow events.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: per-conversation follow state for current club members; auto-follow original sender and repliers; in-app follow/unfollow; reply fan-out to current club-member followers excluding the reply author; an email stop-following link; and BDD/domain/email tests proving non-followers and former/non-current members do not receive replies.\n\nDefer digesting, reply-by-email, advanced notification preferences, and any optional email redesign beyond what is needed for the reply notification and stop-following link.\n\n## Required plan edits\n\n1. Resolve the “Open Technical Decisions” section before implementation:\n   - Choose the follow storage/projection approach.\n   - Choose the unsubscribe token mechanism and security properties.\n   - State whether delivery reuses the 039 path or is factored through a helper/boundary.\n2. Add explicit acceptance criteria and scenarios for permissions/member lifecycle:\n   - Only current club members can follow/unfollow.\n   - Reply recipients are current club members who are following the conversation, excluding the author.\n   - Former/non-current members who previously followed are not emailed.\n   - Invalid, expired, or unauthorized stop-following links fail safely.\n3. Add enough implementation pointers to identify expected modules, migrations/projections, routes/handlers, mailer/template changes, and tests.\n\n## Validation plan\n\nProve success with:\n\n1. BDD scenarios in `acceptance-tests/features/club_message_replies.feature` for:\n   - Sender auto-follows.\n   - Replier auto-follows.\n   - Non-engaged member is not following by default.\n   - Member can follow and then receives future replies.\n   - Member can unfollow in app and receives no further replies.\n   - Member can stop following from email and receives no further replies.\n   - Former/non-current follower receives no reply email.\n2. Domain/integration tests for follow/unfollow state, auto-follow events, idempotency, and recipient selection.\n3. Email tests proving only eligible followers are delivered to, the author is excluded, delivery tracking and sender remain intact, and the stop-following link works/fails safely.\n4. Existing 039 conversation/reply/membership tests remain green with the superseded reply-audience rule updated.\n5. Full `dev check` passes.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":2,\"gemini_review_blocking_gaps\":\"Open technical decisions affect storage/security/delivery shape; Permission/member-lifecycle and unsubscribe error-state behaviour is underspecified\",\"gemini_review_required_edits\":\"Resolve follow storage, unsubscribe token, and delivery-path decisions; Add acceptance criteria/scenarios for current-member-only delivery/following, former members, and invalid or unauthorized unsubscribe links; Name expected modules/migrations/routes/templates/tests\"}}",
+          "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–113.\n\n## Blocking gaps\n\n1. ",
+          "gemini_review_blocking_gaps": "Open technical decisions affect storage/security/delivery shape; Permission/member-lifecycle and unsubscribe error-state behaviour is underspecified",
+          "internal.work_dir": "/workspace/memba",
+          "internal.thread_id": "start",
+          "failure_class": "",
+          "internal.fidelity": "truncate",
+          "last_stage": "gemini_review",
+          "gemini_review_confidence": "High",
+          "gemini_review_decision": "NOT READY",
+          "internal.retry_count.gemini_review": 0,
+          "graph.rankdir": "LR",
+          "current_node": "gemini_review",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_blocking_gap_count": 2,
+          "internal.run_id": "01KVHWTWHRW3WV068TMNZPQBB9",
+          "outcome": "succeeded",
+          "graph.default_fidelity": "summary:high",
+          "failure_signature": ""
+        },
+        "node_outcomes": {
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "gemini_review_confidence": "High",
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–113.\n\n## Blocking gaps\n\n1. **Open technical decisions are still unresolved and affect implementation shape.**  \n   The plan explicitly leaves follow storage/read-model shape, unsubscribe token mechanism, and reply-delivery factoring open. At least the first two affect schema/projections, security boundaries, routes/controllers, tests, and acceptance behaviour. This is not just refactoring latitude; implementers need a settled direction or explicit constraints before starting.\n\n2. **Permission/member-lifecycle and error-state behaviour is not fully specified.**  \n   The plan says replies go to “current followers,” but does not clearly state whether the actual recipient set is `followers ∩ current club members`, what happens if a follower later leaves the club, or whether non-current members may follow/unfollow. It also does not define invalid/expired/unauthorized email unsubscribe link behaviour. These are important privacy and permissions edge cases for notification email delivery.\n\n## Non-blocking improvements\n\n1. Name likely implementation files/modules more concretely, such as the messaging command/event modules, projection/read model, email template, mailer/delivery code, route/controller or LiveView handler, and tests.\n2. Clarify idempotency expectations for repeated follow/unfollow commands.\n3. Define exact user-facing copy for followed/unfollowed states and the email stop-following link.\n4. Clarify whether “unfollow” removes the follow relationship or records an explicit unfollow state, especially after auto-follow events.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: per-conversation follow state for current club members; auto-follow original sender and repliers; in-app follow/unfollow; reply fan-out to current club-member followers excluding the reply author; an email stop-following link; and BDD/domain/email tests proving non-followers and former/non-current members do not receive replies.\n\nDefer digesting, reply-by-email, advanced notification preferences, and any optional email redesign beyond what is needed for the reply notification and stop-following link.\n\n## Required plan edits\n\n1. Resolve the “Open Technical Decisions” section before implementation:\n   - Choose the follow storage/projection approach.\n   - Choose the unsubscribe token mechanism and security properties.\n   - State whether delivery reuses the 039 path or is factored through a helper/boundary.\n2. Add explicit acceptance criteria and scenarios for permissions/member lifecycle:\n   - Only current club members can follow/unfollow.\n   - Reply recipients are current club members who are following the conversation, excluding the author.\n   - Former/non-current members who previously followed are not emailed.\n   - Invalid, expired, or unauthorized stop-following links fail safely.\n3. Add enough implementation pointers to identify expected modules, migrations/projections, routes/handlers, mailer/template changes, and tests.\n\n## Validation plan\n\nProve success with:\n\n1. BDD scenarios in `acceptance-tests/features/club_message_replies.feature` for:\n   - Sender auto-follows.\n   - Replier auto-follows.\n   - Non-engaged member is not following by default.\n   - Member can follow and then receives future replies.\n   - Member can unfollow in app and receives no further replies.\n   - Member can stop following from email and receives no further replies.\n   - Former/non-current follower receives no reply email.\n2. Domain/integration tests for follow/unfollow state, auto-follow events, idempotency, and recipient selection.\n3. Email tests proving only eligible followers are delivered to, the author is excluded, delivery tracking and sender remain intact, and the stop-following link works/fails safely.\n4. Existing 039 conversation/reply/membership tests remain green with the superseded reply-audience rule updated.\n5. Full `dev check` passes.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":2,\"gemini_review_blocking_gaps\":\"Open technical decisions affect storage/security/delivery shape; Permission/member-lifecycle and unsubscribe error-state behaviour is underspecified\",\"gemini_review_required_edits\":\"Resolve follow storage, unsubscribe token, and delivery-path decisions; Add acceptance criteria/scenarios for current-member-only delivery/following, former members, and invalid or unauthorized unsubscribe links; Name expected modules/migrations/routes/templates/tests\"}}",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md` lines 1–113.\n\n## Blocking gaps\n\n1. ",
+              "gemini_review_blocking_gaps": "Open technical decisions affect storage/security/delivery shape; Permission/member-lifecycle and unsubscribe error-state behaviour is underspecified",
+              "gemini_review_blocking_gap_count": 2,
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_required_edits": "Resolve follow storage, unsubscribe token, and delivery-path decisions; Add acceptance criteria/scenarios for current-member-only delivery/following, former members, and invalid or unauthorized unsubscribe links; Name expected modules/migrations/routes/templates/tests"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6729,
+                    "output_tokens": 969,
+                    "reasoning_tokens": 2206,
+                    "cache_read_tokens": 3584,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 130687
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 63637,
+              "tool_time_ms": 49,
+              "active_time_ms": 63686
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "claude_review",
+        "node_visits": {
+          "start": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {}
+    }
+  ],
   "conclusion": null,
   "sandbox": {
     "provider": "docker",
@@ -589,5 +723,240 @@
   "pull_request": null,
   "superseded_by": null,
   "pending_interviews": {},
-  "stages": {}
+  "stages": {
+    "start@1": {
+      "first_event_seq": 17,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-20T06:52:38.954266429Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T06:52:38.954162224Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "gemini_review@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T06:52:38.954460514Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 3824,
+        "output_tokens": 50,
+        "total_tokens": 3917,
+        "reasoning_tokens": 43,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 3824,
+        "usage_percent": 1.4058823529411764,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-20T06:52:42.032345139Z",
+        "event_seq": 29,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1048,
+            "usage_percent": 0.38529411764705884
+          },
+          {
+            "category": "tools",
+            "tokens": 1525,
+            "usage_percent": 0.5606617647058824
+          },
+          {
+            "category": "memory",
+            "tokens": 410,
+            "usage_percent": 0.15073529411764705
+          },
+          {
+            "category": "conversation",
+            "tokens": 835,
+            "usage_percent": 0.3069852941176471
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
+    }
+  }
 }
