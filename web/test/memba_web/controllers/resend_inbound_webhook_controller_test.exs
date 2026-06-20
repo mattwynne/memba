@@ -5,6 +5,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
 
   alias Memba.Membership
   alias Memba.Messaging
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
 
   setup do
@@ -98,11 +99,20 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
            } = Messaging.get_message(message_id)
 
     assert [
-             %{recipient_id: ^alice_id, recipient_address: "alice@example.com"},
-             %{recipient_id: bob_id, recipient_address: "bob@example.com"}
+             %{
+               recipient_id: ^alice_id,
+               recipient_address: "alice@example.com",
+               status: "pending"
+             },
+             %{recipient_id: bob_id, recipient_address: "bob@example.com", status: "pending"}
            ] = Messaging.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
+    assert Fake.deliveries() == []
+
+    assert [%{status: "sent"}, %{status: "sent"}] =
+             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
     assert length(Fake.deliveries()) == 2
   end
 
@@ -131,6 +141,11 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     conn = post_resend_inbound_event(conn, payload)
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
+    assert Fake.deliveries() == []
+
+    assert [%{status: "sent"}, %{status: "sent"}] =
+             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
     first_deliveries = Fake.deliveries()
     assert length(first_deliveries) == 2
 
@@ -164,6 +179,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
+    assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
     assert Fake.deliveries() == first_deliveries
 
     assert %{

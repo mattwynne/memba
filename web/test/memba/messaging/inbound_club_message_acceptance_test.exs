@@ -3,6 +3,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   alias Memba.Membership
   alias Memba.Messaging
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryProviders.Resend
@@ -87,6 +88,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert [
              %{
+               delivery_id: alice_delivery_id,
                message_id: ^message_id,
                recipient_id: ^alice_id,
                recipient_name: "Alice Example",
@@ -101,6 +103,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                failed_at: nil
              },
              %{
+               delivery_id: bob_delivery_id,
                message_id: ^message_id,
                recipient_id: bob_id,
                recipient_name: "Bob Example",
@@ -117,6 +120,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            ] = Messaging.list_recipient_deliveries(message_id)
 
     assert bob_id == bob.person_id
+    assert Fake.deliveries() == []
+
+    assert [
+             %{delivery_id: ^alice_delivery_id, status: "sent", sent_at: %DateTime{}},
+             %{delivery_id: ^bob_delivery_id, status: "sent", sent_at: %DateTime{}}
+           ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
     assert [
              %EmailDeliveryRequest{
@@ -186,7 +195,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert {:ok, %{message_id: message_id}} =
              Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
 
+    assert [%{status: "pending"}, %{status: "pending"}] =
+             Messaging.list_recipient_deliveries(message_id)
+
+    assert Fake.deliveries() == []
+
+    assert [%{status: "sent"}, %{status: "sent"}] =
+             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
     first_deliveries = Fake.deliveries()
+    assert length(first_deliveries) == 2
 
     assert {:ok,
             %{
@@ -212,8 +230,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            ] =
              Messaging.list_messages_for_club(kmc.club_id)
 
+    assert [] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
     assert Fake.deliveries() == first_deliveries
-    assert length(first_deliveries) == 2
 
     assert %InboundEmailSourceProjection{
              status: "accepted",
@@ -256,6 +274,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              )
 
     assert %{body: "Bring route ideas.\n\nMeet at 7."} = Messaging.get_message(message_id)
+
+    assert [%{status: "pending"}] = Messaging.list_recipient_deliveries(message_id)
+    assert Fake.deliveries() == []
+
+    assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
     assert [
              %EmailDeliveryRequest{
@@ -310,6 +333,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              subject: "Alternate sender address",
              body: "Posting from my work address."
            } = Messaging.get_message(message_id)
+
+    assert [%{status: "pending"}] = Messaging.list_recipient_deliveries(message_id)
+    assert Fake.deliveries() == []
+
+    assert [%{status: "sent"}] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
 
     assert [
              %EmailDeliveryRequest{
