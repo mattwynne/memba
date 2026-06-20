@@ -1,0 +1,167 @@
+diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+index b9d995a..157c27e 100644
+--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md
++++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Update the `EmailDelivery` projection/read model so newly created records start with status `pending` and can store dispatch diagnostics such as attempt count, latest error/detail, and useful timestamps.
+ - [x] 003 Add database constraints or schema validation for the expanded status vocabulary where practical, preserving existing webhook statuses.
+ - [x] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.
+-- [ ] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
++- [x] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.
+ - [ ] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.
+ - [ ] 007 Move request-building/provider-call logic out of `Memba.Messaging` into the dispatcher or a focused collaborator used by the dispatcher.
+ - [ ] 008 On provider success, update the delivery to `sent`; on provider error, update it to `failed`, increment attempt count, and persist the latest error/detail.
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index c97daef..65868ac 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -2,24 +2,73 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   @moduledoc """
+   OTP process responsible for asynchronous email delivery dispatch.
+ 
+-  Later iteration tasks add read-model-change subscription, claiming, provider
+-  delivery, and retry behaviour. This process is intentionally minimal here so
+-  the application has a named supervised dispatch boundary before that behaviour
+-  is attached.
++  The dispatcher subscribes to committed read-model changes and treats new
++  `EmailDelivery` projection records as a nudge to look for pending delivery
++  work. Later iteration tasks add claiming, provider delivery, and retry
++  behaviour.
+   """
+ 
+   use GenServer
+ 
++  alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
++  alias Memba.ReadModelChanges
++
+   @name __MODULE__
+ 
+   def start_link(opts \\ []) do
+-    name = Keyword.get(opts, :name, @name)
++    {name, opts} = Keyword.pop(opts, :name, @name)
+ 
+-    GenServer.start_link(__MODULE__, %{}, name: name)
++    if name do
++      GenServer.start_link(__MODULE__, opts, name: name)
++    else
++      GenServer.start_link(__MODULE__, opts)
++    end
+   end
+ 
+   @impl GenServer
+-  def init(state) do
++  def init(opts) do
++    :ok = Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++
++    state = %{
++      dispatch_observer: Keyword.get(opts, :dispatch_observer)
++    }
++
+     {:ok, state}
+   end
++
++  @impl GenServer
++  def handle_info(
++        {:read_model_changed,
++         %{
++           projector: EmailDeliveryProjector,
++           source_event: %EmailDeliveryCreated{}
++         } = payload},
++        state
++      ) do
++    send(self(), {:dispatch_pending_email_deliveries, payload})
++
++    {:noreply, state}
++  end
++
++  def handle_info({:read_model_changed, _payload}, state) do
++    {:noreply, state}
++  end
++
++  def handle_info({:dispatch_pending_email_deliveries, payload}, state) do
++    notify_dispatch_observer(state, payload)
++
++    {:noreply, state}
++  end
++
++  defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload), do: :ok
++
++  defp notify_dispatch_observer(%{dispatch_observer: observer}, payload) when is_pid(observer) do
++    send(
++      observer,
++      {:email_delivery_dispatch_requested, Map.put(payload, :source, :read_model_change)}
++    )
++
++    :ok
++  end
+ end
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+new file mode 100644
+index 0000000..265c671
+--- /dev/null
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -0,0 +1,63 @@
++defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
++  use ExUnit.Case, async: false
++
++  alias Memba.Messaging.EmailDeliveryDispatcher
++  alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.Events.EmailDeliveryDelivered
++  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
++  alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
++  alias Memba.ReadModelChanges
++
++  test "subscribes to read-model changes and nudges dispatch for committed email delivery creation" do
++    name = :"#{__MODULE__}.email_delivery_created"
++
++    start_supervised!({EmailDeliveryDispatcher, name: name, dispatch_observer: self()})
++
++    event = %EmailDeliveryCreated{
++      message_id: "msg_dispatch_nudge",
++      delivery_id: "del_dispatch_nudge",
++      recipient_id: "per_dispatch_nudge",
++      recipient_name: "Ada Member",
++      recipient_email: "ada@example.test"
++    }
++
++    changes = %{
++      messaging_email_delivery: %{
++        delivery_id: event.delivery_id,
++        message_id: event.message_id,
++        status: "pending"
++      }
++    }
++
++    assert :ok = ReadModelChanges.publish(EmailDeliveryProjector, event, %{}, changes)
++
++    assert_receive {:email_delivery_dispatch_requested,
++                    %{
++                      source: :read_model_change,
++                      projector: EmailDeliveryProjector,
++                      source_event: ^event,
++                      changes: ^changes
++                    }}
++  end
++
++  test "ignores unrelated read-model changes" do
++    name = :"#{__MODULE__}.unrelated_changes"
++
++    start_supervised!({EmailDeliveryDispatcher, name: name, dispatch_observer: self()})
++
++    event = %EmailDeliveryDelivered{
++      message_id: "msg_unrelated",
++      delivery_id: "del_unrelated"
++    }
++
++    assert :ok =
++             ReadModelChanges.publish(
++               MemberEmailDeliveryProjector,
++               event,
++               %{},
++               %{messaging_member_email_delivery: %{delivery_id: event.delivery_id}}
++             )
++
++    refute_receive {:email_delivery_dispatch_requested, _}
++  end
++end
