@@ -9,9 +9,14 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+  alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+
+  @email_delivery_replay_projectors [
+    Memba.Messaging.Projectors.EmailDelivery
+  ]
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
@@ -317,6 +322,100 @@ defmodule Memba.Messaging.SendClubMessageTest do
              pending_deliveries_for_message(message_id)
   end
 
+  test "manual retry of a failed delivery does not append duplicate message or delivery events" do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               consistency: :strong
+             )
+
+    assert [delivery] = pending_deliveries_for_message(message_id)
+    assert count_events(MessageSent) == 1
+    assert count_events(EmailDeliveryCreated) == 1
+
+    failed_at =
+      DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
+
+    delivery
+    |> Ecto.Changeset.change(
+      status: "failed",
+      attempt_count: 1,
+      latest_error: "unavailable",
+      latest_detail: ":unavailable",
+      failed_at: failed_at
+    )
+    |> Repo.update!()
+
+    assert {:ok,
+            %EmailDeliveryProjection{
+              delivery_id: delivery_id,
+              status: "sent",
+              attempt_count: 2
+            }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
+
+    assert delivery_id == delivery.delivery_id
+    assert count_events(MessageSent) == 1
+    assert count_events(EmailDeliveryCreated) == 1
+
+    assert [%EmailDeliveryRequest{message_id: ^message_id, delivery_id: ^delivery_id}] =
+             Fake.deliveries()
+  end
+
+  test "projector replay rebuilds pending delivery work without handing it to the provider" do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               consistency: :strong
+             )
+
+    assert [%EmailDeliveryProjection{status: "pending"}] =
+             pending_deliveries_for_message(message_id)
+
+    assert Fake.deliveries() == []
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+
+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
+    Memba.ProjectionBarrier.await!(@email_delivery_replay_projectors, checkpoint: checkpoint)
+
+    assert [%EmailDeliveryProjection{status: "pending"}] =
+             pending_deliveries_for_message(message_id)
+
+    assert Fake.deliveries() == []
+  end
+
   defp pending_deliveries_for_message(message_id) do
     EmailDeliveryProjection
     |> where([delivery], delivery.message_id == ^message_id)
@@ -398,4 +497,16 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp count_events(event_module) when is_atom(event_module) do
+    event_type = Atom.to_string(event_module)
+
+    %{rows: [[count]]} =
+      Repo.query!(
+        ~S|SELECT count(*) FROM "event_store"."events" WHERE event_type = $1|,
+        [event_type]
+      )
+
+    count
+  end
 end
