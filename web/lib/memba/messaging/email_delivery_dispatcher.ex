@@ -6,7 +6,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   `EmailDelivery` projection records as a nudge to look for pending delivery
   work. It also owns the provider handoff request-building boundary and
   persisted dispatch outcomes so command application services do not call email
-  providers directly. Later iteration tasks add retry behaviour.
+  providers directly. Failed deliveries can be retried through the explicit
+  manual retry API; the dispatcher does not perform automatic retry sweeps.
   """
 
   use GenServer
@@ -103,6 +104,24 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   end
 
   @doc """
+  Retry one failed email delivery by handing it to the configured provider.
+
+  This is the manual/internal retry boundary. It atomically moves a failed
+  delivery to `dispatching` before calling the provider so concurrent retry
+  attempts cannot both hand the same failed delivery to the provider. Provider
+  failure is persisted on the delivery and returned as a successful API result
+  containing the updated failed read model; lookup/retryability problems return
+  `{:error, reason}`.
+  """
+  def retry_failed_delivery(delivery_id) when is_binary(delivery_id) do
+    with {:ok, %EmailDeliveryProjection{} = delivery} <- claim_failed_delivery(delivery_id) do
+      {:ok, dispatch_claimed_retry_delivery(delivery)}
+    end
+  end
+
+  def retry_failed_delivery(_delivery_id), do: {:error, :invalid_delivery_id}
+
+  @doc """
   Hand email delivery work to the configured provider.
 
   For normal asynchronous dispatch, the dispatcher builds provider requests from
@@ -187,12 +206,44 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
     :ok
   end
 
-  defp mark_delivery_sent(%EmailDeliveryProjection{} = delivery) do
+  defp claim_failed_delivery(delivery_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    delivery
-    |> outcome_query()
-    |> Repo.update_all(
+    claim_query =
+      from delivery in EmailDeliveryProjection,
+        where: delivery.delivery_id == ^delivery_id and delivery.status == ^@failed_status
+
+    case Repo.update_all(claim_query,
+           set: [
+             status: @dispatching_status,
+             last_dispatch_attempted_at: now,
+             updated_at: now
+           ]
+         ) do
+      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
+      {0, nil} -> failed_delivery_retry_error(delivery_id)
+    end
+  end
+
+  defp failed_delivery_retry_error(delivery_id) do
+    case Repo.get(EmailDeliveryProjection, delivery_id) do
+      nil -> {:error, :not_found}
+      %EmailDeliveryProjection{status: status} -> {:error, {:not_retryable, status}}
+    end
+  end
+
+  defp dispatch_claimed_retry_delivery(%EmailDeliveryProjection{} = delivery) do
+    case deliver_to_provider(delivery) do
+      :ok -> mark_delivery_sent(delivery, increment_attempt_count?: true)
+      {:error, reason} -> mark_delivery_failed(delivery, reason)
+    end
+  end
+
+  defp mark_delivery_sent(%EmailDeliveryProjection{} = delivery, opts \\ []) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    increment_attempt_count? = Keyword.get(opts, :increment_attempt_count?, false)
+
+    updates = [
       set: [
         status: @sent_status,
         latest_error: nil,
@@ -201,7 +252,18 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
         failed_at: nil,
         updated_at: now
       ]
-    )
+    ]
+
+    updates =
+      if increment_attempt_count? do
+        Keyword.put(updates, :inc, attempt_count: 1)
+      else
+        updates
+      end
+
+    delivery
+    |> outcome_query()
+    |> Repo.update_all(updates)
 
     Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
   end

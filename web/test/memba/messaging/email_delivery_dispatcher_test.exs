@@ -7,6 +7,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
+  alias Memba.Messaging
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -352,6 +353,110 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
     end
   end
 
+  describe "manual retry" do
+    test "retries a failed delivery through the internal Messaging API and marks it sent" do
+      failed_at =
+        DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
+
+      %{message: message, delivery: delivery} =
+        insert_dispatchable_delivery!(
+          status: "failed",
+          attempt_count: 1,
+          latest_error: "unavailable",
+          latest_detail: ":unavailable",
+          failed_at: failed_at
+        )
+
+      assert {:ok,
+              %EmailDeliveryProjection{
+                delivery_id: delivery_id,
+                message_id: message_id,
+                status: "sent",
+                attempt_count: 2,
+                latest_error: nil,
+                latest_detail: nil,
+                last_dispatch_attempted_at: %DateTime{} = attempted_at,
+                sent_at: %DateTime{} = sent_at,
+                failed_at: nil
+              }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
+
+      assert delivery_id == delivery.delivery_id
+      assert message_id == message.message_id
+      assert DateTime.compare(attempted_at, failed_at) in [:gt, :eq]
+      assert DateTime.compare(sent_at, attempted_at) in [:gt, :eq]
+
+      assert [%EmailDeliveryRequest{message_id: ^message_id, delivery_id: ^delivery_id}] =
+               Fake.deliveries()
+
+      assert 1 ==
+               Repo.aggregate(
+                 from(projected_delivery in EmailDeliveryProjection,
+                   where: projected_delivery.message_id == ^message.message_id
+                 ),
+                 :count
+               )
+    end
+
+    test "retries a failed delivery and records fresh diagnostics when the provider still errors" do
+      Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+
+      failed_at =
+        DateTime.utc_now() |> DateTime.add(-120, :second) |> DateTime.truncate(:microsecond)
+
+      %{delivery: delivery} =
+        insert_dispatchable_delivery!(
+          status: "failed",
+          attempt_count: 1,
+          latest_error: "old_error",
+          latest_detail: "old detail",
+          failed_at: failed_at
+        )
+
+      assert {:ok,
+              %EmailDeliveryProjection{
+                delivery_id: delivery_id,
+                status: "failed",
+                attempt_count: 2,
+                latest_error: "unavailable",
+                latest_detail: ":unavailable",
+                last_dispatch_attempted_at: %DateTime{} = attempted_at,
+                sent_at: nil,
+                failed_at: %DateTime{} = retried_failed_at
+              }} = Messaging.retry_failed_email_delivery(delivery.delivery_id)
+
+      assert delivery_id == delivery.delivery_id
+      assert DateTime.compare(attempted_at, failed_at) in [:gt, :eq]
+      assert DateTime.compare(retried_failed_at, attempted_at) in [:gt, :eq]
+
+      assert %EmailDeliveryProjection{
+               status: "failed",
+               attempt_count: 2,
+               latest_error: "unavailable",
+               latest_detail: ":unavailable",
+               failed_at: ^retried_failed_at
+             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+    end
+
+    test "does not retry invalid, missing, or non-failed deliveries" do
+      pending_delivery =
+        insert_email_delivery!(delivery_id: Memba.ID.generate(:delivery), status: "pending")
+
+      assert {:error, :invalid_delivery_id} =
+               Messaging.retry_failed_email_delivery("not-a-delivery-id")
+
+      assert {:error, :not_found} =
+               Messaging.retry_failed_email_delivery(Memba.ID.generate(:delivery))
+
+      assert {:error, {:not_retryable, "pending"}} =
+               Messaging.retry_failed_email_delivery(pending_delivery.delivery_id)
+
+      assert [] = Fake.deliveries()
+
+      assert %EmailDeliveryProjection{status: "pending", last_dispatch_attempted_at: nil} =
+               Repo.get!(EmailDeliveryProjection, pending_delivery.delivery_id)
+    end
+  end
+
   defp insert_email_delivery!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
@@ -403,7 +508,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
         recipient_name: Keyword.get(attrs, :recipient_name, "Bob Member"),
         recipient_address: Keyword.get(attrs, :recipient_address, "bob.member@example.com"),
         status: Keyword.fetch!(attrs, :status),
-        attempt_count: Keyword.get(attrs, :attempt_count, 0)
+        attempt_count: Keyword.get(attrs, :attempt_count, 0),
+        latest_error: Keyword.get(attrs, :latest_error),
+        latest_detail: Keyword.get(attrs, :latest_detail),
+        last_dispatch_attempted_at: Keyword.get(attrs, :last_dispatch_attempted_at),
+        sent_at: Keyword.get(attrs, :sent_at),
+        failed_at: Keyword.get(attrs, :failed_at)
       )
 
     %{club: club, sender: sender, message: message, delivery: delivery}

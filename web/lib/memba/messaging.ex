@@ -15,6 +15,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
@@ -249,6 +250,22 @@ defmodule Memba.Messaging do
       Repo.get(EmailDeliveryProjection, delivery_id)
     else
       :error -> nil
+    end
+  end
+
+  @doc """
+  Manually retry provider dispatch for one failed email delivery.
+
+  This internal/operator-facing API does not create message or delivery events.
+  It delegates to the supervised dispatch boundary, which retries only deliveries
+  currently marked `failed` and persists the resulting delivery status and
+  diagnostics.
+  """
+  def retry_failed_email_delivery(delivery_id) do
+    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
+      EmailDeliveryDispatcher.retry_failed_delivery(delivery_id)
+    else
+      :error -> {:error, :invalid_delivery_id}
     end
   end
 
