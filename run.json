@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-20T06:43:04.736514229Z",
-  "last_event_at": "2026-06-20T07:54:12.272107200Z",
+  "last_event_at": "2026-06-20T07:55:06.083861978Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -15131,9 +15131,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2487,
       "checkpoint": {
-        "timestamp": "2026-06-20T07:55:02.706106768Z",
+        "timestamp": "2026-06-20T07:55:06.061944206Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -15190,6 +15190,336 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.todo_readable": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - Current HEAD is a pre-validation checkpoint; the relevant implementation checkpoint is recent commit `8025b72 fabro(...): implement_next_task (succeeded)`.\n  - `git diff 8025b72^ 8025b72 -- docs/iterations/038-email-delivery-handoff-boundary/todo.md` shows exactly one ordinary task changed:\n    - `006 Implement claiming logic...` from `- [ ]` to `- [x]`.\n  - The pre-implementation todo state at `8025b72^` had tasks 001–005 checked and task 006 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n    - Adds `claim_pending_delivery/1`.\n    - Uses a conditional `Repo.update_all` where `delivery_id` matches and `status == \"pending\"` to atomically move a delivery to `\"dispatching\"`.\n    - Sets `last_dispatch_attempted_at` and `updated_at` on claim.\n    - Returns `:not_claimed` for invalid/non-pending/nonexistent IDs.\n    - Adds `claim_pending_email_deliveries/0` to claim pending records in stable order while still relying on the single-row atomic claim.\n    - Dispatcher nudge handling now claims pending deliveries when `dispatch_enabled` is true.\n  - `web/lib/memba/application.ex`\n    - Wires dispatcher `dispatch_enabled` option from config.\n  - `web/config/test.exs`\n    - Disables app-level dispatcher claiming during general tests to avoid sandbox races.\n  - `web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n    - Adds coverage for nudge-driven claiming, dispatch-disabled mode, single claim, non-pending skip, concurrent claim race, and batch claiming.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs'`\n    - Passed: `7 tests, 0 failures`.\n  - Live whitespace validation:\n    - `git diff --check 8025b72^ 8025b72`\n    - Passed.\n  - Implementor summary also reports focused related tests and `dev check --quick` passed.\n\n- ADR/plan conformance notes:\n  - Matches implementation-plan task 006 and does not check off later provider-call, success/failure transition, retry, inbound-flow, UI, or final `dev check` tasks.\n  - Uses the existing `EmailDelivery` projection/read model as the async work record, as required by the plan.\n  - Keeps claiming outside aggregate command handling and projector replay paths, consistent with CQRS/event-sourcing guidance and ADR 0002/0009.\n  - Continues to use the committed read-model-change PubSub nudge boundary from ADR 0021.\n  - Does not misuse projection barriers or conflate them with read-model-change notifications, preserving ADR 0022’s distinction.\n  - Does not introduce acceptance feature edits without plan permission.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
+          "task_retry_available": false,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "outcome": "succeeded",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.rankdir": "LR",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "command.output": "blob://sha256/750528719c0e7b75cad79a678d1f15faa14d081a7a440252a53717cc235108eb",
+          "task_valid": true,
+          "graph.max_node_visits": "80",
+          "internal.fidelity": "summary:high",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.resume_gate": 0,
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "failure_signature": "",
+          "failure_class": "",
+          "internal.work_dir": "/workspace/memba",
+          "last_stage": "implement_next_task",
+          "internal.retry_count.task_gate": 0,
+          "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n   - Moved provider request-building and provider adapter calls out of `Memba.Messaging`.\n   - `Memba.Messaging` now delegates its temporary synchronous handoff to `Memba.Messaging.EmailDeliveryDispatcher.deliver_to_provider/1`.\n   - Added dispatcher-owned provider handoff support:\n     - Builds `EmailDeliveryRequest` from a projected `EmailDelivery` plus projected `Message` context.\n     - Enriches request context through Membership public queries for club/sender information.\n     - Calls the configured `EmailDeliveryProvider` from the dispatcher boundary.\n     - Keeps a temporary `SendMessage` clause to preserve existing synchronous behavior until task 009 removes it.\n   - Added focused tests proving dispatcher-owned handoff:\n     - Successful request construction from projections.\n     - No provider call when the message projection is missing.\n\n3. **Validation commands run**\n   - Initial focused run:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Failed due known sandbox `PGHOST` socket mismatch.\n   - Formatting:\n     - `cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs'`\n     - Passed: `14 tests, 0 failures`.\n   - Broad quick check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check --quick'`\n     - Passed: `811 tests, 0 failures`.\n   - Full check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check'`\n     - Passed: `811 tests, 0 failures`; acceptance: `82 scenarios, 493 steps passed`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n   - To:\n     - `- [x] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: provider side-effect boundary moved out of the Messaging application service toward the dispatcher; domain command handling remains separate.\n   - ADR 0009: projection replay remains provider-side-effect-free; the new handoff function reads projections but is not invoked from projector replay.\n   - ADR 0016: provider selection remains behind `EmailDeliveryProvider`; no provider adapter behavior or runtime config semantics changed.\n   - ADR 0021: dispatcher remains the subscriber to committed read-model changes; this task only adds the handoff boundary it will use.\n   - ADR 0022: no projection barriers were added or conflated with read-model-change notifications.",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.node_visit_count": 7,
+          "current_node": "implement_next_task",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.thread_id": "all_tasks_done",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.implement_next_task": 0,
+          "last_response": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n ",
+          "internal.retry_count.read_plan": 0,
+          "graph.default_fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.validate_task": 0
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/750528719c0e7b75cad79a678d1f15faa14d081a7a440252a53717cc235108eb"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 182,
+              "active_time_ms": 182
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b1d88d7a93e1a637e98fcdce10092a028da8d1c7d1fe086c021d7e49755b0c7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c43a80724faa49d5574505443e9b84a0c1cc2bdaaa57db1c62fbedd10b5eca71"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e9d9154144898118849fa4cd23f48b7f65bd67458160eba5c96e97419695698d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ed63616634545322cee0f94b4cf1b4b376d3028ebf954ab62b33cb83e4b9f57f"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168,
+              "active_time_ms": 168
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ea0367a48baaab34c3202491d0e260e90a1e3e9328241e3f736555e11a91fdfd"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 101284,
+              "active_time_ms": 101284
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "task_valid": true,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - Current HEAD is a pre-validation checkpoint; the relevant implementation checkpoint ",
+              "task_retry_available": false,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - Current HEAD is a pre-validation checkpoint; the relevant implementation checkpoint is recent commit `8025b72 fabro(...): implement_next_task (succeeded)`.\n  - `git diff 8025b72^ 8025b72 -- docs/iterations/038-email-delivery-handoff-boundary/todo.md` shows exactly one ordinary task changed:\n    - `006 Implement claiming logic...` from `- [ ]` to `- [x]`.\n  - The pre-implementation todo state at `8025b72^` had tasks 001–005 checked and task 006 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n    - Adds `claim_pending_delivery/1`.\n    - Uses a conditional `Repo.update_all` where `delivery_id` matches and `status == \"pending\"` to atomically move a delivery to `\"dispatching\"`.\n    - Sets `last_dispatch_attempted_at` and `updated_at` on claim.\n    - Returns `:not_claimed` for invalid/non-pending/nonexistent IDs.\n    - Adds `claim_pending_email_deliveries/0` to claim pending records in stable order while still relying on the single-row atomic claim.\n    - Dispatcher nudge handling now claims pending deliveries when `dispatch_enabled` is true.\n  - `web/lib/memba/application.ex`\n    - Wires dispatcher `dispatch_enabled` option from config.\n  - `web/config/test.exs`\n    - Disables app-level dispatcher claiming during general tests to avoid sandbox races.\n  - `web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n    - Adds coverage for nudge-driven claiming, dispatch-disabled mode, single claim, non-pending skip, concurrent claim race, and batch claiming.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs'`\n    - Passed: `7 tests, 0 failures`.\n  - Live whitespace validation:\n    - `git diff --check 8025b72^ 8025b72`\n    - Passed.\n  - Implementor summary also reports focused related tests and `dev check --quick` passed.\n\n- ADR/plan conformance notes:\n  - Matches implementation-plan task 006 and does not check off later provider-call, success/failure transition, retry, inbound-flow, UI, or final `dev check` tasks.\n  - Uses the existing `EmailDelivery` projection/read model as the async work record, as required by the plan.\n  - Keeps claiming outside aggregate command handling and projector replay paths, consistent with CQRS/event-sourcing guidance and ADR 0002/0009.\n  - Continues to use the committed read-model-change PubSub nudge boundary from ADR 0021.\n  - Does not misuse projection barriers or conflate them with read-model-change notifications, preserving ADR 0022’s distinction.\n  - Does not introduce acceptance feature edits without plan permission.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 269501,
+                    "output_tokens": 2857,
+                    "reasoning_tokens": 1348,
+                    "cache_read_tokens": 272384,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1609847
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 102741,
+              "tool_time_ms": 5188,
+              "active_time_ms": 107929
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3bf1969fcf6a87570d16f2dacde7fa2ebf60e22318cdcc855e8d0e402102ea2b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1830,
+              "active_time_ms": 1830
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5605f93d6aa0ba546dec67364e681fe3d9f022757c139caf1ae45241bfc85591"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n ",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n   - Moved provider request-building and provider adapter calls out of `Memba.Messaging`.\n   - `Memba.Messaging` now delegates its temporary synchronous handoff to `Memba.Messaging.EmailDeliveryDispatcher.deliver_to_provider/1`.\n   - Added dispatcher-owned provider handoff support:\n     - Builds `EmailDeliveryRequest` from a projected `EmailDelivery` plus projected `Message` context.\n     - Enriches request context through Membership public queries for club/sender information.\n     - Calls the configured `EmailDeliveryProvider` from the dispatcher boundary.\n     - Keeps a temporary `SendMessage` clause to preserve existing synchronous behavior until task 009 removes it.\n   - Added focused tests proving dispatcher-owned handoff:\n     - Successful request construction from projections.\n     - No provider call when the message projection is missing.\n\n3. **Validation commands run**\n   - Initial focused run:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Failed due known sandbox `PGHOST` socket mismatch.\n   - Formatting:\n     - `cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs'`\n     - Passed: `14 tests, 0 failures`.\n   - Broad quick check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check --quick'`\n     - Passed: `811 tests, 0 failures`.\n   - Full check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check'`\n     - Passed: `811 tests, 0 failures`; acceptance: `82 scenarios, 493 steps passed`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n   - To:\n     - `- [x] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: provider side-effect boundary moved out of the Messaging application service toward the dispatcher; domain command handling remains separate.\n   - ADR 0009: projection replay remains provider-side-effect-free; the new handoff function reads projections but is not invoked from projector replay.\n   - ADR 0016: provider selection remains behind `EmailDeliveryProvider`; no provider adapter behavior or runtime config semantics changed.\n   - ADR 0021: dispatcher remains the subscriber to committed read-model changes; this task only adds the handoff boundary it will use.\n   - ADR 0022: no projection barriers were added or conflated with read-model-change notifications."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 818323,
+                    "output_tokens": 9797,
+                    "reasoning_tokens": 5643,
+                    "cache_read_tokens": 3233280,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6171455
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 426394,
+              "tool_time_ms": 356244,
+              "active_time_ms": 782638
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "822bcaf3d8264bb4327f97fff1b62e396b620e6d",
+        "node_visits": {
+          "wip_gate": 1,
+          "start": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "implement_next_task": 7,
+          "resume_gate": 1,
+          "task_gate": 6,
+          "validate_task": 6,
+          "todo_readable": 7,
+          "all_tasks_done": 7,
+          "pre_validate_snapshot": 6,
+          "sync_task_list": 7
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/038-email-delivery-handoff-boundary/todo.md b/docs/iterations/038-email-delivery-handoff-boundary/todo.md\nindex 57b59af..6ac69f1 100644\n--- a/docs/iterations/038-email-delivery-handoff-boundary/todo.md\n+++ b/docs/iterations/038-email-delivery-handoff-boundary/todo.md\n@@ -6,7 +6,7 @@\n - [x] 004 Introduce a named dispatch module/process, probably `Memba.Messaging.EmailDeliveryDispatcher`, under the application supervision tree.\n - [x] 005 Make the dispatcher subscribe to `Memba.ReadModelChanges.topic()` and treat relevant `EmailDeliveryCreated`/EmailDelivery projection changes as a nudge to dispatch pending email deliveries.\n - [x] 006 Implement claiming logic that moves a pending delivery to `dispatching` before provider delivery, avoiding two dispatcher invocations claiming the same pending delivery concurrently.\n-- [ ] 007 Move request-building/provider-call logic out of `Memba.Messaging` into the dispatcher or a focused collaborator used by the dispatcher.\n+- [x] 007 Move request-building/provider-call logic out of `Memba.Messaging` into the dispatcher or a focused collaborator used by the dispatcher.\n - [ ] 008 On provider success, update the delivery to `sent`; on provider error, update it to `failed`, increment attempt count, and persist the latest error/detail.\n - [ ] 009 Remove the synchronous provider call from `send_club_message/2`; keep its success contract tied to command acceptance/recording, not provider availability.\n - [ ] 010 Add an internal/manual retry API for failed deliveries. Do not add automatic retries, startup sweeps, periodic sweeps, or staff retry UI in this slice.\ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex 3b5fb7e..1bbd91d 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -15,8 +15,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.ReceiveInboundEmail\n   alias Memba.Messaging.Commands.SendMessage\n-  alias Memba.Messaging.EmailDeliveryProvider\n-  alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.EmailDeliveryDispatcher\n   alias Memba.Messaging.InboundClubAuthorization\n   alias Memba.Messaging.InboundClubDestination\n   alias Memba.Messaging.InboundClubRejectionEmail\n@@ -845,40 +844,6 @@ defmodule Memba.Messaging do\n   end\n \n   defp deliver_to_provider(%SendMessage{} = command) do\n-    club = Membership.get_club(command.club_id)\n-\n-    Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->\n-      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient, club)) do\n-        :ok -> {:cont, :ok}\n-        {:error, _reason} = error -> {:halt, error}\n-      end\n-    end)\n-  end\n-\n-  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient, club) do\n-    sender = Membership.get_person(command.sender_id)\n-    sender_address = Membership.get_person_primary_email(command.sender_id)\n-\n-    %EmailDeliveryRequest{\n-      message_id: command.message_id,\n-      club_id: command.club_id,\n-      delivery_id: recipient.delivery_id,\n-      recipient_id: recipient.person_id,\n-      recipient_name: recipient.name,\n-      recipient_address: recipient.email,\n-      club_name: club_name(club),\n-      club_slug: club_slug(club),\n-      sender_name: sender.name,\n-      sender_address: sender_address,\n-      channel: :email,\n-      subject: command.subject,\n-      body: command.body\n-    }\n+    EmailDeliveryDispatcher.deliver_to_provider(command)\n   end\n-\n-  defp club_name(%{name: name}), do: name\n-  defp club_name(_club), do: nil\n-\n-  defp club_slug(%{slug: slug}), do: slug\n-  defp club_slug(_club), do: nil\n end\ndiff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex\nindex d39c377..7bfb8b1 100644\n--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex\n+++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex\n@@ -4,17 +4,24 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n \n   The dispatcher subscribes to committed read-model changes and treats new\n   `EmailDelivery` projection records as a nudge to look for pending delivery\n-  work. Later iteration tasks add claiming, provider delivery, and retry\n-  behaviour.\n+  work. It also owns the provider handoff request-building boundary so command\n+  application services do not call email providers directly. Later iteration\n+  tasks add persisted success/failure outcomes and retry behaviour.\n   \"\"\"\n \n   use GenServer\n \n   import Ecto.Query\n \n+  alias Memba.Membership\n+  alias Memba.Messaging.Commands.SendMessage\n+  alias Memba.Messaging.EmailDeliveryProvider\n+  alias Memba.Messaging.EmailDeliveryRequest\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n+  alias Memba.Messaging.Projections.Message, as: MessageProjection\n+  alias Memba.Messaging.Recipient\n   alias Memba.ReadModelChanges\n   alias Memba.Repo\n \n@@ -71,6 +78,43 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n     end)\n   end\n \n+  @doc \"\"\"\n+  Hand email delivery work to the configured provider.\n+\n+  For normal asynchronous dispatch, the dispatcher builds provider requests from\n+  committed read-model state: the `EmailDelivery` projection supplies\n+  per-recipient delivery data and the `Message` projection supplies message,\n+  club, and sender IDs. Membership's public query API enriches the request with\n+  sender and club display context.\n+\n+  A temporary `SendMessage` clause preserves the existing synchronous caller\n+  while keeping provider request-building and adapter calls out of\n+  `Memba.Messaging`. A later iteration task removes that synchronous caller once\n+  dispatcher success/failure persistence is in place.\n+  \"\"\"\n+  def deliver_to_provider(work)\n+\n+  def deliver_to_provider(%EmailDeliveryProjection{} = delivery) do\n+    with {:ok, request} <- email_delivery_request(delivery) do\n+      EmailDeliveryProvider.deliver(request)\n+    end\n+  end\n+\n+  def deliver_to_provider(%SendMessage{} = command) do\n+    club = Membership.get_club(command.club_id)\n+    sender = Membership.get_person(command.sender_id)\n+    sender_address = Membership.get_person_primary_email(command.sender_id)\n+\n+    Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->\n+      request = email_delivery_request(command, recipient, club, sender, sender_address)\n+\n+      case EmailDeliveryProvider.deliver(request) do\n+        :ok -> {:cont, :ok}\n+        {:error, _reason} = error -> {:halt, error}\n+      end\n+    end)\n+  end\n+\n   def start_link(opts \\\\ []) do\n     {name, opts} = Keyword.pop(opts, :name, @name)\n \n@@ -138,4 +182,75 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n \n     :ok\n   end\n+\n+  defp email_delivery_request(%EmailDeliveryProjection{} = delivery) do\n+    with %MessageProjection{} = message <- Repo.get(MessageProjection, delivery.message_id),\n+         {:ok, channel} <- request_channel(delivery.channel),\n+         {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do\n+      club = Membership.get_club(message.club_id)\n+\n+      {:ok,\n+       %EmailDeliveryRequest{\n+         message_id: message.message_id,\n+         club_id: message.club_id,\n+         delivery_id: delivery.delivery_id,\n+         recipient_id: delivery.recipient_id,\n+         recipient_name: delivery.recipient_name,\n+         recipient_address: delivery.recipient_address,\n+         club_name: club_name(club),\n+         club_slug: club_slug(club),\n+         sender_name: sender_name,\n+         sender_address: sender_address,\n+         channel: channel,\n+         subject: message.subject,\n+         body: message.body\n+       }}\n+    else\n+      nil -> {:error, {:missing_message_projection, delivery.message_id}}\n+      {:error, _reason} = error -> error\n+    end\n+  end\n+\n+  defp email_delivery_request(\n+         %SendMessage{} = command,\n+         %Recipient{} = recipient,\n+         club,\n+         sender,\n+         sender_address\n+       ) do\n+    %EmailDeliveryRequest{\n+      message_id: command.message_id,\n+      club_id: command.club_id,\n+      delivery_id: recipient.delivery_id,\n+      recipient_id: recipient.person_id,\n+      recipient_name: recipient.name,\n+      recipient_address: recipient.email,\n+      club_name: club_name(club),\n+      club_slug: club_slug(club),\n+      sender_name: sender.name,\n+      sender_address: sender_address,\n+      channel: :email,\n+      subject: command.subject,\n+      body: command.body\n+    }\n+  end\n+\n+  defp request_channel(\"email\"), do: {:ok, :email}\n+  defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}\n+\n+  defp sender_context(sender_id) do\n+    with %{name: sender_name} <- Membership.get_person(sender_id),\n+         sender_address when is_binary(sender_address) <-\n+           Membership.get_person_primary_email(sender_id) do\n+      {:ok, sender_name, sender_address}\n+    else\n+      nil -> {:error, {:missing_sender_context, sender_id}}\n+    end\n+  end\n+\n+  defp club_name(%{name: name}), do: name\n+  defp club_name(_club), do: nil\n+\n+  defp club_slug(%{slug: slug}), do: slug\n+  defp club_slug(_club), do: nil\n end\ndiff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\nindex cf7460a..1a3596f 100644\n--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n+++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n@@ -2,13 +2,30 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n   use Memba.DataCase, async: false\n \n   alias Memba.Messaging.EmailDeliveryDispatcher\n+  alias Memba.Messaging.EmailDeliveryProviders.Fake\n+  alias Memba.Messaging.EmailDeliveryRequest\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Events.EmailDeliveryDelivered\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n+  alias Memba.Messaging.Projections.Message, as: MessageProjection\n   alias Memba.ReadModelChanges\n \n+  setup do\n+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)\n+\n+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)\n+    Fake.reset()\n+\n+    on_exit(fn ->\n+      restore_env(:messaging_email_delivery_provider, original_provider)\n+      Fake.reset()\n+    end)\n+\n+    :ok\n+  end\n+\n   describe \"read-model change nudges\" do\n     test \"subscribes to read-model changes and nudges dispatch for committed email delivery creation\" do\n       name = :\"#{__MODULE__}.email_delivery_created\"\n@@ -179,6 +196,80 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n     end\n   end\n \n+  describe \"provider handoff\" do\n+    test \"builds the provider request from projected delivery and message context\" do\n+      club =\n+        insert_membership_club!(\n+          name: \"Kootenay Mountaineering Club\",\n+          slug: \"kootenay-mountaineering-club\"\n+        )\n+\n+      sender =\n+        insert_membership_person!(\n+          name: \"Alice Sender\",\n+          email: \"alice.sender@example.com\"\n+        )\n+\n+      message =\n+        insert_message_projection!(\n+          club_id: club.club_id,\n+          sender_id: sender.person_id,\n+          subject: \"Trip planning night\",\n+          body: \"Bring route ideas.\"\n+        )\n+\n+      recipient_id = Memba.ID.generate(:person)\n+\n+      delivery =\n+        insert_email_delivery!(\n+          message_id: message.message_id,\n+          recipient_id: recipient_id,\n+          recipient_name: \"Bob Member\",\n+          recipient_address: \"bob.member@example.com\",\n+          status: \"dispatching\"\n+        )\n+\n+      assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)\n+\n+      assert [\n+               %EmailDeliveryRequest{\n+                 message_id: message_id,\n+                 club_id: club_id,\n+                 delivery_id: delivery_id,\n+                 recipient_id: ^recipient_id,\n+                 recipient_name: \"Bob Member\",\n+                 recipient_address: \"bob.member@example.com\",\n+                 club_name: \"Kootenay Mountaineering Club\",\n+                 club_slug: \"kootenay-mountaineering-club\",\n+                 sender_name: \"Alice Sender\",\n+                 sender_address: \"alice.sender@example.com\",\n+                 channel: :email,\n+                 subject: \"Trip planning night\",\n+                 body: \"Bring route ideas.\"\n+               }\n+             ] = Fake.deliveries()\n+\n+      assert message_id == message.message_id\n+      assert club_id == club.club_id\n+      assert delivery_id == delivery.delivery_id\n+    end\n+\n+    test \"does not call the provider when the delivery's message projection is missing\" do\n+      message_id = Memba.ID.generate(:message)\n+\n+      delivery =\n+        insert_email_delivery!(\n+          message_id: message_id,\n+          status: \"dispatching\"\n+        )\n+\n+      assert {:error, {:missing_message_projection, ^message_id}} =\n+               EmailDeliveryDispatcher.deliver_to_provider(delivery)\n+\n+      assert Fake.deliveries() == []\n+    end\n+  end\n+\n   defp insert_email_delivery!(attrs) when is_list(attrs) do\n     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n \n@@ -200,4 +291,21 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n       updated_at: Keyword.get(attrs, :updated_at, now)\n     })\n   end\n+\n+  defp insert_message_projection!(attrs) when is_list(attrs) do\n+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n+\n+    Repo.insert!(%MessageProjection{\n+      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),\n+      club_id: Keyword.fetch!(attrs, :club_id),\n+      sender_id: Keyword.fetch!(attrs, :sender_id),\n+      subject: Keyword.fetch!(attrs, :subject),\n+      body: Keyword.fetch!(attrs, :body),\n+      inserted_at: Keyword.get(attrs, :inserted_at, now),\n+      updated_at: Keyword.get(attrs, :updated_at, now)\n+    })\n+  end\n+\n+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n end\n",
+        "summary": {
+          "files_changed": 17,
+          "additions": 814,
+          "deletions": 45
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-20T07:55:06.277163662Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "task_retry_available": false,
@@ -15210,7 +15540,7 @@
           "internal.work_dir": "/workspace/memba",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n   - Moved provider request-building and provider adapter calls out of `Memba.Messaging`.\n   - `Memba.Messaging` now delegates its temporary synchronous handoff to `Memba.Messaging.EmailDeliveryDispatcher.deliver_to_provider/1`.\n   - Added dispatcher-owned provider handoff support:\n     - Builds `EmailDeliveryRequest` from a projected `EmailDelivery` plus projected `Message` context.\n     - Enriches request context through Membership public queries for club/sender information.\n     - Calls the configured `EmailDeliveryProvider` from the dispatcher boundary.\n     - Keeps a temporary `SendMessage` clause to preserve existing synchronous behavior until task 009 removes it.\n   - Added focused tests proving dispatcher-owned handoff:\n     - Successful request construction from projections.\n     - No provider call when the message projection is missing.\n\n3. **Validation commands run**\n   - Initial focused run:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Failed due known sandbox `PGHOST` socket mismatch.\n   - Formatting:\n     - `cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix format --check-formatted lib/memba/messaging.ex lib/memba/messaging/email_delivery_dispatcher.ex test/memba/messaging/email_delivery_dispatcher_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/send_club_message_test.exs'`\n     - Passed: `14 tests, 0 failures`.\n   - Broad quick check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check --quick'`\n     - Passed: `811 tests, 0 failures`.\n   - Full check:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" dev check'`\n     - Passed: `811 tests, 0 failures`; acceptance: `82 scenarios, 493 steps passed`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n   - To:\n     - `- [x] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: provider side-effect boundary moved out of the Messaging application service toward the dispatcher; domain command handling remains separate.\n   - ADR 0009: projection replay remains provider-side-effect-free; the new handoff function reads projections but is not invoked from projector replay.\n   - ADR 0016: provider selection remains behind `EmailDeliveryProvider`; no provider adapter behavior or runtime config semantics changed.\n   - ADR 0021: dispatcher remains the subscriber to committed read-model changes; this task only adds the handoff boundary it will use.\n   - ADR 0022: no projection barriers were added or conflated with read-model-change notifications.",
           "internal.run_id": "01KVHW7WHVZMTANTVN23WRX00W",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.start": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - Current HEAD is a pre-validation checkpoint; the relevant implementation checkpoint is recent commit `8025b72 fabro(...): implement_next_task (succeeded)`.\n  - `git diff 8025b72^ 8025b72 -- docs/iterations/038-email-delivery-handoff-boundary/todo.md` shows exactly one ordinary task changed:\n    - `006 Implement claiming logic...` from `- [ ]` to `- [x]`.\n  - The pre-implementation todo state at `8025b72^` had tasks 001–005 checked and task 006 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging/email_delivery_dispatcher.ex`\n    - Adds `claim_pending_delivery/1`.\n    - Uses a conditional `Repo.update_all` where `delivery_id` matches and `status == \"pending\"` to atomically move a delivery to `\"dispatching\"`.\n    - Sets `last_dispatch_attempted_at` and `updated_at` on claim.\n    - Returns `:not_claimed` for invalid/non-pending/nonexistent IDs.\n    - Adds `claim_pending_email_deliveries/0` to claim pending records in stable order while still relying on the single-row atomic claim.\n    - Dispatcher nudge handling now claims pending deliveries when `dispatch_enabled` is true.\n  - `web/lib/memba/application.ex`\n    - Wires dispatcher `dispatch_enabled` option from config.\n  - `web/config/test.exs`\n    - Disables app-level dispatcher claiming during general tests to avoid sandbox races.\n  - `web/test/memba/messaging/email_delivery_dispatcher_test.exs`\n    - Adds coverage for nudge-driven claiming, dispatch-disabled mode, single claim, non-pending skip, concurrent claim race, and batch claiming.\n  - No acceptance feature files were changed.\n\n- Tests run/results found:\n  - Live validation run:\n    - `devenv shell -- bash -lc 'cd web && PATH=\"$PWD/../bin:$PATH\" ../bin/mix test test/memba/messaging/email_delivery_dispatcher_test.exs'`\n    - Passed: `7 tests, 0 failures`.\n  - Live whitespace validation:\n    - `git diff --check 8025b72^ 8025b72`\n    - Passed.\n  - Implementor summary also reports focused related tests and `dev check --quick` passed.\n\n- ADR/plan conformance notes:\n  - Matches implementation-plan task 006 and does not check off later provider-call, success/failure transition, retry, inbound-flow, UI, or final `dev check` tasks.\n  - Uses the existing `EmailDelivery` projection/read model as the async work record, as required by the plan.\n  - Keeps claiming outside aggregate command handling and projector replay paths, consistent with CQRS/event-sourcing guidance and ADR 0002/0009.\n  - Continues to use the committed read-model-change PubSub nudge boundary from ADR 0021.\n  - Does not misuse projection barriers or conflate them with read-model-change notifications, preserving ADR 0022’s distinction.\n  - Does not introduce acceptance feature edits without plan permission.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "task_valid": true,
@@ -15222,10 +15552,10 @@
           "internal.retry_count.read_plan": 0,
           "outcome": "succeeded",
           "failure_class": "",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.todo_readable.current_node": "all_tasks_done",
           "thread.sync_task_list.current_node": "todo_readable",
-          "command.output": "blob://sha256/750528719c0e7b75cad79a678d1f15faa14d081a7a440252a53717cc235108eb",
+          "command.output": "blob://sha256/2ca57ccfc57d1e385f539ee67deb3d9801508a15713529e044709c621af6c00a",
           "last_response": "1. **Selected todo line**\n   - `- [ ] 007 Move request-building/provider-call logic out of Memba.Messaging into the dispatcher or a focused collaborator used by the dispatcher.`\n\n2. **Changes made**\n ",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.retry_count.resume_gate": 0,
@@ -15336,15 +15666,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/5605f93d6aa0ba546dec67364e681fe3d9f022757c139caf1ae45241bfc85591"
+              "command.output": "blob://sha256/2ca57ccfc57d1e385f539ee67deb3d9801508a15713529e044709c621af6c00a"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 153,
-              "active_time_ms": 153
+              "tool_time_ms": 167,
+              "active_time_ms": 167
             }
           },
           "validate_task": {
@@ -15433,13 +15763,13 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "start": 1,
           "implement_next_task": 7,
           "read_plan": 1,
           "resume_gate": 1,
-          "pre_validate_snapshot": 6,
+          "pre_validate_snapshot": 7,
           "todo_readable": 7,
           "all_tasks_done": 7,
           "sync_task_list": 7,
@@ -18295,7 +18625,12 @@
       "first_event_seq": 2220,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-20T07:55:02.698847550Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -18309,13 +18644,20 @@
       "output": null,
       "started_at": "2026-06-20T07:41:59.602161630Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 783096,
+        "inference_time_ms": 426394,
+        "tool_time_ms": 356244,
+        "active_time_ms": 782638
+      },
       "usage": {
-        "input_tokens": 806429,
-        "output_tokens": 9036,
-        "total_tokens": 3938102,
-        "reasoning_tokens": 5581,
-        "cache_read_tokens": 3117056,
-        "cache_write_tokens": 0
+        "input_tokens": 818323,
+        "output_tokens": 9797,
+        "total_tokens": 4067043,
+        "reasoning_tokens": 5643,
+        "cache_read_tokens": 3233280,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6171455
       },
       "model": {
         "provider": "openai",
@@ -18454,32 +18796,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 127312,
-        "usage_percent": 46.805882352941175,
+        "input_tokens": 128118,
+        "usage_percent": 47.10220588235294,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-20T07:54:12.104182190Z",
-        "event_seq": 2472,
+        "generated_at": "2026-06-20T07:55:02.693806749Z",
+        "event_seq": 2480,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1027,
-            "usage_percent": 0.3775735294117647
+            "tokens": 1023,
+            "usage_percent": 0.3761029411764706
           },
           {
             "category": "tools",
-            "tokens": 1465,
-            "usage_percent": 0.5386029411764706
+            "tokens": 1458,
+            "usage_percent": 0.5360294117647059
           },
           {
             "category": "memory",
-            "tokens": 393,
-            "usage_percent": 0.14448529411764705
+            "tokens": 392,
+            "usage_percent": 0.14411764705882352
           },
           {
             "category": "conversation",
-            "tokens": 124421,
-            "usage_percent": 45.74301470588235
+            "tokens": 125239,
+            "usage_percent": 46.04375
           },
           {
             "category": "other",
@@ -18489,7 +18831,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "implement_next_task@3": {
       "first_event_seq": 897,
@@ -19534,6 +19876,34 @@
         "warnings": []
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@7": {
+      "first_event_seq": 2490,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-20T07:55:06.083038171Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "pre_validate_snapshot@4": {
       "first_event_seq": 1427,
