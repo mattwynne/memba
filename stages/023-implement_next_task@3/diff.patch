@@ -1,0 +1,493 @@
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+index 0532e5c..42acfa7 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+ - [x] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
+-- [ ] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
++- [x] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
+ - [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+ - [ ] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+ - [ ] 006 Run `dev check`.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 2b15ab3..28e6bf4 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -86,6 +86,22 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Follow a conversation from an in-app current-member surface.
++
++  The raw `follow_conversation/2` command records follow state for system and
++  future email-unsubscribe workflows. Browser surfaces should use this wrapper
++  so only current club members can opt in through the app.
++  """
++  def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- follow_conversation_command(attrs),
++         :ok <- authorize_current_member_conversation_action(command),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
+   @doc """
+   Stop following a club-message conversation.
+   """
+@@ -97,6 +113,22 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Stop following a conversation from an in-app current-member surface.
++
++  Email stop-follow links intentionally use the raw unfollow command so former
++  members can reduce notifications without signing in. In-app unfollow remains
++  limited to current club members.
++  """
++  def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- unfollow_conversation_command(attrs),
++         :ok <- authorize_current_member_conversation_action(command),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
+   @doc """
+   Build a provider-neutral command for an inbound club-message email.
+ 
+@@ -1058,6 +1090,17 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp authorize_current_member_conversation_action(command) do
++    with :ok <- authorize_reply_sender(command.club_id, command.member_id),
++         {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
++      if root_message.club_id == command.club_id do
++        :ok
++      else
++        {:error, :conversation_not_found}
++      end
++    end
++  end
++
+   defp resolve_recipients(club_id, opts \\ []) do
+     except_person_id = Keyword.get(opts, :except_person_id)
+ 
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 5737f30..b47c4e2 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -47,6 +47,85 @@
+         <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
+       </div>
+ 
++      <section
++        id="member-conversation-follow-control"
++        data-following={to_string(@following_conversation)}
++        data-can-follow={to_string(@can_follow_conversation)}
++        class="rounded-3xl border border-sage-200 bg-sage-50/80 p-5 shadow-sm sm:p-6"
++      >
++        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
++          <div class="flex min-w-0 items-start gap-3">
++            <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-base-100 text-sage-700 ring-1 ring-inset ring-sage-200">
++              <.icon
++                name={
++                  if(@following_conversation,
++                    do: "hero-bell-alert",
++                    else: "hero-bell"
++                  )
++                }
++                class="size-5"
++              />
++            </span>
++            <div>
++              <%= cond do %>
++                <% !@can_follow_conversation -> %>
++                  <h2 class="text-base font-semibold text-base-content">
++                    Follow this conversation
++                  </h2>
++                  <p
++                    id="member-conversation-follow-copy"
++                    class="mt-1 text-sm leading-6 text-ink-2"
++                  >
++                    Only current club members can follow this conversation in Memba.
++                  </p>
++                <% @following_conversation -> %>
++                  <h2 class="text-base font-semibold text-base-content">
++                    You’re following this conversation
++                  </h2>
++                  <p
++                    id="member-conversation-follow-copy"
++                    class="mt-1 text-sm leading-6 text-ink-2"
++                  >
++                    You’ll receive any new replies by email. You can stop following at any time.
++                  </p>
++                <% true -> %>
++                  <h2 class="text-base font-semibold text-base-content">
++                    Follow this conversation
++                  </h2>
++                  <p
++                    id="member-conversation-follow-copy"
++                    class="mt-1 text-sm leading-6 text-ink-2"
++                  >
++                    Follow this conversation to receive any new replies by email.
++                  </p>
++              <% end %>
++            </div>
++          </div>
++
++          <.button
++            :if={@can_follow_conversation and !@following_conversation}
++            id="member-conversation-follow-button"
++            type="button"
++            phx-click="follow_conversation"
++            variant="primary"
++            class="w-full shrink-0 sm:w-auto"
++          >
++            <.icon name="hero-bell" class="size-4" /> Follow conversation
++          </.button>
++
++          <.button
++            :if={@can_follow_conversation and @following_conversation}
++            id="member-conversation-unfollow-button"
++            type="button"
++            phx-click="unfollow_conversation"
++            variant="secondary"
++            class="w-full shrink-0 sm:w-auto"
++          >
++            <.icon name="hero-bell-slash" class="size-4" /> Stop following
++          </.button>
++        </div>
++      </section>
++
+       <section
+         id="member-message-reply-composer"
+         class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
+@@ -58,7 +137,7 @@
+               Reply to this conversation
+             </h2>
+             <p class="mt-1 text-sm leading-6 text-ink-2">
+-              Your reply inherits the subject and is emailed to current club members except you.
++              Your reply inherits the subject and is emailed to current followers except you.
+             </p>
+           </div>
+           <p
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index 68bc06e..f15c165 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -79,6 +79,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  def handle_info(
++        {:read_model_changed,
++         %{projector: Memba.Messaging.Projectors.ConversationFollow, source_event: event}},
++        %{assigns: %{message: message}} = socket
++      ) do
++    if event_conversation_id(event) == message.conversation_id do
++      {:noreply, refresh_message_detail(socket)}
++    else
++      {:noreply, socket}
++    end
++  end
++
+   def handle_info(_message, socket), do: {:noreply, socket}
+ 
+   @impl Phoenix.LiveView
+@@ -120,6 +132,14 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  def handle_event("follow_conversation", _params, socket) do
++    update_current_member_follow(socket, :follow)
++  end
++
++  def handle_event("unfollow_conversation", _params, socket) do
++    update_current_member_follow(socket, :unfollow)
++  end
++
+   def handle_event("post_reply", _params, socket) do
+     handle_event("post_reply", %{"reply" => %{}}, socket)
+   end
+@@ -200,6 +220,73 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  defp update_current_member_follow(socket, action) do
++    case current_member_follow_attrs(socket) do
++      {:ok, attrs} ->
++        dispatch_current_member_follow(socket, action, attrs)
++
++      {:error, :forbidden} ->
++        {:noreply,
++         put_flash(
++           socket,
++           :error,
++           "Only current club members can follow conversations in Memba."
++         )}
++    end
++  end
++
++  defp dispatch_current_member_follow(socket, action, attrs) do
++    case run_current_member_follow_action(action, attrs) do
++      :ok ->
++        {:noreply, refresh_message_detail(socket)}
++
++      {:ok, _result} ->
++        {:noreply, refresh_message_detail(socket)}
++
++      {:error, reason} ->
++        log_follow_failure(socket, action, reason)
++
++        {:noreply,
++         put_flash(
++           socket,
++           :error,
++           "Your conversation notification setting was not changed. Please try again."
++         )}
++    end
++  end
++
++  defp current_member_follow_attrs(socket) do
++    with %{
++           selected_club: %{club_id: club_id},
++           message: %{conversation_id: conversation_id},
++           current_member: %{id: member_id}
++         } <- socket.assigns do
++      {:ok,
++       %{
++         club_id: club_id,
++         conversation_id: conversation_id,
++         member_id: member_id
++       }}
++    else
++      _missing_follow_context -> {:error, :forbidden}
++    end
++  end
++
++  defp run_current_member_follow_action(:follow, attrs) do
++    Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
++  end
++
++  defp run_current_member_follow_action(:unfollow, attrs) do
++    Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
++  end
++
++  defp event_conversation_id(%{conversation_id: conversation_id})
++       when is_binary(conversation_id),
++       do: conversation_id
++
++  defp event_conversation_id(%{message_id: message_id}), do: message_id
++  defp event_conversation_id(_event), do: nil
++
+   defp assign_initial_reply_state(socket) do
+     socket
+     |> assign(:reply_state, :composing)
+@@ -258,6 +345,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     )
+   end
+ 
++  defp log_follow_failure(socket, action, reason) do
++    Logger.error("Member conversation follow setting failed",
++      action: action,
++      club_id: socket.assigns.selected_club.club_id,
++      conversation_id: socket.assigns.message.conversation_id,
++      member_id: current_member_id(socket.assigns.current_member),
++      reason: inspect(reason)
++    )
++  end
++
+   defp current_member_id(nil), do: nil
+   defp current_member_id(current_member), do: current_member.id
+ 
+diff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex
+index f168eaa..b7db664 100644
+--- a/web/lib/memba_web/member_message_detail.ex
++++ b/web/lib/memba_web/member_message_detail.ex
+@@ -74,6 +74,7 @@ defmodule MembaWeb.MemberMessageDetail do
+ 
+     sender = Membership.get_person(message.sender_id)
+     active_members = Membership.list_active_members_of_club(selected_club.club_id)
++    current_member = current_member_for_identity(active_members, current_identity)
+     conversation_messages = Messaging.list_conversation_messages(message.message_id)
+ 
+     %{
+@@ -81,7 +82,9 @@ defmodule MembaWeb.MemberMessageDetail do
+       selected_club: selected_club,
+       message: message,
+       sender_name: sender_name(sender),
+-      current_member: current_member_for_identity(active_members, current_identity),
++      current_member: current_member,
++      can_follow_conversation: not is_nil(current_member),
++      following_conversation: following_conversation?(message, current_member),
+       conversation_entries: conversation_entries(conversation_messages),
+       member_email_deliverys: receipt_model.receipts,
+       member_email_delivery_count: receipt_model.total_count,
+@@ -102,6 +105,12 @@ defmodule MembaWeb.MemberMessageDetail do
+ 
+   defp current_member_for_identity(_active_members, _identity), do: nil
+ 
++  defp following_conversation?(_message, nil), do: false
++
++  defp following_conversation?(%{conversation_id: conversation_id}, %{id: member_id}) do
++    Messaging.following_conversation?(conversation_id, member_id)
++  end
++
+   defp conversation_entries(messages) do
+     sender_summaries =
+       messages
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+index 3f70854..45b3723 100644
+--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -43,6 +43,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              )
+ 
+     assert [message] = Messaging.list_messages_for_club(club_id)
++    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+ 
+     {:ok, view, _html} =
+       conn
+@@ -70,6 +71,13 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+ 
+     assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
+     assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
++    assert Messaging.following_conversation?(message.message_id, bob.person_id)
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
++             "You’re following this conversation"
++           )
+ 
+     assert has_element?(
+              view,
+@@ -81,6 +89,104 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+            )
+   end
+ 
++  test "current member can follow and unfollow a conversation from message detail", %{conn: conn} do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: Memba.ID.generate(:message),
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring your maps."
++               },
++               consistency: :strong
++             )
++
++    assert [message] = Messaging.list_messages_for_club(club_id)
++    refute Messaging.following_conversation?(message.message_id, bob.person_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
++      |> live(~p"/messages/#{message.message_id}")
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']",
++             "Follow this conversation to receive any new replies"
++           )
++
++    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
++    refute has_element?(view, "#member-conversation-unfollow-button")
++
++    view
++    |> element("#member-conversation-follow-button")
++    |> render_click()
++
++    assert Messaging.following_conversation?(message.message_id, bob.person_id)
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
++             "You’re following this conversation"
++           )
++
++    assert has_element?(view, "#member-conversation-unfollow-button", "Stop following")
++    refute has_element?(view, "#member-conversation-follow-button")
++
++    view
++    |> element("#member-conversation-unfollow-button")
++    |> render_click()
++
++    refute Messaging.following_conversation?(message.message_id, bob.person_id)
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
++           )
++
++    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
++    refute has_element?(view, "#member-conversation-unfollow-button")
++  end
++
++  test "former members cannot reach the in-app follow control", %{conn: conn} do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: Memba.ID.generate(:message),
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring your maps."
++               },
++               consistency: :strong
++             )
++
++    assert [message] = Messaging.list_messages_for_club(club_id)
++
++    assert :ok =
++             Membership.remove_member(
++               %{membership_id: bob.membership_id},
++               consistency: :strong
++             )
++
++    conn =
++      conn
++      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
++      |> get(~p"/messages/#{message.message_id}")
++
++    assert response(conn, 403) == "Forbidden"
++    refute Messaging.following_conversation?(message.message_id, bob.person_id)
++  end
++
+   defp signed_in_club_host(conn, email, club) do
+     conn
+     |> club_host(club)
+@@ -119,14 +225,14 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+     assert :ok =
+              Membership.add_member(
+                %{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id = Memba.ID.generate(:membership),
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
+ 
+-    %{club_id: club_id, person_id: person_id}
++    %{club_id: club_id, person_id: person_id, membership_id: membership_id}
+   end
+ 
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
