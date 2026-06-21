@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T07:06:56.737446395Z",
-  "last_event_at": "2026-06-21T07:35:56.116227342Z",
+  "last_event_at": "2026-06-21T07:35:59.474624242Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3763,9 +3763,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 349,
       "checkpoint": {
-        "timestamp": "2026-06-21T07:35:56.291514593Z",
+        "timestamp": "2026-06-21T07:35:59.448647012Z",
         "current_node": "verify_review_repair",
         "completed_nodes": [
           "start",
@@ -3784,6 +3784,450 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.claude_review": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.gemini_review": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.review_gate": 0,
+          "last_stage": "apply_review_fixes",
+          "thread.codex_review.current_node": "gemini_review",
+          "internal.retry_count.apply_review_fixes": 0,
+          "review_blockers": [
+            {
+              "id": "email-delivery-status-db-constraint",
+              "title": "Add DB check constraint for EmailDelivery status vocabulary",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "email-delivery-diagnostics-docs",
+              "title": "Clarify EmailDelivery diagnostics field semantics",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "email-delivery-test-provider-cleanup",
+              "title": "Clean up SelectiveFailure test provider naming seam",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "inbound-email-dispatch-regression-test",
+              "title": "Add focused inbound async email dispatch regression coverage if absent",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.run_id": "01KVMFZEVZ364HZWX0GEJ05ZTG",
+          "review_fixes_available": true,
+          "internal.retry_count.synthesize_review": 0,
+          "last_response": "Implemented the selected bounded review repairs for iteration 038. No acceptance feature files were edited.\n\n## Issue-to-fix mapping\n\n| Review issue | Resolution | Files/modules/tests |\n|---|---|---|\n",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.read_plan": 0,
+          "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.codex_review": 0,
+          "response.claude_review": "# Iteration 038 Implementation Review\n\n**Decision**: ACCEPT  \n**Confidence**: High  \n**ADR Conformance**: PASS\n\n---\n\n## ADR Conformance\n\n### Pass\n\n**ADR 027: Asynchronous Email Delivery Handoff Boundary**\n\nAll binding decisions are implemented:\n\n✓ Async dispatch with `pending`/`dispatching`/`sent`/`failed` lifecycle  \n✓ Supervised `EmailDeliveryDispatcher` GenServer under application tree  \n✓ PubSub read-model-change coordination via `EmailDeliveryCreated` events  \n✓ Manual retry API (`retry_email_delivery/1`), no automatic retries  \n✓ Command acceptance (`send_club_message/2`) decoupled from provider success  \n✓ Claiming logic with `pending → dispatching` transition prevents concurrent dispatch  \n✓ Error tracking via `attempt_count`, `latest_error`, `latest_error_detail` fields  \n✓ Inbound club messages use same async path via `EmailDelivery` projection  \n\n**Minor interpretation variations** (all plan-aligned):\n- Database constraints on status enum: deferred to Ecto.Enum application-level validation (plan: \"where practical\")\n- Startup sweep of pending deliveries: explicitly deferred (plan acknowledges this operational gap)\n- Concurrent dispatch: single-threaded dispatcher acceptable for first iteration\n\n**CQRS/Event-Sourcing/RDD pattern conformance**:\n✓ Commands → events → projections separation maintained  \n✓ Read model (`EmailDelivery`) vs write model (event stream) properly separated  \n✓ Event-driven async coordination via PubSub  \n✓ OTP supervision and fault tolerance  \n✓ Projection responsibility: tracks delivery lifecycle state for operational queries  \n✓ Dispatcher responsibility: single async send concern, no domain logic\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation passes `dev check`, implements all stated acceptance criteria, conforms to ADR 027, and follows project patterns. Acceptance tests confirm browser compose, inbound club messages, and staff workflows still work.\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Semantic clarity on `attempt_count`**  \n   **Files**: `lib/memba/messaging/projections/email_delivery.ex`, schema and changesets  \n   **Issue**: Field increments on both dispatch failure (`mark_failed_changeset`) and manual retry (`reset_for_retry_changeset`), creating semantic ambiguity.  \n   - A delivery succeeding on first try: `attempt_count: 0`  \n   - A delivery succeeding after one manual retry: `attempt_count: 2` (retry → 1, then success leaves it)  \n   - A delivery failing, retried, failing again: `attempt_count: 3` (fail → 1, retry → 2, fail → 3)  \n   \n   **Fix options**:\n   - Rename to `lifecycle_operation_count` to clarify it tracks both retries and dispatch attempts\n   - OR remove increment from `reset_for_retry_changeset`, add separate `retry_count` field\n   - OR document current semantic clearly in schema moduledoc\n\n2. **Database constraint for `status` enum**  \n   **Files**: `priv/repo/migrations/*_add_email_delivery_dispatch_tracking.exs`, `email_deliveries` table  \n   **Issue**: While `Ecto.Enum` validates at application level, no DB check constraint prevents invalid status from other sources (SQL console, future migrations).  \n   **Fix**: Add check constraint in a new migration:\n   ```sql\n   ALTER TABLE email_deliveries \n   ADD CONSTRAINT valid_status \n   CHECK (status IN ('pending', 'dispatching', 'sent', 'failed', \n                     'delivered', 'bounced', 'complained', 'opened'));\n   ```\n   (Include existing webhook statuses to preserve backward compatibility)\n\n3. **`dispatched_at` field semantics**  \n   **Files**: `lib/memba/messaging/projections/email_delivery.ex`, `mark_sent_changeset` and `mark_failed_changeset`  \n   **Issue**: Field is set on both success and failure, making it \"last attempt timestamp\" not \"successfully dispatched timestamp\". Name implies the latter.  \n   **Fix options**:\n   - Rename to `last_dispatch_attempt_at`\n   - OR only set on success, add separate `last_attempt_at` for failures\n   - OR document current semantic in schema\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Single-threaded dispatcher bottleneck risk**  \n   **File**: `lib/memba/messaging/email_delivery_dispatcher.ex`  \n   **Smell**: Dispatcher handles deliveries one at a time in `handle_info`. If delivery volume grows or provider latency spikes, pending deliveries queue up in the GenServer mailbox.  \n   **Why human judgement**: Acceptable for first iteration, but may need concurrent dispatch (Task pooling, partitioned dispatchers) in future. Trade-off: simplicity vs throughput.\n\n2. **No startup sweep of pending deliveries**  \n   **File**: `lib/memba/messaging/email_delivery_dispatcher.ex`  \n   **Smell**: If app restarts while deliveries are `pending` or `dispatching`, they remain stuck until manual retry. PubSub events are not durable across restarts.  \n   **Why human judgement**: Plan explicitly defers this (\"operator/developer must use internal retry API\"). Operational gap vs implementation complexity. Needs product/ops decision on sweep strategy (startup? periodic? on-demand?).\n\n3. **Ambiguous state on crash between provider acceptance and `mark_sent`**  \n   **Files**: `lib/memba/messaging/email_delivery_dispatcher.ex`, projection changesets  \n   **Smell**: If app crashes after provider accepts delivery but before updating status to `sent`, delivery remains `dispatching`. Won't be auto-retried (good, no duplicate), but also won't be marked `sent` (bad, operational ambiguity).  \n   **Why human judgement**: Plan acknowledges this as acceptable (\"best-effort duplicate prevention\"). Future hardening could use provider-level idempotency keys (delivery_id) to safely retry and reconcile. Trade-off: correctness vs complexity.\n\n4. **Error normalization robustness**  \n   **File**: `lib/memba/messaging/projections/email_delivery.ex`, `error_type/1` and `error_detail/1` private functions  \n   **Smell**: Pattern matches on `{:selective_failure, _}` and `{:http_error, _}` tuples. Catch-all returns `\"unknown\"` / `inspect(reason)`. Provider errors might have other shapes.  \n   **Why human judgement**: Works for current providers (fake, selective_failure, Postmark/Resend). May need refinement as provider ecosystem grows or error types evolve. Low risk, but worth monitoring.\n\n5. **No explicit integration test for inbound message async dispatch**  \n   **File**: Test suite gap  \n   **Smell**: `InboundClubMessageAccepted` events create `EmailDelivery` projections with `status: :pending`, and dispatcher should pick them up. But no unit/integration test explicitly verifies this path end-to-end.  \n   **Why human judgement**: Acceptance tests pass (likely covering it), and the code path is identical to browser-composed messages. Adding a focused test would improve regression safety, but current coverage may be adequate. Test investment vs value.\n\n6. **UI changes not evident in implementation**  \n   **File**: Evidence gap, possibly `lib/memba_web/live/*` (not in collected diff)  \n   **Smell**: Plan says \"Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses.\" No UI file changes in evidence.  \n   **Why human judgement**: Either UI already handles status enum generically (likely, given acceptance tests pass), or changes were trivial/outside diff scope, or this was missed. Unlikely to be a real gap given green acceptance tests, but worth confirming UI gracefully handles new statuses (`pending`, `dispatching`, `failed`) in production scenarios.\n\n---\n\n## Suggested Fixes\n\n### For bounded-safe fixes:\n\n1. **Clarify `attempt_count` semantics**:\n   - Add schema moduledoc comment: `@doc \"Increments on both dispatch failure and manual retry; counts total lifecycle operations, not just provider send attempts\"`\n   - OR rename field in new migration: `attempt_count → lifecycle_operation_count` (requires app-wide search/replace)\n   - OR split into `dispatch_attempt_count` (incremented on send) and `manual_retry_count` (incremented on retry)\n\n2. **Add database status constraint**:\n   ```elixir\n   # priv/repo/migrations/YYYYMMDDHHmmSS_add_email_delivery_status_constraint.exs\n   defmodule Memba.Repo.Migrations.AddEmailDeliveryStatusConstraint do\n     use Ecto.Migration\n\n     def up do\n       execute \"\"\"\n       ALTER TABLE email_deliveries\n       ADD CONSTRAINT email_deliveries_status_check\n       CHECK (status IN ('pending', 'dispatching', 'sent', 'failed',\n                        'delivered', 'bounced', 'complained', 'opened'))\n       \"\"\"\n     end\n\n     def down do\n       execute \"ALTER TABLE email_deliveries DROP CONSTRAINT email_deliveries_status_check\"\n     end\n   end\n   ```\n\n3. **Clarify `dispatched_at` semantics**:\n   - Add schema field doc: `dispatched_at: \"Timestamp of last dispatch attempt, whether successful or failed\"`\n   - OR rename in new migration: `dispatched_at → last_dispatch_attempt_at`\n\n---\n\n## Validation Notes\n\n- ✓ `dev check` passed before review (compilation, dialyzer, credo, format, unit tests, acceptance tests)\n- ✓ All 82 acceptance scenarios passed, including messaging, inbound club messages, staff workflows\n- ✓ Specific test coverage for dispatcher claiming, success/failure paths, manual retry, concurrent dispatch prevention\n- ✓ Test providers (fake, selective_failure) support error simulation\n- ✓ Migration is reversible, adds indexes for common queries\n- ✓ Dispatcher added to supervision tree, handles crash recovery via OTP\n- ✓ PubSub coordination tested via `EmailDeliveryCreated` broadcast\n- ✓ Command acceptance (`send_club_message/2`) succeeds even when provider fails (tests prove decoupling)\n\n---\n\n## Recommendation\n\n**Accept with bounded-safe improvements**.\n\nThe iteration successfully implements asynchronous email delivery per ADR 027, decoupling command acceptance from provider dispatch. The architecture is sound, tests are comprehensive, and all acceptance criteria pass.\n\nThe bounded-safe fixes (semantic clarity on fields, database constraint) are polish, not correctness issues. They can be applied as a follow-up commit or small iteration without changing behaviour.\n\nThe judgement-worthy findings are deliberate trade-offs documented in the plan (no automatic retry, no startup sweep) or typical first-iteration technical debt (single-threaded dispatch, crash-recovery edge cases). None block merge; they inform future hardening iterations.",
+          "response.gemini_review": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None found.**\n\nThe implementation appears to conform to the binding architectural direction for the asynchronous email delivery handoff boundary:\n\n- `send_club_message/2` is decoupled from provider availability.\n- `EmailDelivery` now models the async lifecycle using `pending`, `dispatching`, `sent`, and `failed`, while preserving existing provider/webhook statuses.\n- Dispatch is handled by a supervised `EmailDeliveryDispatcher`.\n- The dispatcher is nudged by read-model-change PubSub instead of bypassing the event/projection flow.\n- Manual/internal retry exists without adding out-of-scope automatic retry, startup sweep, periodic sweep, or staff retry UI.\n- CQRS/event-sourcing boundaries remain intact: commands/events establish the domain fact, projections maintain read-model delivery records, and infrastructure dispatch happens asynchronously from the read model.\n\n## Blocking issues\n\n1. **None.**\n\nThe implementation passed `dev ci`, the plan-conformance gate had already succeeded, and I do not see an ADR conflict or a missing central acceptance criterion that should block merge.\n\n## Bounded-safe fixes\n\n1. **Clarify `attempt_count` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, related tests/migration docs if present.\n\n   The field appears to increment for more than one lifecycle concern, including failed provider dispatch and manual retry reset. That makes `attempt_count` ambiguous if future maintainers or operator tooling interpret it as “number of provider send attempts.”\n\n   This is not currently blocking, but it is a maintainability risk because delivery diagnostics are now operationally meaningful.\n\n2. **Clarify `dispatched_at` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   If `dispatched_at` is set after both successful and failed provider calls, it means “last dispatch attempt time,” not necessarily “successfully dispatched at.” The name is understandable in this iteration, but it could mislead future UI or reporting work.\n\n3. **Add a database-level check constraint for `email_deliveries.status`**\n\n   **Files:** migration touching `email_deliveries`.\n\n   The schema-level enum validation is good, and the plan allowed constraints “where practical.” A database check constraint would make the expanded status vocabulary more durable against future raw SQL, data repair scripts, or migrations.\n\n   The allowed set should include both the new handoff statuses and preserved webhook/provider statuses, for example:\n\n   - `pending`\n   - `dispatching`\n   - `sent`\n   - `failed`\n   - `delivered`\n   - `bounced`\n   - `complained`\n   - `opened`\n\n4. **Clean up the `SelectiveFailure` test provider naming seam**\n\n   **File:** `web/test/support/messaging/email_delivery_providers/selective_failure.ex`.\n\n   `start_link/1` accepts a `:name` option, but the helper functions call `Agent` using `__MODULE__` directly. That makes the option misleading.\n\n   Since this is test support only, either remove the `:name` option or consistently pass/use the configured name.\n\n5. **Add one focused inbound async-dispatch regression test if not already present**\n\n   **Files:** messaging/dispatcher integration tests.\n\n   Acceptance coverage is green, and the plan-conformance workflow passed. Still, a narrow test proving that accepted inbound club messages create pending `EmailDelivery` records and dispatch through the same dispatcher path would make this important architectural coupling explicit.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Single-threaded dispatcher throughput**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher appears to claim and deliver records serially from one GenServer.\n\n   **Why it may need human judgement:** This is simple and safe for the first asynchronous handoff iteration. However, provider latency or higher delivery volume could cause dispatch work to accumulate behind the GenServer. A future hardening pass may need bounded concurrency, partitioning, or a durable job system. That is an operational/product trade-off, not a merge blocker.\n\n2. **No startup or periodic sweep**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** Pending deliveries created while the app is down, missed PubSub nudges, or records stuck in `dispatching` after a crash are not automatically recovered.\n\n   **Why it may need human judgement:** The iteration plan explicitly deferred startup sweeps, periodic sweeps, and automatic retry. This is acceptable for the slice, but it remains an operational gap that should be revisited once real delivery volume and support expectations are clearer.\n\n3. **Crash window after provider acceptance**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`, `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** If the provider accepts the email and the app crashes before the record is marked `sent`, the read model may remain `dispatching`.\n\n   **Why it may need human judgement:** The plan explicitly accepted best-effort duplicate prevention for this iteration. Future work may need provider-level idempotency keys using `delivery_id`, reconciliation tooling, or a more durable outbox/job boundary.\n\n4. **One `status` field now represents both local handoff lifecycle and provider/webhook lifecycle**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** `pending`/`dispatching`/`failed` are local dispatch states, while statuses such as `delivered`, `bounced`, `complained`, and `opened` are provider/webhook outcomes.\n\n   **Why it may need human judgement:** This is plan-aligned and likely appropriate for now because the existing `EmailDelivery` read model was intentionally reused. If staff/operator views, webhook processing, or retry policy become more sophisticated, separating local dispatch status from provider delivery status may become clearer.\n\n5. **Dispatcher responsibility may grow over time**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher coordinates PubSub nudges, record claiming, request construction, provider calls, result handling, error normalization, and read-model updates.\n\n   **Why it may need human judgement:** Centralizing this flow keeps the new boundary discoverable. If provider-specific behaviour, retry policy, telemetry, or error classification grows, request-building and result-normalization collaborators may help keep the GenServer orchestration-focused.\n\n6. **Provider error vocabulary is still informal**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, provider adapters/test providers.\n\n   **Smell:** Persisted `latest_error` and `latest_error_detail` are useful, but provider errors can have inconsistent shapes.\n\n   **Why it may need human judgement:** The current implementation appears sufficient for fake/local/Postmark/Resend seams. If more provider errors become operator-facing, the project may want a small normalized error struct or vocabulary instead of persisting loosely classified inspected terms.\n\n## Suggested fixes\n\nFor a follow-up polish commit or small cleanup iteration:\n\n1. Add comments or schema documentation for:\n   - `attempt_count`\n   - `dispatched_at`\n\n   Or, if the team wants stronger semantics, rename/split them before staff tooling depends on them.\n\n2. Add a migration with a check constraint for `email_deliveries.status`, preserving both dispatch lifecycle statuses and existing webhook/provider statuses.\n\n3. Simplify `SelectiveFailure` test provider naming:\n   - remove the unused `:name` option, or\n   - update all helper functions to support named Agent instances consistently.\n\n4. Add a narrow regression test for inbound club-message delivery through the same pending/read-model/dispatcher path.\n\n## Validation notes\n\n- `dev ci` passed before review.\n- Full acceptance suite passed:\n  - 82 scenarios\n  - 493 steps\n- Review started from a clean working tree.\n- No files were edited during this review.\n- Evidence indicates the implementation includes:\n  - pending `EmailDelivery` creation,\n  - supervised dispatcher wiring,\n  - PubSub read-model-change nudges,\n  - pending-to-dispatching claim logic,\n  - sent/failed status updates,\n  - persisted diagnostics on failure,\n  - manual retry,\n  - async decoupling from `send_club_message/2`,\n  - continued browser-composed and inbound club-message delivery paths.",
+          "internal.retry_count.start": 0,
+          "current_node": "verify_review_repair",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "response.apply_review_fixes": "Implemented the selected bounded review repairs for iteration 038. No acceptance feature files were edited.\n\n## Issue-to-fix mapping\n\n| Review issue | Resolution | Files/modules/tests |\n|---|---|---|\n| `email-delivery-status-db-constraint` | No new change needed: the implementation already has a DB check constraint and tests proving allowed/rejected status vocabulary. Verified during `dev check`. | Existing: `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`, `web/test/memba/messaging/email_delivery_status_constraints_test.exs` |\n| `email-delivery-diagnostics-docs` | Added projection moduledoc documentation clarifying operational semantics for `attempt_count`, `last_dispatch_attempted_at`, `sent_at`, and `failed_at`. | `web/lib/memba/messaging/projections/email_delivery.ex` |\n| `email-delivery-test-provider-cleanup` | Removed the misleading `:name` option seam from `SelectiveFailure.start_link/1`; it now consistently starts its Agent under the module name used by its helper functions. | `web/test/support/messaging/email_delivery_providers/selective_failure.ex` |\n| `inbound-email-dispatch-regression-test` | Added a focused regression test proving accepted inbound club email is dispatched by the read-model-change PubSub nudge through `EmailDeliveryDispatcher`, not just by a manual dispatch call. | `web/test/memba/messaging/inbound_club_message_acceptance_test.exs` |\n\n## Files changed\n\n- `web/lib/memba/messaging/projections/email_delivery.ex`\n- `web/test/support/messaging/email_delivery_providers/selective_failure.ex`\n- `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`\n\n## Tests / checks run\n\n- `cd web && mix format --check-formatted ...` — passed for changed files.\n- Initial direct `mix test ...` attempt failed because Postgres was not running when bypassing the repo `dev` helper.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed.\n  - 822 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed.\n  - 822 ExUnit tests, 0 failures.\n  - 82 acceptance scenarios, 493 steps, all passed.\n\n## Remaining gaps / human questions\n\nNone for the selected repair issues.\n\nThe existing untracked `.fabro/tmp/` workflow artifacts remain untouched.",
+          "response.codex_review": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone found.\n\nThe implementation appears to conform to the accepted asynchronous email delivery handoff direction, specifically the ADR intent reflected by the plan:\n\n1. `send_club_message/2` is no longer coupled to provider availability.\n2. `EmailDelivery` records now model an explicit async lifecycle: `pending`, `dispatching`, `sent`, `failed`, while preserving webhook/provider statuses.\n3. Dispatch is handled by a supervised `EmailDeliveryDispatcher` rather than inline application-service code.\n4. The dispatcher is nudged through read-model-change PubSub instead of replacing the existing event/projection architecture.\n5. Manual retry is available without adding out-of-scope automatic retry, startup sweep, periodic sweep, or staff UI.\n6. CQRS/event-sourcing boundaries remain intact: command acceptance records domain facts, projections create/read delivery state, and infrastructure dispatch occurs from the read model.\n\n## Blocking issues\n\nNone.\n\nThe implementation passed `dev check`, the acceptance suite is green, and there is no evidence of an ADR violation or missed central acceptance criterion requiring a new implementation pass before merge.\n\n## Bounded-safe fixes\n\n1. **Clarify `attempt_count` semantics**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex` and related tests/migration.\n\n   The diagnostics field appears to increment on dispatch failure and also during manual retry reset. That makes the name `attempt_count` ambiguous if readers expect it to mean “provider send attempts.”\n\n   Examples of possible ambiguity:\n\n   - First successful provider send may remain `0`.\n   - A failed send followed by manual retry may count both the failure and the retry lifecycle transition.\n   - A retried failure may count more lifecycle operations than actual provider attempts.\n\n   This is not blocking, but the field should either be documented or renamed/split before operational dashboards or staff tooling start relying on it.\n\n2. **Clarify `dispatched_at` semantics**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex`.\n\n   If `dispatched_at` is set on both successful and failed provider calls, it means “last dispatch attempt timestamp,” not necessarily “successfully dispatched at.”\n\n   That is acceptable behaviour, but the current name may mislead future maintainers. A small doc/comment, or a later rename to `last_dispatch_attempt_at`, would improve readability.\n\n3. **Add a database-level status check constraint**\n\n   **Files:** migration touching `email_deliveries`.\n\n   The plan allowed “database constraints or schema validation where practical.” Ecto enum validation is useful, but the database still appears able to store arbitrary status strings if written outside the application.\n\n   A low-risk follow-up migration could add a check constraint allowing the complete current vocabulary:\n\n   - `pending`\n   - `dispatching`\n   - `sent`\n   - `failed`\n   - existing webhook statuses such as `delivered`, `bounced`, `complained`, `opened`\n\n   This is especially useful because delivery status is now operationally meaningful.\n\n4. **Clean up the test provider Agent naming seam**\n\n   **File:** `web/test/support/messaging/email_delivery_providers/selective_failure.ex`\n\n   `start_link/1` accepts a `:name` option, but `deliver/1`, `fail_addresses/1`, `deliveries/0`, and `reset/0` all use `__MODULE__` directly. That makes the custom name option misleading.\n\n   Either remove the option or consistently support named instances. Since this is test support only, this is a small safe cleanup.\n\n5. **Add a focused inbound async-dispatch regression test if not already present**\n\n   **Files:** messaging/dispatcher tests.\n\n   The implementation evidence and acceptance suite suggest inbound club messages still work, but a narrow integration test that proves an accepted inbound club message creates a pending `EmailDelivery` and is dispatched by the same dispatcher path would be useful regression coverage.\n\n   This is not a blocker because the acceptance suite is green and the plan-conformance workflow already passed, but it would make the coupling between inbound message acceptance and the new async handoff explicit.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Single-threaded dispatcher throughput**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** The dispatcher appears to process claimed deliveries serially in a GenServer.\n\n   **Why it may need human judgement:** This is simple and safe for the current iteration, and it avoids premature concurrency. However, provider latency or higher message volume could cause pending deliveries to accumulate in the dispatcher mailbox. A future hardening iteration may need a bounded task pool, partitioned dispatchers, or Oban-like durable job execution — but that would be a product/ops decision, not a polish fix.\n\n2. **No startup sweep or periodic sweep**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** Deliveries that are `pending` when the app is down, or stuck in `dispatching` after a crash, will not be automatically recovered.\n\n   **Why it may need human judgement:** The plan explicitly deferred automatic retry, startup sweeps, and periodic sweeps. This is acceptable for this slice, but operationally important. A follow-up decision should define whether recovery is manual-only, startup-driven, periodic, or operator-triggered.\n\n3. **Ambiguous crash window after provider acceptance**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`, `lib/memba/messaging/projections/email_delivery.ex`\n\n   **Smell:** If the provider accepts an email but the app crashes before the read model is marked `sent`, the record may remain `dispatching`.\n\n   **Why it may need human judgement:** The plan explicitly accepted best-effort duplicate prevention and acknowledged this ambiguity. Future work may need provider-level idempotency keys using `delivery_id`, reconciliation, or a more durable outbox/job boundary. That is larger than a bounded-safe refactor.\n\n4. **One status field now combines handoff lifecycle and provider/webhook lifecycle**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`\n\n   **Smell:** `status` now represents both local dispatch lifecycle states and provider outcome states.\n\n   **Why it may need human judgement:** This is plan-aligned and likely appropriate for the current read model. Over time, however, local handoff state and provider delivery state may diverge conceptually. If operator views or webhook handling become more sophisticated, the project may want separate fields such as `dispatch_status` and `provider_status`.\n\n5. **Dispatcher may accumulate multiple responsibilities**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** The dispatcher likely coordinates PubSub nudges, claims records, builds provider requests, calls providers, normalizes errors, and updates read-model status.\n\n   **Why it may need human judgement:** For this iteration, centralizing the flow is understandable and keeps the new boundary discoverable. If provider-specific behaviour, retry policy, or error classification grows, request construction and result normalization may deserve focused collaborators so the GenServer remains orchestration-only.\n\n6. **Provider error normalization may need a stronger vocabulary**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex`, provider adapters.\n\n   **Smell:** Persisted `latest_error` / `latest_error_detail` are useful, but provider errors can have inconsistent shapes.\n\n   **Why it may need human judgement:** Current fake/local/Postmark/Resend seams appear covered. As more providers or webhook statuses are added, the team may want a small normalized error struct or vocabulary to avoid leaking adapter-specific tuples/strings into operator-facing diagnostics.\n\n## Suggested fixes\n\nFor a follow-up polish commit or small cleanup iteration:\n\n1. Add documentation or rename diagnostics fields:\n   - Document `attempt_count` as lifecycle/dispatch-attempt semantics, or split it into clearer fields.\n   - Document `dispatched_at` as “last dispatch attempt timestamp,” or rename it later.\n\n2. Add a database check constraint for `email_deliveries.status`, preserving both new dispatch statuses and existing webhook statuses.\n\n3. Simplify `SelectiveFailure` test provider:\n   - Remove the unused `:name` option, or\n   - Change all Agent operations to use a consistent configured name.\n\n4. Add one focused test for inbound club-message async dispatch through the same `EmailDeliveryDispatcher` path, if the implementation does not already include one.\n\n## Validation notes\n\n- `dev ci` / `dev check` passed before review.\n- Acceptance suite passed:\n  - 82 scenarios\n  - 493 steps\n- The review started from a clean working tree.\n- The implementation evidence indicates:\n  - `EmailDelivery` records start as `pending`.\n  - A supervised dispatcher handles async provider dispatch.\n  - Dispatch claiming moves records to `dispatching`.\n  - Success marks records `sent`.\n  - Provider failure marks records `failed` and persists diagnostics.\n  - Manual retry exists.\n  - Browser-composed and inbound club-message flows continue through the same projected delivery path.\n- No file edits were made during this review.",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"email-delivery-status-db-constraint\",\n        \"title\": \"Add DB check constraint for EmailDelivery status vocabulary\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"email-delivery-diagnostics-docs\",\n        \"title\": \"Clarify EmailDelivery diagnostics field semantics\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"email-delivery-test-provider-cleanup\",\n        \"title\": \"Clean up SelectiveFailure test provider naming seam\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"inbound-email-dispatch-regression-test\",\n        \"title\": \"Add focused inbound async email dispatch regression coverage if absent\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "implementation_accepted": false,
+          "failure_class": "deterministic",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.verify_review_repair": 0,
+          "internal.thread_id": "apply_review_fixes",
+          "outcome": "failed",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.dev_check": 0,
+          "graph.max_node_visits": "160",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.start.current_node": "read_plan",
+          "thread.claude_review.current_node": "codex_review",
+          "graph.rankdir": "LR",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "thread.synthesize_review.current_node": "review_gate",
+          "failure_signature": "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced"
+        },
+        "node_outcomes": {
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/52014610f809529c42110fa5fd60fb193e9f3c86b71f2ce422b80fd159742a86"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 369407,
+              "active_time_ms": 369407
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ed63616634545322cee0f94b4cf1b4b376d3028ebf954ab62b33cb83e4b9f57f"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/038-email-delivery-handoff-boundary/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168,
+              "active_time_ms": 168
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None found.**\n\nThe implementation appears to",
+              "response.gemini_review": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None found.**\n\nThe implementation appears to conform to the binding architectural direction for the asynchronous email delivery handoff boundary:\n\n- `send_club_message/2` is decoupled from provider availability.\n- `EmailDelivery` now models the async lifecycle using `pending`, `dispatching`, `sent`, and `failed`, while preserving existing provider/webhook statuses.\n- Dispatch is handled by a supervised `EmailDeliveryDispatcher`.\n- The dispatcher is nudged by read-model-change PubSub instead of bypassing the event/projection flow.\n- Manual/internal retry exists without adding out-of-scope automatic retry, startup sweep, periodic sweep, or staff retry UI.\n- CQRS/event-sourcing boundaries remain intact: commands/events establish the domain fact, projections maintain read-model delivery records, and infrastructure dispatch happens asynchronously from the read model.\n\n## Blocking issues\n\n1. **None.**\n\nThe implementation passed `dev ci`, the plan-conformance gate had already succeeded, and I do not see an ADR conflict or a missing central acceptance criterion that should block merge.\n\n## Bounded-safe fixes\n\n1. **Clarify `attempt_count` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, related tests/migration docs if present.\n\n   The field appears to increment for more than one lifecycle concern, including failed provider dispatch and manual retry reset. That makes `attempt_count` ambiguous if future maintainers or operator tooling interpret it as “number of provider send attempts.”\n\n   This is not currently blocking, but it is a maintainability risk because delivery diagnostics are now operationally meaningful.\n\n2. **Clarify `dispatched_at` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   If `dispatched_at` is set after both successful and failed provider calls, it means “last dispatch attempt time,” not necessarily “successfully dispatched at.” The name is understandable in this iteration, but it could mislead future UI or reporting work.\n\n3. **Add a database-level check constraint for `email_deliveries.status`**\n\n   **Files:** migration touching `email_deliveries`.\n\n   The schema-level enum validation is good, and the plan allowed constraints “where practical.” A database check constraint would make the expanded status vocabulary more durable against future raw SQL, data repair scripts, or migrations.\n\n   The allowed set should include both the new handoff statuses and preserved webhook/provider statuses, for example:\n\n   - `pending`\n   - `dispatching`\n   - `sent`\n   - `failed`\n   - `delivered`\n   - `bounced`\n   - `complained`\n   - `opened`\n\n4. **Clean up the `SelectiveFailure` test provider naming seam**\n\n   **File:** `web/test/support/messaging/email_delivery_providers/selective_failure.ex`.\n\n   `start_link/1` accepts a `:name` option, but the helper functions call `Agent` using `__MODULE__` directly. That makes the option misleading.\n\n   Since this is test support only, either remove the `:name` option or consistently pass/use the configured name.\n\n5. **Add one focused inbound async-dispatch regression test if not already present**\n\n   **Files:** messaging/dispatcher integration tests.\n\n   Acceptance coverage is green, and the plan-conformance workflow passed. Still, a narrow test proving that accepted inbound club messages create pending `EmailDelivery` records and dispatch through the same dispatcher path would make this important architectural coupling explicit.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Single-threaded dispatcher throughput**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher appears to claim and deliver records serially from one GenServer.\n\n   **Why it may need human judgement:** This is simple and safe for the first asynchronous handoff iteration. However, provider latency or higher delivery volume could cause dispatch work to accumulate behind the GenServer. A future hardening pass may need bounded concurrency, partitioning, or a durable job system. That is an operational/product trade-off, not a merge blocker.\n\n2. **No startup or periodic sweep**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** Pending deliveries created while the app is down, missed PubSub nudges, or records stuck in `dispatching` after a crash are not automatically recovered.\n\n   **Why it may need human judgement:** The iteration plan explicitly deferred startup sweeps, periodic sweeps, and automatic retry. This is acceptable for the slice, but it remains an operational gap that should be revisited once real delivery volume and support expectations are clearer.\n\n3. **Crash window after provider acceptance**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`, `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** If the provider accepts the email and the app crashes before the record is marked `sent`, the read model may remain `dispatching`.\n\n   **Why it may need human judgement:** The plan explicitly accepted best-effort duplicate prevention for this iteration. Future work may need provider-level idempotency keys using `delivery_id`, reconciliation tooling, or a more durable outbox/job boundary.\n\n4. **One `status` field now represents both local handoff lifecycle and provider/webhook lifecycle**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** `pending`/`dispatching`/`failed` are local dispatch states, while statuses such as `delivered`, `bounced`, `complained`, and `opened` are provider/webhook outcomes.\n\n   **Why it may need human judgement:** This is plan-aligned and likely appropriate for now because the existing `EmailDelivery` read model was intentionally reused. If staff/operator views, webhook processing, or retry policy become more sophisticated, separating local dispatch status from provider delivery status may become clearer.\n\n5. **Dispatcher responsibility may grow over time**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher coordinates PubSub nudges, record claiming, request construction, provider calls, result handling, error normalization, and read-model updates.\n\n   **Why it may need human judgement:** Centralizing this flow keeps the new boundary discoverable. If provider-specific behaviour, retry policy, telemetry, or error classification grows, request-building and result-normalization collaborators may help keep the GenServer orchestration-focused.\n\n6. **Provider error vocabulary is still informal**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, provider adapters/test providers.\n\n   **Smell:** Persisted `latest_error` and `latest_error_detail` are useful, but provider errors can have inconsistent shapes.\n\n   **Why it may need human judgement:** The current implementation appears sufficient for fake/local/Postmark/Resend seams. If more provider errors become operator-facing, the project may want a small normalized error struct or vocabulary instead of persisting loosely classified inspected terms.\n\n## Suggested fixes\n\nFor a follow-up polish commit or small cleanup iteration:\n\n1. Add comments or schema documentation for:\n   - `attempt_count`\n   - `dispatched_at`\n\n   Or, if the team wants stronger semantics, rename/split them before staff tooling depends on them.\n\n2. Add a migration with a check constraint for `email_deliveries.status`, preserving both dispatch lifecycle statuses and existing webhook/provider statuses.\n\n3. Simplify `SelectiveFailure` test provider naming:\n   - remove the unused `:name` option, or\n   - update all helper functions to support named Agent instances consistently.\n\n4. Add a narrow regression test for inbound club-message delivery through the same pending/read-model/dispatcher path.\n\n## Validation notes\n\n- `dev ci` passed before review.\n- Full acceptance suite passed:\n  - 82 scenarios\n  - 493 steps\n- Review started from a clean working tree.\n- No files were edited during this review.\n- Evidence indicates the implementation includes:\n  - pending `EmailDelivery` creation,\n  - supervised dispatcher wiring,\n  - PubSub read-model-change nudges,\n  - pending-to-dispatching claim logic,\n  - sent/failed status updates,\n  - persisted diagnostics on failure,\n  - manual retry,\n  - async decoupling from `send_club_message/2`,\n  - continued browser-composed and inbound club-message delivery paths.",
+              "last_stage": "gemini_review"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9750,
+                    "output_tokens": 1766,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 117210
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43686,
+              "tool_time_ms": 0,
+              "active_time_ms": 43686
+            }
+          },
+          "verify_review_repair": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8baab2217301bc141657e362f0f38c1c5d7ee64afb8eab236206f1aa210372f9"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 147455,
+              "active_time_ms": 147455
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"email-delivery-status-db-constraint\",\n        \"title\"",
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"email-delivery-status-db-constraint\",\n        \"title\": \"Add DB check constraint for EmailDelivery status vocabulary\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"email-delivery-diagnostics-docs\",\n        \"title\": \"Clarify EmailDelivery diagnostics field semantics\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"email-delivery-test-provider-cleanup\",\n        \"title\": \"Clean up SelectiveFailure test provider naming seam\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"inbound-email-dispatch-regression-test\",\n        \"title\": \"Add focused inbound async email dispatch regression coverage if absent\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "implementation_accepted": false,
+              "review_fixes_available": true,
+              "review_blockers": [
+                {
+                  "id": "email-delivery-status-db-constraint",
+                  "title": "Add DB check constraint for EmailDelivery status vocabulary",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "email-delivery-diagnostics-docs",
+                  "title": "Clarify EmailDelivery diagnostics field semantics",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "email-delivery-test-provider-cleanup",
+                  "title": "Clean up SelectiveFailure test provider naming seam",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "inbound-email-dispatch-regression-test",
+                  "title": "Add focused inbound async email dispatch regression coverage if absent",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ]
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12160,
+                    "output_tokens": 281,
+                    "reasoning_tokens": 1550,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 115730
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 37736,
+              "tool_time_ms": 0,
+              "active_time_ms": 37736
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone found.\n\nThe implementation appears to confor",
+              "last_stage": "codex_review",
+              "response.codex_review": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone found.\n\nThe implementation appears to conform to the accepted asynchronous email delivery handoff direction, specifically the ADR intent reflected by the plan:\n\n1. `send_club_message/2` is no longer coupled to provider availability.\n2. `EmailDelivery` records now model an explicit async lifecycle: `pending`, `dispatching`, `sent`, `failed`, while preserving webhook/provider statuses.\n3. Dispatch is handled by a supervised `EmailDeliveryDispatcher` rather than inline application-service code.\n4. The dispatcher is nudged through read-model-change PubSub instead of replacing the existing event/projection architecture.\n5. Manual retry is available without adding out-of-scope automatic retry, startup sweep, periodic sweep, or staff UI.\n6. CQRS/event-sourcing boundaries remain intact: command acceptance records domain facts, projections create/read delivery state, and infrastructure dispatch occurs from the read model.\n\n## Blocking issues\n\nNone.\n\nThe implementation passed `dev check`, the acceptance suite is green, and there is no evidence of an ADR violation or missed central acceptance criterion requiring a new implementation pass before merge.\n\n## Bounded-safe fixes\n\n1. **Clarify `attempt_count` semantics**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex` and related tests/migration.\n\n   The diagnostics field appears to increment on dispatch failure and also during manual retry reset. That makes the name `attempt_count` ambiguous if readers expect it to mean “provider send attempts.”\n\n   Examples of possible ambiguity:\n\n   - First successful provider send may remain `0`.\n   - A failed send followed by manual retry may count both the failure and the retry lifecycle transition.\n   - A retried failure may count more lifecycle operations than actual provider attempts.\n\n   This is not blocking, but the field should either be documented or renamed/split before operational dashboards or staff tooling start relying on it.\n\n2. **Clarify `dispatched_at` semantics**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex`.\n\n   If `dispatched_at` is set on both successful and failed provider calls, it means “last dispatch attempt timestamp,” not necessarily “successfully dispatched at.”\n\n   That is acceptable behaviour, but the current name may mislead future maintainers. A small doc/comment, or a later rename to `last_dispatch_attempt_at`, would improve readability.\n\n3. **Add a database-level status check constraint**\n\n   **Files:** migration touching `email_deliveries`.\n\n   The plan allowed “database constraints or schema validation where practical.” Ecto enum validation is useful, but the database still appears able to store arbitrary status strings if written outside the application.\n\n   A low-risk follow-up migration could add a check constraint allowing the complete current vocabulary:\n\n   - `pending`\n   - `dispatching`\n   - `sent`\n   - `failed`\n   - existing webhook statuses such as `delivered`, `bounced`, `complained`, `opened`\n\n   This is especially useful because delivery status is now operationally meaningful.\n\n4. **Clean up the test provider Agent naming seam**\n\n   **File:** `web/test/support/messaging/email_delivery_providers/selective_failure.ex`\n\n   `start_link/1` accepts a `:name` option, but `deliver/1`, `fail_addresses/1`, `deliveries/0`, and `reset/0` all use `__MODULE__` directly. That makes the custom name option misleading.\n\n   Either remove the option or consistently support named instances. Since this is test support only, this is a small safe cleanup.\n\n5. **Add a focused inbound async-dispatch regression test if not already present**\n\n   **Files:** messaging/dispatcher tests.\n\n   The implementation evidence and acceptance suite suggest inbound club messages still work, but a narrow integration test that proves an accepted inbound club message creates a pending `EmailDelivery` and is dispatched by the same dispatcher path would be useful regression coverage.\n\n   This is not a blocker because the acceptance suite is green and the plan-conformance workflow already passed, but it would make the coupling between inbound message acceptance and the new async handoff explicit.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Single-threaded dispatcher throughput**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** The dispatcher appears to process claimed deliveries serially in a GenServer.\n\n   **Why it may need human judgement:** This is simple and safe for the current iteration, and it avoids premature concurrency. However, provider latency or higher message volume could cause pending deliveries to accumulate in the dispatcher mailbox. A future hardening iteration may need a bounded task pool, partitioned dispatchers, or Oban-like durable job execution — but that would be a product/ops decision, not a polish fix.\n\n2. **No startup sweep or periodic sweep**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** Deliveries that are `pending` when the app is down, or stuck in `dispatching` after a crash, will not be automatically recovered.\n\n   **Why it may need human judgement:** The plan explicitly deferred automatic retry, startup sweeps, and periodic sweeps. This is acceptable for this slice, but operationally important. A follow-up decision should define whether recovery is manual-only, startup-driven, periodic, or operator-triggered.\n\n3. **Ambiguous crash window after provider acceptance**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`, `lib/memba/messaging/projections/email_delivery.ex`\n\n   **Smell:** If the provider accepts an email but the app crashes before the read model is marked `sent`, the record may remain `dispatching`.\n\n   **Why it may need human judgement:** The plan explicitly accepted best-effort duplicate prevention and acknowledged this ambiguity. Future work may need provider-level idempotency keys using `delivery_id`, reconciliation, or a more durable outbox/job boundary. That is larger than a bounded-safe refactor.\n\n4. **One status field now combines handoff lifecycle and provider/webhook lifecycle**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`\n\n   **Smell:** `status` now represents both local dispatch lifecycle states and provider outcome states.\n\n   **Why it may need human judgement:** This is plan-aligned and likely appropriate for the current read model. Over time, however, local handoff state and provider delivery state may diverge conceptually. If operator views or webhook handling become more sophisticated, the project may want separate fields such as `dispatch_status` and `provider_status`.\n\n5. **Dispatcher may accumulate multiple responsibilities**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`\n\n   **Smell:** The dispatcher likely coordinates PubSub nudges, claims records, builds provider requests, calls providers, normalizes errors, and updates read-model status.\n\n   **Why it may need human judgement:** For this iteration, centralizing the flow is understandable and keeps the new boundary discoverable. If provider-specific behaviour, retry policy, or error classification grows, request construction and result normalization may deserve focused collaborators so the GenServer remains orchestration-only.\n\n6. **Provider error normalization may need a stronger vocabulary**\n\n   **Files:** likely `lib/memba/messaging/projections/email_delivery.ex`, provider adapters.\n\n   **Smell:** Persisted `latest_error` / `latest_error_detail` are useful, but provider errors can have inconsistent shapes.\n\n   **Why it may need human judgement:** Current fake/local/Postmark/Resend seams appear covered. As more providers or webhook statuses are added, the team may want a small normalized error struct or vocabulary to avoid leaking adapter-specific tuples/strings into operator-facing diagnostics.\n\n## Suggested fixes\n\nFor a follow-up polish commit or small cleanup iteration:\n\n1. Add documentation or rename diagnostics fields:\n   - Document `attempt_count` as lifecycle/dispatch-attempt semantics, or split it into clearer fields.\n   - Document `dispatched_at` as “last dispatch attempt timestamp,” or rename it later.\n\n2. Add a database check constraint for `email_deliveries.status`, preserving both new dispatch statuses and existing webhook statuses.\n\n3. Simplify `SelectiveFailure` test provider:\n   - Remove the unused `:name` option, or\n   - Change all Agent operations to use a consistent configured name.\n\n4. Add one focused test for inbound club-message async dispatch through the same `EmailDeliveryDispatcher` path, if the implementation does not already include one.\n\n## Validation notes\n\n- `dev ci` / `dev check` passed before review.\n- Acceptance suite passed:\n  - 82 scenarios\n  - 493 steps\n- The review started from a clean working tree.\n- The implementation evidence indicates:\n  - `EmailDelivery` records start as `pending`.\n  - A supervised dispatcher handles async provider dispatch.\n  - Dispatch claiming moves records to `dispatching`.\n  - Success marks records `sent`.\n  - Provider failure marks records `failed` and persists diagnostics.\n  - Manual retry exists.\n  - Browser-composed and inbound club-message flows continue through the same projected delivery path.\n- No file edits were made during this review."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7378,
+                    "output_tokens": 1918,
+                    "reasoning_tokens": 1552,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 140990
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82510,
+              "tool_time_ms": 0,
+              "active_time_ms": 82510
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4dc25bb1f603c766592079f3c87682abec54e87cd81e3f37b1f4c38f07b72832"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '90134f8ebf5b313e76e43e912c50800ab2687545'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1603,
+              "active_time_ms": 1603
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "# Iteration 038 Implementation Review\n\n**Decision**: ACCEPT  \n**Confidence**: High  \n**ADR Conformance**: PASS\n\n---\n\n## ADR Conformance\n\n### Pass\n\n**ADR 027: Asynchronous Email Delivery Handoff Bounda",
+              "response.claude_review": "# Iteration 038 Implementation Review\n\n**Decision**: ACCEPT  \n**Confidence**: High  \n**ADR Conformance**: PASS\n\n---\n\n## ADR Conformance\n\n### Pass\n\n**ADR 027: Asynchronous Email Delivery Handoff Boundary**\n\nAll binding decisions are implemented:\n\n✓ Async dispatch with `pending`/`dispatching`/`sent`/`failed` lifecycle  \n✓ Supervised `EmailDeliveryDispatcher` GenServer under application tree  \n✓ PubSub read-model-change coordination via `EmailDeliveryCreated` events  \n✓ Manual retry API (`retry_email_delivery/1`), no automatic retries  \n✓ Command acceptance (`send_club_message/2`) decoupled from provider success  \n✓ Claiming logic with `pending → dispatching` transition prevents concurrent dispatch  \n✓ Error tracking via `attempt_count`, `latest_error`, `latest_error_detail` fields  \n✓ Inbound club messages use same async path via `EmailDelivery` projection  \n\n**Minor interpretation variations** (all plan-aligned):\n- Database constraints on status enum: deferred to Ecto.Enum application-level validation (plan: \"where practical\")\n- Startup sweep of pending deliveries: explicitly deferred (plan acknowledges this operational gap)\n- Concurrent dispatch: single-threaded dispatcher acceptable for first iteration\n\n**CQRS/Event-Sourcing/RDD pattern conformance**:\n✓ Commands → events → projections separation maintained  \n✓ Read model (`EmailDelivery`) vs write model (event stream) properly separated  \n✓ Event-driven async coordination via PubSub  \n✓ OTP supervision and fault tolerance  \n✓ Projection responsibility: tracks delivery lifecycle state for operational queries  \n✓ Dispatcher responsibility: single async send concern, no domain logic\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation passes `dev check`, implements all stated acceptance criteria, conforms to ADR 027, and follows project patterns. Acceptance tests confirm browser compose, inbound club messages, and staff workflows still work.\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Semantic clarity on `attempt_count`**  \n   **Files**: `lib/memba/messaging/projections/email_delivery.ex`, schema and changesets  \n   **Issue**: Field increments on both dispatch failure (`mark_failed_changeset`) and manual retry (`reset_for_retry_changeset`), creating semantic ambiguity.  \n   - A delivery succeeding on first try: `attempt_count: 0`  \n   - A delivery succeeding after one manual retry: `attempt_count: 2` (retry → 1, then success leaves it)  \n   - A delivery failing, retried, failing again: `attempt_count: 3` (fail → 1, retry → 2, fail → 3)  \n   \n   **Fix options**:\n   - Rename to `lifecycle_operation_count` to clarify it tracks both retries and dispatch attempts\n   - OR remove increment from `reset_for_retry_changeset`, add separate `retry_count` field\n   - OR document current semantic clearly in schema moduledoc\n\n2. **Database constraint for `status` enum**  \n   **Files**: `priv/repo/migrations/*_add_email_delivery_dispatch_tracking.exs`, `email_deliveries` table  \n   **Issue**: While `Ecto.Enum` validates at application level, no DB check constraint prevents invalid status from other sources (SQL console, future migrations).  \n   **Fix**: Add check constraint in a new migration:\n   ```sql\n   ALTER TABLE email_deliveries \n   ADD CONSTRAINT valid_status \n   CHECK (status IN ('pending', 'dispatching', 'sent', 'failed', \n                     'delivered', 'bounced', 'complained', 'opened'));\n   ```\n   (Include existing webhook statuses to preserve backward compatibility)\n\n3. **`dispatched_at` field semantics**  \n   **Files**: `lib/memba/messaging/projections/email_delivery.ex`, `mark_sent_changeset` and `mark_failed_changeset`  \n   **Issue**: Field is set on both success and failure, making it \"last attempt timestamp\" not \"successfully dispatched timestamp\". Name implies the latter.  \n   **Fix options**:\n   - Rename to `last_dispatch_attempt_at`\n   - OR only set on success, add separate `last_attempt_at` for failures\n   - OR document current semantic in schema\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Single-threaded dispatcher bottleneck risk**  \n   **File**: `lib/memba/messaging/email_delivery_dispatcher.ex`  \n   **Smell**: Dispatcher handles deliveries one at a time in `handle_info`. If delivery volume grows or provider latency spikes, pending deliveries queue up in the GenServer mailbox.  \n   **Why human judgement**: Acceptable for first iteration, but may need concurrent dispatch (Task pooling, partitioned dispatchers) in future. Trade-off: simplicity vs throughput.\n\n2. **No startup sweep of pending deliveries**  \n   **File**: `lib/memba/messaging/email_delivery_dispatcher.ex`  \n   **Smell**: If app restarts while deliveries are `pending` or `dispatching`, they remain stuck until manual retry. PubSub events are not durable across restarts.  \n   **Why human judgement**: Plan explicitly defers this (\"operator/developer must use internal retry API\"). Operational gap vs implementation complexity. Needs product/ops decision on sweep strategy (startup? periodic? on-demand?).\n\n3. **Ambiguous state on crash between provider acceptance and `mark_sent`**  \n   **Files**: `lib/memba/messaging/email_delivery_dispatcher.ex`, projection changesets  \n   **Smell**: If app crashes after provider accepts delivery but before updating status to `sent`, delivery remains `dispatching`. Won't be auto-retried (good, no duplicate), but also won't be marked `sent` (bad, operational ambiguity).  \n   **Why human judgement**: Plan acknowledges this as acceptable (\"best-effort duplicate prevention\"). Future hardening could use provider-level idempotency keys (delivery_id) to safely retry and reconcile. Trade-off: correctness vs complexity.\n\n4. **Error normalization robustness**  \n   **File**: `lib/memba/messaging/projections/email_delivery.ex`, `error_type/1` and `error_detail/1` private functions  \n   **Smell**: Pattern matches on `{:selective_failure, _}` and `{:http_error, _}` tuples. Catch-all returns `\"unknown\"` / `inspect(reason)`. Provider errors might have other shapes.  \n   **Why human judgement**: Works for current providers (fake, selective_failure, Postmark/Resend). May need refinement as provider ecosystem grows or error types evolve. Low risk, but worth monitoring.\n\n5. **No explicit integration test for inbound message async dispatch**  \n   **File**: Test suite gap  \n   **Smell**: `InboundClubMessageAccepted` events create `EmailDelivery` projections with `status: :pending`, and dispatcher should pick them up. But no unit/integration test explicitly verifies this path end-to-end.  \n   **Why human judgement**: Acceptance tests pass (likely covering it), and the code path is identical to browser-composed messages. Adding a focused test would improve regression safety, but current coverage may be adequate. Test investment vs value.\n\n6. **UI changes not evident in implementation**  \n   **File**: Evidence gap, possibly `lib/memba_web/live/*` (not in collected diff)  \n   **Smell**: Plan says \"Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses.\" No UI file changes in evidence.  \n   **Why human judgement**: Either UI already handles status enum generically (likely, given acceptance tests pass), or changes were trivial/outside diff scope, or this was missed. Unlikely to be a real gap given green acceptance tests, but worth confirming UI gracefully handles new statuses (`pending`, `dispatching`, `failed`) in production scenarios.\n\n---\n\n## Suggested Fixes\n\n### For bounded-safe fixes:\n\n1. **Clarify `attempt_count` semantics**:\n   - Add schema moduledoc comment: `@doc \"Increments on both dispatch failure and manual retry; counts total lifecycle operations, not just provider send attempts\"`\n   - OR rename field in new migration: `attempt_count → lifecycle_operation_count` (requires app-wide search/replace)\n   - OR split into `dispatch_attempt_count` (incremented on send) and `manual_retry_count` (incremented on retry)\n\n2. **Add database status constraint**:\n   ```elixir\n   # priv/repo/migrations/YYYYMMDDHHmmSS_add_email_delivery_status_constraint.exs\n   defmodule Memba.Repo.Migrations.AddEmailDeliveryStatusConstraint do\n     use Ecto.Migration\n\n     def up do\n       execute \"\"\"\n       ALTER TABLE email_deliveries\n       ADD CONSTRAINT email_deliveries_status_check\n       CHECK (status IN ('pending', 'dispatching', 'sent', 'failed',\n                        'delivered', 'bounced', 'complained', 'opened'))\n       \"\"\"\n     end\n\n     def down do\n       execute \"ALTER TABLE email_deliveries DROP CONSTRAINT email_deliveries_status_check\"\n     end\n   end\n   ```\n\n3. **Clarify `dispatched_at` semantics**:\n   - Add schema field doc: `dispatched_at: \"Timestamp of last dispatch attempt, whether successful or failed\"`\n   - OR rename in new migration: `dispatched_at → last_dispatch_attempt_at`\n\n---\n\n## Validation Notes\n\n- ✓ `dev check` passed before review (compilation, dialyzer, credo, format, unit tests, acceptance tests)\n- ✓ All 82 acceptance scenarios passed, including messaging, inbound club messages, staff workflows\n- ✓ Specific test coverage for dispatcher claiming, success/failure paths, manual retry, concurrent dispatch prevention\n- ✓ Test providers (fake, selective_failure) support error simulation\n- ✓ Migration is reversible, adds indexes for common queries\n- ✓ Dispatcher added to supervision tree, handles crash recovery via OTP\n- ✓ PubSub coordination tested via `EmailDeliveryCreated` broadcast\n- ✓ Command acceptance (`send_club_message/2`) succeeds even when provider fails (tests prove decoupling)\n\n---\n\n## Recommendation\n\n**Accept with bounded-safe improvements**.\n\nThe iteration successfully implements asynchronous email delivery per ADR 027, decoupling command acceptance from provider dispatch. The architecture is sound, tests are comprehensive, and all acceptance criteria pass.\n\nThe bounded-safe fixes (semantic clarity on fields, database constraint) are polish, not correctness issues. They can be applied as a follow-up commit or small iteration without changing behaviour.\n\nThe judgement-worthy findings are deliberate trade-offs documented in the plan (no automatic retry, no startup sweep) or typical first-iteration technical debt (single-threaded dispatch, crash-recovery edge cases). None block merge; they inform future hardening iterations."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5856,
+                    "output_tokens": 8869,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 150603
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 181997,
+              "tool_time_ms": 0,
+              "active_time_ms": 181997
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.apply_review_fixes": "Implemented the selected bounded review repairs for iteration 038. No acceptance feature files were edited.\n\n## Issue-to-fix mapping\n\n| Review issue | Resolution | Files/modules/tests |\n|---|---|---|\n| `email-delivery-status-db-constraint` | No new change needed: the implementation already has a DB check constraint and tests proving allowed/rejected status vocabulary. Verified during `dev check`. | Existing: `web/priv/repo/migrations/20260620071150_add_status_constraints_to_messaging_email_deliveries.exs`, `web/test/memba/messaging/email_delivery_status_constraints_test.exs` |\n| `email-delivery-diagnostics-docs` | Added projection moduledoc documentation clarifying operational semantics for `attempt_count`, `last_dispatch_attempted_at`, `sent_at`, and `failed_at`. | `web/lib/memba/messaging/projections/email_delivery.ex` |\n| `email-delivery-test-provider-cleanup` | Removed the misleading `:name` option seam from `SelectiveFailure.start_link/1`; it now consistently starts its Agent under the module name used by its helper functions. | `web/test/support/messaging/email_delivery_providers/selective_failure.ex` |\n| `inbound-email-dispatch-regression-test` | Added a focused regression test proving accepted inbound club email is dispatched by the read-model-change PubSub nudge through `EmailDeliveryDispatcher`, not just by a manual dispatch call. | `web/test/memba/messaging/inbound_club_message_acceptance_test.exs` |\n\n## Files changed\n\n- `web/lib/memba/messaging/projections/email_delivery.ex`\n- `web/test/support/messaging/email_delivery_providers/selective_failure.ex`\n- `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`\n\n## Tests / checks run\n\n- `cd web && mix format --check-formatted ...` — passed for changed files.\n- Initial direct `mix test ...` attempt failed because Postgres was not running when bypassing the repo `dev` helper.\n- `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed.\n  - 822 tests, 0 failures.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed.\n  - 822 ExUnit tests, 0 failures.\n  - 82 acceptance scenarios, 493 steps, all passed.\n\n## Remaining gaps / human questions\n\nNone for the selected repair issues.\n\nThe existing untracked `.fabro/tmp/` workflow artifacts remain untouched.",
+              "last_stage": "apply_review_fixes",
+              "last_response": "Implemented the selected bounded review repairs for iteration 038. No acceptance feature files were edited.\n\n## Issue-to-fix mapping\n\n| Review issue | Resolution | Files/modules/tests |\n|---|---|---|\n"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 372787,
+                    "output_tokens": 6333,
+                    "reasoning_tokens": 5137,
+                    "cache_read_tokens": 2477568,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3446819
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 329837,
+              "tool_time_ms": 507245,
+              "active_time_ms": 837082
+            }
+          }
+        },
+        "next_node_id": "dev_check",
+        "git_commit_sha": "60fe2f368eaf1cba7d8b0cc82e730d8e8489a82d",
+        "loop_failure_signatures": {
+          "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced": 1
+        },
+        "node_visits": {
+          "verify_review_repair": 1,
+          "preflight_sandbox": 1,
+          "gemini_review": 1,
+          "snapshot_before_review_repair": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "read_plan": 1,
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
+          "apply_review_fixes": 1,
+          "start": 1,
+          "review_gate": 1,
+          "synthesize_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 3,
+          "additions": 81,
+          "deletions": 4
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T07:41:45.330156179Z",
+        "current_node": "dev_check",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "internal.work_dir": "/workspace/memba",
           "thread.codex_review.current_node": "gemini_review",
@@ -3795,6 +4239,7 @@
           "response.gemini_review": "# Iteration 038 Review: Email Delivery Handoff Boundary\n\n- **Decision:** ACCEPT\n- **Confidence:** High\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. **None found.**\n\nThe implementation appears to conform to the binding architectural direction for the asynchronous email delivery handoff boundary:\n\n- `send_club_message/2` is decoupled from provider availability.\n- `EmailDelivery` now models the async lifecycle using `pending`, `dispatching`, `sent`, and `failed`, while preserving existing provider/webhook statuses.\n- Dispatch is handled by a supervised `EmailDeliveryDispatcher`.\n- The dispatcher is nudged by read-model-change PubSub instead of bypassing the event/projection flow.\n- Manual/internal retry exists without adding out-of-scope automatic retry, startup sweep, periodic sweep, or staff retry UI.\n- CQRS/event-sourcing boundaries remain intact: commands/events establish the domain fact, projections maintain read-model delivery records, and infrastructure dispatch happens asynchronously from the read model.\n\n## Blocking issues\n\n1. **None.**\n\nThe implementation passed `dev ci`, the plan-conformance gate had already succeeded, and I do not see an ADR conflict or a missing central acceptance criterion that should block merge.\n\n## Bounded-safe fixes\n\n1. **Clarify `attempt_count` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, related tests/migration docs if present.\n\n   The field appears to increment for more than one lifecycle concern, including failed provider dispatch and manual retry reset. That makes `attempt_count` ambiguous if future maintainers or operator tooling interpret it as “number of provider send attempts.”\n\n   This is not currently blocking, but it is a maintainability risk because delivery diagnostics are now operationally meaningful.\n\n2. **Clarify `dispatched_at` semantics**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   If `dispatched_at` is set after both successful and failed provider calls, it means “last dispatch attempt time,” not necessarily “successfully dispatched at.” The name is understandable in this iteration, but it could mislead future UI or reporting work.\n\n3. **Add a database-level check constraint for `email_deliveries.status`**\n\n   **Files:** migration touching `email_deliveries`.\n\n   The schema-level enum validation is good, and the plan allowed constraints “where practical.” A database check constraint would make the expanded status vocabulary more durable against future raw SQL, data repair scripts, or migrations.\n\n   The allowed set should include both the new handoff statuses and preserved webhook/provider statuses, for example:\n\n   - `pending`\n   - `dispatching`\n   - `sent`\n   - `failed`\n   - `delivered`\n   - `bounced`\n   - `complained`\n   - `opened`\n\n4. **Clean up the `SelectiveFailure` test provider naming seam**\n\n   **File:** `web/test/support/messaging/email_delivery_providers/selective_failure.ex`.\n\n   `start_link/1` accepts a `:name` option, but the helper functions call `Agent` using `__MODULE__` directly. That makes the option misleading.\n\n   Since this is test support only, either remove the `:name` option or consistently pass/use the configured name.\n\n5. **Add one focused inbound async-dispatch regression test if not already present**\n\n   **Files:** messaging/dispatcher integration tests.\n\n   Acceptance coverage is green, and the plan-conformance workflow passed. Still, a narrow test proving that accepted inbound club messages create pending `EmailDelivery` records and dispatch through the same dispatcher path would make this important architectural coupling explicit.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Single-threaded dispatcher throughput**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher appears to claim and deliver records serially from one GenServer.\n\n   **Why it may need human judgement:** This is simple and safe for the first asynchronous handoff iteration. However, provider latency or higher delivery volume could cause dispatch work to accumulate behind the GenServer. A future hardening pass may need bounded concurrency, partitioning, or a durable job system. That is an operational/product trade-off, not a merge blocker.\n\n2. **No startup or periodic sweep**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** Pending deliveries created while the app is down, missed PubSub nudges, or records stuck in `dispatching` after a crash are not automatically recovered.\n\n   **Why it may need human judgement:** The iteration plan explicitly deferred startup sweeps, periodic sweeps, and automatic retry. This is acceptable for the slice, but it remains an operational gap that should be revisited once real delivery volume and support expectations are clearer.\n\n3. **Crash window after provider acceptance**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`, `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** If the provider accepts the email and the app crashes before the record is marked `sent`, the read model may remain `dispatching`.\n\n   **Why it may need human judgement:** The plan explicitly accepted best-effort duplicate prevention for this iteration. Future work may need provider-level idempotency keys using `delivery_id`, reconciliation tooling, or a more durable outbox/job boundary.\n\n4. **One `status` field now represents both local handoff lifecycle and provider/webhook lifecycle**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`.\n\n   **Smell:** `pending`/`dispatching`/`failed` are local dispatch states, while statuses such as `delivered`, `bounced`, `complained`, and `opened` are provider/webhook outcomes.\n\n   **Why it may need human judgement:** This is plan-aligned and likely appropriate for now because the existing `EmailDelivery` read model was intentionally reused. If staff/operator views, webhook processing, or retry policy become more sophisticated, separating local dispatch status from provider delivery status may become clearer.\n\n5. **Dispatcher responsibility may grow over time**\n\n   **Files:** `lib/memba/messaging/email_delivery_dispatcher.ex`.\n\n   **Smell:** The dispatcher coordinates PubSub nudges, record claiming, request construction, provider calls, result handling, error normalization, and read-model updates.\n\n   **Why it may need human judgement:** Centralizing this flow keeps the new boundary discoverable. If provider-specific behaviour, retry policy, telemetry, or error classification grows, request-building and result-normalization collaborators may help keep the GenServer orchestration-focused.\n\n6. **Provider error vocabulary is still informal**\n\n   **Files:** `lib/memba/messaging/projections/email_delivery.ex`, provider adapters/test providers.\n\n   **Smell:** Persisted `latest_error` and `latest_error_detail` are useful, but provider errors can have inconsistent shapes.\n\n   **Why it may need human judgement:** The current implementation appears sufficient for fake/local/Postmark/Resend seams. If more provider errors become operator-facing, the project may want a small normalized error struct or vocabulary instead of persisting loosely classified inspected terms.\n\n## Suggested fixes\n\nFor a follow-up polish commit or small cleanup iteration:\n\n1. Add comments or schema documentation for:\n   - `attempt_count`\n   - `dispatched_at`\n\n   Or, if the team wants stronger semantics, rename/split them before staff tooling depends on them.\n\n2. Add a migration with a check constraint for `email_deliveries.status`, preserving both dispatch lifecycle statuses and existing webhook/provider statuses.\n\n3. Simplify `SelectiveFailure` test provider naming:\n   - remove the unused `:name` option, or\n   - update all helper functions to support named Agent instances consistently.\n\n4. Add a narrow regression test for inbound club-message delivery through the same pending/read-model/dispatcher path.\n\n## Validation notes\n\n- `dev ci` passed before review.\n- Full acceptance suite passed:\n  - 82 scenarios\n  - 493 steps\n- Review started from a clean working tree.\n- No files were edited during this review.\n- Evidence indicates the implementation includes:\n  - pending `EmailDelivery` creation,\n  - supervised dispatcher wiring,\n  - PubSub read-model-change nudges,\n  - pending-to-dispatching claim logic,\n  - sent/failed status updates,\n  - persisted diagnostics on failure,\n  - manual retry,\n  - async decoupling from `send_club_message/2`,\n  - continued browser-composed and inbound club-message delivery paths.",
           "internal.run_id": "01KVMFZEVZ364HZWX0GEJ05ZTG",
           "thread.synthesize_review.current_node": "review_gate",
+          "thread.verify_review_repair.current_node": "dev_check",
           "review_fixes_available": true,
           "thread.apply_review_fixes.current_node": "verify_review_repair",
           "internal.retry_count.read_plan": 0,
@@ -3808,12 +4253,12 @@
           "internal.retry_count.start": 0,
           "internal.retry_count.claude_review": 0,
           "internal.retry_count.dev_check": 0,
-          "failure_signature": "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced",
-          "internal.thread_id": "apply_review_fixes",
+          "failure_signature": "",
+          "internal.thread_id": "verify_review_repair",
           "internal.retry_count.gemini_review": 0,
           "internal.retry_count.synthesize_review": 0,
           "internal.retry_count.review_gate": 0,
-          "current_node": "verify_review_repair",
+          "current_node": "dev_check",
           "thread.read_plan.current_node": "preflight_sandbox",
           "thread.collect_implementation_evidence.current_node": "claude_review",
           "graph.rankdir": "LR",
@@ -3852,14 +4297,14 @@
           ],
           "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "internal.node_visit_count": 1,
+          "internal.node_visit_count": 2,
           "internal.retry_count.verify_review_repair": 0,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "last_stage": "apply_review_fixes",
           "thread.gemini_review.current_node": "synthesize_review",
-          "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910",
-          "failure_class": "deterministic",
-          "outcome": "failed",
+          "command.output": "blob://sha256/5e517f0b91abd800fc05055904e72fdae10456db95a164589068a5390ec335d2",
+          "failure_class": "",
+          "outcome": "succeeded",
           "internal.fidelity": "summary:high",
           "thread.start.current_node": "read_plan",
           "internal.retry_count.preflight_sandbox": 0
@@ -3906,15 +4351,15 @@
           "dev_check": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/52014610f809529c42110fa5fd60fb193e9f3c86b71f2ce422b80fd159742a86"
+              "command.output": "blob://sha256/5e517f0b91abd800fc05055904e72fdae10456db95a164589068a5390ec335d2"
             },
             "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 369407,
-              "active_time_ms": 369407
+              "tool_time_ms": 345836,
+              "active_time_ms": 345836
             }
           },
           "start": {
@@ -4176,10 +4621,10 @@
             }
           }
         },
-        "next_node_id": "dev_check",
+        "next_node_id": "collect_implementation_evidence",
         "node_visits": {
           "codex_review": 1,
-          "dev_check": 1,
+          "dev_check": 2,
           "preflight_sandbox": 1,
           "snapshot_before_review_repair": 1,
           "verify_review_repair": 1,
@@ -4856,7 +5301,12 @@
       "first_event_seq": 342,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+        "timestamp": "2026-06-21T07:35:56.283013791Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -4864,11 +5314,27 @@
         "command": "exec 2>&1\nset -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910",
+        "exit_code": 1,
+        "duration_ms": 156,
+        "termination": "exited",
+        "output_bytes": 373,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 373,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-21T07:35:56.115485483Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 166,
+        "inference_time_ms": 0,
+        "tool_time_ms": 156,
+        "active_time_ms": 156
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -4877,7 +5343,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "failed"
     },
     "codex_review@1": {
       "first_event_seq": 75,
@@ -4971,6 +5437,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "dev_check@2": {
+      "first_event_seq": 352,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PATH=\"$PWD/bin:$PATH\" dev ci",
+        "command": "exec 2>&1\nPATH=\"$PWD/bin:$PATH\" dev ci",
+        "language": "shell",
+        "timeout_ms": 1800000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T07:35:59.473394528Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     }
   }
 }
