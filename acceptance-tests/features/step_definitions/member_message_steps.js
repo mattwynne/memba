@@ -200,6 +200,14 @@ When("{word} replies by email to {string} with:", async function (senderName, su
 });
 
 When(
+  /^(\w+) replies by email to "([^"]+)" through ([^\s]+)$/,
+  async function (senderName, subject, toAddress) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmailReply(this, senderName, subject, `${subject} details.`, { toAddress });
+  }
+);
+
+When(
   /^(\w+) emails "([^"]+)" to ([^\s]+) with reply headers from "([^"]+)"$/,
   async function (senderName, subject, toAddress, referencedSubject) {
     await prepareInboundClubEmailRouting(this, toAddress);
@@ -698,7 +706,9 @@ async function ensureKootenayMember(world, personName) {
 }
 
 async function prepareInboundClubEmailRouting(world, toAddress) {
-  await withStaffHarness(world, (staff) =>
-    ensureClubSlugMatchesInboundAddress(staff, kootenayClubName, toAddress)
-  );
+  if (String(toAddress || "").toLowerCase().includes("@unknown.")) {
+    return;
+  }
+
+  await withStaffHarness(world, (staff) => ensureClubSlugMatchesInboundAddress(staff, kootenayClubName, toAddress));
 }

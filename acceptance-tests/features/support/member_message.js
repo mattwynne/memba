@@ -17,6 +17,16 @@ function clubSiteBaseDomain() {
   return process.env.MEMBA_CLUB_SITE_BASE_DOMAIN || "lvh.me";
 }
 
+function clubInboundEmailDomain() {
+  return process.env.MEMBA_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io";
+}
+
+function clubEveryoneAddress(club) {
+  assert.ok(club && club.slug, "Expected club to have a slug for club inbound email address generation");
+
+  return `everyone@${club.slug}.${clubInboundEmailDomain()}`;
+}
+
 function clubSiteUrl(baseUrl, club, path = "/") {
   assert.ok(club && club.slug, "Expected club to have a slug for club-site URL generation");
 
@@ -783,7 +793,7 @@ async function ensureClubSlugMatchesInboundAddress(
   ensureState(world);
 
   const slug = slugFromInboundAddress(inboundAddress);
-  assert.ok(slug, `Expected inbound address ${JSON.stringify(inboundAddress)} to include a local-part slug`);
+  assert.ok(slug, `Expected inbound address ${JSON.stringify(inboundAddress)} to include a club slug`);
 
   return updateClubSlug(world, clubName, slug, { expect, timeoutMs });
 }
@@ -1154,7 +1164,7 @@ async function sendInboundClubEmailReply(
   senderName,
   subject,
   body,
-  { expect = playwrightExpect } = {}
+  { expect = playwrightExpect, toAddress } = {}
 ) {
   ensureState(world);
 
@@ -1168,7 +1178,7 @@ async function sendInboundClubEmailReply(
   const providerMessageId = `acceptance-reply-${randomUUID()}`;
   const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
-  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, `${club.slug}@clubs.memba.io`, {
+  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, toAddress || clubEveryoneAddress(club), {
     expect,
     headers: { "In-Reply-To": outboundMessageId },
     providerMessageId,
@@ -3258,7 +3268,15 @@ function memberNamesForClub(world, clubName) {
 }
 
 function slugFromInboundAddress(inboundAddress) {
-  const match = String(inboundAddress || "").match(/<?([^<>\s@]+)@[^<>\s@]+>?/);
+  const address = String(inboundAddress || "").toLowerCase();
+  const domain = clubInboundEmailDomain().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const subdomainMatch = address.match(new RegExp(`^[^<>\\s@]+@([^<>\\s@.]+)\\.${domain}$`));
+
+  if (subdomainMatch) {
+    return subdomainMatch[1];
+  }
+
+  const match = address.match(/^<?([^<>\s@]+)@[^<>\s@]+>?$/);
 
   return match && match[1];
 }
