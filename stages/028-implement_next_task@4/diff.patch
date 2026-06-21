@@ -1,0 +1,78 @@
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index 35b3542..813a5db 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current inbound address helper, destination resolver, Postmark/Resend inbound parsers, member dashboard/compose display, reply email generation from iteration 041, production smoke-test config, and Postmark docs.
+ - [x] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
+ - [x] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
+-- [ ] 004 Accept only `local_part == "everyone"` for now.
++- [x] 004 Accept only `local_part == "everyone"` for now.
+ - [ ] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
+ - [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
+ - [ ] 007 Update member dashboard and member compose copy/mailto links to display the new address.
+diff --git a/web/lib/memba/messaging/inbound_club_destination.ex b/web/lib/memba/messaging/inbound_club_destination.ex
+index 9a8e616..60b93b1 100644
+--- a/web/lib/memba/messaging/inbound_club_destination.ex
++++ b/web/lib/memba/messaging/inbound_club_destination.ex
+@@ -29,10 +29,10 @@ defmodule Memba.Messaging.InboundClubDestination do
+   @doc """
+   Resolve recipient addresses to the destination club for an inbound email.
+ 
+-  Returns `{:ok, destination}` when any recipient address uses a club subdomain
+-  under the configured inbound domain and the subdomain matches an existing club
+-  slug. Unrelated copied recipients are ignored once a supported club destination
+-  is found.
++  Returns `{:ok, destination}` when any recipient address uses the supported
++  `everyone` local part at a club subdomain under the configured inbound domain
++  and the subdomain matches an existing club slug. Unrelated copied recipients
++  are ignored once a supported club destination is found.
+ 
+   Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is
+   present but no matching club exists, or
+@@ -83,12 +83,22 @@ defmodule Memba.Messaging.InboundClubDestination do
+ 
+   defp resolve_club_slug(local_part, host) do
+     case club_slug_from_subdomain_host(host) do
+-      {:ok, slug} -> {:ok, slug}
+-      {:error, :not_club_subdomain_host} -> club_slug_from_flat_address(local_part, host)
+-      {:error, _reason} = error -> error
++      {:ok, slug} ->
++        with :ok <- ensure_supported_local_part(local_part) do
++          {:ok, slug}
++        end
++
++      {:error, :not_club_subdomain_host} ->
++        club_slug_from_flat_address(local_part, host)
++
++      {:error, _reason} = error ->
++        error
+     end
+   end
+ 
++  defp ensure_supported_local_part("everyone"), do: :ok
++  defp ensure_supported_local_part(_local_part), do: {:error, :unsupported_local_part}
++
+   defp club_slug_from_subdomain_host(host) do
+     inbound_domain = ClubInboundEmailAddress.domain()
+     subdomain_suffix = "." <> inbound_domain
+diff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs
+index fbd6ec4..3019b71 100644
+--- a/web/test/memba/messaging/inbound_club_destination_test.exs
++++ b/web/test/memba/messaging/inbound_club_destination_test.exs
+@@ -58,6 +58,15 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+       end)
+     end
+ 
++    test "rejects unsupported local parts at a known club subdomain" do
++      insert_membership_club!(slug: "kmc")
++
++      assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
++               Messaging.resolve_inbound_club_email_destination([
++                 "committee@kmc.clubs.memba.io"
++               ])
++    end
++
+     test "rejects recipient addresses outside the inbound club domain" do
+       insert_membership_club!(slug: "kmc")
+ 
