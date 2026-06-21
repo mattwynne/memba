@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T21:26:59.405446688Z",
-  "last_event_at": "2026-06-21T22:25:38.224296765Z",
+  "last_event_at": "2026-06-21T22:26:05.968987645Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -12715,9 +12715,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1874,
       "checkpoint": {
-        "timestamp": "2026-06-21T22:26:02.257040017Z",
+        "timestamp": "2026-06-21T22:26:05.933142370Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -12765,6 +12765,344 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.thread_id": "all_tasks_done",
+          "internal.retry_count.reset_task_attempt": 0,
+          "thread.task_gate.current_node": "sync_task_list",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "failure_class": "",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `ac26e97` is the implementation checkpoint.\n  - Its parent had task `005` as the first unchecked task.\n  - `ac26e97` changed exactly one ordinary todo line:\n    - `- [ ] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n    - to `- [x] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n\n- Implementation artifacts found:\n  - `ac26e97` updated `web/test/memba/messaging/inbound_club_destination_test.exs`.\n  - Added regression coverage proving `everyone@kmc-alpine.clubs.memba.io` resolves via the extracted subdomain slug `kmc-alpine`.\n  - Added negative coverage proving `everyone@kmc.clubs.memba.io` does not resolve when only `kmc-alpine` exists.\n  - Current resolver code uses `Memba.Membership.get_club_by_slug/1` at the public Membership boundary.\n  - No acceptance `*.feature` files were edited.\n\n- Tests run/results found:\n  - Implementor reported formatting and focused resolver tests passing.\n  - I reran the focused test:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'cd web && mix test test/memba/messaging/inbound_club_destination_test.exs'`\n    - Result: `8 tests, 0 failures`.\n\n- ADR/plan conformance notes:\n  - Task `005` is the planned next slice and stands independently as a focused regression checkpoint.\n  - ADR 0007 is respected: Messaging depends on Membership through the public query API, not Membership projection storage.\n  - ADR 0016 is unaffected: no provider-specific parser boundary was changed.\n  - ADR 0019 is unaffected: no club-site domain routing configuration was changed.\n  - Remaining rejection/display/reply/docs/smoke-test work stays queued in later unchecked tasks; this task did not delete or weaken plan-required work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "graph.default_fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the exi",
+          "outcome": "succeeded",
+          "command.output": "blob://sha256/91cc86d0c8cf96549055743f13dcf7298e6f6392804432f1e383189e0f0b6e05",
+          "internal.retry_count.task_gate": 0,
+          "last_stage": "implement_next_task",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.fidelity": "summary:high",
+          "internal.run_id": "01KVP176J15P7MMCNB6PDVHPZA",
+          "graph.rankdir": "LR",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n\n2. **Changes made**\n   - Updated `web/lib/memba/messaging/inbound_club_destination.ex`\n     - Removed fallback support for the old flat `kmc@clubs.memba.io` shape.\n     - Non-subdomain recipients now resolve as `:unsupported_recipient_address`.\n     - `everyone@unknown.clubs.memba.io` still resolves through the unknown-club rejection path.\n   - Updated/added tests in:\n     - `web/test/memba/messaging/inbound_club_destination_test.exs`\n       - Added explicit regression coverage that `kmc@clubs.memba.io` is rejected even when `kmc` exists.\n     - `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`\n       - Added end-to-end rejection-path coverage for:\n         - unsupported local part: `committee@kmc.clubs.memba.io`\n         - unsupported domain: `everyone@example.org`\n         - old flat address: `kmc@clubs.memba.io`\n         - unknown club subdomain: `everyone@unknown.clubs.memba.io`\n       - Updated existing inbound acceptance/rejection examples in that file to use `everyone@kmc.clubs.memba.io`.\n     - `web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n     - `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n       - Updated controller-level accepted/rejected webhook payloads to route through the new address shape so selected-task hard cutover does not break those focused tests.\n\n3. **Focused validation**\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/messaging/inbound_club_destination.ex test/memba/messaging/inbound_club_destination_test.exs test/memba/messaging/inbound_club_message_acceptance_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n     - Passed.\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 bin/mix test test/memba/messaging/inbound_club_destination_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Passed: `27 tests, 0 failures`.\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 bin/mix test test/memba/messaging/inbound_club_message_acceptance_test.exs`\n     - Passed: `22 tests, 0 failures`.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 dev check --quick`\n     - Ran, but output still reports 2 failures in domain Cucumber selection/step support around new-address acceptance scenarios. I am **not** reporting dev check as passing; that remaining work maps to later todo `010`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n   - To:\n     - `- [x] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0007 preserved: Messaging continues resolving clubs through Membership’s public slug lookup boundary, not Membership projection internals.\n   - ADR 0016 preserved: provider-specific Postmark/Resend controller tests continue feeding provider-neutral inbound email handling; no provider boundary or HTTP client was changed.\n   - ADR 0021 unaffected: no projection-publishing or read-model notification behavior was changed.",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "graph.max_node_visits": "80",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.reset_task_attempt.current_node": "implement_next_task",
+          "failure_signature": "",
+          "task_retry_available": false,
+          "internal.retry_count.validate_task": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.node_visit_count": 6,
+          "current_node": "implement_next_task",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "task_valid": true,
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.validate_task.current_node": "task_gate"
+        },
+        "node_outcomes": {
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `ac26e97` is the implementation checkpoint.\n  - Its parent had task `005` as the first unchecked task.\n  - `ac26e97` changed exactly one ordinary todo line:\n    - `- [ ] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n    - to `- [x] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n\n- Implementation artifacts found:\n  - `ac26e97` updated `web/test/memba/messaging/inbound_club_destination_test.exs`.\n  - Added regression coverage proving `everyone@kmc-alpine.clubs.memba.io` resolves via the extracted subdomain slug `kmc-alpine`.\n  - Added negative coverage proving `everyone@kmc.clubs.memba.io` does not resolve when only `kmc-alpine` exists.\n  - Current resolver code uses `Memba.Membership.get_club_by_slug/1` at the public Membership boundary.\n  - No acceptance `*.feature` files were edited.\n\n- Tests run/results found:\n  - Implementor reported formatting and focused resolver tests passing.\n  - I reran the focused test:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'cd web && mix test test/memba/messaging/inbound_club_destination_test.exs'`\n    - Result: `8 tests, 0 failures`.\n\n- ADR/plan conformance notes:\n  - Task `005` is the planned next slice and stands independently as a focused regression checkpoint.\n  - ADR 0007 is respected: Messaging depends on Membership through the public query API, not Membership projection storage.\n  - ADR 0016 is unaffected: no provider-specific parser boundary was changed.\n  - ADR 0019 is unaffected: no club-site domain routing configuration was changed.\n  - Remaining rejection/display/reply/docs/smoke-test work stays queued in later unchecked tasks; this task did not delete or weaken plan-required work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `ac26e97` is the impleme"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 203806,
+                    "output_tokens": 1898,
+                    "reasoning_tokens": 977,
+                    "cache_read_tokens": 203264,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1206912
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 78095,
+              "tool_time_ms": 7385,
+              "active_time_ms": 85480
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6bc3ab1283527a001c03470b925c4d3a2f89e2d73f1f2250cae0dc3ea6c2c2e9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 187,
+              "active_time_ms": 187
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1415fb48e087266a36a2873503ae48825f6bc0016f965f3fcb19fb93c837764c"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 275,
+              "active_time_ms": 275
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3bec8ba70c30cd514f494cd85d99633b46c265bd47c293c6c0f82a10bbeb4d7b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1832,
+              "active_time_ms": 1832
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1029146f423cf38a6e172d648bae0f128628324a45a5abe1c6044aa772c678b4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/91cc86d0c8cf96549055743f13dcf7298e6f6392804432f1e383189e0f0b6e05"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 208,
+              "active_time_ms": 208
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/07da16804a21fc9890597a039c36238fdcff8835254e0f903d3bd5edd6d7c151"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 144062,
+              "active_time_ms": 144062
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cfb234cee869d2178cbc9e3c1fa5f1089a24eaac2ed0603d8d1104f885644fa9"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 309,
+              "active_time_ms": 309
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ff530e51a24c5dcdb32c8e9162f6ca78fab9052063603ed1117c13bc73fbf29f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 193,
+              "active_time_ms": 193
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the exi",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n\n2. **Changes made**\n   - Updated `web/lib/memba/messaging/inbound_club_destination.ex`\n     - Removed fallback support for the old flat `kmc@clubs.memba.io` shape.\n     - Non-subdomain recipients now resolve as `:unsupported_recipient_address`.\n     - `everyone@unknown.clubs.memba.io` still resolves through the unknown-club rejection path.\n   - Updated/added tests in:\n     - `web/test/memba/messaging/inbound_club_destination_test.exs`\n       - Added explicit regression coverage that `kmc@clubs.memba.io` is rejected even when `kmc` exists.\n     - `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`\n       - Added end-to-end rejection-path coverage for:\n         - unsupported local part: `committee@kmc.clubs.memba.io`\n         - unsupported domain: `everyone@example.org`\n         - old flat address: `kmc@clubs.memba.io`\n         - unknown club subdomain: `everyone@unknown.clubs.memba.io`\n       - Updated existing inbound acceptance/rejection examples in that file to use `everyone@kmc.clubs.memba.io`.\n     - `web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n     - `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n       - Updated controller-level accepted/rejected webhook payloads to route through the new address shape so selected-task hard cutover does not break those focused tests.\n\n3. **Focused validation**\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/messaging/inbound_club_destination.ex test/memba/messaging/inbound_club_destination_test.exs test/memba/messaging/inbound_club_message_acceptance_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n     - Passed.\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 bin/mix test test/memba/messaging/inbound_club_destination_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Passed: `27 tests, 0 failures`.\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 bin/mix test test/memba/messaging/inbound_club_message_acceptance_test.exs`\n     - Passed: `22 tests, 0 failures`.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH:$PWD/.devenv/profile/bin\" PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 dev check --quick`\n     - Ran, but output still reports 2 failures in domain Cucumber selection/step support around new-address acceptance scenarios. I am **not** reporting dev check as passing; that remaining work maps to later todo `010`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n   - To:\n     - `- [x] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0007 preserved: Messaging continues resolving clubs through Membership’s public slug lookup boundary, not Membership projection internals.\n   - ADR 0016 preserved: provider-specific Postmark/Resend controller tests continue feeding provider-neutral inbound email handling; no provider boundary or HTTP client was changed.\n   - ADR 0021 unaffected: no projection-publishing or read-model notification behavior was changed.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1293218,
+                    "output_tokens": 13553,
+                    "reasoning_tokens": 8795,
+                    "cache_read_tokens": 8244736,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 11258898
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 697480,
+              "tool_time_ms": 201474,
+              "active_time_ms": 898954
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/94088a950378b39f5224d85c78281f63fe1248decd63fc341ff4f5840f72fe6c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 203,
+              "active_time_ms": 203
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "f31dbd5d4487cc0d7e4d8f45fcec68484ddd232c",
+        "node_visits": {
+          "read_plan": 1,
+          "all_tasks_done": 5,
+          "start": 1,
+          "validate_task": 5,
+          "resume_gate": 1,
+          "reset_task_attempt": 1,
+          "pre_validate_snapshot": 5,
+          "implement_next_task": 6,
+          "preflight_sandbox": 1,
+          "todo_readable": 5,
+          "wip_gate": 1,
+          "sync_task_list": 5,
+          "task_gate": 5
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md\nindex 5b633fb..ab923af 100644\n--- a/docs/iterations/042-club-email-subdomains/todo.md\n+++ b/docs/iterations/042-club-email-subdomains/todo.md\n@@ -5,7 +5,7 @@\n - [x] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.\n - [x] 004 Accept only `local_part == \"everyone\"` for now.\n - [x] 005 Resolve `<club-slug>` through the existing Membership slug lookup.\n-- [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.\n+- [x] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.\n - [ ] 007 Update member dashboard and member compose copy/mailto links to display the new address.\n - [ ] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.\n - [ ] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.\ndiff --git a/web/lib/memba/messaging/inbound_club_destination.ex b/web/lib/memba/messaging/inbound_club_destination.ex\nindex 60b93b1..a6a5326 100644\n--- a/web/lib/memba/messaging/inbound_club_destination.ex\n+++ b/web/lib/memba/messaging/inbound_club_destination.ex\n@@ -34,8 +34,8 @@ defmodule Memba.Messaging.InboundClubDestination do\n   and the subdomain matches an existing club slug. Unrelated copied recipients\n   are ignored once a supported club destination is found.\n \n-  Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is\n-  present but no matching club exists, or\n+  Returns `{:error, :unknown_club_slug, to_address}` when a supported subdomain\n+  address is present but no matching club exists, or\n   `{:error, :unsupported_recipient_address, address_or_nil}` when no supported\n   whole-club address shape is present.\n   \"\"\"\n@@ -89,7 +89,7 @@ defmodule Memba.Messaging.InboundClubDestination do\n         end\n \n       {:error, :not_club_subdomain_host} ->\n-        club_slug_from_flat_address(local_part, host)\n+        {:error, :unsupported_recipient_address}\n \n       {:error, _reason} = error ->\n         error\n@@ -117,13 +117,6 @@ defmodule Memba.Messaging.InboundClubDestination do\n     end\n   end\n \n-  defp club_slug_from_flat_address(local_part, host) do\n-    with true <- host == ClubInboundEmailAddress.domain(),\n-         {:ok, slug} <- Slug.normalize_for_lookup(local_part) do\n-      {:ok, slug}\n-    end\n-  end\n-\n   defp unsupported_candidate(address) do\n     case normalize_address(address) do\n       {:ok, normalized_address} -> {:unsupported, normalized_address}\ndiff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs\nindex 48aa79a..d0b030d 100644\n--- a/web/test/memba/messaging/inbound_club_destination_test.exs\n+++ b/web/test/memba/messaging/inbound_club_destination_test.exs\n@@ -105,6 +105,13 @@ defmodule Memba.Messaging.InboundClubDestinationTest do\n                ])\n     end\n \n+    test \"rejects the old flat club address shape even when the club exists\" do\n+      insert_membership_club!(slug: \"kmc\")\n+\n+      assert {:error, :unsupported_recipient_address, \"kmc@clubs.memba.io\"} ==\n+               Messaging.resolve_inbound_club_email_destination([\"kmc@clubs.memba.io\"])\n+    end\n+\n     test \"rejects malformed or missing recipient input as unsupported\" do\n       assert {:error, :unsupported_recipient_address, nil} ==\n                Messaging.resolve_inbound_club_email_destination([])\ndiff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex 8ec7dcd..a207d5f 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -62,7 +62,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               club_id: kmc_id,\n               sender_id: alice_id,\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -70,7 +70,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-011-email\",\n                  provider_event_id: \"task-011-event\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Bring route ideas.\"\n                },\n@@ -165,7 +165,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider_message_id: \"task-011-email\",\n              provider_event_id: \"task-011-event\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"accepted\",\n              club_id: ^kmc_id,\n              sender_id: ^alice_id,\n@@ -205,7 +205,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               club_id: kmc_id,\n               sender_id: bob_id,\n               from_address: \"bob@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -213,7 +213,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-041-reply-header-match\",\n                  provider_event_id: \"task-041-reply-header-match-event\",\n                  from_address: \"bob@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Re: Trip planning night\",\n                  text_body: \"\"\"\n                  I can bring maps.\n@@ -267,7 +267,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider_message_id: \"task-041-reply-header-match\",\n              provider_event_id: \"task-041-reply-header-match-event\",\n              from_address: \"bob@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"accepted\",\n              club_id: ^kmc_id,\n              sender_id: ^bob_id,\n@@ -300,7 +300,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               club_id: kmc_id,\n               sender_id: bob_id,\n               from_address: \"bob@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -308,7 +308,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-041-unknown-reply-header-fallback\",\n                  provider_event_id: \"task-041-unknown-reply-header-fallback-event\",\n                  from_address: \"bob@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Re: Trip planning night\",\n                  text_body: \"This should start a separate club-wide thread.\",\n                  in_reply_to_message_ids: [\"<unknown-message@example.test>\"],\n@@ -383,7 +383,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-041-other-club-reply-header-fallback\",\n                  provider_event_id: \"task-041-other-club-reply-header-fallback-event\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Re: Paddle planning\",\n                  text_body: \"This belongs to KMC, not the paddling club.\",\n                  in_reply_to_message_ids: [npc_outbound_message_id]\n@@ -451,7 +451,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"sender_not_active_member\",\n               from_address: \"pat@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -459,7 +459,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-041-reply-header-non-member\",\n                  provider_event_id: \"task-041-reply-header-non-member-event\",\n                  from_address: \"pat@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Re: Trip planning night\",\n                  text_body: \"I should not be able to reply to this conversation.\",\n                  in_reply_to_message_ids: [bob_outbound_message_id]\n@@ -515,7 +515,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"attachments_not_supported\",\n               from_address: \"bob@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -523,7 +523,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-041-reply-header-attachment\",\n                  provider_event_id: \"task-041-reply-header-attachment-event\",\n                  from_address: \"bob@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Re: Trip planning night\",\n                  text_body: \"The GPX is attached.\",\n                  in_reply_to_message_ids: [bob_outbound_message_id],\n@@ -581,7 +581,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-011-async-dispatch\",\n                  provider_event_id: \"task-011-async-dispatch-event\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Dispatch me asynchronously\",\n                  text_body: \"This should be handed off by the dispatcher nudge.\"\n                },\n@@ -643,7 +643,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n       provider_message_id: \"task-012-duplicate-email\",\n       provider_event_id: \"task-012-event-first\",\n       from_address: \"alice@example.com\",\n-      recipient_addresses: [\"kmc@clubs.memba.io\"],\n+      recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n       subject: \"Trip planning night\",\n       text_body: \"Bring route ideas.\"\n     }\n@@ -711,7 +711,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider: \"resend\",\n                  provider_message_id: \"task-013-normalized-body\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"\"\"\n                  Bring route ideas.\n@@ -764,7 +764,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               club_id: kmc_id,\n               sender_id: alice_id,\n               from_address: \"alice.work@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n@@ -772,7 +772,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider_message_id: \"task-020-alternate-sender\",\n                  provider_event_id: \"task-020-alternate-sender-event\",\n                  from_address: \" Alice.Work@Example.COM \",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Alternate sender address\",\n                  text_body: \"Posting from my work address.\"\n                },\n@@ -814,7 +814,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider_message_id: \"task-020-alternate-sender\",\n              provider_event_id: \"task-020-alternate-sender-event\",\n              from_address: \"alice.work@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              club_id: ^kmc_id,\n              sender_id: ^alice_id,\n              message_id: ^message_id\n@@ -833,14 +833,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"plain_text_required\",\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-013-html-only\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"  \\n> quoted prior content only\\n\",\n                  html_body: \"<p>This HTML must not be converted.</p>\"\n@@ -859,7 +859,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider: \"resend\",\n              provider_message_id: \"task-013-html-only\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"plain_text_required\",\n@@ -886,14 +886,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"plain_text_required\",\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-020-blank-plain-text\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \" \\n\\t \"\n                },\n@@ -933,14 +933,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"plain_text_required\",\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-020-html-only\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  html_body: \"<p>This HTML must not be converted to a posted message.</p>\"\n                },\n@@ -980,14 +980,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"attachments_not_supported\",\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-014-attachments\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Bring route ideas.\",\n                  attachments: [\n@@ -1012,7 +1012,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider: \"resend\",\n              provider_message_id: \"task-014-attachments\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"attachments_not_supported\",\n@@ -1036,14 +1036,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"unknown_sender\",\n               from_address: \"unknown@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-015-unknown-sender\",\n                  from_address: \"unknown@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Bring route ideas.\",\n                  original_message_id: \"<original-trip-planning@example.com>\"\n@@ -1062,7 +1062,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              provider: \"resend\",\n              provider_message_id: \"task-015-unknown-sender\",\n              from_address: \"unknown@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"unknown_sender\",\n@@ -1103,14 +1103,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"unknown_sender\",\n               from_address: \"unknown@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"postmark\",\n                  provider_message_id: \"task-020-postmark-selected-rejection\",\n                  from_address: \"unknown@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Can I post through Postmark?\"\n                },\n@@ -1147,7 +1147,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n              \"memba_inbound_id\" => inbound_email_id,\n              \"memba_in_provider\" => \"postmark\",\n              \"memba_in_msg_id\" => \"task-020-postmark-selected-rejection\",\n-             \"memba_in_to\" => \"kmc@clubs.memba.io\",\n+             \"memba_in_to\" => \"everyone@kmc.clubs.memba.io\",\n              \"memba_reject_reason\" => \"unknown_sender\",\n              \"memba_reject_ref\" => rejection_email_delivery_reference\n            }\n@@ -1174,7 +1174,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n                  provider: \"resend\",\n                  provider_message_id: \"1b700cb9-3a48-460d-a2d1-255fe01ed4e2\",\n                  from_address: \"unknown@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Can I post through Resend?\"\n                },\n@@ -1226,14 +1226,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"sender_not_active_member\",\n               from_address: \"pat@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-020-non-member\",\n                  from_address: \"pat@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Can I post to KMC?\"\n                },\n@@ -1274,14 +1274,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"sender_not_active_member\",\n               from_address: \"alice@example.com\",\n-              to_address: \"kmc@clubs.memba.io\"\n+              to_address: \"everyone@kmc.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-020-inactive-member\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"kmc@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Can I post while inactive?\"\n                },\n@@ -1309,7 +1309,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     )\n   end\n \n-  test \"unknown club slug is rejected without creating a club message\" do\n+  test \"unknown club subdomain is rejected without creating a club message\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n \n@@ -1321,14 +1321,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n               status: :rejected,\n               rejection_reason: \"unknown_club_slug\",\n               from_address: \"alice@example.com\",\n-              to_address: \"unknown@clubs.memba.io\"\n+              to_address: \"everyone@unknown.clubs.memba.io\"\n             }} =\n              Messaging.receive_inbound_club_email(\n                %{\n                  provider: \"resend\",\n                  provider_message_id: \"task-020-unknown-club\",\n                  from_address: \"alice@example.com\",\n-                 recipient_addresses: [\"unknown@clubs.memba.io\"],\n+                 recipient_addresses: [\"everyone@unknown.clubs.memba.io\"],\n                  subject: \"Trip planning night\",\n                  text_body: \"Where did this go?\"\n                },\n@@ -1344,7 +1344,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert %InboundEmailSourceProjection{\n              status: \"rejected\",\n              from_address: \"alice@example.com\",\n-             to_address: \"unknown@clubs.memba.io\",\n+             to_address: \"everyone@unknown.clubs.memba.io\",\n              message_id: nil,\n              rejection_reason: \"unknown_club_slug\",\n              rejection_email_delivery_reference: rejection_email_delivery_reference\n@@ -1358,6 +1358,83 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     )\n   end\n \n+  test \"unsupported recipient routes are rejected through the inbound rejection pathway\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+\n+    cases = [\n+      %{\n+        provider_message_id: \"task-042-unsupported-local-part\",\n+        recipient_address: \"committee@kmc.clubs.memba.io\",\n+        rejection_reason: \"unsupported_recipient_address\"\n+      },\n+      %{\n+        provider_message_id: \"task-042-unsupported-domain\",\n+        recipient_address: \"everyone@example.org\",\n+        rejection_reason: \"unsupported_recipient_address\"\n+      },\n+      %{\n+        provider_message_id: \"task-042-old-flat-address\",\n+        recipient_address: \"kmc@clubs.memba.io\",\n+        rejection_reason: \"unsupported_recipient_address\"\n+      },\n+      %{\n+        provider_message_id: \"task-042-unknown-club-subdomain\",\n+        recipient_address: \"everyone@unknown.clubs.memba.io\",\n+        rejection_reason: \"unknown_club_slug\"\n+      }\n+    ]\n+\n+    for %{provider_message_id: provider_message_id} = rejection_case <- cases do\n+      assert {:ok,\n+              %{\n+                inbound_email_id: _inbound_email_id,\n+                status: :rejected,\n+                rejection_reason: rejection_reason,\n+                from_address: \"alice@example.com\",\n+                to_address: recipient_address,\n+                rejection_email_delivery_reference: rejection_email_delivery_reference\n+              }} =\n+               Messaging.receive_inbound_club_email(\n+                 %{\n+                   provider: \"resend\",\n+                   provider_message_id: provider_message_id,\n+                   from_address: \"alice@example.com\",\n+                   recipient_addresses: [rejection_case.recipient_address],\n+                   subject: \"Unsupported recipient #{provider_message_id}\",\n+                   text_body: \"This should not post.\"\n+                 },\n+                 consistency: :strong\n+               )\n+\n+      assert recipient_address == rejection_case.recipient_address\n+      assert rejection_reason == rejection_case.rejection_reason\n+      assert is_binary(rejection_email_delivery_reference)\n+\n+      assert %InboundEmailSourceProjection{\n+               status: \"rejected\",\n+               from_address: \"alice@example.com\",\n+               to_address: ^recipient_address,\n+               message_id: nil,\n+               rejection_reason: ^rejection_reason,\n+               rejection_email_delivery_reference: ^rejection_email_delivery_reference\n+             } = Messaging.get_inbound_email_source(\"resend\", provider_message_id)\n+\n+      assert_rejection_email_received(\n+        to: \"alice@example.com\",\n+        reason: expected_rejection_copy(rejection_reason)\n+      )\n+    end\n+\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n+    assert 0 == count_events(MessageSent)\n+    assert 0 == count_events(InboundClubEmailAccepted)\n+    assert length(cases) == count_events(InboundClubEmailRejected)\n+  end\n+\n   test \"duplicate rejected inbound email does not send another rejection email\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n@@ -1369,7 +1446,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n       provider_message_id: \"task-015-duplicate-rejected\",\n       provider_event_id: \"task-015-event-first\",\n       from_address: \"alice@example.com\",\n-      recipient_addresses: [\"kmc@clubs.memba.io\"],\n+      recipient_addresses: [\"everyone@kmc.clubs.memba.io\"],\n       subject: \"Trip planning night\",\n       text_body: \"Bring route ideas.\",\n       attachments: [%{filename: \"route.gpx\", content_type: \"application/gpx+xml\"}]\n@@ -1554,6 +1631,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     email\n   end\n \n+  defp expected_rejection_copy(\"unknown_club_slug\"),\n+    do: \"We couldn't match the address you used to a Memba group\"\n+\n+  defp expected_rejection_copy(\"unsupported_recipient_address\"),\n+    do: \"That recipient address isn't set up for member messages\"\n+\n   defp support_copy_for(_reason), do: \"Just reply to this email and a person will help.\"\n \n   defp count_events(event_module) when is_atom(event_module) do\ndiff --git a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\nindex ea2f69b..5334854 100644\n--- a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n@@ -38,8 +38,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-accepted\",\n         \"From\" => \"Alice Example <Alice@Example.COM>\",\n         \"FromFull\" => %{\"Email\" => \"Alice@Example.COM\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night\",\n         \"TextBody\" => \"Bring route ideas.\",\n         \"HtmlBody\" => \"<p>Bring route ideas.</p>\",\n@@ -109,8 +109,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-alternate-sender\",\n         \"From\" => \"Alice Work <Alice.Work@Example.COM>\",\n         \"FromFull\" => %{\"Email\" => \"Alice.Work@Example.COM\", \"Name\" => \"Alice Work\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Alternate sender address\",\n         \"TextBody\" => \"Posting from my work address.\"\n       })\n@@ -124,7 +124,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n              provider_message_id: \"postmark-controller-alternate-sender\",\n              status: \"accepted\",\n              from_address: \"alice.work@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              club_id: kmc_id,\n              sender_id: alice_id,\n              message_id: message_id\n@@ -177,8 +177,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-unknown-sender\",\n         \"From\" => \"Mystery Sender <mystery@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"mystery@example.com\", \"Name\" => \"Mystery Sender\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Can I post?\",\n         \"TextBody\" => \"Please post this.\"\n       })\n@@ -194,7 +194,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n              provider_message_id: \"postmark-controller-unknown-sender\",\n              provider_event_id: nil,\n              from_address: \"mystery@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"unknown_sender\",\n@@ -222,8 +222,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-attachment-rejected\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night\",\n         \"TextBody\" => \"See the attached route.\",\n         \"Attachments\" => [\n@@ -246,7 +246,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n              provider: \"postmark\",\n              provider_message_id: \"postmark-controller-attachment-rejected\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"attachments_not_supported\",\n@@ -269,8 +269,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-attachment-rejected\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Retry without attachment\",\n         \"TextBody\" => \"This retry must not send another rejection email.\"\n       })\n@@ -308,8 +308,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-html-only\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night\",\n         \"HtmlBody\" => \"<p>This HTML must not be converted into a club message.</p>\"\n       })\n@@ -325,7 +325,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n              provider: \"postmark\",\n              provider_message_id: \"postmark-controller-html-only\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"plain_text_required\",\n@@ -352,8 +352,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-quoted-only\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night\",\n         \"TextBody\" => \"  \\n> quoted prior content only\\n\",\n         \"HtmlBody\" => \"<p>This HTML must not be converted into a club message.</p>\"\n@@ -369,7 +369,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n              provider: \"postmark\",\n              provider_message_id: \"postmark-controller-quoted-only\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"plain_text_required\",\n@@ -398,8 +398,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-duplicate\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night\",\n         \"TextBody\" => \"Bring route ideas.\"\n       })\n@@ -420,8 +420,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-duplicate\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n         \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n         \"Subject\" => \"Trip planning night retry\",\n         \"TextBody\" => \"This retry must not create another message.\"\n       })\n@@ -476,8 +476,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n         \"MessageID\" => \"postmark-controller-message\",\n         \"MessageStream\" => \"inbound\",\n         \"From\" => \"Alice Example <alice@example.com>\",\n-        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n-        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <everyone@kmc.clubs.memba.io>\",\n+        \"OriginalRecipient\" => \"everyone@kmc.clubs.memba.io\",\n         \"Subject\" => \"Trip planning night\",\n         \"TextBody\" => \"Bring route ideas.\"\n       },\ndiff --git a/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs\nindex 439f10d..0a304f3 100644\n--- a/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs\n@@ -67,7 +67,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_controller_accepted\",\n           \"from\" => \"Alice Example <Alice@Example.COM>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\",\n           \"text\" => \"Bring route ideas.\"\n         }\n@@ -132,7 +132,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_controller_duplicate\",\n           \"from\" => \"Alice Example <alice@example.com>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\",\n           \"text\" => \"Bring route ideas.\"\n         }\n@@ -155,7 +155,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_controller_duplicate\",\n           \"from\" => \"Alice Example <alice@example.com>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night retry\",\n           \"text\" => \"This retry must not create another message.\"\n         }\n@@ -205,7 +205,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_controller_attachment_rejected\",\n           \"from\" => \"Alice Example <alice@example.com>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\",\n           \"text\" => \"See the attached route.\",\n           \"attachments\" => [\n@@ -229,7 +229,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n              provider_message_id: \"email_controller_attachment_rejected\",\n              provider_event_id: \"evt_controller_attachment_rejected\",\n              from_address: \"alice@example.com\",\n-             to_address: \"kmc@clubs.memba.io\",\n+             to_address: \"everyone@kmc.clubs.memba.io\",\n              status: \"rejected\",\n              message_id: nil,\n              rejection_reason: \"attachments_not_supported\",\n@@ -259,7 +259,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_controller_attachment_rejected\",\n           \"from\" => \"Alice Example <alice@example.com>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Retry without attachment\",\n           \"text\" => \"This retry must not send another rejection.\"\n         }\n@@ -332,7 +332,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_fetched_content\",\n           \"from\" => \"Alice Example <Alice@Example.COM>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\"\n         }\n       })\n@@ -362,7 +362,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_no_body\",\n           \"from\" => \"Alice Example <Alice@Example.COM>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\"\n         }\n       })\n@@ -445,7 +445,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do\n         \"data\" => %{\n           \"email_id\" => \"email_123\",\n           \"from\" => \"Alice Example <alice@example.com>\",\n-          \"to\" => [\"KMC <kmc@clubs.memba.io>\"],\n+          \"to\" => [\"KMC <everyone@kmc.clubs.memba.io>\"],\n           \"subject\" => \"Trip planning night\",\n           \"text\" => \"Bring route ideas.\"\n         }\n",
+        "summary": {
+          "files_changed": 14,
+          "additions": 308,
+          "deletions": 124
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T22:26:06.151805280Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `ac26e97` is the implementation checkpoint.\n  - Its parent had task `005` as the first unchecked task.\n  - `ac26e97` changed exactly one ordinary todo line:\n    - `- [ ] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n    - to `- [x] 005 Resolve <club-slug> through the existing Membership slug lookup.`\n\n- Implementation artifacts found:\n  - `ac26e97` updated `web/test/memba/messaging/inbound_club_destination_test.exs`.\n  - Added regression coverage proving `everyone@kmc-alpine.clubs.memba.io` resolves via the extracted subdomain slug `kmc-alpine`.\n  - Added negative coverage proving `everyone@kmc.clubs.memba.io` does not resolve when only `kmc-alpine` exists.\n  - Current resolver code uses `Memba.Membership.get_club_by_slug/1` at the public Membership boundary.\n  - No acceptance `*.feature` files were edited.\n\n- Tests run/results found:\n  - Implementor reported formatting and focused resolver tests passing.\n  - I reran the focused test:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'cd web && mix test test/memba/messaging/inbound_club_destination_test.exs'`\n    - Result: `8 tests, 0 failures`.\n\n- ADR/plan conformance notes:\n  - Task `005` is the planned next slice and stands independently as a focused regression checkpoint.\n  - ADR 0007 is respected: Messaging depends on Membership through the public query API, not Membership projection storage.\n  - ADR 0016 is unaffected: no provider-specific parser boundary was changed.\n  - ADR 0019 is unaffected: no club-site domain routing configuration was changed.\n  - Remaining rejection/display/reply/docs/smoke-test work stays queued in later unchecked tasks; this task did not delete or weaken plan-required work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "outcome": "succeeded",
@@ -12776,7 +13114,7 @@
           "internal.retry_count.wip_gate": 0,
           "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the exi",
           "task_retry_available": false,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.all_tasks_done": 0,
           "internal.run_id": "01KVP176J15P7MMCNB6PDVHPZA",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
@@ -12792,7 +13130,7 @@
           "internal.retry_count.task_gate": 0,
           "failure_signature": "",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.reset_task_attempt": 0,
           "thread.sync_task_list.current_node": "todo_readable",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
@@ -12807,7 +13145,7 @@
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.sync_task_list": 0,
           "internal.retry_count.start": 0,
-          "command.output": "blob://sha256/91cc86d0c8cf96549055743f13dcf7298e6f6392804432f1e383189e0f0b6e05",
+          "command.output": "blob://sha256/22b1b5bc8f1fba24963387ec7a22d4cdad64861f6f4253687d0a6e2334ec7829",
           "internal.fidelity": "summary:high",
           "internal.node_visit_count": 6,
           "last_stage": "implement_next_task",
@@ -12998,15 +13336,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/cfb234cee869d2178cbc9e3c1fa5f1089a24eaac2ed0603d8d1104f885644fa9"
+              "command.output": "blob://sha256/22b1b5bc8f1fba24963387ec7a22d4cdad64861f6f4253687d0a6e2334ec7829"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 309,
-              "active_time_ms": 309
+              "tool_time_ms": 161,
+              "active_time_ms": 161
             }
           },
           "preflight_sandbox": {
@@ -13024,12 +13362,12 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "preflight_sandbox": 1,
           "read_plan": 1,
           "wip_gate": 1,
-          "pre_validate_snapshot": 5,
+          "pre_validate_snapshot": 6,
           "validate_task": 5,
           "all_tasks_done": 5,
           "reset_task_attempt": 1,
@@ -13786,7 +14124,12 @@
       "first_event_seq": 1541,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-21T22:26:02.250345327Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -13800,13 +14143,20 @@
       "output": null,
       "started_at": "2026-06-21T22:11:02.525810993Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 899724,
+        "inference_time_ms": 697480,
+        "tool_time_ms": 201474,
+        "active_time_ms": 898954
+      },
       "usage": {
-        "input_tokens": 1291871,
-        "output_tokens": 12620,
-        "total_tokens": 9411322,
-        "reasoning_tokens": 8527,
-        "cache_read_tokens": 8098304,
-        "cache_write_tokens": 0
+        "input_tokens": 1293218,
+        "output_tokens": 13553,
+        "total_tokens": 9560302,
+        "reasoning_tokens": 8795,
+        "cache_read_tokens": 8244736,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 11258898
       },
       "model": {
         "provider": "openai",
@@ -13981,22 +14331,22 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 147627,
-        "usage_percent": 54.274632352941175,
+        "input_tokens": 147779,
+        "usage_percent": 54.33051470588235,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-21T22:25:38.224054083Z",
-        "event_seq": 1861,
+        "generated_at": "2026-06-21T22:26:02.246556181Z",
+        "event_seq": 1867,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 965,
-            "usage_percent": 0.3547794117647059
+            "tokens": 963,
+            "usage_percent": 0.35404411764705884
           },
           {
             "category": "tools",
-            "tokens": 1369,
-            "usage_percent": 0.5033088235294118
+            "tokens": 1365,
+            "usage_percent": 0.5018382352941176
           },
           {
             "category": "memory",
@@ -14005,18 +14355,18 @@
           },
           {
             "category": "conversation",
-            "tokens": 144920,
-            "usage_percent": 53.279411764705884
+            "tokens": 145079,
+            "usage_percent": 53.33786764705882
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "todo_readable@4": {
       "first_event_seq": 1238,
@@ -15755,6 +16105,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@6": {
+      "first_event_seq": 1877,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/042-club-email-subdomains/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T22:26:05.968062527Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "all_tasks_done@1": {
       "first_event_seq": 85,
