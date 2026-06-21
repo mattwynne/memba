@@ -1,0 +1,1 @@
+{"outcome":"failed","failure_reason":"Previous response used an unsupported outcome enum value. The plan conformance decision was not actually completed in the required report format, so route to bounded plan rework to rerun the conformance gate correctly.","context_updates":{"plan_conformant":false,"plan_rework_available":true}}
