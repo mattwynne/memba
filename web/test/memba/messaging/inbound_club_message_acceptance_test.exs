@@ -8,9 +8,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryProviders.Resend
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
@@ -171,6 +173,73 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              rejection_reason: nil,
              rejection_email_delivery_reference: nil
            } = Messaging.get_inbound_email_source("resend", "task-011-email")
+  end
+
+  test "accepted inbound email is dispatched by the read-model-change dispatcher nudge" do
+    name = :"#{__MODULE__}.inbound_dispatch_nudge"
+
+    start_supervised!(
+      {EmailDeliveryDispatcher, name: name, dispatch_enabled: true, dispatch_observer: self()}
+    )
+
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok, %{message_id: message_id, club_id: kmc_id, sender_id: alice_id}} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-011-async-dispatch",
+                 provider_event_id: "task-011-async-dispatch-event",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Dispatch me asynchronously",
+                 text_body: "This should be handed off by the dispatcher nudge."
+               },
+               consistency: :strong
+             )
+
+    assert kmc_id == kmc.club_id
+    assert alice_id == alice.person_id
+
+    assert_receive {:email_delivery_dispatch_requested,
+                    %{
+                      source: :read_model_change,
+                      projector: EmailDeliveryProjector,
+                      source_event: %EmailDeliveryCreated{
+                        message_id: ^message_id,
+                        delivery_id: delivery_id
+                      },
+                      claimed_delivery_ids: [claimed_delivery_id]
+                    }}
+
+    assert claimed_delivery_id == delivery_id
+
+    assert [
+             %{
+               delivery_id: ^delivery_id,
+               recipient_id: ^alice_id,
+               recipient_address: "alice@example.com",
+               status: "sent",
+               sent_at: %DateTime{}
+             }
+           ] = Messaging.list_recipient_deliveries(message_id)
+
+    assert [
+             %EmailDeliveryRequest{
+               message_id: ^message_id,
+               club_id: ^kmc_id,
+               delivery_id: ^delivery_id,
+               recipient_id: ^alice_id,
+               recipient_address: "alice@example.com",
+               sender_name: "Alice Example",
+               sender_address: "alice@example.com",
+               subject: "Dispatch me asynchronously",
+               body: "This should be handed off by the dispatcher nudge."
+             }
+           ] = Fake.deliveries()
   end
 
   test "duplicate provider message ids return accepted without creating duplicate messages or outbound deliveries" do
