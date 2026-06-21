@@ -1,0 +1,277 @@
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+index 31c365e..de3356d 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Model the conversation/reply in `Memba.Messaging`: decide whether the existing message aggregate is extended to hold replies, or a conversation concept references it; keep it event-sourced and consistent with existing commands/events.
++- [x] 001 Model the conversation/reply in `Memba.Messaging`: decide whether the existing message aggregate is extended to hold replies, or a conversation concept references it; keep it event-sourced and consistent with existing commands/events.
+ - [ ] 002 Add command(s)/event(s) for posting a reply, with authorization that the actor is a current member of the message's club, and non-blank body validation.
+ - [ ] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
+ - [ ] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
+diff --git a/web/lib/memba/messaging/commands/send_message.ex b/web/lib/memba/messaging/commands/send_message.ex
+index 56de978..c6d7868 100644
+--- a/web/lib/memba/messaging/commands/send_message.ex
++++ b/web/lib/memba/messaging/commands/send_message.ex
+@@ -4,8 +4,23 @@ defmodule Memba.Messaging.Commands.SendMessage do
+ 
+   The caller supplies the message aggregate identity as `message_id` and a list
+   of resolved `Memba.Messaging.Recipient` values.
++
++  A message is also the write-model unit for a conversation entry. Root club
++  messages omit `conversation_id`/`reply_to_message_id`; the aggregate records
++  the root's `conversation_id` as its own `message_id`. Replies use their own
++  `message_id`, reference the root via `conversation_id`, and may reference the
++  immediate message being answered via `reply_to_message_id`.
+   """
+ 
+   @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body, :recipients]
+-  defstruct [:message_id, :club_id, :sender_id, :subject, :body, :recipients]
++  defstruct [
++    :message_id,
++    :club_id,
++    :sender_id,
++    :conversation_id,
++    :reply_to_message_id,
++    :subject,
++    :body,
++    :recipients
++  ]
+ end
+diff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex
+index 1892f56..702570b 100644
+--- a/web/lib/memba/messaging/events/message_sent.ex
++++ b/web/lib/memba/messaging/events/message_sent.ex
+@@ -5,5 +5,13 @@ defmodule Memba.Messaging.Events.MessageSent do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body]
+-  defstruct [:message_id, :club_id, :sender_id, :subject, :body]
++  defstruct [
++    :message_id,
++    :club_id,
++    :sender_id,
++    :conversation_id,
++    :reply_to_message_id,
++    :subject,
++    :body
++  ]
+ end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 5ef67fd..fa4e1b0 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -2,8 +2,15 @@ defmodule Memba.Messaging.Message do
+   @moduledoc """
+   Message aggregate for the Messaging bounded context.
+ 
+-  One aggregate represents one club message and owns the per-email delivery
+-  records created for that message.
++  One aggregate represents one conversation entry: either the root club message
++  or a reply message. Each aggregate owns the per-email delivery records created
++  for that message.
++
++  Conversations are modeled without a separate conversation aggregate. The root
++  message records `conversation_id == message_id`; replies use their own
++  `message_id` and point at the root with `conversation_id`, keeping reply
++  delivery receipts in the reply message's stream while leaving a clean key for
++  conversation projections and future follower rules.
+   """
+ 
+   alias Commanded.Aggregates.Aggregate
+@@ -28,6 +35,8 @@ defmodule Memba.Messaging.Message do
+     :message_id,
+     :club_id,
+     :sender_id,
++    :conversation_id,
++    :reply_to_message_id,
+     :subject,
+     :body,
+     delivery_statuses: %{},
+@@ -40,6 +49,12 @@ defmodule Memba.Messaging.Message do
+     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
++         {:ok, conversation_id, reply_to_message_id} <-
++           normalize_conversation_reference(
++             command.message_id,
++             command.conversation_id,
++             command.reply_to_message_id
++           ),
+          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
+          {:ok, body} <- normalize_text(command.body, :invalid_body),
+          {:ok, recipients} <- normalize_recipients(command.recipients),
+@@ -49,6 +64,8 @@ defmodule Memba.Messaging.Message do
+           message_id: command.message_id,
+           club_id: command.club_id,
+           sender_id: command.sender_id,
++          conversation_id: conversation_id,
++          reply_to_message_id: reply_to_message_id,
+           subject: subject,
+           body: body
+         }
+@@ -82,6 +99,8 @@ defmodule Memba.Messaging.Message do
+       | message_id: event.message_id,
+         club_id: event.club_id,
+         sender_id: event.sender_id,
++        conversation_id: event.conversation_id || event.message_id,
++        reply_to_message_id: event.reply_to_message_id,
+         subject: event.subject,
+         body: event.body
+     }
+@@ -157,6 +176,36 @@ defmodule Memba.Messaging.Message do
+   defp validate_message_identity(%__MODULE__{message_id: message_id}, message_id), do: :ok
+   defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
+ 
++  defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
++    conversation_id = conversation_id || message_id
++
++    with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
++         :ok <- validate_optional_id(:message, reply_to_message_id, :invalid_reply_to_message_id),
++         :ok <- validate_conversation_shape(message_id, conversation_id, reply_to_message_id) do
++      {:ok, conversation_id, reply_to_message_id}
++    end
++  end
++
++  defp validate_optional_id(_type, nil, _error), do: :ok
++
++  defp validate_optional_id(type, value, error) do
++    validate_id(type, value, error)
++  end
++
++  defp validate_conversation_shape(message_id, message_id, nil), do: :ok
++
++  defp validate_conversation_shape(message_id, message_id, _reply_to_message_id),
++    do: {:error, :invalid_conversation_reference}
++
++  defp validate_conversation_shape(message_id, _conversation_id, message_id),
++    do: {:error, :invalid_conversation_reference}
++
++  defp validate_conversation_shape(_message_id, _conversation_id, nil),
++    do: {:error, :reply_to_message_required}
++
++  defp validate_conversation_shape(_message_id, _conversation_id, _reply_to_message_id),
++    do: :ok
++
+   defp validate_known_delivery(%__MODULE__{} = message, delivery_id) do
+     if MapSet.member?(message.email_delivery_ids, delivery_id) do
+       :ok
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index c62c331..9a901be 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -17,7 +17,7 @@ defmodule Memba.Messaging.MessageTest do
+   alias Memba.Messaging.Recipient
+ 
+   describe "execute/2 SendMessage" do
+-    test "emits MessageSent and one EmailDeliveryCreated per resolved recipient" do
++    test "emits MessageSent as the root of its own conversation and one EmailDeliveryCreated per resolved recipient" do
+       message_id = Memba.ID.generate(:message)
+       club_id = Memba.ID.generate(:club)
+       sender_id = Memba.ID.generate(:person)
+@@ -52,6 +52,8 @@ defmodule Memba.Messaging.MessageTest do
+                  message_id: ^message_id,
+                  club_id: ^club_id,
+                  sender_id: ^sender_id,
++                 conversation_id: ^message_id,
++                 reply_to_message_id: nil,
+                  subject: "Trail day",
+                  body: "Meet at 9am."
+                },
+@@ -95,6 +97,60 @@ defmodule Memba.Messaging.MessageTest do
+                Message.execute(%Message{}, %SendMessage{valid_command | body: "  "})
+     end
+ 
++    test "models a reply as another message in the root message conversation" do
++      root_message_id = Memba.ID.generate(:message)
++      reply_message_id = Memba.ID.generate(:message)
++      sender_id = Memba.ID.generate(:person)
++
++      command = %SendMessage{
++        valid_send_message()
++        | message_id: reply_message_id,
++          sender_id: sender_id,
++          conversation_id: root_message_id,
++          reply_to_message_id: root_message_id,
++          subject: "Re: Trail day",
++          body: "I'll bring maps.",
++          recipients: [
++            %Recipient{
++              delivery_id: Memba.ID.generate(:delivery),
++              person_id: sender_id,
++              name: "Alice Sender",
++              email: "alice@example.com"
++            }
++          ]
++      }
++
++      assert [
++               %MessageSent{
++                 message_id: ^reply_message_id,
++                 sender_id: ^sender_id,
++                 conversation_id: ^root_message_id,
++                 reply_to_message_id: ^root_message_id,
++                 subject: "Re: Trail day",
++                 body: "I'll bring maps."
++               },
++               %EmailDeliveryCreated{}
++             ] = Message.execute(%Message{}, command)
++    end
++
++    test "rejects malformed conversation references" do
++      valid_command = valid_send_message()
++
++      assert {:error, :invalid_conversation_id} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | conversation_id: "not-a-uuid",
++                   reply_to_message_id: valid_command.message_id
++               })
++
++      assert {:error, :invalid_reply_to_message_id} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | conversation_id: valid_command.message_id,
++                   reply_to_message_id: "not-a-uuid"
++               })
++    end
++
+     test "rejects invalid recipient lists" do
+       valid_command = valid_send_message()
+ 
+@@ -382,6 +438,8 @@ defmodule Memba.Messaging.MessageTest do
+              message_id: ^message_id,
+              club_id: ^club_id,
+              sender_id: ^sender_id,
++             conversation_id: ^message_id,
++             reply_to_message_id: nil,
+              delivery_statuses: delivery_statuses,
+              email_delivery_ids: email_delivery_ids,
+              recipient_ids: recipient_ids
+@@ -392,6 +450,25 @@ defmodule Memba.Messaging.MessageTest do
+     assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
+   end
+ 
++  test "apply/2 treats historic MessageSent events without conversation fields as conversation roots" do
++    message_id = Memba.ID.generate(:message)
++
++    message =
++      Message.apply(%Message{}, %MessageSent{
++        message_id: message_id,
++        club_id: Memba.ID.generate(:club),
++        sender_id: Memba.ID.generate(:person),
++        subject: "Trail day",
++        body: "Meet at 9am."
++      })
++
++    assert %Message{
++             message_id: ^message_id,
++             conversation_id: ^message_id,
++             reply_to_message_id: nil
++           } = message
++  end
++
+   test "apply/2 records delivery status changes and ignores historic opened events" do
+     {message, ids} = sent_message()
+     delivery_id = ids.delivery_id
