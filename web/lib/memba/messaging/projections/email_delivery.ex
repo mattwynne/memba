@@ -1,6 +1,16 @@
 defmodule Memba.Messaging.Projections.EmailDelivery do
   @moduledoc """
   Read model projection for one email delivery belonging to a message.
+
+  Dispatch diagnostics are intentionally operational rather than domain facts:
+
+    * `attempt_count` remains `0` for first-pass successes, increments when a
+      provider handoff fails, and increments for a manual retry that succeeds so
+      a previously-failed delivery shows how many provider attempts were needed.
+    * `last_dispatch_attempted_at` records when the dispatcher most recently
+      claimed the delivery for a provider handoff, whether that handoff later
+      succeeds or fails.
+    * `sent_at` and `failed_at` record the latest persisted dispatch outcome.
   """
 
   use Ecto.Schema
