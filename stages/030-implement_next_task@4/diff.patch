@@ -1,0 +1,235 @@
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+index bd89c68..e2c9739 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Model the conversation/reply in `Memba.Messaging`: decide whether the existing message aggregate is extended to hold replies, or a conversation concept references it; keep it event-sourced and consistent with existing commands/events.
+ - [x] 002 Add command(s)/event(s) for posting a reply, with authorization that the actor is a current member of the message's club, and non-blank body validation.
+ - [x] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
+-- [ ] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
++- [x] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
+ - [ ] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
+ - [ ] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
+ - [ ] 007 Run `dev check`.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index b78bc7f..b69494a 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -217,6 +217,36 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List the projected conversation containing a message.
++
++  The argument may be the root message ID or any reply message ID. Invalid,
++  missing, or orphaned projections return an empty list. Results are ordered with
++  the original root message first, followed by replies in projected posted order.
++  """
++  def list_conversation_messages(message_id) do
++    with {:ok, message_id} <- ID.cast(:message, message_id),
++         %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
++         {:ok, conversation_id} <- conversation_id_for_message(message),
++         %MessageProjection{} <- fetch_conversation_root_projection(conversation_id) do
++      MessageProjection
++      |> where([message], message.conversation_id == ^conversation_id)
++      |> order_by([message],
++        asc:
++          fragment(
++            "CASE WHEN ? = ? THEN 0 ELSE 1 END",
++            message.message_id,
++            ^conversation_id
++          ),
++        asc: message.inserted_at,
++        asc: message.message_id
++      )
++      |> Repo.all()
++    else
++      _invalid_or_missing -> []
++    end
++  end
++
+   @doc """
+   List projected messages for the Memba staff operations Messages index.
+ 
+@@ -468,6 +498,23 @@ defmodule Memba.Messaging do
+     delivery
+   end
+ 
++  defp conversation_id_for_message(%MessageProjection{conversation_id: conversation_id}) do
++    case ID.cast(:message, conversation_id) do
++      {:ok, conversation_id} -> {:ok, conversation_id}
++      :error -> :error
++    end
++  end
++
++  defp fetch_conversation_root_projection(conversation_id) do
++    case Repo.get(MessageProjection, conversation_id) do
++      %MessageProjection{message_id: ^conversation_id, conversation_id: ^conversation_id} = root ->
++        root
++
++      _missing_or_not_root ->
++        nil
++    end
++  end
++
+   defp operator_deliveries_query(opts) do
+     query =
+       from deliverability in MembaStaffEmailDeliveryProjection,
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index ab538d4..52f8bde 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -100,6 +100,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert is_nil(Messaging.get_message(nil))
+     assert is_nil(Messaging.get_message("not-a-uuid"))
+ 
++    assert Messaging.list_conversation_messages(Memba.ID.generate(:message)) == []
++    assert Messaging.list_conversation_messages(nil) == []
++    assert Messaging.list_conversation_messages("not-a-uuid") == []
++
+     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
+     assert is_nil(Messaging.get_email_delivery(nil))
+     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
+@@ -109,6 +113,121 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+   end
+ 
++  describe "list_conversation_messages/1" do
++    test "returns the root message followed by replies in posted order" do
++      club_id = Memba.ID.generate(:club)
++      alice_id = Memba.ID.generate(:person)
++      bob_id = Memba.ID.generate(:person)
++      carol_id = Memba.ID.generate(:person)
++
++      unrelated =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          subject: "Unrelated thread",
++          inserted_at: ~U[2026-06-05 09:00:00.000000Z]
++        )
++
++      root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          subject: "Trip planning night",
++          body: "Bring route ideas.",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      newer_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: carol_id,
++          conversation_id: root.message_id,
++          reply_to_message_id: root.message_id,
++          subject: "Trip planning night",
++          body: "I can bring snacks.",
++          inserted_at: ~U[2026-06-05 12:03:00.000000Z]
++        )
++
++      older_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: bob_id,
++          conversation_id: root.message_id,
++          reply_to_message_id: root.message_id,
++          subject: "Trip planning night",
++          body: "I can bring maps.",
++          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
++        )
++
++      assert [
++               %MessageProjection{message_id: root_id, reply_to_message_id: nil},
++               %MessageProjection{
++                 message_id: older_reply_id,
++                 reply_to_message_id: older_reply_to_message_id
++               },
++               %MessageProjection{
++                 message_id: newer_reply_id,
++                 reply_to_message_id: newer_reply_to_message_id
++               }
++             ] = Messaging.list_conversation_messages(root.message_id)
++
++      assert root_id == root.message_id
++      assert older_reply_id == older_reply.message_id
++      assert newer_reply_id == newer_reply.message_id
++      assert older_reply_to_message_id == root.message_id
++      assert newer_reply_to_message_id == root.message_id
++      refute unrelated.message_id in [root_id, older_reply_id, newer_reply_id]
++    end
++
++    test "accepts a reply message id and returns its root conversation" do
++      club_id = Memba.ID.generate(:club)
++      alice_id = Memba.ID.generate(:person)
++      bob_id = Memba.ID.generate(:person)
++
++      root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          subject: "Trip planning night",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: bob_id,
++          conversation_id: root.message_id,
++          reply_to_message_id: root.message_id,
++          subject: "Trip planning night",
++          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
++        )
++
++      assert [
++               %MessageProjection{message_id: root_id},
++               %MessageProjection{message_id: reply_id}
++             ] = Messaging.list_conversation_messages(reply.message_id)
++
++      assert root_id == root.message_id
++      assert reply_id == reply.message_id
++    end
++
++    test "returns an empty list for orphaned reply projections without a root" do
++      missing_root_id = Memba.ID.generate(:message)
++
++      _orphaned_reply =
++        insert_message_projection!(
++          club_id: Memba.ID.generate(:club),
++          sender_id: Memba.ID.generate(:person),
++          conversation_id: missing_root_id,
++          reply_to_message_id: missing_root_id,
++          subject: "Trip planning night",
++          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
++        )
++
++      assert Messaging.list_conversation_messages(missing_root_id) == []
++    end
++  end
++
+   describe "list_operator_messages/0" do
+     test "returns projected messages with club and sender context where available" do
+       kootenay = insert_membership_club!(name: "Kootenay Mountaineering Club")
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index fafca25..b3be887 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -10,6 +10,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def post_message_reply("
+     assert source =~ "def get_message("
+     assert source =~ "def list_messages_for_club("
++    assert source =~ "def list_conversation_messages("
+     assert source =~ "def list_operator_messages("
+     assert source =~ "def get_email_delivery("
+     assert source =~ "def get_member_email_delivery("
+@@ -29,6 +30,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+ 
+     assert list_functions == [
+              "list_messages_for_club",
++             "list_conversation_messages",
+              "list_operator_messages",
+              "list_recipient_deliveries",
+              "list_member_email_deliverys",
