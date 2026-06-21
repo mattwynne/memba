@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T17:10:48.865231545Z",
-  "last_event_at": "2026-06-21T17:34:36.974152722Z",
+  "last_event_at": "2026-06-21T17:34:40.095916864Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3115,9 +3115,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 587,
       "checkpoint": {
-        "timestamp": "2026-06-21T17:34:37.015820896Z",
+        "timestamp": "2026-06-21T17:34:40.062181534Z",
         "current_node": "task_gate",
         "completed_nodes": [
           "start",
@@ -3135,7 +3135,296 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "outcome": "succeeded",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "current_node": "task_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.node_visit_count": 1,
           "command.output": "blob://sha256/54141d0c68c26a1be7b682be54d135883f40cb7d536e1abfa918dcc527ae8b3a",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "graph.rankdir": "LR",
+          "internal.retry_count.todo_readable": 0,
+          "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found:** Recent implementation checkpoint `c1806e5` changes exactly one ordinary todo line: task `001` from `- [ ]` to `- [",
+          "graph.max_node_visits": "80",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.read_plan.current_node": "wip_gate",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.fidelity": "summary:high",
+          "thread.start.current_node": "read_plan",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found:** Recent implementation checkpoint `c1806e5` changes exactly one ordinary todo line: task `001` from `- [ ]` to `- [x]`. It was the first unchecked task; tasks `002`–`007` remain unchecked.\n- **Implementation artifacts found:** `c1806e5` adds outbound Message-ID support via:\n  - `Memba.Messaging.OutboundMessageID`\n  - `messaging_email_deliveries.outbound_message_id` migration with backfill, NOT NULL, and unique index\n  - email delivery projection/replay persistence\n  - `EmailDeliveryRequest.outbound_message_id`\n  - provider `Message-ID` headers for Local/Postmark/Resend\n  - `Messaging.get_outbound_message_reference/1` resolving outbound RFC Message-ID to delivery/message/conversation/club context\n  - related local delivery facts and test helper updates\n- **Tests run/results found:** Live validation ran `PATH=\"$PWD/bin:$PATH\" dev check --quick` on the clean current state; it passed with `871 tests, 0 failures`. Working tree remained clean afterward.\n- **ADR/plan conformance notes:** Work stays within task 001’s outbound Message-ID/mapping scope and does not silently check off inbound parsing/routing or reply-thread headers. Relevant accepted ADRs inspected and respected: message/delivery state remains in Messaging/message delivery models (ADR 0004), Membership remains accessed through public query APIs (ADR 0007), projections use Commanded Ecto projection paths (ADR 0009), IDs derive from caller-generated stable UUIDs (ADR 0011), provider boundary remains Swoosh/provider-neutral with Postmark and Resend both covered (ADR 0016), and read-model change/barrier architecture is not altered (ADRs 0021/0022).\n- **Acceptance feature files:** No `*.feature` files were edited in the implementation checkpoint.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "failure_class": "",
+          "internal.run_id": "01KVNJJ02226WWG9STMV6AGVH9",
+          "last_stage": "validate_task",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "internal.thread_id": "validate_task",
+          "internal.work_dir": "/workspace/memba",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club...`\n\n2. **Changes made**\n   - Added `Memba.Messaging.OutboundMessageID` to generate deterministic Memba-controlled RFC `Message-ID` values from `delivery_id` + `message_id`.\n   - Added migration `20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs`:\n     - adds `messaging_email_deliveries.outbound_message_id`\n     - backfills existing rows deterministically\n     - makes it `NOT NULL`\n     - adds a unique index\n   - Updated the email delivery projection to persist outbound message IDs on replay.\n   - Added `outbound_message_id` to `EmailDeliveryRequest` and dispatcher-created provider requests.\n   - Added `MemberMessageEmail.message_id/1`.\n   - Set RFC `Message-ID` headers in Local, Postmark, and Resend member-message providers.\n   - Added `Messaging.get_outbound_message_reference/1` to resolve persisted outbound message IDs to `%{club_id, conversation_id, message_id, delivery_id}`.\n   - Updated focused tests and helpers to assert persisted IDs, lookup behavior, and provider headers.\n   - Updated `LocalDeliveryFacts` to expose `outbound_message_id`.\n\n3. **Validation**\n   - `PATH=\"$PWD/bin:$PATH\" mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed on final diff:\n     - `871 tests, 0 failures`\n   - Earlier attempted focused `bin/mix test ...` did not run tests because the sandbox mix wrapper failed its Postgres readiness check with a PGHOST mismatch; validation was completed through the required `dev check --quick` path.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 001 ...`\n     - to\n     - `- [x] 001 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No ADRs were explicitly referenced by the plan. I inspected relevant accepted ADRs: 0002, 0004, 0005, 0007, 0009, 0011, 0016, 0021, 0022.\n   - Conformance:\n     - ADR 0004: kept message/delivery state within the existing message/email-delivery model.\n     - ADR 0007: stayed inside Messaging context; no Membership storage coupling added.\n     - ADR 0009: used the existing Commanded Ecto projection/read-model path.\n     - ADR 0011: derived IDs from stable caller-generated Memba IDs, no aggregate-generated identity.\n     - ADR 0016: preserved provider-neutral delivery request shape and Swoosh provider boundary for Postmark/Resend/Local; no new HTTP provider code.\n     - ADR 0021/0022: did not alter read-model publishing/barrier architecture.",
+          "task_retry_available": false,
+          "task_valid": true,
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.task_gate": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "failure_signature": "",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.read_plan": 0
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fe713f6dccb1105870fb7fad44cc5a7a8c72d3e74a48babbfb7bbd75b205bff3"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 100104,
+              "active_time_ms": 100104
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6aa625b428f781ce506f997c7d4c19784245f2da86ee4e5745c2fdcdf4cb3616"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d56b5e5729c6532096b02c5e96c694bb451b307311b01565cceca499aa92aa9a"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3ec207e9efc4690a2fa4dcf1a2c3f690f89fe9750beb3fdab9b440d4739faf9f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club...`\n\n2. **Changes made**\n   - Added `Memba.Messaging.OutboundMessageID` to generate deterministic Memba-controlled RFC `Message-ID` values from `delivery_id` + `message_id`.\n   - Added migration `20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs`:\n     - adds `messaging_email_deliveries.outbound_message_id`\n     - backfills existing rows deterministically\n     - makes it `NOT NULL`\n     - adds a unique index\n   - Updated the email delivery projection to persist outbound message IDs on replay.\n   - Added `outbound_message_id` to `EmailDeliveryRequest` and dispatcher-created provider requests.\n   - Added `MemberMessageEmail.message_id/1`.\n   - Set RFC `Message-ID` headers in Local, Postmark, and Resend member-message providers.\n   - Added `Messaging.get_outbound_message_reference/1` to resolve persisted outbound message IDs to `%{club_id, conversation_id, message_id, delivery_id}`.\n   - Updated focused tests and helpers to assert persisted IDs, lookup behavior, and provider headers.\n   - Updated `LocalDeliveryFacts` to expose `outbound_message_id`.\n\n3. **Validation**\n   - `PATH=\"$PWD/bin:$PATH\" mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed on final diff:\n     - `871 tests, 0 failures`\n   - Earlier attempted focused `bin/mix test ...` did not run tests because the sandbox mix wrapper failed its Postgres readiness check with a PGHOST mismatch; validation was completed through the required `dev check --quick` path.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 001 ...`\n     - to\n     - `- [x] 001 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No ADRs were explicitly referenced by the plan. I inspected relevant accepted ADRs: 0002, 0004, 0005, 0007, 0009, 0011, 0016, 0021, 0022.\n   - Conformance:\n     - ADR 0004: kept message/delivery state within the existing message/email-delivery model.\n     - ADR 0007: stayed inside Messaging context; no Membership storage coupling added.\n     - ADR 0009: used the existing Commanded Ecto projection/read-model path.\n     - ADR 0011: derived IDs from stable caller-generated Memba IDs, no aggregate-generated identity.\n     - ADR 0016: preserved provider-neutral delivery request shape and Swoosh provider boundary for Postmark/Resend/Local; no new HTTP provider code.\n     - ADR 0021/0022: did not alter read-model publishing/barrier architecture.",
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba messa"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 900637,
+                    "output_tokens": 16072,
+                    "reasoning_tokens": 6150,
+                    "cache_read_tokens": 5469696,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7904693
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 763052,
+              "tool_time_ms": 245192,
+              "active_time_ms": 1008244
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/76e86eb9dd59effb56f854e8e512eb4e4608f8d1b2056a3763fc4b0e3ca85717"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1816,
+              "active_time_ms": 1816
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0d3d4739271d22fcf5e27701a5e1730f16db33243aee7cac2c5a5e0fc0f1c650"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/eb871347ff29ca3296dd15562c91ba0fc40e7bc348a14ecb36a2c5b1a5daface"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/54141d0c68c26a1be7b682be54d135883f40cb7d536e1abfa918dcc527ae8b3a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found:** Recent implementation checkpoint `c1806e5` changes exactly one ordinary todo line: task `001` from `- [ ]` to `- [",
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found:** Recent implementation checkpoint `c1806e5` changes exactly one ordinary todo line: task `001` from `- [ ]` to `- [x]`. It was the first unchecked task; tasks `002`–`007` remain unchecked.\n- **Implementation artifacts found:** `c1806e5` adds outbound Message-ID support via:\n  - `Memba.Messaging.OutboundMessageID`\n  - `messaging_email_deliveries.outbound_message_id` migration with backfill, NOT NULL, and unique index\n  - email delivery projection/replay persistence\n  - `EmailDeliveryRequest.outbound_message_id`\n  - provider `Message-ID` headers for Local/Postmark/Resend\n  - `Messaging.get_outbound_message_reference/1` resolving outbound RFC Message-ID to delivery/message/conversation/club context\n  - related local delivery facts and test helper updates\n- **Tests run/results found:** Live validation ran `PATH=\"$PWD/bin:$PATH\" dev check --quick` on the clean current state; it passed with `871 tests, 0 failures`. Working tree remained clean afterward.\n- **ADR/plan conformance notes:** Work stays within task 001’s outbound Message-ID/mapping scope and does not silently check off inbound parsing/routing or reply-thread headers. Relevant accepted ADRs inspected and respected: message/delivery state remains in Messaging/message delivery models (ADR 0004), Membership remains accessed through public query APIs (ADR 0007), projections use Commanded Ecto projection paths (ADR 0009), IDs derive from caller-generated stable UUIDs (ADR 0011), provider boundary remains Swoosh/provider-neutral with Postmark and Resend both covered (ADR 0016), and read-model change/barrier architecture is not altered (ADRs 0021/0022).\n- **Acceptance feature files:** No `*.feature` files were edited in the implementation checkpoint.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 329071,
+                    "output_tokens": 3109,
+                    "reasoning_tokens": 2344,
+                    "cache_read_tokens": 820736,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2219313
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 228460,
+              "tool_time_ms": 53908,
+              "active_time_ms": 282368
+            }
+          }
+        },
+        "next_node_id": "sync_task_list",
+        "git_commit_sha": "137e6cb1b9935a87d73f13e00c5b58b00affc76a",
+        "node_visits": {
+          "task_gate": 1,
+          "implement_next_task": 1,
+          "resume_gate": 1,
+          "pre_validate_snapshot": 1,
+          "preflight_sandbox": 1,
+          "sync_task_list": 1,
+          "read_plan": 1,
+          "wip_gate": 1,
+          "todo_readable": 1,
+          "all_tasks_done": 1,
+          "start": 1,
+          "validate_task": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 22,
+          "additions": 226,
+          "deletions": 17
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T17:34:40.258566150Z",
+        "current_node": "sync_task_list",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "command.output": "blob://sha256/5d091c3e560a3bbc2a5369eccce5f88765635da811abc4083793d9246eae1eb6",
           "thread.todo_readable.current_node": "all_tasks_done",
           "internal.retry_count.start": 0,
           "internal.retry_count.read_plan": 0,
@@ -3148,16 +3437,16 @@
           "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found:** Recent implementation checkpoint `c1806e5` changes exactly one ordinary todo line: task `001` from `- [ ]` to `- [x]`. It was the first unchecked task; tasks `002`–`007` remain unchecked.\n- **Implementation artifacts found:** `c1806e5` adds outbound Message-ID support via:\n  - `Memba.Messaging.OutboundMessageID`\n  - `messaging_email_deliveries.outbound_message_id` migration with backfill, NOT NULL, and unique index\n  - email delivery projection/replay persistence\n  - `EmailDeliveryRequest.outbound_message_id`\n  - provider `Message-ID` headers for Local/Postmark/Resend\n  - `Messaging.get_outbound_message_reference/1` resolving outbound RFC Message-ID to delivery/message/conversation/club context\n  - related local delivery facts and test helper updates\n- **Tests run/results found:** Live validation ran `PATH=\"$PWD/bin:$PATH\" dev check --quick` on the clean current state; it passed with `871 tests, 0 failures`. Working tree remained clean afterward.\n- **ADR/plan conformance notes:** Work stays within task 001’s outbound Message-ID/mapping scope and does not silently check off inbound parsing/routing or reply-thread headers. Relevant accepted ADRs inspected and respected: message/delivery state remains in Messaging/message delivery models (ADR 0004), Membership remains accessed through public query APIs (ADR 0007), projections use Commanded Ecto projection paths (ADR 0009), IDs derive from caller-generated stable UUIDs (ADR 0011), provider boundary remains Swoosh/provider-neutral with Postmark and Resend both covered (ADR 0016), and read-model change/barrier architecture is not altered (ADRs 0021/0022).\n- **Acceptance feature files:** No `*.feature` files were edited in the implementation checkpoint.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "failure_class": "",
           "internal.retry_count.sync_task_list": 0,
-          "internal.node_visit_count": 1,
+          "internal.node_visit_count": 2,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
-          "current_node": "task_gate",
+          "current_node": "sync_task_list",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.fidelity": "summary:high",
           "outcome": "succeeded",
           "graph.max_node_visits": "80",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.run_id": "01KVNJJ02226WWG9STMV6AGVH9",
-          "internal.thread_id": "validate_task",
+          "internal.thread_id": "task_gate",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.start.current_node": "read_plan",
           "thread.preflight_sandbox.current_node": "resume_gate",
@@ -3173,6 +3462,7 @@
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.implement_next_task": 0,
           "last_stage": "validate_task",
+          "thread.task_gate.current_node": "sync_task_list",
           "thread.validate_task.current_node": "task_gate",
           "failure_signature": "",
           "task_valid": true,
@@ -3216,15 +3506,15 @@
           "sync_task_list": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/eb871347ff29ca3296dd15562c91ba0fc40e7bc348a14ecb36a2c5b1a5daface"
+              "command.output": "blob://sha256/5d091c3e560a3bbc2a5369eccce5f88765635da811abc4083793d9246eae1eb6"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 153,
-              "active_time_ms": 153
+              "tool_time_ms": 150,
+              "active_time_ms": 150
             }
           },
           "todo_readable": {
@@ -3377,9 +3667,9 @@
             }
           }
         },
-        "next_node_id": "sync_task_list",
+        "next_node_id": "todo_readable",
         "node_visits": {
-          "sync_task_list": 1,
+          "sync_task_list": 2,
           "start": 1,
           "wip_gate": 1,
           "all_tasks_done": 1,
@@ -3823,6 +4113,34 @@
       },
       "state": "succeeded"
     },
+    "sync_task_list@2": {
+      "first_event_seq": 590,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T17:34:40.095411383Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "preflight_sandbox@1": {
       "first_event_seq": 45,
       "prompt": null,
@@ -4220,6 +4538,40 @@
         "inference_time_ms": 0,
         "tool_time_ms": 153,
         "active_time_ms": 153
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "task_gate@1": {
+      "first_event_seq": 582,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-21T17:34:37.006930219Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T17:34:37.006420488Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
         "input_tokens": 0,
