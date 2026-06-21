@@ -84,18 +84,20 @@ This iteration changes the public email address convention, club resolution rule
 Updated during planning:
 
 - `acceptance-tests/features/member_message_deliverability.feature`
-  - Added `@iteration-042 @todo-domain @todo-ui` examples for the new canonical `everyone@kmc.clubs.memba.io` accepted path, alternate sender accepted path, unsupported local parts, unknown club subdomains, and the old flat address being rejected.
-  - Existing executable `kmc@clubs.memba.io` scenarios are left in place during planning so the current mainline remains green; implementation should update or replace them when it performs the hard cutover.
+  - Inbound club-message scenarios now describe the post-042 address convention: the accepted path, alternate sender path, unsafe-mail rejection paths, and body-stripping path use `everyone@kmc.clubs.memba.io`.
+  - Added examples for unsupported local parts, unknown club subdomains, and the old flat `kmc@clubs.memba.io` address being rejected.
 - `acceptance-tests/features/club_message_replies.feature`
-  - Added an `@iteration-042 @todo-domain @todo-ui` example showing a reply-by-email coming through `everyone@kmc.clubs.memba.io` while still landing in the conversation.
+  - Reply-by-email and no-header inbound examples now describe the post-042 visible destination, `everyone@kmc.clubs.memba.io`, while preserving 041's header-based reply routing rule.
+- `acceptance-tests/features/email_branding.feature`
+  - The club rejection-branding example now uses the post-042 `everyone@kmc.clubs.memba.io` address.
 
-The `@todo-domain` / `@todo-ui` tags preserve the green mainline while these future-facing examples wait for implementation.
+The `@todo-domain` / `@todo-ui` tags mark scenarios that describe the post-042 truth but will fail against the current pre-042 implementation, preserving the green mainline until implementation removes or narrows those tags.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_message_deliverability.feature`: update inbound club-message scenarios from `kmc@clubs.memba.io` to `everyone@kmc.clubs.memba.io`; add examples for unsupported local parts, unknown club subdomains, and old flat address rejection; remove or narrow `@todo-domain` / `@todo-ui` as implementation makes each scenario executable.
-- `acceptance-tests/features/club_message_replies.feature`: update or add reply-by-email examples so reply emails use `everyone@<club-slug>.clubs.memba.io` as the visible reply destination after iteration 041; preserve 039/040/041 conversation, follower, and header-routing rules.
-- `acceptance-tests/features/email_branding.feature`: during implementation, update any inbound rejection branding examples that still use the old flat address only as needed to preserve the same branding coverage under the new address convention.
+- `acceptance-tests/features/member_message_deliverability.feature`: remove or narrow `@todo-domain` / `@todo-ui` as the post-042 `everyone@kmc.clubs.memba.io` scenarios become executable; preserve examples for unsupported local parts, unknown club subdomains, and old flat address rejection.
+- `acceptance-tests/features/club_message_replies.feature`: remove or narrow `@todo-domain` / `@todo-ui` as reply-by-email examples using `everyone@<club-slug>.clubs.memba.io` become executable; preserve 039/040/041 conversation, follower, and header-routing rules.
+- `acceptance-tests/features/email_branding.feature`: remove or narrow `@todo-domain` / `@todo-ui` from the inbound rejection branding example once the new address convention is implemented and the same branding coverage is executable.
 - `smoke-tests/features/inbound_club_email.feature`: during implementation, update production smoke examples and support to use `everyone@test.clubs.memba.io` for the smoke club.
 
 ## Designs

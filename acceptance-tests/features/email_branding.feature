@@ -12,9 +12,9 @@ Rule: Memba transactional emails use consistent Memba branding
 
 Rule: Club-message rejection emails identify the club
 
-    @iteration-031 @todo-domain
+    @iteration-031 @iteration-042 @todo-domain @todo-ui
     Scenario: Robin receives a KMC rejection email
       Given Kootenay Mountaineering Club has the slug "kmc"
-      When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
+      When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
       Then Robin should receive a rejection email from "Kootenay Mountaineering Club via Memba"
       And the rejection email should use the standard Memba footer

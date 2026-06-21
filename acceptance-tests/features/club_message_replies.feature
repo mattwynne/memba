@@ -95,8 +95,9 @@ Feature: Club message replies (conversations)
       And Dana should not receive Bob's reply by email
       And Bob should not receive his own reply by email
 
+    @iteration-042 @todo-domain @todo-ui
     Scenario: Email to the club address without reply headers starts a new club-wide message
-      When Bob emails "Re: Trip planning night" to kmc@clubs.memba.io
+      When Bob emails "Re: Trip planning night" to everyone@kmc.clubs.memba.io
       Then Bob should see the message "Re: Trip planning night" in Kootenay Mountaineering Club
       And the conversation for "Trip planning night" should not show Bob's reply "Re: Trip planning night details."
 
@@ -109,9 +110,10 @@ Feature: Club message replies (conversations)
       And Pat should receive a rejection email explaining the message was not posted
       And Pat should be told how to contact support
 
+    @iteration-042 @todo-domain @todo-ui
     Scenario: Reply headers from another club do not create a cross-club reply
       Given Pat sent the message "Paddle planning" to Nelson Paddling Club members
-      When Alice emails "Re: Paddle planning" to kmc@clubs.memba.io with reply headers from "Paddle planning"
+      When Alice emails "Re: Paddle planning" to everyone@kmc.clubs.memba.io with reply headers from "Paddle planning"
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
 
