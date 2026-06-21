@@ -1,0 +1,245 @@
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+index 4113b2c..0532e5c 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+-- [ ] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
++- [x] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
+ - [ ] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
+ - [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+ - [ ] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index dcf9fef..2b15ab3 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -949,7 +949,10 @@ defmodule Memba.Messaging do
+          reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
+          subject: root_message.subject,
+          body: body,
+-         recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
++         recipients:
++           resolve_reply_recipients(root_message.club_id, conversation_id,
++             except_person_id: sender_id
++           )
+        }}
+     end
+   end
+@@ -1064,6 +1067,25 @@ defmodule Memba.Messaging do
+     |> Enum.map(&resolved_recipient/1)
+   end
+ 
++  defp resolve_reply_recipients(club_id, conversation_id, opts) do
++    except_person_id = Keyword.get(opts, :except_person_id)
++    follower_ids = current_follower_ids(club_id, conversation_id)
++
++    club_id
++    |> Membership.list_active_members_of_club()
++    |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
++    |> Enum.reject(&(&1.id == except_person_id))
++    |> Enum.map(&resolved_recipient/1)
++  end
++
++  defp current_follower_ids(club_id, conversation_id) do
++    conversation_id
++    |> list_conversation_followers()
++    |> Enum.filter(&(&1.club_id == club_id))
++    |> Enum.map(& &1.member_id)
++    |> MapSet.new()
++  end
++
+   defp resolved_recipient(%{id: person_id, name: name, email: email}) do
+     %Recipient{
+       delivery_id: Memba.ID.generate(:delivery),
+diff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex
+index 3f4b9ab..87daa3f 100644
+--- a/web/lib/memba/messaging/conversation_followers.ex
++++ b/web/lib/memba/messaging/conversation_followers.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Messaging.ConversationFollowers do
+   alias Memba.Messaging.Commands.UnfollowConversation
+   alias Memba.Messaging.Events.ConversationFollowed
+   alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Events.MessageSent
+ 
+   @behaviour Aggregate
+ 
+@@ -50,6 +51,15 @@ defmodule Memba.Messaging.ConversationFollowers do
+   end
+ 
+   @impl Aggregate
++  def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do
++    %__MODULE__{
++      conversation
++      | conversation_id: event.conversation_id || event.message_id,
++        club_id: event.club_id,
++        follower_ids: MapSet.put(conversation.follower_ids, event.sender_id)
++    }
++  end
++
+   def apply(%__MODULE__{} = conversation, %ConversationFollowed{} = event) do
+     %__MODULE__{
+       conversation
+@@ -68,6 +78,8 @@ defmodule Memba.Messaging.ConversationFollowers do
+     }
+   end
+ 
++  def apply(%__MODULE__{} = conversation, _event), do: conversation
++
+   def follow_id(conversation_id, member_id) do
+     ID.deterministic(:conversation_follow, [conversation_id, member_id])
+   end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 69f3d53..3e859ad 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -22,6 +22,8 @@ defmodule Memba.Messaging.Message do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.ConversationReference
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.ConversationUnfollowed
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryBounced
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+@@ -134,6 +136,9 @@ defmodule Memba.Messaging.Message do
+     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
+   end
+ 
++  def apply(%__MODULE__{} = message, %ConversationFollowed{}), do: message
++  def apply(%__MODULE__{} = message, %ConversationUnfollowed{}), do: message
++
+   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
+   # product status. Keep this no-op so historic events can rehydrate aggregates
+   # without changing current delivery state. Do not extend.
+diff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs
+index e58866e..43b79ac 100644
+--- a/web/test/memba/messaging/post_message_reply_test.exs
++++ b/web/test/memba/messaging/post_message_reply_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Messaging
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.MessageSent
+@@ -14,20 +15,32 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Repo
+ 
+-  test "a current club member can post a reply in the root message conversation and email everyone except themself" do
++  test "a current club member can post a reply and email only current followers except themself" do
+     club_id = Memba.ID.generate(:club)
+     alice = create_person(name: "Alice", email: "alice@example.com")
+     bob = create_person(name: "Bob", email: "bob@example.com")
+     carol = create_person(name: "Carol", email: "carol@example.com")
++    dana = create_person(name: "Dana", email: "dana@example.com")
++    erin = create_person(name: "Erin", email: "erin@example.com")
+     pat = create_person(name: "Pat", email: "pat@example.com")
+     other_club_id = Memba.ID.generate(:club)
+ 
+     add_member(club_id, alice.person_id)
+     add_member(club_id, bob.person_id)
+     add_member(club_id, carol.person_id)
++    add_member(club_id, dana.person_id)
++    erin_membership_id = add_member(club_id, erin.person_id)
+     add_member(other_club_id, pat.person_id)
+ 
+     root_message_id = send_root_message(club_id, alice.person_id)
++    follow_conversation(club_id, root_message_id, bob.person_id)
++    follow_conversation(club_id, root_message_id, carol.person_id)
++    unfollow_conversation(club_id, root_message_id, carol.person_id)
++    follow_conversation(club_id, root_message_id, dana.person_id)
++    follow_conversation(club_id, root_message_id, erin.person_id)
++    follow_conversation(club_id, root_message_id, pat.person_id)
++    remove_member(erin_membership_id)
++
+     reply_message_id = Memba.ID.generate(:message)
+ 
+     assert {:ok,
+@@ -68,15 +81,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+              },
+              %EmailDeliveryCreated{
+                message_id: ^reply_message_id,
+-               recipient_id: carol_id,
+-               recipient_name: "Carol",
+-               recipient_email: "carol@example.com"
++               recipient_id: dana_id,
++               recipient_name: "Dana",
++               recipient_email: "dana@example.com"
+              }
+            ] = delivery_events
+ 
+-    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
+-    refute bob.person_id in Enum.map(delivery_events, & &1.recipient_id)
+-    refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
++    assert [alice_id, dana_id] == [alice.person_id, dana.person_id]
++
++    recipient_ids = Enum.map(delivery_events, & &1.recipient_id)
++
++    refute bob.person_id in recipient_ids
++    refute carol.person_id in recipient_ids
++    refute erin.person_id in recipient_ids
++    refute pat.person_id in recipient_ids
+ 
+     assert %MessageProjection{
+              message_id: ^reply_message_id,
+@@ -98,9 +116,9 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+              },
+              %EmailDeliveryProjection{
+                message_id: ^reply_message_id,
+-               recipient_id: ^carol_id,
+-               recipient_name: "Carol",
+-               recipient_address: "carol@example.com",
++               recipient_id: ^dana_id,
++               recipient_name: "Dana",
++               recipient_address: "dana@example.com",
+                status: "pending"
+              }
+            ] = pending_deliveries_for_message(reply_message_id)
+@@ -203,14 +221,42 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   end
+ 
+   defp add_member(club_id, person_id) do
++    membership_id = Memba.ID.generate(:membership)
++
+     assert :ok =
+              MembershipApp.dispatch(
+                %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id,
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
++
++    membership_id
++  end
++
++  defp remove_member(membership_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveMember{membership_id: membership_id},
++               consistency: :strong
++             )
++  end
++
++  defp follow_conversation(club_id, conversation_id, member_id) do
++    assert :ok =
++             Messaging.follow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               consistency: :strong
++             )
++  end
++
++  defp unfollow_conversation(club_id, conversation_id, member_id) do
++    assert :ok =
++             Messaging.unfollow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               consistency: :strong
++             )
+   end
+ end
