@@ -1,0 +1,423 @@
+diff --git a/.pi/skills/iteration-planning/SKILL.md b/.pi/skills/iteration-planning/SKILL.md
+index 75c84cd..308f45f 100644
+--- a/.pi/skills/iteration-planning/SKILL.md
++++ b/.pi/skills/iteration-planning/SKILL.md
+@@ -21,8 +21,8 @@ Create a task for each item and complete them in order:
+ 2. **Identify relevant problems** — decide which captured problems the iteration might resolve, partially address, depend on, or deliberately leave unresolved. Bring those problems into brainstorming and slicing rather than treating the iteration as a standalone idea.
+ 3. **Interview Matt** — ask clarifying questions one at a time about goal, relevant problems, scope, acceptance criteria, business decisions, implementation shape, and validation.
+ 4. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing). Use the related problem notes to avoid bundling several unrelated problems into one iteration.
+-5. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. Present the related problems and planned status changes alongside the draft plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
+-6. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include a `Related Problems` section, an `Iteration Type` section, and an `Acceptance Scenarios / Feature Files` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. Tag every new or changed scenario (or the whole feature if all scenarios are new/changed for the iteration) with `@iteration-NNN` matching the iteration number; preserve existing iteration tags, because a scenario may evolve through multiple iterations. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
++5. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. Present the related problems and planned status changes alongside the draft plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done. Also present the **design decision** (see Design Check): for each user-facing surface, the existing design that covers it, or — if one is needed and missing — a reminder to create it.
++6. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include a `Related Problems` section, an `Iteration Type` section, an `Acceptance Scenarios / Feature Files` section, and a `Designs` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. Tag every new or changed scenario (or the whole feature if all scenarios are new/changed for the iteration) with `@iteration-NNN` matching the iteration number; preserve existing iteration tags, because a scenario may evolve through multiple iterations. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
+ 7. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it is tagged `@wip` and excluded by the relevant test command/configuration. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
+ 8. **Validate the published plan** — after the planning artifacts are committed and pushed, run:
+    ```bash
+@@ -94,6 +94,16 @@ It is usually reasonable not to add Gherkin when the iteration is purely technic
+ 
+ When deciding not to add or change feature files for a behaviour-facing iteration, write a short rationale in the plan. A good rationale names the existing scenario that already covers the rule, or explains why the behaviour is too internal/obvious for a useful stakeholder example. `Covered by ExUnit/controller tests` is not sufficient by itself for business-facing behaviour.
+ 
++## Design Check
++
++The design system (claude.ai/design) is the source of truth for design and is meant to mirror the running app (see `CLAUDE.md`). For any iteration with a user-facing surface, make an explicit design decision during planning — the way you make a BDD decision — and write it into `## Designs`. Decide three things:
++
++1. **Does this iteration need a design?** Yes if it adds or changes a screen, page, component, email, or a visible state (empty / first-run / loading / error / success). No for purely internal or technical work (refactors, data/model changes, background jobs, infra, observability) with no visible surface — record `No design needed` and why.
++2. **Do we already have it?** Check the design system (use the `DesignSync` tool — `list_files`, then `get_file`) and `docs/superpowers/specs/*` sketches for an existing design of each affected surface. Reference what exists by path (e.g. a DS card `wireframes/*.html`, `ui_kits/*/index.html`, `emails/*.html`, or a sketch section). A design that is close but missing the new elements still counts as the base to extend — say so.
++3. **If it's needed and missing, remind to create it.** Do not leave a user-facing surface with no referenced design and no reminder. The reminder is: mock the surface as a self-contained design-system preview, render-verify it (headless render), and push it to the DS via `DesignSync` — done before implementation where possible. If the iteration is already building, record it as a **fast-follow** design to align the in-flight build/review to.
++
++Write the outcome in `## Designs`: for each affected surface, the design that covers it (with path) or the reminder to create one. When a feature spans several iterations, design the **final** version once and note which elements earlier slices omit, rather than a separate design per slice. Default to "needs a design" whenever the iteration changes anything a user sees; `No design needed` is for genuinely invisible technical work.
++
+ ## Interview Guidance
+ 
+ Ask only one question per message. Prefer multiple choice when it lowers effort, but use open questions when needed. When asking a multiple-choice question, use the `question` tool rather than writing A/B/C/D options in prose. Use normal chat only for open-ended questions or when the tool cannot express the choice clearly.
+@@ -110,6 +120,7 @@ Cover these topics:
+ - **Acceptance criteria** — concrete behaviours, examples, edge cases, permissions, and error states.
+ - **Business decisions** — domain, policy, copy, workflow, pricing, privacy, or support questions.
+ - **Technical shape** — likely modules, data, events/commands, integrations, UI, background work, and migration concerns.
++- **Design** — does this iteration touch a screen, page, component, email, or visible state? If so, is there an existing design in the design system or a sketch (check via `DesignSync`), or does one need to be created? (see Design Check)
+ - **Validation** — automated tests, acceptance tests, shared Cucumber scenarios, manual demo, stakeholder review, or operational checks.
+ 
+ Stop interviewing when you can write a plan that an engineer could start without inventing material product or technical decisions.
+@@ -177,6 +188,10 @@ Behaviour-facing or technical/engineering. For behaviour-facing iterations, iden
+ 
+ State the BDD decision: `Required`, `Useful but not required`, or `Not useful for this slice`. For behaviour-facing iterations, name the shared Cucumber feature file(s) and scenarios that will express the business rules, or state why Gherkin would not add useful stakeholder-readable examples for this slice. For technical iterations, write `Not applicable` and the reason. If implementation is allowed to edit `.feature` files, also include a separate `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed.
+ 
++## Designs
++
++Apply the Design Check. For each user-facing surface the iteration adds or changes, name the design that covers it (a design-system card or a `docs/superpowers/specs` sketch, by path), or note that no design exists yet and must be created (a reminder to mock + render-verify + push to the DS; mark it a fast-follow if the iteration is already building). Write `No design needed` with a reason for purely internal/technical iterations.
++
+ ## Acceptance Criteria
+ 
+ ## Open Business Decisions
+@@ -211,6 +226,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
+ - Classify the iteration in the plan as behaviour-facing or technical/engineering. For behaviour-facing iterations, fill in `## Acceptance Scenarios / Feature Files` with a BDD decision of `Required`, `Useful but not required`, or `Not useful for this slice`, plus either the feature file(s)/scenario summaries that express the business rules or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples. Do not rely on low-level ExUnit/controller tests as a substitute for this BDD decision.
+ - Apply the BDD scenario heuristics above before deciding. If two or more “default to Gherkin” signals apply, draft scenarios unless Matt explicitly decides otherwise.
+ - Draft or update shared Cucumber feature files/scenarios when they clarify the iteration's domain behaviour. Use `bdd-discovery` first if the rules/examples are unclear, and `bdd-formulation` when writing or reviewing the Gherkin. Keep scenarios abstract from test infrastructure: no CSS selectors, route names, button-click choreography, database setup, or adapter configuration.
++- Include a `## Designs` section and apply the Design Check: for each user-facing surface, reference an existing design (a design-system card or a sketch, by path — check the DS with `DesignSync`) or record a reminder to create one (mock + render-verify + push to the DS, or a fast-follow if already building). Write `No design needed` with a reason for internal/technical iterations. Design the final version once for multi-iteration features and note what earlier slices omit. Do not author the design during ordinary planning unless Matt asks — the planning deliverable is the decision and the reminder, not the mock.
+ - Tag every scenario created or changed during planning with the iteration tag `@iteration-NNN`, where `NNN` is the zero-padded iteration number. If every scenario in a new or changed feature belongs to that iteration, a feature-level `@iteration-NNN` tag is acceptable. Do not remove older iteration tags from existing scenarios; multiple iteration tags are allowed and useful when a scenario evolves across iterations.
+ - Preserve a green mainline while planning. Existing executable scenarios should keep passing. If planning deliberately rewrites or adds scenarios that describe future behaviour and would fail before implementation catches up, tag each affected scenario with `@wip`; if every scenario in a changed feature is future-facing, a feature-level `@wip` is acceptable. Prefer scenario-level tags when only part of a feature is unfinished. Do not leave untagged future-facing scenarios that make `dev check` fail.
+ - When feature files/scenarios are created or changed, show Matt the feature file path, which scenarios are tagged with `@iteration-NNN`, which scenarios are `@wip`, and a concise summary of the scenarios, and explicitly ask him to review the language/examples before treating the plan as final.
+@@ -278,4 +294,5 @@ When planning is complete, report:
+ - Make technical decisions explicit enough to start.
+ - Make acceptance criteria testable.
+ - Make validation observable.
++- If a user sees it, it needs a design: check the design system for an existing one, and if it is missing, record a reminder to create it (fast-follow if already building).
+ - Do not implement locally during this skill; `bin/dev fabro deliver` owns implementation after Matt explicitly approves launching it or runs it himself.
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md b/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md
+index e1381a2..47b9c41 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/plan.md
+@@ -26,6 +26,14 @@ The reply feature is split into three sequential, independently shippable iterat
+ 
+ - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **partially addressed.** This slice delivers "users can reply from the message view," "replies preserve context," and "replies are tracked as part of the conversation," and gets replies to members by email. The *opt-in control over who receives replies* is iteration 040; replying from an email client is iteration 041.
+ 
++## Designs
++
++The implementer must build against these existing designs:
++
++- **Conversation message-detail screen** — DS wireframe `wireframes/member-conversation.html` (final version) plus design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) §4.1: the message-detail screen reframed as a conversation (original message → inline reply composer → replies in order), with the delivery-receipts panel demoted to a collapsed summary. **The DS card shows the follow toggle, which is 040 — 039 builds this screen without it.** §4.2 covers the club-home row gaining a reply-count signal.
++- **Reply notification email** — DS card `emails/reply-notification.html` (final version). In 039, render it **without** the "you're following · stop following" footer line (no follow concept yet — see the design sketch §8 "one canonical email design; earlier slices omit elements"). The earlier-messages quoted-thread block and "View the conversation" CTA still apply.
++- **Mobile member surfaces** — DS wireframes `wireframes/mobile-message-detail.html` and `wireframes/mobile-compose.html` show the phone-width member layout/style (sage theme, shared components) the conversation screen must match responsively.
++
+ ## Scope
+ 
+ ### In scope
+@@ -109,4 +117,5 @@ Members can hold a conversation on a club message inside Memba — reply, read i
+ - **Interim reply-all noise.** 039 emails replies to all current members — the noisy model Memba otherwise avoids. 040 narrows this to opt-in followers and follows immediately. Coordinate release so 039 is not long-lived in production without 040, or consciously accept short-term reply-all on club messages.
+ - **Model choice ripples forward.** 040 (followers get replies) and 041 (inbound threading) depend on the conversation/reply model chosen here. Keep "who is in / follows this conversation?" easy to answer so 040 is a clean narrowing rather than a rework.
+ - The message-detail screen reframing (receipts → secondary) could grow; keep it minimal and record larger UI rework as follow-up.
++- **Conversation-screen design arrived as a fast-follow.** The DS wireframe `wireframes/member-conversation.html` was mocked after 039 implementation began, so align the in-flight build/review to it (it shows the final/040 follow toggle — 039 omits that). Mobile conversation layout is not yet mocked (only the pre-reply `mobile-message-detail.html`); add a mobile conversation card as a follow-up if needed.
+ - Sits behind the active WIP slot and other queued iterations; this is planning ahead.
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md
+index 7cc6fd5..a515be0 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md
+@@ -1,7 +1,7 @@
+ # Follow a conversation, and send replies only to followers
+ 
+ Date: 2026-06-19
+-Status: draft
++Status: validated
+ 
+ ## Goal
+ 
+@@ -11,7 +11,7 @@ After this iteration:
+ 
+ - A conversation has **followers**. The original sender follows it; anyone who posts a reply follows it; everyone else is **not** following by default.
+ - Members can "follow this conversation to receive any new replies" and stop following at any time, in Memba and from a reply email.
+-- A reply is emailed **only to current followers** of the conversation (excluding the reply's author), not to every member.
++- A reply is emailed **only to current club members who currently follow** the conversation (excluding the reply's author), not to every member.
+ - Reply emails keep the existing delivery tracking, shared layout/footer, and `<club name> via Memba` sender.
+ 
+ ## Background / Context
+@@ -24,15 +24,20 @@ Following has no purpose except deciding who is emailed, so the follow model and
+ 
+ - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **further addressed.** Completes "members can opt in to receive replies to a conversation." Replying *from* an email client remains iteration 041.
+ 
++## Designs
++
++- **Reply notification email** — DS card `emails/reply-notification.html` is the **final/canonical** version this iteration completes: it adds the "you're following this conversation · stop following this conversation" footer line that 039 omitted. The new-reply body, "View the conversation" CTA, and standard quoted-thread history are unchanged from 039.
++- **Conversation screen follow control** — DS wireframe `wireframes/member-conversation.html` shows the final state including the "Follow this conversation to receive any new replies" toggle under the original message (this iteration adds that toggle to the 039 screen). Also design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) §4.1 and §4.3 (email footer follow/unfollow).
++
+ ## Scope
+ 
+ ### In scope
+ 
+ - **Follow model:** a per-(member, conversation) follow state. Event-sourced, consistent with `Memba.Messaging`. Commands/events to follow and unfollow.
+ - **Auto-follow:** the conversation's original sender follows it; any member who posts a reply follows it. Everyone else defaults to **not** following.
+-- **Narrow reply delivery:** change reply fan-out from "every current member" (039) to "current followers of the conversation," excluding the reply's author. Non-followers receive no reply email.
+-- **Follow control + copy:** an in-app "follow this conversation to receive any new replies" / unfollow control on the message-detail surface, reflecting the viewer's state.
+-- **Unsubscribe from email:** a stop-following link in the reply email, consistent with the in-app unfollow; unfollowing halts further reply emails for that conversation.
++- **Narrow reply delivery:** change reply fan-out from "every current member" (039) to "current club members who currently follow the conversation," excluding the reply's author. Non-followers and former/non-current members receive no reply email, even if a historical follow state exists.
++- **Follow control + copy:** an in-app "follow this conversation to receive any new replies" / unfollow control on the message-detail surface, reflecting the viewer's state. Only current members of the club can follow or unfollow in-app; non-members and former members cannot newly follow a conversation.
++- **Unsubscribe from email:** a one-click signed stop-following link in the reply email, consistent with the in-app unfollow; unfollowing halts further reply emails for that conversation.
+ - **Reply email design:** per the DS design `emails/reply-notification.html` — a branded new-reply body + "View the conversation" CTA + a footer with "you're following this conversation · stop following this conversation". **Earlier messages are emitted as a standard quoted thread** (`blockquote.gmail_quote` + "On <date>, <name> wrote:" attributions) so email clients fold it natively ("See more" in Apple Mail, "•••" in Gmail) and thread it via headers (041) — rather than building a custom fold (unreliable: `<details>` is stripped by Gmail) or inlining a branded full history (which would double the thread in clients that thread by headers).
+ - **Acceptance scenarios:** revise `club_message_replies.feature` to replace the 039 "reply emailed to every current member" rule with a "followers receive replies" rule, and add follow/auto-follow/unfollow scenarios, tagged `@iteration-040`.
+ 
+@@ -51,20 +56,22 @@ Behaviour-facing. Changed user-observable rule: a reply is emailed to the conver
+ 
+ BDD decision: **Required.**
+ 
+-Revise `acceptance-tests/features/club_message_replies.feature`: the 039 rule "A reply is emailed to every current member of the club" is **replaced** by "A reply is emailed to the conversation's followers," and new rules cover auto-follow (sender + repliers), opt-in default (a non-engaged member is not following), follow/unfollow, and unfollow-stops-email. Tag ahead-of-implementation scenarios `@iteration-040 @todo-domain @todo-ui` until the runners can execute them; preserve the 039 conversation/reply/membership rules.
++Revise `acceptance-tests/features/club_message_replies.feature`: the 039 rule "A reply is emailed to every current member of the club" is **replaced** by "A reply is emailed to current club-member followers," and new rules cover auto-follow (sender + repliers), opt-in default (a non-engaged member is not following), follow/unfollow, current-member recipient eligibility, and unfollow-stops-email from both the app and a reply email. Tag ahead-of-implementation scenarios `@iteration-040 @todo-domain @todo-ui` until the runners can execute them; preserve the 039 conversation/reply/membership rules.
+ 
+ ## Allowed acceptance feature changes
+ 
+ - `acceptance-tests/features/club_message_replies.feature`:
+-  - **Replace** the `@iteration-039` rule/scenario "A reply is emailed to every current member of the club" with a `@iteration-040` rule "A reply is emailed to the conversation's followers" (the documented narrowing of who receives replies).
+-  - **Add** `@iteration-040` scenarios for auto-follow (sender and repliers), the opt-in default, following/unfollowing, and unfollow-stops-email.
++  - **Replace** the `@iteration-039` rule/scenario "A reply is emailed to every current member of the club" with a `@iteration-040` rule "A reply is emailed to current club-member followers" (the documented narrowing of who receives replies while preserving the current-member boundary).
++  - **Add** `@iteration-040` scenarios for auto-follow (sender and repliers), the opt-in default, following/unfollowing, follower delivery excluding former/non-current members, valid email stop-follow, and invalid/tampered email stop-follow links changing nothing.
+   - Preserve the 039 rules that a member can reply, replies join the conversation in order, and only current members can reply.
+ 
+ ## Acceptance Criteria
+ 
+ - A conversation's original sender is following it; a member who posts a reply is following it; a member who has not engaged is not following it.
+-- A member can follow ("follow this conversation to receive any new replies") and unfollow, in Memba and from a reply email; the stored state reflects this.
+-- A reply is emailed only to the conversation's current followers, excluding the reply's author; non-followers receive no reply email.
++- A current member can follow ("follow this conversation to receive any new replies") and unfollow in Memba; repeated follow/unfollow attempts are idempotent and do not create duplicate or inconsistent follow state.
++- A one-click signed stop-following link in a reply email unfollows only the intended recipient from the intended conversation without requiring sign-in; using it when already unfollowed is a safe success.
++- Invalid, tampered, expired-if-the-implementation-explicitly-adds-expiry, or wrong-scope stop-follow links change nothing and show a generic failure that does not reveal whether the club, conversation, or member exists.
++- A reply is emailed only to current club members who currently follow the conversation, excluding the reply's author; non-followers and former/non-current members receive no reply email.
+ - After unfollowing, a member receives no further reply emails for that conversation.
+ - Reply emails keep the existing delivery tracking, shared layout/footer, and `<club name> via Memba` sender.
+ - The revised/added `@iteration-040` scenarios pass with temporary tags removed/narrowed; the 039 conversation/reply/membership scenarios stay green (with the reply-audience rule now superseded by the followers rule).
+@@ -74,24 +81,39 @@ Revise `acceptance-tests/features/club_message_replies.feature`: the 039 rule "A
+ 
+ None outstanding on audience. **Reply-To is decided:** the conversation reply address `<club-slug>+c.<token>@clubs.memba.io` is introduced in iteration 041 (inbound routing). Since 040 ships before that routing exists, 040 sets the reply email `Reply-To` to a **no-reply / "reply in Memba" guidance**, and 041 switches it to the conversation address. This avoids shipping a `Reply-To` whose inbound handling does not yet exist. See the email address schema in [iteration 041's plan](../041-reply-by-email-threading/plan.md).
+ 
+-Confirmed: only followers receive replies; sender + repliers auto-follow; everyone else opts in (default off).
++Confirmed: only current club-member followers receive replies; sender + repliers auto-follow; everyone else opts in (default off). A valid email stop-follow link may clear that recipient's follow state even if they are no longer a current member, because it only reduces future notifications; former/non-current members cannot newly follow and are never reply-email recipients.
+ 
+ ## Implementation Plan
+ 
+ 1. Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+-2. Rewire the reply delivery introduced in 039 from "all current members" to "current followers of the conversation," excluding the author.
+-3. Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state.
+-4. Add a stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
++2. Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
++3. Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
++4. Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+ 5. Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+ 6. Run `dev check`.
+ 
++## Email Stop-Follow Behaviour
++
++The reply-email footer contains a one-click signed stop-following link. This is an unsubscribe-style action and does **not** require sign-in.
++
++Required behaviour:
++
++- The token is opaque/signed and scoped to the club, conversation, and intended recipient/member-person; it must not be usable to change any other person's or conversation's follow state.
++- The product behaviour is long-lived/non-expiring so old reply emails remain useful; if the chosen implementation helper forces an expiry, use the longest practical expiry and treat expired tokens like invalid tokens.
++- A valid link unfollows only that recipient from that conversation and then shows a simple success page/state that offers a path back to the conversation if the viewer can sign in.
++- Reusing a valid link after the recipient is already unfollowed is idempotent and shows the same safe success.
++- Invalid, tampered, expired, or wrong-scope tokens change nothing and show a generic failure that does not reveal whether the club, conversation, or member exists.
++- A valid email stop-follow link may clear a historical follow state for a former/non-current member, because it only reduces notifications. Former/non-current members still cannot newly follow and are never eligible reply-email recipients.
++
+ ## Open Technical Decisions
+ 
+-- Follow storage: a dedicated follow projection vs. a field on a conversation-membership read model. Pick the one that makes "is viewer following?" and "who follows this conversation?" cheap.
+-- Unsubscribe token mechanism (reuse existing auth/token helpers vs. a dedicated follow token).
+-- Whether to keep reusing 039's delivery path (now filtered to followers) or factor a shared "deliver to recipients" helper; note any interaction with iteration 038's email-handoff boundary if landed.
++None that require product decisions before implementation.
++
++Implementation choices left to the implementer, with constraints:
+ 
+-These are implementation details and should not need product decisions.
++- Follow storage may be a dedicated follow projection or a conversation-membership read-model field, provided "is viewer following?" and "who are the current club-member followers?" are cheap and deterministic.
++- The signed stop-follow token may reuse existing token helpers or use a dedicated token module, provided it satisfies the behaviour above.
++- Reply delivery may keep reusing 039's delivery path (now filtered to current club-member followers) or factor a shared "deliver to recipients" helper; note any interaction with iteration 038's email-handoff boundary if landed.
+ 
+ ## New Capability
+ 
+@@ -99,8 +121,8 @@ Replies reach exactly the people who want them: the sender and repliers automati
+ 
+ ## Validation Plan
+ 
+-- Domain/integration tests: auto-follow (sender + replier), opt-in default, follow/unfollow, reply fan-out to followers only, replier excluded, unfollow stops delivery.
+-- Email tests: only followers emailed; stop-following link works; footer, `<club> via Memba`, conversation context preserved.
++- Domain/integration tests: auto-follow (sender + replier), opt-in default, follow/unfollow, idempotent repeated follow/unfollow, current-member-only in-app permissions, reply fan-out to current club-member followers only, former/non-current followers excluded, replier excluded, unfollow stops delivery.
++- Email tests: only current club-member followers emailed; stop-following link works for the intended recipient/conversation; reused already-unfollowed links are safe; invalid/tampered/expired/wrong-scope links change nothing; footer, `<club> via Memba`, conversation context preserved.
+ - Acceptance: the `@iteration-040` scenarios green; 039 conversation/reply/membership scenarios green.
+ - Full `dev check`.
+ 
+diff --git a/docs/iterations/041-reply-by-email-threading/plan.md b/docs/iterations/041-reply-by-email-threading/plan.md
+index 1d0dc42..8d815c6 100644
+--- a/docs/iterations/041-reply-by-email-threading/plan.md
++++ b/docs/iterations/041-reply-by-email-threading/plan.md
+@@ -41,6 +41,10 @@ Decided up front so the schema is not flat and can grow. One inbound domain (`cl
+ 
+ - [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **expected to resolve.** With 039 (conversation + in-app reply), 040 (follower emails + opt-in follow), and this slice (reply from the inbox), all four "Expected" bullets are met end to end.
+ 
++## Designs
++
++- **Reply notification email** — DS card `emails/reply-notification.html`. This iteration sets its `Reply-To` to the conversation address `<club-slug>+c.<token>@clubs.memba.io` and the `Message-ID`/`References` headers; the email's earlier-messages quoted-thread block (already designed) is what email clients fold/thread once these headers are present. No new screen design — 041 is inbound routing.
++
+ ## Scope
+ 
+ ### In scope
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 09f31fd..9aaacda 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -49,7 +49,7 @@ green than before.
+ | 037 | 2026-06-17 | merged | Design-system catch-up: onboarding requests + empty states & member refresh | [plan](037-ds-catchup-onboarding-requests-and-refresh/plan.md) |
+ | 038 | 2026-06-19 | implementing | Async email delivery dispatch | [plan](038-email-delivery-handoff-boundary/plan.md) |
+ | 039 | 2026-06-19 | validated | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
+-| 040 | 2026-06-19 | draft | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
++| 040 | 2026-06-19 | validated | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
+ | 041 | 2026-06-19 | draft | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
+ 
+ Status notes:
+diff --git a/docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md b/docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md
+index 168bf3a..b5c88ae 100644
+--- a/docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md
++++ b/docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md
+@@ -192,4 +192,5 @@ The open questions in §6 are now decided; this sketch is implemented across ite
+   - `<club-slug>+g.<group>@clubs.memba.io` and `…+g.<group>.c.<token>` → **reserved** for future groups/channels.
+   - Matching is by the address token (robust); `In-Reply-To`/`References` are a secondary check.
+ - **Reply email — show the whole conversation, but lean on the client to fold it.** The branded body is just the new reply + "View the conversation" CTA + footer (with "you're following · stop following" from 040). Earlier messages are emitted as a **standard quoted thread** (`blockquote.gmail_quote` + "On <date>, <name> wrote:") so Apple Mail/Gmail fold ("See more" / "•••") and thread it natively via the 041 headers. We do **not** build a custom fold (`<details>` is unreliable in email) or inline a branded full history (it would double the thread in clients that thread by headers). DS design: `emails/reply-notification.html`.
++- **One canonical email design; earlier slices omit elements.** The DS card `emails/reply-notification.html` is the **final (040) version** — including the "you're following · stop following" footer. Iteration 039 renders the *same* email minus that follow-footer line (039 has no follow concept yet). We do not keep a separate per-iteration card; earlier iterations just leave parts out.
+ - **Delivery-receipts placement (§6 Q5):** still open as a UI detail; the conversation view may demote receipts to a secondary panel, decided during 039 implementation.
+diff --git a/spikes/ds-convert/member-conversation.html b/spikes/ds-convert/member-conversation.html
+new file mode 100644
+index 0000000..e61f452
+--- /dev/null
++++ b/spikes/ds-convert/member-conversation.html
+@@ -0,0 +1,156 @@
++<!-- @dsCard group="Member App" viewport="760x900" subtitle="Message detail as a conversation — original message, follow, replies, composer" name="Conversation (message detail)" -->
++<!-- @startingPoint section="Member App" subtitle="Member message detail reframed as a conversation" viewport="760x900" -->
++<!--
++  FINAL (post-040) version: includes the "Follow this conversation" toggle.
++  Iteration 039 ships the same screen WITHOUT the follow toggle (no follow concept yet)
++  and with replies emailed to all members. Delivery receipts are demoted to a collapsed
++  panel (was the whole screen pre-039). See design sketch §4.1.
++-->
++<!doctype html>
++<html lang="en" data-theme="light">
++<head>
++  <meta charset="utf-8">
++  <title>Conversation · Kootenay Alpine Club · Memba</title>
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <link rel="stylesheet"
++        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
++  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
++  <style>
++    :root {
++      --color-sage-50:#eef1e6; --color-sage-100:#dde3cf; --color-sage-200:#bccaa6;
++      --color-sage-300:#98ab80; --color-sage-400:#6f8760; --color-sage-500:#5a7050;
++      --color-sage-600:#475a40; --color-sage-700:#36462f; --color-sage-800:#232e1e;
++      --color-cream:#f6f5ea; --color-paper:#fffef9; --color-line:#e8e6d4; --color-line-strong:#d9d6bf;
++      --color-ink:#25291d; --color-ink-2:#555a47; --color-ink-3:#878b76;
++      --font-sans:'Figtree',ui-sans-serif,system-ui,sans-serif;
++      --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
++    }
++    :root {
++      color-scheme: light;
++      --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;
++      --color-primary:#5a7050; --color-primary-content:#f6f5ea;
++      --color-secondary:#555a47; --color-secondary-content:#f6f5ea;
++      --color-accent:#d2925a; --color-accent-content:#25291d;
++      --color-neutral:#25291d; --color-neutral-content:#f6f5ea;
++      --color-info:#4f6b78; --color-info-content:#f6f5ea;
++      --color-success:#5f7a4f; --color-success-content:#f6f5ea;
++      --color-warning:#a8772e; --color-warning-content:#f6f5ea;
++      --color-error:#a8503a; --color-error-content:#f6f5ea;
++      --radius-selector:0.375rem; --radius-field:0.375rem; --radius-box:0.75rem;
++      --size-selector:0.25rem; --size-field:0.25rem; --border:1px; --depth:0; --noise:0;
++    }
++    * { box-sizing:border-box; }
++    body { margin:0; background:var(--color-cream); font-family:var(--font-sans); color:var(--color-ink); -webkit-font-smoothing:antialiased; }
++
++    .nav { display:flex; align-items:center; gap:10px; padding:12px 24px; background:var(--color-sage-700); }
++    .nav__mark { width:28px; height:28px; border-radius:7px; background:rgba(255,255,255,0.15); display:grid; place-items:center; flex:none; }
++    .nav__mark svg { width:15px; height:15px; fill:none; stroke:#fff; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; opacity:0.85; }
++    .nav__name { flex:1; font-size:14px; font-weight:600; color:#fff; }
++    .nav__av { width:30px; height:30px; border-radius:50%; background:var(--color-sage-400); display:grid; place-items:center; font-size:11px; font-weight:700; color:#fff; }
++    .nav__out { font-size:12px; color:rgba(255,255,255,0.55); background:none; border:0; cursor:pointer; font-family:var(--font-sans); }
++
++    .wrap { max-width:680px; margin:0 auto; padding:26px 24px 56px; }
++    .back { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--color-ink-3); text-decoration:none; }
++    .back svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
++
++    .eyebrow { font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--color-ink-3); margin:18px 0 0; }
++    .subject { font-size:32px; font-weight:700; letter-spacing:-0.022em; line-height:1.12; color:var(--color-ink); margin:7px 0 0; }
++    .meta { font-size:13.5px; color:var(--color-ink-2); margin:12px 0 0; }
++    .meta strong { color:var(--color-ink); font-weight:600; }
++    .msgbody { font-size:16px; line-height:1.7; color:var(--color-ink-2); margin:16px 0 0; padding-bottom:22px; border-bottom:1px solid var(--color-line); }
++
++    /* follow control */
++    .follow { display:flex; align-items:center; gap:14px; margin:20px 0 0; padding:14px 16px; background:var(--color-paper);
++              border:1px solid var(--color-line); border-radius:14px; }
++    .follow__t { flex:1; }
++    .follow__t strong { display:block; font-size:14px; font-weight:600; color:var(--color-ink); }
++    .follow__t span { display:block; font-size:12.5px; color:var(--color-ink-3); margin-top:2px; }
++
++    /* collapsed delivery summary (demoted from the whole page) */
++    .deliv { display:flex; align-items:center; gap:10px; width:100%; margin:12px 0 0; padding:12px 16px; background:transparent;
++             border:1px solid var(--color-line); border-radius:12px; cursor:pointer; font-family:var(--font-sans); text-align:left; }
++    .deliv svg.chev { width:16px; height:16px; fill:none; stroke:var(--color-ink-3); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
++    .deliv__ic { width:30px; height:30px; border-radius:8px; background:var(--color-sage-100); color:var(--color-sage-700); display:grid; place-items:center; flex:none; }
++    .deliv__ic svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; }
++    .deliv__t { flex:1; font-size:13.5px; color:var(--color-ink-2); }
++    .deliv__t strong { color:var(--color-ink); font-weight:600; }
++    .bar { display:flex; height:6px; width:120px; border-radius:999px; overflow:hidden; background:var(--color-base-200); box-shadow:inset 0 0 0 1px var(--color-line); }
++    .bar > span { display:block; height:100%; }
++
++    /* replies */
++    .replies-h { font-size:15px; font-weight:700; color:var(--color-ink); margin:28px 0 0; }
++    .reply { display:flex; gap:13px; align-items:flex-start; padding:16px 0; border-top:1px solid var(--color-line); }
++    .reply__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--color-sage-800); flex:none; }
++    .reply__b { flex:1; min-width:0; }
++    .reply__head { font-size:13.5px; color:var(--color-ink-3); }
++    .reply__head strong { color:var(--color-ink); font-weight:600; }
++    .reply__body { font-size:15px; line-height:1.6; color:var(--color-ink-2); margin:4px 0 0; }
++
++    /* composer */
++    .composer { margin:18px 0 0; padding:16px; background:var(--color-paper); border:1px solid var(--color-line); border-radius:14px; }
++    .composer textarea { width:100%; resize:vertical; }
++    .composer__actions { display:flex; justify-content:flex-end; margin-top:12px; }
++    .dot { width:7px; height:7px; border-radius:999px; background:currentColor; display:inline-block; }
++  </style>
++</head>
++<body>
++  <div class="nav">
++    <div class="nav__mark"><svg viewBox="0 0 24 24"><path d="M3 18 9 7l4 6 2-3 5 8z"/></svg></div>
++    <div class="nav__name">Kootenay Alpine Club</div>
++    <div class="nav__av">LT</div>
++    <button class="nav__out">Sign out</button>
++  </div>
++
++  <div class="wrap">
++    <a class="back" href="#"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Club home</a>
++
++    <!-- original message -->
++    <p class="eyebrow">Club message</p>
++    <h1 class="subject">Saturday ridge walk</h1>
++    <p class="meta">From <strong>Eira Sandhu</strong> · sent to <strong>142</strong> members · 3 Jun</p>
++    <p class="msgbody">Meeting at the trailhead 8am sharp. Bring microspikes — the north side still has ice in the gullies. We'll regroup at the saddle for lunch.</p>
++
++    <!-- follow control (FINAL/040 — 039 omits this) -->
++    <div class="follow">
++      <input type="checkbox" class="toggle toggle-primary" checked aria-label="Follow this conversation" />
++      <div class="follow__t">
++        <strong>Follow this conversation to receive any new replies</strong>
++        <span>You'll get an email when someone replies. Stop any time.</span>
++      </div>
++    </div>
++
++    <!-- demoted delivery summary -->
++    <button class="deliv">
++      <span class="deliv__ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/></svg></span>
++      <span class="deliv__t"><strong>Delivery</strong> — 142 delivered · 0 sending · 0 problems</span>
++      <span class="bar"><span style="width:100%;background:var(--color-success)"></span></span>
++      <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
++    </button>
++
++    <!-- replies -->
++    <h2 class="replies-h">Replies · 2</h2>
++    <div class="reply">
++      <div class="reply__av" style="background:var(--color-sage-100)">PD</div>
++      <div class="reply__b">
++        <div class="reply__head"><strong>Phil Dunbar</strong> · 3 Jun, 9:14am</div>
++        <div class="reply__body">I can bring a spare set of microspikes — happy to lend them out at the trailhead for anyone who needs them.</div>
++      </div>
++    </div>
++    <div class="reply">
++      <div class="reply__av" style="background:var(--color-sage-200)">MW</div>
++      <div class="reply__b">
++        <div class="reply__head"><strong>Marta Wiśniewska</strong> · 3 Jun, 9:40am</div>
++        <div class="reply__body">Carpool from the north lot? I have three seats — reply here if you want one.</div>
++      </div>
++    </div>
++
++    <!-- inline reply composer -->
++    <div class="composer">
++      <textarea class="textarea" rows="3" placeholder="Write a reply…"></textarea>
++      <div class="composer__actions">
++        <button class="btn btn-primary">Post reply</button>
++      </div>
++    </div>
++  </div>
++</body>
++</html>
