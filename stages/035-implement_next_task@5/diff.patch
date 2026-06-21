@@ -1,0 +1,48 @@
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index 813a5db..5b633fb 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
+ - [x] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
+ - [x] 004 Accept only `local_part == "everyone"` for now.
+-- [ ] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
++- [x] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
+ - [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
+ - [ ] 007 Update member dashboard and member compose copy/mailto links to display the new address.
+ - [ ] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
+diff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs
+index 3019b71..48aa79a 100644
+--- a/web/test/memba/messaging/inbound_club_destination_test.exs
++++ b/web/test/memba/messaging/inbound_club_destination_test.exs
+@@ -21,6 +21,30 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+                ])
+     end
+ 
++    test "uses the extracted club subdomain as the Membership slug lookup value" do
++      club =
++        insert_membership_club!(
++          name: "Kootenay Mountaineering Club",
++          slug: "kmc-alpine"
++        )
++
++      assert {:ok,
++              %InboundClubDestination{
++                club_id: club.club_id,
++                club_slug: "kmc-alpine",
++                club_name: "Kootenay Mountaineering Club",
++                to_address: "everyone@kmc-alpine.clubs.memba.io"
++              }} ==
++               Messaging.resolve_inbound_club_email_destination([
++                 "everyone@kmc-alpine.clubs.memba.io"
++               ])
++
++      assert {:error, :unknown_club_slug, "everyone@kmc.clubs.memba.io"} ==
++               Messaging.resolve_inbound_club_email_destination([
++                 "everyone@kmc.clubs.memba.io"
++               ])
++    end
++
+     test "normalizes recipient subdomain address casing and accepts unrelated copied recipients" do
+       club = insert_membership_club!(slug: "kmc")
+ 
