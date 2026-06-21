@@ -100,6 +100,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert is_nil(Messaging.get_message(nil))
     assert is_nil(Messaging.get_message("not-a-uuid"))
 
+    assert Messaging.list_conversation_messages(Memba.ID.generate(:message)) == []
+    assert Messaging.list_conversation_messages(nil) == []
+    assert Messaging.list_conversation_messages("not-a-uuid") == []
+
     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_email_delivery(nil))
     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
@@ -107,6 +111,121 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert Messaging.list_recipient_deliveries(Memba.ID.generate(:message)) == []
     assert Messaging.list_recipient_deliveries(nil) == []
     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+  end
+
+  describe "list_conversation_messages/1" do
+    test "returns the root message followed by replies in posted order" do
+      club_id = Memba.ID.generate(:club)
+      alice_id = Memba.ID.generate(:person)
+      bob_id = Memba.ID.generate(:person)
+      carol_id = Memba.ID.generate(:person)
+
+      unrelated =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          subject: "Unrelated thread",
+          inserted_at: ~U[2026-06-05 09:00:00.000000Z]
+        )
+
+      root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas.",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      newer_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: carol_id,
+          conversation_id: root.message_id,
+          reply_to_message_id: root.message_id,
+          subject: "Trip planning night",
+          body: "I can bring snacks.",
+          inserted_at: ~U[2026-06-05 12:03:00.000000Z]
+        )
+
+      older_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: bob_id,
+          conversation_id: root.message_id,
+          reply_to_message_id: root.message_id,
+          subject: "Trip planning night",
+          body: "I can bring maps.",
+          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
+        )
+
+      assert [
+               %MessageProjection{message_id: root_id, reply_to_message_id: nil},
+               %MessageProjection{
+                 message_id: older_reply_id,
+                 reply_to_message_id: older_reply_to_message_id
+               },
+               %MessageProjection{
+                 message_id: newer_reply_id,
+                 reply_to_message_id: newer_reply_to_message_id
+               }
+             ] = Messaging.list_conversation_messages(root.message_id)
+
+      assert root_id == root.message_id
+      assert older_reply_id == older_reply.message_id
+      assert newer_reply_id == newer_reply.message_id
+      assert older_reply_to_message_id == root.message_id
+      assert newer_reply_to_message_id == root.message_id
+      refute unrelated.message_id in [root_id, older_reply_id, newer_reply_id]
+    end
+
+    test "accepts a reply message id and returns its root conversation" do
+      club_id = Memba.ID.generate(:club)
+      alice_id = Memba.ID.generate(:person)
+      bob_id = Memba.ID.generate(:person)
+
+      root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          subject: "Trip planning night",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: bob_id,
+          conversation_id: root.message_id,
+          reply_to_message_id: root.message_id,
+          subject: "Trip planning night",
+          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
+        )
+
+      assert [
+               %MessageProjection{message_id: root_id},
+               %MessageProjection{message_id: reply_id}
+             ] = Messaging.list_conversation_messages(reply.message_id)
+
+      assert root_id == root.message_id
+      assert reply_id == reply.message_id
+    end
+
+    test "returns an empty list for orphaned reply projections without a root" do
+      missing_root_id = Memba.ID.generate(:message)
+
+      _orphaned_reply =
+        insert_message_projection!(
+          club_id: Memba.ID.generate(:club),
+          sender_id: Memba.ID.generate(:person),
+          conversation_id: missing_root_id,
+          reply_to_message_id: missing_root_id,
+          subject: "Trip planning night",
+          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
+        )
+
+      assert Messaging.list_conversation_messages(missing_root_id) == []
+    end
   end
 
   describe "list_operator_messages/0" do

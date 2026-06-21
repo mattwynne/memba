@@ -218,6 +218,36 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List the projected conversation containing a message.
+
+  The argument may be the root message ID or any reply message ID. Invalid,
+  missing, or orphaned projections return an empty list. Results are ordered with
+  the original root message first, followed by replies in projected posted order.
+  """
+  def list_conversation_messages(message_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id),
+         %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
+         {:ok, conversation_id} <- conversation_id_for_message(message),
+         %MessageProjection{} <- fetch_conversation_root_projection(conversation_id) do
+      MessageProjection
+      |> where([message], message.conversation_id == ^conversation_id)
+      |> order_by([message],
+        asc:
+          fragment(
+            "CASE WHEN ? = ? THEN 0 ELSE 1 END",
+            message.message_id,
+            ^conversation_id
+          ),
+        asc: message.inserted_at,
+        asc: message.message_id
+      )
+      |> Repo.all()
+    else
+      _invalid_or_missing -> []
+    end
+  end
+
+  @doc """
   List projected messages for the Memba staff operations Messages index.
 
   Results include club and sender context where the Membership read models can
@@ -466,6 +496,23 @@ defmodule Memba.Messaging do
 
   defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
     delivery
+  end
+
+  defp conversation_id_for_message(%MessageProjection{conversation_id: conversation_id}) do
+    case ID.cast(:message, conversation_id) do
+      {:ok, conversation_id} -> {:ok, conversation_id}
+      :error -> :error
+    end
+  end
+
+  defp fetch_conversation_root_projection(conversation_id) do
+    case Repo.get(MessageProjection, conversation_id) do
+      %MessageProjection{message_id: ^conversation_id, conversation_id: ^conversation_id} = root ->
+        root
+
+      _missing_or_not_root ->
+        nil
+    end
   end
 
   defp operator_deliveries_query(opts) do
