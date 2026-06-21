@@ -949,7 +949,10 @@ defmodule Memba.Messaging do
          reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
          subject: root_message.subject,
          body: body,
-         recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
+         recipients:
+           resolve_reply_recipients(root_message.club_id, conversation_id,
+             except_person_id: sender_id
+           )
        }}
     end
   end
@@ -1062,6 +1065,25 @@ defmodule Memba.Messaging do
     |> Membership.list_active_members_of_club()
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
+  end
+
+  defp resolve_reply_recipients(club_id, conversation_id, opts) do
+    except_person_id = Keyword.get(opts, :except_person_id)
+    follower_ids = current_follower_ids(club_id, conversation_id)
+
+    club_id
+    |> Membership.list_active_members_of_club()
+    |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
+    |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.map(&resolved_recipient/1)
+  end
+
+  defp current_follower_ids(club_id, conversation_id) do
+    conversation_id
+    |> list_conversation_followers()
+    |> Enum.filter(&(&1.club_id == club_id))
+    |> Enum.map(& &1.member_id)
+    |> MapSet.new()
   end
 
   defp resolved_recipient(%{id: person_id, name: name, email: email}) do

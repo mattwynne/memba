@@ -9,6 +9,7 @@ defmodule Memba.Messaging.ConversationFollowers do
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
+  alias Memba.Messaging.Events.MessageSent
 
   @behaviour Aggregate
 
@@ -50,6 +51,15 @@ defmodule Memba.Messaging.ConversationFollowers do
   end
 
   @impl Aggregate
+  def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do
+    %__MODULE__{
+      conversation
+      | conversation_id: event.conversation_id || event.message_id,
+        club_id: event.club_id,
+        follower_ids: MapSet.put(conversation.follower_ids, event.sender_id)
+    }
+  end
+
   def apply(%__MODULE__{} = conversation, %ConversationFollowed{} = event) do
     %__MODULE__{
       conversation
@@ -67,6 +77,8 @@ defmodule Memba.Messaging.ConversationFollowers do
         follower_ids: MapSet.delete(conversation.follower_ids, event.member_id)
     }
   end
+
+  def apply(%__MODULE__{} = conversation, _event), do: conversation
 
   def follow_id(conversation_id, member_id) do
     ID.deterministic(:conversation_follow, [conversation_id, member_id])
