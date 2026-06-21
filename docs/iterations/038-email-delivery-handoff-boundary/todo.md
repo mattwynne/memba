@@ -13,4 +13,4 @@
 - [x] 011 Adapt accepted inbound club-message flow so it relies on the same pending-delivery projection and dispatcher path.
 - [x] 012 Adjust member-facing and staff/operator delivery presentation only as needed for the new statuses: hide or soften infrastructure detail on member-facing screens, while allowing staff/operator diagnostics to show exact status/error.
 - [x] 013 Add/update focused tests for the acceptance criteria above.
-- [ ] 014 Run `dev check` and fix any regressions.
+- [x] 014 Run `dev check` and fix any regressions.
