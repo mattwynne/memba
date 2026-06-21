@@ -100,3 +100,4 @@ Validation:
 Remaining follow-up:
 
 - Existing history still contains commits already attributed to `fabro@users.noreply.github.com`; this fix only prevents future workflow commits from using that GitHub-user-mapped address.
+- Matt wants to rewrite existing history after iteration 041 has landed. Treat that as a coordinated maintenance step: pause/avoid new Fabro runs, confirm 041 is merged and pushed, back up current refs, rewrite `fabro@users.noreply.github.com` to the approved identity, force-push `main`, and decide how to handle old Fabro run/rescue/review branches and local clones.
