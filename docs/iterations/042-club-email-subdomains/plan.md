@@ -1,7 +1,7 @@
 # Club email subdomains
 
 Date: 2026-06-21
-Status: ready
+Status: validated
 
 ## Goal
 
