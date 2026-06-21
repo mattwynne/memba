@@ -6,7 +6,7 @@ defmodule MembaWeb.ResendInboundEmailParser do
   @provider "resend"
   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
 
-  alias Memba.Messaging.InboundEmailReplyHeaders
+  alias MembaWeb.InboundEmailHeaders
 
   @doc """
   Translate a Resend inbound webhook payload into attrs accepted by Messaging's
@@ -35,9 +35,9 @@ defmodule MembaWeb.ResendInboundEmailParser do
          subject: String.trim(subject),
          text_body: text_body,
          html_body: html_body,
-         original_message_id: original_message_id(headers),
-         in_reply_to_message_ids: reply_message_ids(headers, "in-reply-to"),
-         references_message_ids: reply_message_ids(headers, "references"),
+         original_message_id: InboundEmailHeaders.original_message_id(headers),
+         in_reply_to_message_ids: InboundEmailHeaders.reply_message_ids(headers, "in-reply-to"),
+         references_message_ids: InboundEmailHeaders.reply_message_ids(headers, "references"),
          attachments: attachments,
          headers: headers
        }}
@@ -221,73 +221,6 @@ defmodule MembaWeb.ResendInboundEmailParser do
   end
 
   defp fetch_required(_map, _keys, label), do: {:error, {:missing_required_attribute, label}}
-
-  defp original_message_id(headers) do
-    headers
-    |> header_value("message-id")
-    |> optional_trimmed_string()
-  end
-
-  defp reply_message_ids(headers, name) do
-    headers
-    |> header_values(name)
-    |> InboundEmailReplyHeaders.message_ids()
-  end
-
-  defp header_value(headers, name) when is_map(headers) do
-    Enum.find_value(headers, fn {header_name, value} ->
-      if normalize_header_name(header_name) == name, do: value
-    end)
-  end
-
-  defp header_value(headers, name) when is_list(headers) do
-    Enum.find_value(headers, fn
-      header when is_map(header) ->
-        header_name = value(header, [:name, "name", :Name, "Name"])
-
-        if normalize_header_name(header_name) == name do
-          value(header, [:value, "value", :Value, "Value"])
-        end
-
-      _header ->
-        nil
-    end)
-  end
-
-  defp header_value(_headers, _name), do: nil
-
-  defp header_values(headers, name) when is_map(headers) do
-    headers
-    |> Enum.filter(fn {header_name, _value} -> normalize_header_name(header_name) == name end)
-    |> Enum.map(fn {_header_name, value} -> value end)
-  end
-
-  defp header_values(headers, name) when is_list(headers) do
-    headers
-    |> Enum.flat_map(fn
-      header when is_map(header) ->
-        header_name = value(header, [:name, "name", :Name, "Name"])
-
-        if normalize_header_name(header_name) == name do
-          [value(header, [:value, "value", :Value, "Value"])]
-        else
-          []
-        end
-
-      _header ->
-        []
-    end)
-  end
-
-  defp header_values(_headers, _name), do: []
-
-  defp normalize_header_name(name) when is_binary(name) do
-    name
-    |> String.trim()
-    |> String.downcase()
-  end
-
-  defp normalize_header_name(_name), do: nil
 
   defp value(map, keys) when is_map(map) do
     Enum.find_value(keys, fn key ->

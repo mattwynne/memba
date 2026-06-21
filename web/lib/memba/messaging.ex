@@ -187,6 +187,13 @@ defmodule Memba.Messaging do
   messages, so accepted inbound email creates the same message event, recipient
   delivery events, and pending delivery projections for the dispatcher to hand
   off to the provider.
+
+  Reply-by-email uses Topicbox-style routing: recognized `In-Reply-To` or
+  `References` Message-ID values are matched only against outbound Memba emails
+  for the addressed club. A recognized same-club header posts through the normal
+  conversation reply path; missing, unknown, or different-club headers fall back
+  to the existing new club-wide message path. Sender authorization and rejection
+  behaviour stay the same for both paths.
   """
   def receive_inbound_club_email(attrs, dispatch_opts \\ [])
 
@@ -442,6 +449,10 @@ defmodule Memba.Messaging do
 
   @doc """
   Resolve a persisted outbound RFC Message-ID to its Memba message context.
+
+  `messaging_email_deliveries.outbound_message_id` is non-null and unique, so
+  this lookup is deterministic across dispatcher retries, projection replay, and
+  inbound reply handling.
 
   Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,
   or belongs to a delivery whose message projection is absent.
