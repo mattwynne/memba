@@ -2,8 +2,15 @@ defmodule Memba.Messaging.Message do
   @moduledoc """
   Message aggregate for the Messaging bounded context.
 
-  One aggregate represents one club message and owns the per-email delivery
-  records created for that message.
+  One aggregate represents one conversation entry: either the root club message
+  or a reply message. Each aggregate owns the per-email delivery records created
+  for that message.
+
+  Conversations are modeled without a separate conversation aggregate. The root
+  message records `conversation_id == message_id`; replies use their own
+  `message_id` and point at the root with `conversation_id`, keeping reply
+  delivery receipts in the reply message's stream while leaving a clean key for
+  conversation projections and future follower rules.
   """
 
   alias Commanded.Aggregates.Aggregate
@@ -28,6 +35,8 @@ defmodule Memba.Messaging.Message do
     :message_id,
     :club_id,
     :sender_id,
+    :conversation_id,
+    :reply_to_message_id,
     :subject,
     :body,
     delivery_statuses: %{},
@@ -40,6 +49,12 @@ defmodule Memba.Messaging.Message do
     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+         {:ok, conversation_id, reply_to_message_id} <-
+           normalize_conversation_reference(
+             command.message_id,
+             command.conversation_id,
+             command.reply_to_message_id
+           ),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
          {:ok, recipients} <- normalize_recipients(command.recipients),
@@ -49,6 +64,8 @@ defmodule Memba.Messaging.Message do
           message_id: command.message_id,
           club_id: command.club_id,
           sender_id: command.sender_id,
+          conversation_id: conversation_id,
+          reply_to_message_id: reply_to_message_id,
           subject: subject,
           body: body
         }
@@ -82,6 +99,8 @@ defmodule Memba.Messaging.Message do
       | message_id: event.message_id,
         club_id: event.club_id,
         sender_id: event.sender_id,
+        conversation_id: event.conversation_id || event.message_id,
+        reply_to_message_id: event.reply_to_message_id,
         subject: event.subject,
         body: event.body
     }
@@ -156,6 +175,36 @@ defmodule Memba.Messaging.Message do
 
   defp validate_message_identity(%__MODULE__{message_id: message_id}, message_id), do: :ok
   defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
+
+  defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
+    conversation_id = conversation_id || message_id
+
+    with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
+         :ok <- validate_optional_id(:message, reply_to_message_id, :invalid_reply_to_message_id),
+         :ok <- validate_conversation_shape(message_id, conversation_id, reply_to_message_id) do
+      {:ok, conversation_id, reply_to_message_id}
+    end
+  end
+
+  defp validate_optional_id(_type, nil, _error), do: :ok
+
+  defp validate_optional_id(type, value, error) do
+    validate_id(type, value, error)
+  end
+
+  defp validate_conversation_shape(message_id, message_id, nil), do: :ok
+
+  defp validate_conversation_shape(message_id, message_id, _reply_to_message_id),
+    do: {:error, :invalid_conversation_reference}
+
+  defp validate_conversation_shape(message_id, _conversation_id, message_id),
+    do: {:error, :invalid_conversation_reference}
+
+  defp validate_conversation_shape(_message_id, _conversation_id, nil),
+    do: {:error, :reply_to_message_required}
+
+  defp validate_conversation_shape(_message_id, _conversation_id, _reply_to_message_id),
+    do: :ok
 
   defp validate_known_delivery(%__MODULE__{} = message, delivery_id) do
     if MapSet.member?(message.email_delivery_ids, delivery_id) do

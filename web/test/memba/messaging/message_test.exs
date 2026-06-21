@@ -17,7 +17,7 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Recipient
 
   describe "execute/2 SendMessage" do
-    test "emits MessageSent and one EmailDeliveryCreated per resolved recipient" do
+    test "emits MessageSent as the root of its own conversation and one EmailDeliveryCreated per resolved recipient" do
       message_id = Memba.ID.generate(:message)
       club_id = Memba.ID.generate(:club)
       sender_id = Memba.ID.generate(:person)
@@ -52,6 +52,8 @@ defmodule Memba.Messaging.MessageTest do
                  message_id: ^message_id,
                  club_id: ^club_id,
                  sender_id: ^sender_id,
+                 conversation_id: ^message_id,
+                 reply_to_message_id: nil,
                  subject: "Trail day",
                  body: "Meet at 9am."
                },
@@ -93,6 +95,60 @@ defmodule Memba.Messaging.MessageTest do
 
       assert {:error, :invalid_body} =
                Message.execute(%Message{}, %SendMessage{valid_command | body: "  "})
+    end
+
+    test "models a reply as another message in the root message conversation" do
+      root_message_id = Memba.ID.generate(:message)
+      reply_message_id = Memba.ID.generate(:message)
+      sender_id = Memba.ID.generate(:person)
+
+      command = %SendMessage{
+        valid_send_message()
+        | message_id: reply_message_id,
+          sender_id: sender_id,
+          conversation_id: root_message_id,
+          reply_to_message_id: root_message_id,
+          subject: "Re: Trail day",
+          body: "I'll bring maps.",
+          recipients: [
+            %Recipient{
+              delivery_id: Memba.ID.generate(:delivery),
+              person_id: sender_id,
+              name: "Alice Sender",
+              email: "alice@example.com"
+            }
+          ]
+      }
+
+      assert [
+               %MessageSent{
+                 message_id: ^reply_message_id,
+                 sender_id: ^sender_id,
+                 conversation_id: ^root_message_id,
+                 reply_to_message_id: ^root_message_id,
+                 subject: "Re: Trail day",
+                 body: "I'll bring maps."
+               },
+               %EmailDeliveryCreated{}
+             ] = Message.execute(%Message{}, command)
+    end
+
+    test "rejects malformed conversation references" do
+      valid_command = valid_send_message()
+
+      assert {:error, :invalid_conversation_id} =
+               Message.execute(%Message{}, %SendMessage{
+                 valid_command
+                 | conversation_id: "not-a-uuid",
+                   reply_to_message_id: valid_command.message_id
+               })
+
+      assert {:error, :invalid_reply_to_message_id} =
+               Message.execute(%Message{}, %SendMessage{
+                 valid_command
+                 | conversation_id: valid_command.message_id,
+                   reply_to_message_id: "not-a-uuid"
+               })
     end
 
     test "rejects invalid recipient lists" do
@@ -382,6 +438,8 @@ defmodule Memba.Messaging.MessageTest do
              message_id: ^message_id,
              club_id: ^club_id,
              sender_id: ^sender_id,
+             conversation_id: ^message_id,
+             reply_to_message_id: nil,
              delivery_statuses: delivery_statuses,
              email_delivery_ids: email_delivery_ids,
              recipient_ids: recipient_ids
@@ -390,6 +448,25 @@ defmodule Memba.Messaging.MessageTest do
     assert MapSet.equal?(email_delivery_ids, MapSet.new([delivery_id]))
     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id]))
     assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
+  end
+
+  test "apply/2 treats historic MessageSent events without conversation fields as conversation roots" do
+    message_id = Memba.ID.generate(:message)
+
+    message =
+      Message.apply(%Message{}, %MessageSent{
+        message_id: message_id,
+        club_id: Memba.ID.generate(:club),
+        sender_id: Memba.ID.generate(:person),
+        subject: "Trail day",
+        body: "Meet at 9am."
+      })
+
+    assert %Message{
+             message_id: ^message_id,
+             conversation_id: ^message_id,
+             reply_to_message_id: nil
+           } = message
   end
 
   test "apply/2 records delivery status changes and ignores historic opened events" do
