@@ -1,0 +1,432 @@
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index bb5806f..5ecdab3 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -13,10 +13,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   use GenServer
+ 
+   import Ecto.Query
++  require Logger
+ 
+   alias Memba.Membership
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.EmailDeliveryStatus
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+@@ -25,10 +27,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   alias Memba.Repo
+ 
+   @name __MODULE__
+-  @pending_status "pending"
+-  @dispatching_status "dispatching"
+-  @sent_status "sent"
+-  @failed_status "failed"
++  @pending_status EmailDeliveryStatus.pending()
++  @dispatching_status EmailDeliveryStatus.dispatching()
++  @sent_status EmailDeliveryStatus.sent()
++  @failed_status EmailDeliveryStatus.failed()
+ 
+   @doc """
+   Atomically claim one pending email delivery for provider dispatch.
+@@ -51,8 +53,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+              updated_at: now
+            ]
+          ) do
+-      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
+-      {0, nil} -> :not_claimed
++      {1, nil} ->
++        delivery = Repo.get!(EmailDeliveryProjection, delivery_id)
++        log_dispatch_claimed(delivery)
++        {:ok, delivery}
++
++      {0, nil} ->
++        log_dispatch_claim_skipped(delivery_id)
++        :not_claimed
+     end
+   end
+ 
+@@ -98,8 +106,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   """
+   def dispatch_claimed_delivery(%EmailDeliveryProjection{} = delivery) do
+     case deliver_to_provider(delivery) do
+-      :ok -> mark_delivery_sent(delivery)
+-      {:error, reason} -> mark_delivery_failed(delivery, reason)
++      :ok ->
++        log_provider_success(delivery)
++        mark_delivery_sent(delivery)
++
++      {:error, reason} ->
++        log_provider_error(delivery, reason)
++        mark_delivery_failed(delivery, reason)
+     end
+   end
+ 
+@@ -134,7 +147,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+   def deliver_to_provider(%EmailDeliveryProjection{} = delivery) do
+     with {:ok, request} <- email_delivery_request(delivery) do
+-      EmailDeliveryProvider.deliver(request)
++      request
++      |> deliver_request_to_provider(delivery)
++      |> normalize_provider_result()
+     end
+   end
+ 
+@@ -169,6 +184,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          } = payload},
+         state
+       ) do
++    Logger.debug("email_delivery_dispatch_nudged",
++      delivery_id: payload_delivery_id(payload),
++      source_event: inspect(EmailDeliveryCreated)
++    )
++
+     send(self(), {:dispatch_pending_email_deliveries, payload})
+ 
+     {:noreply, state}
+@@ -189,7 +209,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp dispatch_pending_email_deliveries(%{dispatch_enabled: true}),
+     do: dispatch_pending_email_deliveries()
+ 
+-  defp dispatch_pending_email_deliveries(%{dispatch_enabled: false}), do: []
++  defp dispatch_pending_email_deliveries(%{dispatch_enabled: false}) do
++    Logger.debug("email_delivery_dispatch_disabled")
++    []
++  end
+ 
+   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
+ 
+@@ -220,8 +243,15 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+              updated_at: now
+            ]
+          ) do
+-      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
+-      {0, nil} -> failed_delivery_retry_error(delivery_id)
++      {1, nil} ->
++        delivery = Repo.get!(EmailDeliveryProjection, delivery_id)
++        log_retry_claimed(delivery)
++        {:ok, delivery}
++
++      {0, nil} ->
++        error = failed_delivery_retry_error(delivery_id)
++        log_retry_skipped(delivery_id, error)
++        error
+     end
+   end
+ 
+@@ -234,8 +264,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+   defp dispatch_claimed_retry_delivery(%EmailDeliveryProjection{} = delivery) do
+     case deliver_to_provider(delivery) do
+-      :ok -> mark_delivery_sent(delivery, increment_attempt_count?: true)
+-      {:error, reason} -> mark_delivery_failed(delivery, reason)
++      :ok ->
++        log_provider_success(delivery)
++        mark_delivery_sent(delivery, increment_attempt_count?: true)
++
++      {:error, reason} ->
++        log_provider_error(delivery, reason)
++        mark_delivery_failed(delivery, reason)
+     end
+   end
+ 
+@@ -342,6 +377,30 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp request_channel("email"), do: {:ok, :email}
+   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
+ 
++  defp deliver_request_to_provider(
++         %EmailDeliveryRequest{} = request,
++         %EmailDeliveryProjection{} = delivery
++       ) do
++    EmailDeliveryProvider.deliver(request)
++  rescue
++    exception ->
++      stacktrace = __STACKTRACE__
++
++      Logger.error(
++        "email_delivery_provider_exception\n" <> Exception.format(:error, exception, stacktrace),
++        delivery_id: delivery.delivery_id,
++        message_id: delivery.message_id,
++        provider: inspect(EmailDeliveryProvider.configured_provider()),
++        event: "email_delivery_provider_exception"
++      )
++
++      {:error, {:provider_exception, exception.__struct__, Exception.message(exception)}}
++  end
++
++  defp normalize_provider_result(:ok), do: :ok
++  defp normalize_provider_result({:error, reason}), do: {:error, reason}
++  defp normalize_provider_result(other), do: {:error, {:unexpected_provider_response, other}}
++
+   defp sender_context(sender_id) do
+     with %{name: sender_name} <- Membership.get_person(sender_id),
+          sender_address when is_binary(sender_address) <-
+@@ -357,4 +416,54 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+ 
+   defp club_slug(%{slug: slug}), do: slug
+   defp club_slug(_club), do: nil
++
++  defp log_dispatch_claimed(%EmailDeliveryProjection{} = delivery) do
++    Logger.info(
++      "email_delivery_dispatch_claimed",
++      delivery_metadata(delivery, @dispatching_status)
++    )
++  end
++
++  defp log_dispatch_claim_skipped(delivery_id) do
++    Logger.debug("email_delivery_dispatch_claim_skipped",
++      delivery_id: delivery_id,
++      expected_status: @pending_status
++    )
++  end
++
++  defp log_retry_claimed(%EmailDeliveryProjection{} = delivery) do
++    Logger.info("email_delivery_retry_claimed", delivery_metadata(delivery, @dispatching_status))
++  end
++
++  defp log_retry_skipped(delivery_id, error) do
++    Logger.debug("email_delivery_retry_skipped",
++      delivery_id: delivery_id,
++      reason: inspect(error)
++    )
++  end
++
++  defp log_provider_success(%EmailDeliveryProjection{} = delivery) do
++    Logger.info("email_delivery_provider_success", delivery_metadata(delivery, @sent_status))
++  end
++
++  defp log_provider_error(%EmailDeliveryProjection{} = delivery, reason) do
++    Logger.warning(
++      "email_delivery_provider_error",
++      Keyword.merge(delivery_metadata(delivery, @failed_status), reason: inspect(reason))
++    )
++  end
++
++  defp delivery_metadata(%EmailDeliveryProjection{} = delivery, status) do
++    [
++      delivery_id: delivery.delivery_id,
++      message_id: delivery.message_id,
++      status: status,
++      provider: inspect(EmailDeliveryProvider.configured_provider())
++    ]
++  end
++
++  defp payload_delivery_id(%{source_event: %EmailDeliveryCreated{delivery_id: delivery_id}}),
++    do: delivery_id
++
++  defp payload_delivery_id(_payload), do: nil
+ end
+diff --git a/web/lib/memba/messaging/email_delivery_provider.ex b/web/lib/memba/messaging/email_delivery_provider.ex
+index 853264a..a318b59 100644
+--- a/web/lib/memba/messaging/email_delivery_provider.ex
++++ b/web/lib/memba/messaging/email_delivery_provider.ex
+@@ -14,10 +14,11 @@ defmodule Memba.Messaging.EmailDeliveryProvider do
+   Hand one email delivery request to the configured provider.
+   """
+   def deliver(%EmailDeliveryRequest{} = request) do
+-    provider().deliver(request)
++    configured_provider().deliver(request)
+   end
+ 
+-  defp provider do
++  @doc false
++  def configured_provider do
+     Application.get_env(
+       :memba,
+       :messaging_email_delivery_provider,
+diff --git a/web/lib/memba/messaging/email_delivery_status.ex b/web/lib/memba/messaging/email_delivery_status.ex
+new file mode 100644
+index 0000000..d96f9ff
+--- /dev/null
++++ b/web/lib/memba/messaging/email_delivery_status.ex
+@@ -0,0 +1,40 @@
++defmodule Memba.Messaging.EmailDeliveryStatus do
++  @moduledoc """
++  Shared status vocabulary for provider dispatch-backed email deliveries.
++
++  These values are persisted on `messaging_email_deliveries` and mirrored by the
++  database check constraint. Keep this module and that constraint in sync when
++  the delivery lifecycle or webhook outcome vocabulary changes.
++  """
++
++  @pending "pending"
++  @dispatching "dispatching"
++  @sent "sent"
++  @failed "failed"
++
++  @delivered "delivered"
++  @delayed "delayed"
++  @bounced "bounced"
++  @spam_complaint "spam_complaint"
++
++  @dispatch_lifecycle_statuses [@pending, @dispatching, @sent, @failed]
++  @provider_webhook_statuses [@delivered, @delayed, @bounced, @spam_complaint]
++  @valid_statuses @dispatch_lifecycle_statuses ++ @provider_webhook_statuses
++
++  def pending, do: @pending
++  def dispatching, do: @dispatching
++  def sent, do: @sent
++  def failed, do: @failed
++
++  def delivered, do: @delivered
++  def delayed, do: @delayed
++  def bounced, do: @bounced
++  def spam_complaint, do: @spam_complaint
++
++  def dispatch_lifecycle_statuses, do: @dispatch_lifecycle_statuses
++  def provider_webhook_statuses, do: @provider_webhook_statuses
++  def valid_statuses, do: @valid_statuses
++
++  def valid?(status) when is_binary(status), do: status in @valid_statuses
++  def valid?(_status), do: false
++end
+diff --git a/web/lib/memba/messaging/projections/email_delivery.ex b/web/lib/memba/messaging/projections/email_delivery.ex
+index 12834a6..b5b7a3e 100644
+--- a/web/lib/memba/messaging/projections/email_delivery.ex
++++ b/web/lib/memba/messaging/projections/email_delivery.ex
+@@ -2,6 +2,10 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
+   @moduledoc """
+   Read model projection for one email delivery belonging to a message.
+ 
++  Valid persisted statuses are defined in `Memba.Messaging.EmailDeliveryStatus`
++  and enforced by the `messaging_email_deliveries_status_check` database
++  constraint.
++
+   Dispatch diagnostics are intentionally operational rather than domain facts:
+ 
+     * `attempt_count` remains `0` for first-pass successes, increments when a
+diff --git a/web/lib/memba/messaging/projectors/email_delivery.ex b/web/lib/memba/messaging/projectors/email_delivery.ex
+index e6285dd..b2d3f15 100644
+--- a/web/lib/memba/messaging/projectors/email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/email_delivery.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
+     consistency: :strong
+ 
+   alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.EmailDeliveryStatus
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
+   project(%EmailDeliveryCreated{} = event, fn multi ->
+@@ -20,7 +21,7 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
+       recipient_name: event.recipient_name,
+       recipient_address: event.recipient_email,
+       channel: "email",
+-      status: "pending",
++      status: EmailDeliveryStatus.pending(),
+       attempt_count: 0
+     })
+   end)
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 319541b..642aefe 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -1,8 +1,11 @@
+ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+   use Memba.DataCase, async: false
+ 
++  import ExUnit.CaptureLog
++
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
++  alias Memba.Messaging.EmailDeliveryProviders.Raising
+   alias Memba.Messaging.EmailDeliveryProviders.SelectiveFailure
+   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+   alias Memba.Messaging.EmailDeliveryRequest
+@@ -353,6 +356,46 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+     end
+ 
++    test "marks a claimed delivery as failed when the provider raises unexpectedly" do
++      Application.put_env(:memba, :messaging_email_delivery_provider, Raising)
++
++      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
++
++      log =
++        capture_log(fn ->
++          assert [
++                   %EmailDeliveryProjection{
++                     delivery_id: delivery_id,
++                     status: "failed",
++                     attempt_count: 1,
++                     latest_error: "provider_exception",
++                     latest_detail: latest_detail,
++                     sent_at: nil,
++                     failed_at: %DateTime{} = failed_at
++                   }
++                 ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
++
++          assert delivery_id == delivery.delivery_id
++          assert latest_detail =~ "RuntimeError"
++          assert latest_detail =~ "provider exploded"
++          assert DateTime.compare(failed_at, delivery.inserted_at) in [:gt, :eq]
++        end)
++
++      assert log =~ "email_delivery_provider_exception"
++      assert log =~ "provider exploded"
++
++      assert %EmailDeliveryProjection{
++               status: "failed",
++               attempt_count: 1,
++               latest_error: "provider_exception",
++               latest_detail: latest_detail,
++               sent_at: nil,
++               failed_at: %DateTime{}
++             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
++
++      assert latest_detail =~ "provider exploded"
++    end
++
+     test "continues dispatching other deliveries when one recipient fails" do
+       start_supervised!(SelectiveFailure)
+       SelectiveFailure.reset()
+diff --git a/web/test/memba/messaging/email_delivery_status_constraints_test.exs b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+index d64047e..0532646 100644
+--- a/web/test/memba/messaging/email_delivery_status_constraints_test.exs
++++ b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+@@ -1,9 +1,22 @@
+ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
+   use Memba.DataCase, async: true
+ 
++  alias Memba.Messaging.EmailDeliveryStatus
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
+-  @valid_statuses ~w(pending dispatching sent failed delivered delayed bounced spam_complaint)
++  @valid_statuses EmailDeliveryStatus.valid_statuses()
++
++  test "shared status vocabulary lists dispatch lifecycle and provider webhook statuses" do
++    assert EmailDeliveryStatus.dispatch_lifecycle_statuses() ==
++             ~w(pending dispatching sent failed)
++
++    assert EmailDeliveryStatus.provider_webhook_statuses() ==
++             ~w(delivered delayed bounced spam_complaint)
++
++    assert EmailDeliveryStatus.valid_statuses() == @valid_statuses
++    assert EmailDeliveryStatus.valid?("pending")
++    refute EmailDeliveryStatus.valid?("not-a-delivery-status")
++  end
+ 
+   test "database constraint allows dispatch lifecycle and provider webhook statuses" do
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+diff --git a/web/test/support/messaging/email_delivery_providers/raising.ex b/web/test/support/messaging/email_delivery_providers/raising.ex
+new file mode 100644
+index 0000000..13da0fb
+--- /dev/null
++++ b/web/test/support/messaging/email_delivery_providers/raising.ex
+@@ -0,0 +1,15 @@
++defmodule Memba.Messaging.EmailDeliveryProviders.Raising do
++  @moduledoc """
++  Test email delivery provider that raises at the provider boundary.
++  """
++
++  alias Memba.Messaging.EmailDeliveryProvider
++  alias Memba.Messaging.EmailDeliveryRequest
++
++  @behaviour EmailDeliveryProvider
++
++  @impl EmailDeliveryProvider
++  def deliver(%EmailDeliveryRequest{}) do
++    raise "provider exploded"
++  end
++end
