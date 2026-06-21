@@ -34,8 +34,8 @@ defmodule Memba.Messaging.InboundClubDestination do
   and the subdomain matches an existing club slug. Unrelated copied recipients
   are ignored once a supported club destination is found.
 
-  Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is
-  present but no matching club exists, or
+  Returns `{:error, :unknown_club_slug, to_address}` when a supported subdomain
+  address is present but no matching club exists, or
   `{:error, :unsupported_recipient_address, address_or_nil}` when no supported
   whole-club address shape is present.
   """
@@ -89,7 +89,7 @@ defmodule Memba.Messaging.InboundClubDestination do
         end
 
       {:error, :not_club_subdomain_host} ->
-        club_slug_from_flat_address(local_part, host)
+        {:error, :unsupported_recipient_address}
 
       {:error, _reason} = error ->
         error
@@ -114,13 +114,6 @@ defmodule Memba.Messaging.InboundClubDestination do
 
       true ->
         {:error, :not_club_subdomain_host}
-    end
-  end
-
-  defp club_slug_from_flat_address(local_part, host) do
-    with true <- host == ClubInboundEmailAddress.domain(),
-         {:ok, slug} <- Slug.normalize_for_lookup(local_part) do
-      {:ok, slug}
     end
   end
 

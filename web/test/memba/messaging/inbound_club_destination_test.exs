@@ -105,6 +105,13 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                ])
     end
 
+    test "rejects the old flat club address shape even when the club exists" do
+      insert_membership_club!(slug: "kmc")
+
+      assert {:error, :unsupported_recipient_address, "kmc@clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
+    end
+
     test "rejects malformed or missing recipient input as unsupported" do
       assert {:error, :unsupported_recipient_address, nil} ==
                Messaging.resolve_inbound_club_email_destination([])

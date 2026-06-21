@@ -38,8 +38,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-accepted",
         "From" => "Alice Example <Alice@Example.COM>",
         "FromFull" => %{"Email" => "Alice@Example.COM", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night",
         "TextBody" => "Bring route ideas.",
         "HtmlBody" => "<p>Bring route ideas.</p>",
@@ -109,8 +109,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-alternate-sender",
         "From" => "Alice Work <Alice.Work@Example.COM>",
         "FromFull" => %{"Email" => "Alice.Work@Example.COM", "Name" => "Alice Work"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Alternate sender address",
         "TextBody" => "Posting from my work address."
       })
@@ -124,7 +124,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider_message_id: "postmark-controller-alternate-sender",
              status: "accepted",
              from_address: "alice.work@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              club_id: kmc_id,
              sender_id: alice_id,
              message_id: message_id
@@ -177,8 +177,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-unknown-sender",
         "From" => "Mystery Sender <mystery@example.com>",
         "FromFull" => %{"Email" => "mystery@example.com", "Name" => "Mystery Sender"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Can I post?",
         "TextBody" => "Please post this."
       })
@@ -194,7 +194,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider_message_id: "postmark-controller-unknown-sender",
              provider_event_id: nil,
              from_address: "mystery@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "unknown_sender",
@@ -222,8 +222,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-attachment-rejected",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night",
         "TextBody" => "See the attached route.",
         "Attachments" => [
@@ -246,7 +246,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider: "postmark",
              provider_message_id: "postmark-controller-attachment-rejected",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "attachments_not_supported",
@@ -269,8 +269,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-attachment-rejected",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Retry without attachment",
         "TextBody" => "This retry must not send another rejection email."
       })
@@ -308,8 +308,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-html-only",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night",
         "HtmlBody" => "<p>This HTML must not be converted into a club message.</p>"
       })
@@ -325,7 +325,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider: "postmark",
              provider_message_id: "postmark-controller-html-only",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "plain_text_required",
@@ -352,8 +352,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-quoted-only",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night",
         "TextBody" => "  \n> quoted prior content only\n",
         "HtmlBody" => "<p>This HTML must not be converted into a club message.</p>"
@@ -369,7 +369,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              provider: "postmark",
              provider_message_id: "postmark-controller-quoted-only",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "plain_text_required",
@@ -398,8 +398,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-duplicate",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night",
         "TextBody" => "Bring route ideas."
       })
@@ -420,8 +420,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-duplicate",
         "From" => "Alice Example <alice@example.com>",
         "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
-        "OriginalRecipient" => "kmc@clubs.memba.io",
-        "To" => "KMC <kmc@clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
         "Subject" => "Trip planning night retry",
         "TextBody" => "This retry must not create another message."
       })
@@ -476,8 +476,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
         "MessageID" => "postmark-controller-message",
         "MessageStream" => "inbound",
         "From" => "Alice Example <alice@example.com>",
-        "To" => "KMC <kmc@clubs.memba.io>",
-        "OriginalRecipient" => "kmc@clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
         "Subject" => "Trip planning night",
         "TextBody" => "Bring route ideas."
       },
