@@ -1,0 +1,735 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index e650cfa..1fff0f0 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -1,4 +1,4 @@
+-@iteration-039 @todo-domain @todo-ui
++@iteration-039
+ Feature: Club message replies (conversations)
+   Club members want to reply to a club message and keep the conversation in Memba,
+   instead of replies scattering to private inboxes and never being tracked.
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index cf0d7d7..e67908c 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -12,7 +12,10 @@ const {
+   assertMemberMessageAddressedTo,
+   assertMemberMessageBody,
+   assertMemberMessageNotAddressedTo,
++  assertConversationReplyOrder,
++  assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
++  assertMemberCannotReplyToMessage,
+   assertMemberSeesMessageInClub,
+   assertMemberWasToldMessageBodyCannotBeBlank,
+   assertMemberWasToldMessageWasNotSent,
+@@ -21,6 +24,8 @@ const {
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
++  assertReplyEmailDeliveredToMembers,
++  assertReplyEmailNotDeliveredToAuthor,
+   emailFor,
+   ensureClubSlugMatchesInboundAddress,
+   ensureState,
+@@ -29,6 +34,7 @@ const {
+   nelsonClubName,
+   openMemberMessage,
+   reportRecipientEmailStatus,
++  postMemberReply,
+   sendInboundClubEmail,
+   sendMemberMessageToKootenayMembers,
+   trySendBlankMemberMessageToKootenayMembers,
+@@ -160,6 +166,65 @@ Given(
+   }
+ );
+ 
++Given(
++  "{word} sent the message {string} to Kootenay Mountaineering Club members",
++  async function (senderName, subject) {
++    await sendMessageToKootenayMembersDirectly(this, senderName, subject);
++  }
++);
++
++When("{word} replies {string} to {string}", async function (senderName, body, subject) {
++  await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
++});
++
++Then(
++  "the conversation for {string} should show {word}'s reply {string}",
++  async function (subject, senderName, body) {
++    await withMemberHarness(this, "Alice", (member) =>
++      assertConversationShowsReply(member, subject, senderName, body)
++    );
++  }
++);
++
++Then(
++  "{word} should see {word}'s reply in the conversation for {string}",
++  async function (viewerName, senderName, subject) {
++    const reply = latestReplyFor(this, subject, senderName);
++
++    await withMemberHarness(this, viewerName, (member) =>
++      assertConversationShowsReply(member, subject, senderName, reply.body)
++    );
++  }
++);
++
++Then(
++  "the conversation for {string} should show {string} before {string}",
++  async function (subject, earlierBody, laterBody) {
++    await withMemberHarness(this, "Alice", (member) =>
++      assertConversationReplyOrder(member, subject, earlierBody, laterBody)
++    );
++  }
++);
++
++Then(
++  /^(.+) should each receive (\w+)'s reply by email from (.+) via Memba$/,
++  async function (recipientNamesText, senderName, clubName) {
++    await withMemberHarness(this, "Alice", (member) =>
++      assertReplyEmailDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText), clubName)
++    );
++  }
++);
++
++Then("{word} should not receive his own reply by email", async function (senderName) {
++  await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
++});
++
++Then("{word} should not be able to reply to {string}", async function (personName, subject) {
++  await withMemberHarness(this, personName, (member) =>
++    assertMemberCannotReplyToMessage(member, personName, subject, kootenayClubName)
++  );
++});
++
+ Then("{word} should be told the message body cannot be blank", async function (viewerName) {
+   await memberBrowserAction(this, `blank-body validation notice for ${viewerName}`, () =>
+     assertMemberWasToldMessageBodyCannotBeBlank(this)
+@@ -383,6 +448,20 @@ function parsePersonList(text) {
+     .filter(Boolean);
+ }
+ 
++function latestReplyFor(world, subject, senderName) {
++  ensureState(world);
++
++  const reply = Object.values(world.replies || {})
++    .filter((candidate) => candidate.subject === subject && candidate.senderName === senderName)
++    .at(-1);
++
++  if (!reply) {
++    throw new Error(`Expected ${senderName} to have replied to ${JSON.stringify(subject)}`);
++  }
++
++  return reply;
++}
++
+ function ensureClubState(world, clubName, { slug = clubSlugFor(clubName) } = {}) {
+   ensureState(world);
+ 
+diff --git a/acceptance-tests/features/support/member_harness.js b/acceptance-tests/features/support/member_harness.js
+index 28579a5..2ce3c9d 100644
+--- a/acceptance-tests/features/support/member_harness.js
++++ b/acceptance-tests/features/support/member_harness.js
+@@ -96,11 +96,15 @@ function syncHarnessState(world, harnessWorld, options = {}) {
+     people: world.people,
+     memberships: world.memberships,
+     messages: world.messages,
++    replies: world.replies,
++    lastReply: world.lastReply,
+     inboundEmails: world.inboundEmails,
+     inboundEmailSenders: world.inboundEmailSenders,
+     lastMessageSubject: world.lastMessageSubject,
+     localDeliveryFactsBeforeSend: world.localDeliveryFactsBeforeSend,
+     mailboxEmailsBeforeSend: world.mailboxEmailsBeforeSend,
++    replyDeliveryFactsAfterSend: world.replyDeliveryFactsAfterSend,
++    replyDeliveryFactsBeforeSend: world.replyDeliveryFactsBeforeSend,
+     addressedMemberNames: world.addressedMemberNames,
+     addressedMemberIds: world.addressedMemberIds,
+     deliveries: world.deliveries,
+@@ -131,6 +135,10 @@ function copyHarnessState(world, harnessWorld) {
+     "localDeliveryFactsBeforeSend",
+     "mailboxEmailsBeforeSend",
+     "messages",
++    "replies",
++    "lastReply",
++    "replyDeliveryFactsAfterSend",
++    "replyDeliveryFactsBeforeSend",
+     "inboundEmails",
+     "inboundEmailSenders"
+   ]) {
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 35628d4..482100c 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -157,6 +157,7 @@ function ensureState(world) {
+   world.inboundEmailSenders = world.inboundEmailSenders || {};
+   world.inboundRejectionEmails = world.inboundRejectionEmails || {};
+   world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
++  world.replies = world.replies || {};
+ 
+   return world;
+ }
+@@ -525,6 +526,64 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
+   );
+ }
+ 
++async function postMemberReply(
++  world,
++  replierName,
++  subject,
++  body,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent before replying`);
++
++  const replier = world.people[replierName];
++  assert.ok(replier, `Expected ${replierName} to have been created before replying`);
++
++  const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
++
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await browserInteraction(`${replierName} posts a reply to ${JSON.stringify(subject)}`, async () => {
++    await world.page.getByLabel("Reply").fill(body);
++    await world.page.getByRole("button", { name: "Post reply" }).click();
++  });
++
++  await waitForProjectedVisible(
++    world,
++    world.page.locator("#member-message-reply-success", { hasText: "Your reply is being sent." }),
++    `reply success message for ${replierName}`,
++    { expect, timeoutMs }
++  );
++
++  const replyRow = conversationReplyRow(world, replierName, body);
++  await waitForProjectedVisible(
++    world,
++    replyRow,
++    `${replierName}'s reply in ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  const replyMessageId = await replyRow.getAttribute("data-message-id");
++  assert.ok(replyMessageId, `Expected ${replierName}'s reply row to expose data-message-id`);
++
++  const reply = {
++    body,
++    clubId: message.clubId,
++    conversationId: message.messageId,
++    messageId: replyMessageId,
++    senderName: replierName,
++    subject
++  };
++
++  world.replies[replyKey(subject, replierName, body)] = reply;
++  world.lastReply = reply;
++  world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
++
++  return world;
++}
++
+ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
+   await gotoUnlessCurrent(world, appUrl(world.baseUrl, "/admin/deliveries"), "visit /admin/deliveries");
+   await waitForProjectedVisible(
+@@ -1262,6 +1321,182 @@ async function assertMemberMessageBody(world, expectedBody, { expect = playwrigh
+   return world;
+ }
+ 
++async function assertConversationShowsReply(
++  world,
++  subject,
++  senderName,
++  body,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedVisible(
++    world,
++    conversationReplyRow(world, senderName, body),
++    `${senderName}'s reply ${JSON.stringify(body)} in conversation ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertConversationReplyOrder(
++  world,
++  subject,
++  earlierBody,
++  laterBody,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedVisible(
++    world,
++    world.page.locator("#member-conversation-replies [id^=\"member-conversation-body-\"]", {
++      hasText: earlierBody
++    }),
++    `earlier reply ${JSON.stringify(earlierBody)}`,
++    { expect, timeoutMs }
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.locator("#member-conversation-replies [id^=\"member-conversation-body-\"]", {
++      hasText: laterBody
++    }),
++    `later reply ${JSON.stringify(laterBody)}`,
++    { expect, timeoutMs }
++  );
++
++  const replyBodies = (await world.page
++    .locator("#member-conversation-replies [id^=\"member-conversation-body-\"]")
++    .allTextContents()).map((text) => text.trim());
++
++  const earlierIndex = replyBodies.indexOf(earlierBody);
++  const laterIndex = replyBodies.indexOf(laterBody);
++
++  assertFinalBrowserState(`conversation reply order for ${JSON.stringify(subject)}`, () => {
++    assert.notEqual(
++      earlierIndex,
++      -1,
++      `Expected conversation replies to include ${JSON.stringify(earlierBody)}; saw ${JSON.stringify(replyBodies)}`
++    );
++    assert.notEqual(
++      laterIndex,
++      -1,
++      `Expected conversation replies to include ${JSON.stringify(laterBody)}; saw ${JSON.stringify(replyBodies)}`
++    );
++    assert.ok(
++      earlierIndex < laterIndex,
++      `Expected ${JSON.stringify(earlierBody)} before ${JSON.stringify(laterBody)}; saw ${JSON.stringify(
++        replyBodies
++      )}`
++    );
++  });
++
++  return world;
++}
++
++async function assertReplyEmailDeliveredToMembers(
++  world,
++  senderName,
++  recipientNames,
++  clubName,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const reply = latestReplyFor(world, senderName);
++  const message = world.messages[reply.subject];
++  assert.ok(message, `Expected root message ${JSON.stringify(reply.subject)} for reply email assertion`);
++
++  const previousEmails = world.replyDeliveryFactsBeforeSend || [];
++  const emails = await waitForLocalDeliveryFacts(
++    world,
++    previousEmails.length + recipientNames.length,
++    `local provider delivery facts for ${senderName}'s reply to ${JSON.stringify(reply.subject)}`
++  );
++  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
++  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
++  const expectedSubject = replyEmailSubjectFor(world, reply.subject);
++
++  for (const recipientName of recipientNames) {
++    const person = world.people[recipientName];
++    assert.ok(person, `Expected ${recipientName} to have been created`);
++
++    const matchingEmail = newEmails.find(
++      (email) =>
++        email.subject === expectedSubject &&
++        mailboxEmailTo(email).includes(person.email) &&
++        mailboxEmailFrom(email).includes(`${clubName} via Memba`) &&
++        mailboxEmailText(email).includes(reply.body)
++    );
++
++    assertFinalBrowserState(`reply email for ${recipientName}`, () =>
++      assert.ok(
++        matchingEmail,
++        `Expected a reply email for ${recipientName} <${person.email}> from ${clubName} via Memba ` +
++          `with subject ${JSON.stringify(expectedSubject)} and body containing ${JSON.stringify(reply.body)}; ` +
++          `saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
++      )
++    );
++  }
++
++  world.replyDeliveryFactsAfterSend = newEmails;
++
++  return world;
++}
++
++async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
++  ensureState(world);
++
++  const reply = latestReplyFor(world, senderName);
++  const sender = world.people[senderName];
++  assert.ok(sender, `Expected ${senderName} to have been created`);
++
++  const emails = world.replyDeliveryFactsAfterSend || [];
++  const matchingEmail = emails.find(
++    (email) => email.subject === replyEmailSubjectFor(world, reply.subject) && mailboxEmailTo(email).includes(sender.email)
++  );
++
++  assertFinalBrowserState(`${senderName} should not receive their own reply`, () =>
++    assert.equal(
++      matchingEmail,
++      undefined,
++      `Expected no reply email to ${senderName} <${sender.email}>; saw ${JSON.stringify(emails.map(mailboxEmailSummary))}`
++    )
++  );
++
++  return world;
++}
++
++async function assertMemberCannotReplyToMessage(
++  world,
++  personName,
++  subject,
++  clubName = kootenayClubName,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to be known before checking reply authorization`);
++
++  const response = await browserInteraction(
++    `${personName} attempts to open ${JSON.stringify(subject)} to reply`,
++    () => world.page.goto(clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}`))
++  );
++
++  assertFinalBrowserState(`${personName} cannot open reply form for ${JSON.stringify(subject)}`, () =>
++    assert.equal(response && response.status(), 403)
++  );
++
++  await expect(world.page.locator("#member-message-reply-form")).toHaveCount(0, { timeout: timeoutMs || 1000 });
++
++  return world;
++}
++
+ async function assertMemberMessageAddressedTo(
+   world,
+   expectedNames,
+@@ -1455,6 +1690,16 @@ function memberMessageEmailSubjectFor(world, subject) {
+   return slug ? `[${slug}] ${subject}` : subject;
+ }
+ 
++function replyEmailSubjectFor(world, subject) {
++  const message = world.messages[subject];
++  assert.ok(message, "Expected a message to have been sent before checking reply email subject");
++  const club = clubById(world, message.clubId);
++  const slug = message.clubSlug || (club && club.slug);
++  const replySubject = `Re: ${subject}`;
++
++  return slug ? `[${slug}] ${replySubject}` : replySubject;
++}
++
+ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { senderName } = {}) {
+   ensureState(world);
+ 
+@@ -2232,6 +2477,38 @@ function mailboxEmailSummary(email) {
+   };
+ }
+ 
++function conversationReplyRow(world, senderName, body) {
++  const sender = world.people[senderName];
++  assert.ok(sender, `Expected ${senderName} to have been created`);
++
++  return world.page.locator(
++    `#member-conversation-replies [data-testid=${cssString(
++      "member-conversation-entry"
++    )}][data-conversation-kind="reply"][data-sender-id=${cssString(sender.personId)}]`,
++    { hasText: body }
++  );
++}
++
++function replyKey(subject, senderName, body) {
++  return `${subject}\u0000${senderName}\u0000${body}`;
++}
++
++function latestReplyFor(world, senderName) {
++  ensureState(world);
++
++  if (world.lastReply && world.lastReply.senderName === senderName) {
++    return world.lastReply;
++  }
++
++  const reply = Object.values(world.replies)
++    .filter((candidate) => candidate.senderName === senderName)
++    .at(-1);
++
++  assert.ok(reply, `Expected ${senderName} to have replied before checking reply email`);
++
++  return reply;
++}
++
+ async function capturedInboundRejectionEmail(world, senderName) {
+   ensureState(world);
+ 
+@@ -2538,7 +2815,10 @@ module.exports = {
+   assertMemberMessageAddressedTo,
+   assertMemberMessageBody,
+   assertMemberMessageNotAddressedTo,
++  assertConversationReplyOrder,
++  assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
++  assertMemberCannotReplyToMessage,
+   assertMemberReceiptStatus: assertMemberEmailDeliveryStatus,
+   assertMemberSeesMessageInClub,
+   assertMemberWasToldMessageBodyCannotBeBlank,
+@@ -2548,6 +2828,8 @@ module.exports = {
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
++  assertReplyEmailDeliveredToMembers,
++  assertReplyEmailNotDeliveredToAuthor,
+   assertReceiptStatus,
+   createClub,
+   createPeople,
+@@ -2580,6 +2862,7 @@ module.exports = {
+   sendInboundClubEmail,
+   sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers,
++  postMemberReply,
+   testLocalDeliveryFacts,
+   testMailboxEmails,
+   trySendBlankMemberMessageToKootenayMembers,
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+index 50d19ba..52feeda 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+@@ -5,5 +5,5 @@
+ - [x] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
+ - [x] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
+ - [x] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
+-- [ ] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
++- [x] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
+ - [ ] 007 Run `dev check`.
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 65cdcfb..dfdf23a 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -31,6 +31,57 @@ defmodule Memba.Cucumber.MessagingSteps do
+     send_message_to_kootenay_members(context, sender_name, subject)
+   end
+ 
++  step "{word} sent the message {string} to Kootenay Mountaineering Club members",
++       %{args: [sender_name, subject]} = context do
++    Fake.reset()
++
++    context
++    |> send_message_to_kootenay_members(sender_name, subject)
++    |> dispatch_and_clear_background_message_deliveries()
++  end
++
++  step "{word} replies {string} to {string}", %{args: [sender_name, body, subject]} = context do
++    post_reply_to_message(context, sender_name, subject, body)
++  end
++
++  step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
++       %{args: [subject, sender_name, body]} = context do
++    assert_conversation_shows_reply(context, subject, sender_name, body)
++  end
++
++  step ~r/^(\w+) should see (\w+)'s reply in the conversation for "([^"]+)"$/,
++       %{args: [viewer_name, sender_name, subject]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++
++    %{body: body} = latest_reply_for!(context, subject, sender_name)
++    assert_conversation_shows_reply(context, subject, sender_name, body)
++  end
++
++  step "the conversation for {string} should show {string} before {string}",
++       %{args: [subject, earlier_body, later_body]} = context do
++    assert_conversation_order(context, subject, earlier_body, later_body)
++  end
++
++  step "Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba",
++       context do
++    assert_reply_email_delivered_to_members(
++      context,
++      "Trip planning night",
++      "Bob",
++      ["Alice", "Carol", "Dana"],
++      "Kootenay Mountaineering Club"
++    )
++  end
++
++  step "{word} should not receive his own reply by email", %{args: [sender_name]} = context do
++    assert_reply_email_not_delivered_to_author(context, sender_name)
++  end
++
++  step "{word} should not be able to reply to {string}",
++       %{args: [sender_name, subject]} = context do
++    assert_cannot_reply_to_message(context, sender_name, subject)
++  end
++
+   step "club message sending is unavailable", context do
+     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+     Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+@@ -384,6 +435,157 @@ defmodule Memba.Cucumber.MessagingSteps do
+     })
+   end
+ 
++  defp dispatch_and_clear_background_message_deliveries(context) do
++    dispatch_pending_email_deliveries()
++    Fake.reset()
++    context
++  end
++
++  defp post_reply_to_message(context, sender_name, subject, body) do
++    reply_message_id = Memba.ID.generate(:message)
++    root_message = fetch_from_context!(context, :messages, subject)
++    sender_id = person_id_from_context!(context, sender_name)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 message_id: reply_message_id,
++                 conversation_id: root_message.message_id,
++                 sender_id: sender_id,
++                 body: body
++               },
++               consistency: :strong
++             )
++
++    assert reply = Messaging.get_message(reply_message_id)
++
++    reply_context = %{
++      body: reply.body,
++      club_id: reply.club_id,
++      conversation_id: reply.conversation_id,
++      message_id: reply.message_id,
++      sender_id: reply.sender_id,
++      sender_name: sender_name,
++      subject: subject
++    }
++
++    context
++    |> Map.put(:last_reply, reply_context)
++    |> update_context_map({:replies, subject}, {sender_name, body}, reply_context)
++  end
++
++  defp assert_conversation_shows_reply(context, subject, sender_name, body) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    sender_id = person_id_from_context!(context, sender_name)
++
++    assert Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
++             message.sender_id == sender_id and message.body == body
++           end)
++
++    context
++  end
++
++  defp assert_conversation_order(context, subject, earlier_body, later_body) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    bodies = Enum.map(Messaging.list_conversation_messages(root_message.message_id), & &1.body)
++
++    earlier_index = Enum.find_index(bodies, &(&1 == earlier_body))
++    later_index = Enum.find_index(bodies, &(&1 == later_body))
++
++    assert is_integer(earlier_index),
++           "Expected conversation for #{inspect(subject)} to include #{inspect(earlier_body)}"
++
++    assert is_integer(later_index),
++           "Expected conversation for #{inspect(subject)} to include #{inspect(later_body)}"
++
++    assert earlier_index < later_index
++
++    context
++  end
++
++  defp assert_reply_email_delivered_to_members(
++         context,
++         subject,
++         sender_name,
++         expected_recipient_names,
++         expected_from_group_name
++       ) do
++    reply = latest_reply_for!(context, subject, sender_name)
++    dispatch_pending_email_deliveries()
++
++    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
++    assert Enum.map(member_deliveries, & &1.recipient_name) == expected_recipient_names
++
++    provider_deliveries = Fake.deliveries()
++    assert length(provider_deliveries) == length(expected_recipient_names)
++
++    Enum.zip(expected_recipient_names, provider_deliveries)
++    |> Enum.each(fn {recipient_name, %EmailDeliveryRequest{} = request} ->
++      assert request.message_id == reply.message_id
++      assert request.conversation_id == reply.conversation_id
++      assert request.subject == subject
++      assert request.body == reply.body
++      assert request.sender_name == sender_name
++      assert request.recipient_name == recipient_name
++
++      assert MemberMessageEmail.from_display_name(request) ==
++               "#{expected_from_group_name} via Memba"
++    end)
++
++    context
++  end
++
++  defp assert_reply_email_not_delivered_to_author(context, sender_name) do
++    reply = Map.fetch!(context, :last_reply)
++    sender_id = person_id_from_context!(context, sender_name)
++
++    refute Enum.any?(Messaging.list_member_email_deliverys(reply.message_id), fn receipt ->
++             receipt.recipient_id == sender_id
++           end)
++
++    refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
++             request.message_id == reply.message_id and request.recipient_id == sender_id
++           end)
++
++    context
++  end
++
++  defp assert_cannot_reply_to_message(context, sender_name, subject) do
++    reply_message_id = Memba.ID.generate(:message)
++    root_message = fetch_from_context!(context, :messages, subject)
++    sender_id = person_id_from_context!(context, sender_name)
++
++    assert {:error, :not_current_member} =
++             Messaging.post_message_reply(
++               %{
++                 message_id: reply_message_id,
++                 conversation_id: root_message.message_id,
++                 sender_id: sender_id,
++                 body: "I should not be able to post this."
++               },
++               consistency: :strong
++             )
++
++    refute Messaging.get_message(reply_message_id)
++
++    context
++  end
++
++  defp latest_reply_for!(context, subject, sender_name) do
++    context
++    |> Map.get({:replies, subject}, %{})
++    |> Enum.map(fn {{reply_sender_name, _body}, reply} -> {reply_sender_name, reply} end)
++    |> Enum.filter(fn {reply_sender_name, _reply} -> reply_sender_name == sender_name end)
++    |> List.last()
++    |> case do
++      {_reply_sender_name, reply} ->
++        reply
++
++      nil ->
++        flunk("Expected #{sender_name} to have replied to #{inspect(subject)}")
++    end
++  end
++
+   defp try_send_message_to_kootenay_members(context, sender_name, subject, body \\ nil) do
+     message_id = Memba.ID.generate(:message)
+     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
