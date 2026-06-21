@@ -1,0 +1,234 @@
+diff --git a/docs/iterations/020-migrate-production-email-to-postmark/postmark-production-cutover-runbook.md b/docs/iterations/020-migrate-production-email-to-postmark/postmark-production-cutover-runbook.md
+index 04ded4d..a3ca791 100644
+--- a/docs/iterations/020-migrate-production-email-to-postmark/postmark-production-cutover-runbook.md
++++ b/docs/iterations/020-migrate-production-email-to-postmark/postmark-production-cutover-runbook.md
+@@ -14,7 +14,7 @@ This cutover moves all production email paths together:
+ 
+ - member-message outbound delivery and rejection emails;
+ - magic-link authentication email;
+-- inbound club-message email for `<club-slug>@clubs.memba.io`.
++- inbound club-message email for `everyone@<club-slug>.clubs.memba.io`.
+ 
+ Keep the providers aligned. Memba's member-message and auth paths share
+ `Memba.Mailer` runtime configuration, so do not intentionally run a mixed
+@@ -37,7 +37,8 @@ constraint and provides a dedicated runbook.
+ - [ ] Confirm a controlled recipient inbox is available for auth, outbound
+       member-message, and rejection-email smoke tests.
+ - [ ] Confirm a controlled active member can send from a known address to
+-      `kmc@clubs.memba.io` or another known club slug in production.
++      `everyone@test.clubs.memba.io` or another known club subdomain in
++      production.
+ 
+ ### Postmark dashboard and DNS readiness
+ 
+@@ -58,7 +59,7 @@ constraint and provides a dedicated runbook.
+       `outbound-authentication`.
+ - [ ] Auth stream is not reusing the member broadcast stream and does not point
+       auth-only delivery events at Memba's member-message webhook route.
+-- [ ] Inbound stream exists for `clubs.memba.io`.
++- [ ] Inbound stream exists for `*.clubs.memba.io`.
+ - [ ] Inbound stream webhook points to:
+ 
+   ```text
+@@ -68,11 +69,12 @@ constraint and provides a dedicated runbook.
+ - [ ] DNS for inbound club messages is ready to route to Postmark:
+ 
+   ```text
+-  MX clubs.memba.io 10 inbound.postmarkapp.com
++  MX *.clubs.memba.io 10 inbound.postmarkapp.com
+   ```
+ 
+-- [ ] DNS has no higher-priority conflicting MX record for `clubs.memba.io` that
+-      would steal inbound club-message mail.
++- [ ] DNS has no higher-priority conflicting MX record for club subdomains such
++      as `test.clubs.memba.io` or `kmc.clubs.memba.io` that would steal inbound
++      club-message mail.
+ 
+ ### Rollback readiness
+ 
+@@ -93,9 +95,10 @@ constraint and provides a dedicated runbook.
+       may be used: `MEMBA_RESEND_WEBHOOK_SIGNING_SECRET`.
+ - [ ] Decide before cutover whether inbound rollback to Resend is operationally
+       available. The current Resend domain/account previously could not receive
+-      `clubs.memba.io` without provider changes; if that is still true, rollback
+-      can restore outbound/auth email to Resend but cannot fully restore inbound
+-      club-message receiving until Resend inbound domain routing is fixed.
++      the `*.clubs.memba.io` namespace without provider changes; if that is
++      still true, rollback can restore outbound/auth email to Resend but cannot
++      fully restore inbound club-message receiving until Resend inbound domain
++      routing is fixed.
+ 
+ ## Cutover steps
+ 
+@@ -158,8 +161,9 @@ or screenshot, and Memba observation for each step.
+ 
+ ### 3. Inbound club message accepted path
+ 
+-- [ ] Email `kmc@clubs.memba.io` or another known club slug from a controlled
+-      active member address. Use a unique subject/body for this smoke test.
++- [ ] Email `everyone@test.clubs.memba.io` or another known club subdomain from
++      a controlled active member address. Use a unique subject/body for this
++      smoke test.
+ - [ ] Confirm Postmark receives the inbound message and calls
+       `https://memba.io/webhooks/postmark/inbound`.
+ - [ ] Confirm Memba creates one club message for the email.
+@@ -240,13 +244,13 @@ unused Postmark secrets may be removed from Fly if desired.
+       for Memba.
+ - [ ] Confirm the Resend webhook signing secret in Fly matches the Resend
+       dashboard secret.
+-- [ ] If inbound rollback to Resend is available, move `clubs.memba.io` inbound
+-      DNS/provider routing back to Resend and point inbound webhooks at
++- [ ] If inbound rollback to Resend is available, move `*.clubs.memba.io`
++      inbound DNS/provider routing back to Resend and point inbound webhooks at
+       `https://memba.io/webhooks/resend`.
+-- [ ] If Resend still cannot receive `clubs.memba.io`, keep or disable Postmark
+-      inbound routing deliberately and communicate that inbound club-message
+-      email is degraded until Resend inbound setup is fixed. Do not claim rollback
+-      is complete for inbound email in that state.
++- [ ] If Resend still cannot receive the `*.clubs.memba.io` namespace, keep or
++      disable Postmark inbound routing deliberately and communicate that inbound
++      club-message email is degraded until Resend inbound setup is fixed. Do not
++      claim rollback is complete for inbound email in that state.
+ 
+ ### Rollback smoke tests
+ 
+@@ -261,7 +265,8 @@ unused Postmark secrets may be removed from Fly if desired.
+       through Resend and signs in successfully.
+ - [ ] Send a controlled member message and confirm Resend accepts it, the inbox
+       receives it, and `POST /webhooks/resend` updates Memba delivery records.
+-- [ ] If Resend inbound rollback is available, email `kmc@clubs.memba.io` from a
++- [ ] If Resend inbound rollback is available, email
++      `everyone@test.clubs.memba.io` or another known club subdomain from a
+       controlled active member address and confirm Memba creates exactly one club
+       message through the Resend inbound path.
+ - [ ] If Resend inbound rollback is not available, document the inbound outage or
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index 70f6096..91d0c57 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
+ - [x] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
+ - [x] 010 Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
+-- [ ] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
++- [x] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
+ - [ ] 012 Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
+ - [ ] 013 Run `dev check`.
+ - [ ] 014 After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result.
+diff --git a/docs/postmark-email.md b/docs/postmark-email.md
+index 65cd79d..d38dcae 100644
+--- a/docs/postmark-email.md
++++ b/docs/postmark-email.md
+@@ -4,7 +4,7 @@ Memba has Postmark-backed and Resend-backed email paths:
+ 
+ - member-message email for club broadcasts;
+ - shared magic-link authentication email for members and Memba staff;
+-- inbound club-message email sent to `<club-slug>@clubs.memba.io`.
++- inbound club-message email sent to `everyone@<club-slug>.clubs.memba.io`.
+ 
+ One environment-wide provider setting, `MEMBA_EMAIL_PROVIDER`, selects the
+ outbound email provider for both member messages and magic-link authentication.
+@@ -20,7 +20,7 @@ Postmark should be configured with distinct production responsibilities:
+ | --- | --- | --- |
+ | Outbound member broadcasts and rejection emails | Default transactional stream `outbound`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_MESSAGING_FROM_ADDRESS`, optional `MEMBA_MESSAGING_REPLY_TO_ADDRESS` for rejection/contact replies |
+ | Magic-link authentication | Dedicated auth Transactional Message Stream, recommended ID `outbound-authentication`; verified sender such as `auth@mail.memba.io` | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` |
+-| Inbound club messages | Inbound Message Stream for `clubs.memba.io`; MX for `clubs.memba.io` points to Postmark inbound; inbound webhook URL configured on the inbound stream | No runtime provider variable. Postmark sends JSON to `POST /webhooks/postmark/inbound`, and Memba derives the club from the recipient address such as `kmc@clubs.memba.io`. |
++| Inbound club messages | Inbound Message Stream for `*.clubs.memba.io`; wildcard MX for `*.clubs.memba.io` points to Postmark inbound; inbound webhook URL configured on the inbound stream | No runtime provider variable. Postmark sends JSON to `POST /webhooks/postmark/inbound`, and Memba derives the club from the recipient host, such as `kmc` from `everyone@kmc.clubs.memba.io`. |
+ 
+ Keep these Postmark paths separate. Delivery-status webhooks for outbound member
+ messages go to `POST /webhooks/postmark`; inbound email webhooks go to
+@@ -161,22 +161,23 @@ provider option on every magic-link email.
+ 
+ ## Inbound club-message email
+ 
+-Inbound club messages keep the member-facing address shape:
++Inbound club messages use a club subdomain and the `everyone` route:
+ 
+ ```text
+-<club-slug>@clubs.memba.io
++everyone@<club-slug>.clubs.memba.io
+ ```
+ 
+ For example, members email:
+ 
+ ```text
+-kmc@clubs.memba.io
++everyone@kmc.clubs.memba.io
+ ```
+ 
+-Configure Postmark inbound domain forwarding for the `clubs.memba.io` subdomain:
++Configure Postmark inbound domain forwarding for the wildcard
++`*.clubs.memba.io` namespace:
+ 
+ ```text
+-MX clubs.memba.io -> inbound.postmarkapp.com, priority 10
++MX *.clubs.memba.io -> inbound.postmarkapp.com, priority 10
+ ```
+ 
+ Use a dedicated Postmark Inbound Message Stream for this route and set its
+@@ -197,6 +198,11 @@ Memba uses the provider-neutral inbound email handling shared with Resend:
+ 
+ - active members can post to their club address;
+ - alternate known member email addresses are accepted;
++- only the `everyone` local part is accepted for now;
++- unknown club subdomains and unsupported local parts are rejected without
++  creating a club message;
++- the old flat address shape, such as `kmc@clubs.memba.io`, is no longer
++  accepted;
+ - unknown senders, inactive members, and non-members are rejected without
+   creating a club message;
+ - inbound emails with attachments are rejected;
+@@ -206,7 +212,7 @@ Memba uses the provider-neutral inbound email handling shared with Resend:
+ 
+ Webhook authentication/signature verification for Postmark inbound webhooks is a
+ follow-up security concern. Do not put other applications behind this route, and
+-limit the Postmark inbound stream to the `clubs.memba.io` mail flow.
++limit the Postmark inbound stream to the `*.clubs.memba.io` mail flow.
+ 
+ ## Delivery-status webhook configuration
+ 
+@@ -325,11 +331,11 @@ http://localhost:4000/webhooks/postmark/inbound
+ ```
+ 
+ Use a payload with `MessageID`, `From`, `OriginalRecipient` such as
+-`kmc@clubs.memba.io`, `Subject`, and `TextBody`. This tests Memba's inbound route
+-without changing DNS.
++`everyone@kmc.clubs.memba.io`, `Subject`, and `TextBody`. This tests Memba's
++inbound route without changing DNS.
+ 
+ For a real local inbound email smoke test, use the dedicated Postmark dev server
+-with the receiving-enabled `clubs-dev.memba.io` domain:
++with the receiving-enabled `*.clubs-dev.memba.io` wildcard domain:
+ 
+ 1. Add ngrok, Postmark, and inbound-domain secret/config values to `.local/secrets.envrc`:
+ 
+@@ -351,10 +357,10 @@ with the receiving-enabled `clubs-dev.memba.io` domain:
+    https://<ngrok-host>/webhooks/postmark/inbound
+    ```
+ 
+-3. Send real email to a local club address such as `test@clubs-dev.memba.io`.
+-   Memba dev resolves the club from the configured
+-   `MEMBA_CLUB_INBOUND_EMAIL_DOMAIN` value while Postmark reaches the local app
+-   through ngrok.
++3. Send real email to a local club address such as
++   `everyone@test.clubs-dev.memba.io`. Memba dev resolves the club from the
++   configured `MEMBA_CLUB_INBOUND_EMAIL_DOMAIN` value while Postmark reaches the
++   local app through ngrok.
+ 
+ ## Manual production smoke test
+ 
+@@ -384,10 +390,12 @@ For a controlled magic-link auth smoke test:
+ 
+ For a controlled inbound club-message smoke test:
+ 
+-1. Verify the `clubs.memba.io` MX record points to Postmark inbound.
++1. Verify the `*.clubs.memba.io` MX record points to Postmark inbound.
+ 2. Verify the Postmark inbound stream webhook URL is
+    `https://<memba-host>/webhooks/postmark/inbound`.
+-3. Email `kmc@clubs.memba.io` from a controlled active member address.
++3. Email `everyone@test.clubs.memba.io` or
++   `everyone@<known-club-slug>.clubs.memba.io` from a controlled active member
++   address.
+ 4. Confirm Memba creates the club message and sends member deliveries.
+ 5. Email the same address from an unsupported sender, or with an unsupported
+    attachment, and confirm Memba creates no club message.
