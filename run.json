@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T17:10:48.865231545Z",
-  "last_event_at": "2026-06-21T17:29:44.512017127Z",
+  "last_event_at": "2026-06-21T17:29:47.717418140Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2385,9 +2385,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 419,
       "checkpoint": {
-        "timestamp": "2026-06-21T17:29:44.523006846Z",
+        "timestamp": "2026-06-21T17:29:47.685768548Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -2402,7 +2402,225 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "command.output": "blob://sha256/6aa625b428f781ce506f997c7d4c19784245f2da86ee4e5745c2fdcdf4cb3616",
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.implement_next_task": 0,
+          "last_stage": "implement_next_task",
+          "internal.retry_count.wip_gate": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.work_dir": "/workspace/memba",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.default_fidelity": "summary:high",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.all_tasks_done": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.todo_readable": 0,
+          "failure_signature": "",
+          "internal.run_id": "01KVNJJ02226WWG9STMV6AGVH9",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "graph.max_node_visits": "80",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.sync_task_list": 0,
+          "thread.start.current_node": "read_plan",
+          "internal.node_visit_count": 1,
+          "current_node": "implement_next_task",
+          "internal.thread_id": "all_tasks_done",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "failure_class": "",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.resume_gate": 0,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.read_plan": 0,
+          "internal.fidelity": "summary:high",
+          "last_response": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba messa",
+          "outcome": "succeeded",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club...`\n\n2. **Changes made**\n   - Added `Memba.Messaging.OutboundMessageID` to generate deterministic Memba-controlled RFC `Message-ID` values from `delivery_id` + `message_id`.\n   - Added migration `20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs`:\n     - adds `messaging_email_deliveries.outbound_message_id`\n     - backfills existing rows deterministically\n     - makes it `NOT NULL`\n     - adds a unique index\n   - Updated the email delivery projection to persist outbound message IDs on replay.\n   - Added `outbound_message_id` to `EmailDeliveryRequest` and dispatcher-created provider requests.\n   - Added `MemberMessageEmail.message_id/1`.\n   - Set RFC `Message-ID` headers in Local, Postmark, and Resend member-message providers.\n   - Added `Messaging.get_outbound_message_reference/1` to resolve persisted outbound message IDs to `%{club_id, conversation_id, message_id, delivery_id}`.\n   - Updated focused tests and helpers to assert persisted IDs, lookup behavior, and provider headers.\n   - Updated `LocalDeliveryFacts` to expose `outbound_message_id`.\n\n3. **Validation**\n   - `PATH=\"$PWD/bin:$PATH\" mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed on final diff:\n     - `871 tests, 0 failures`\n   - Earlier attempted focused `bin/mix test ...` did not run tests because the sandbox mix wrapper failed its Postgres readiness check with a PGHOST mismatch; validation was completed through the required `dev check --quick` path.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 001 ...`\n     - to\n     - `- [x] 001 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No ADRs were explicitly referenced by the plan. I inspected relevant accepted ADRs: 0002, 0004, 0005, 0007, 0009, 0011, 0016, 0021, 0022.\n   - Conformance:\n     - ADR 0004: kept message/delivery state within the existing message/email-delivery model.\n     - ADR 0007: stayed inside Messaging context; no Membership storage coupling added.\n     - ADR 0009: used the existing Commanded Ecto projection/read-model path.\n     - ADR 0011: derived IDs from stable caller-generated Memba IDs, no aggregate-generated identity.\n     - ADR 0016: preserved provider-neutral delivery request shape and Swoosh provider boundary for Postmark/Resend/Local; no new HTTP provider code.\n     - ADR 0021/0022: did not alter read-model publishing/barrier architecture."
+        },
+        "node_outcomes": {
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/eb871347ff29ca3296dd15562c91ba0fc40e7bc348a14ecb36a2c5b1a5daface"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fe713f6dccb1105870fb7fad44cc5a7a8c72d3e74a48babbfb7bbd75b205bff3"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 100104,
+              "active_time_ms": 100104
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0d3d4739271d22fcf5e27701a5e1730f16db33243aee7cac2c5a5e0fc0f1c650"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6aa625b428f781ce506f997c7d4c19784245f2da86ee4e5745c2fdcdf4cb3616"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3ec207e9efc4690a2fa4dcf1a2c3f690f89fe9750beb3fdab9b440d4739faf9f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d56b5e5729c6532096b02c5e96c694bb451b307311b01565cceca499aa92aa9a"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/76e86eb9dd59effb56f854e8e512eb4e4608f8d1b2056a3763fc4b0e3ca85717"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1816,
+              "active_time_ms": 1816
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club...`\n\n2. **Changes made**\n   - Added `Memba.Messaging.OutboundMessageID` to generate deterministic Memba-controlled RFC `Message-ID` values from `delivery_id` + `message_id`.\n   - Added migration `20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs`:\n     - adds `messaging_email_deliveries.outbound_message_id`\n     - backfills existing rows deterministically\n     - makes it `NOT NULL`\n     - adds a unique index\n   - Updated the email delivery projection to persist outbound message IDs on replay.\n   - Added `outbound_message_id` to `EmailDeliveryRequest` and dispatcher-created provider requests.\n   - Added `MemberMessageEmail.message_id/1`.\n   - Set RFC `Message-ID` headers in Local, Postmark, and Resend member-message providers.\n   - Added `Messaging.get_outbound_message_reference/1` to resolve persisted outbound message IDs to `%{club_id, conversation_id, message_id, delivery_id}`.\n   - Updated focused tests and helpers to assert persisted IDs, lookup behavior, and provider headers.\n   - Updated `LocalDeliveryFacts` to expose `outbound_message_id`.\n\n3. **Validation**\n   - `PATH=\"$PWD/bin:$PATH\" mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed on final diff:\n     - `871 tests, 0 failures`\n   - Earlier attempted focused `bin/mix test ...` did not run tests because the sandbox mix wrapper failed its Postgres readiness check with a PGHOST mismatch; validation was completed through the required `dev check --quick` path.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 001 ...`\n     - to\n     - `- [x] 001 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No ADRs were explicitly referenced by the plan. I inspected relevant accepted ADRs: 0002, 0004, 0005, 0007, 0009, 0011, 0016, 0021, 0022.\n   - Conformance:\n     - ADR 0004: kept message/delivery state within the existing message/email-delivery model.\n     - ADR 0007: stayed inside Messaging context; no Membership storage coupling added.\n     - ADR 0009: used the existing Commanded Ecto projection/read-model path.\n     - ADR 0011: derived IDs from stable caller-generated Memba IDs, no aggregate-generated identity.\n     - ADR 0016: preserved provider-neutral delivery request shape and Swoosh provider boundary for Postmark/Resend/Local; no new HTTP provider code.\n     - ADR 0021/0022: did not alter read-model publishing/barrier architecture.",
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line**\n   - `001 Add outbound message-id support: generate Memba-controlled RFC Message-ID values for outbound club/reply emails and persist a mapping from message id to Memba messa"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 900637,
+                    "output_tokens": 16072,
+                    "reasoning_tokens": 6150,
+                    "cache_read_tokens": 5469696,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7904693
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 763052,
+              "tool_time_ms": 245192,
+              "active_time_ms": 1008244
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "c1806e5e19ecceec0b7c964493185a0a10c8fedc",
+        "node_visits": {
+          "resume_gate": 1,
+          "all_tasks_done": 1,
+          "todo_readable": 1,
+          "wip_gate": 1,
+          "sync_task_list": 1,
+          "implement_next_task": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/041-reply-by-email-threading/todo.md b/docs/iterations/041-reply-by-email-threading/todo.md\nindex 11f4fc9..55c2fa7 100644\n--- a/docs/iterations/041-reply-by-email-threading/todo.md\n+++ b/docs/iterations/041-reply-by-email-threading/todo.md\n@@ -1,6 +1,6 @@\n # Implementation TODO\n \n-- [ ] 001 Add outbound message-id support: generate Memba-controlled RFC `Message-ID` values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club. Likely touchpoints: `Memba.Messaging.MemberMessageEmail`, provider adapters, `EmailDeliveryRequest`, and a projection/table or fields that make lookup deterministic.\n+- [x] 001 Add outbound message-id support: generate Memba-controlled RFC `Message-ID` values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club. Likely touchpoints: `Memba.Messaging.MemberMessageEmail`, provider adapters, `EmailDeliveryRequest`, and a projection/table or fields that make lookup deterministic.\n - [ ] 002 Set reply email headers: club/reply emails should route normal replies to `<club-slug>@clubs.memba.io`; reply notification emails should set `In-Reply-To` / `References` so email clients thread and Memba can recognize the conversation on inbound.\n - [ ] 003 Extend inbound parsing: parse `In-Reply-To` and all `References` message ids in Postmark/Resend provider-neutral inbound structs. Likely touchpoints: `MembaWeb.PostmarkInboundEmailParser`, `MembaWeb.ResendInboundEmailParser`, and `Memba.Messaging.InboundEmail`.\n - [ ] 004 Extend inbound routing: before creating a new club-wide message, attempt a same-club header match; when found, post via the 039 reply path, apply current-member authorization, auto-follow the replier, fan out to followers, and apply basic quoted-history stripping.\ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex ba1f3d8..89e6750 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -29,6 +29,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.InboundEmail\n   alias Memba.Messaging.InboundEmailBody\n   alias Memba.Messaging.InboundEmailReceipt\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection\n   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection\n   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection\n@@ -439,6 +440,32 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  @doc \"\"\"\n+  Resolve a persisted outbound RFC Message-ID to its Memba message context.\n+\n+  Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,\n+  or belongs to a delivery whose message projection is absent.\n+  \"\"\"\n+  def get_outbound_message_reference(rfc_message_id) do\n+    with message_id when is_binary(message_id) <- OutboundMessageID.normalize(rfc_message_id) do\n+      EmailDeliveryProjection\n+      |> join(:inner, [delivery], message in MessageProjection,\n+        on: message.message_id == delivery.message_id\n+      )\n+      |> where([delivery, _message], delivery.outbound_message_id == ^message_id)\n+      |> select([delivery, message], %{\n+        outbound_message_id: delivery.outbound_message_id,\n+        delivery_id: delivery.delivery_id,\n+        message_id: message.message_id,\n+        conversation_id: message.conversation_id,\n+        club_id: message.club_id\n+      })\n+      |> Repo.one()\n+    else\n+      nil -> nil\n+    end\n+  end\n+\n   @doc \"\"\"\n   Manually retry provider dispatch for one failed email delivery.\n \ndiff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex\nindex dbd20c4..1062971 100644\n--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex\n+++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex\n@@ -360,6 +360,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n          message_id: message.message_id,\n          club_id: message.club_id,\n          delivery_id: delivery.delivery_id,\n+         outbound_message_id: delivery.outbound_message_id,\n          recipient_id: delivery.recipient_id,\n          recipient_name: delivery.recipient_name,\n          recipient_address: delivery.recipient_address,\ndiff --git a/web/lib/memba/messaging/email_delivery_providers/local.ex b/web/lib/memba/messaging/email_delivery_providers/local.ex\nindex 91651b9..8e8e244 100644\n--- a/web/lib/memba/messaging/email_delivery_providers/local.ex\n+++ b/web/lib/memba/messaging/email_delivery_providers/local.ex\n@@ -32,6 +32,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do\n     |> from({MemberMessageEmail.from_display_name(request), from_address()})\n     |> reply_to(MemberMessageEmail.reply_to(request))\n     |> to(MemberMessageEmail.to(request))\n+    |> header(\"Message-ID\", MemberMessageEmail.message_id(request))\n     |> subject(MemberMessageEmail.subject(request))\n     |> text_body(MemberMessageEmail.text_body(request))\n     |> html_body(MemberMessageEmail.html_body(request))\ndiff --git a/web/lib/memba/messaging/email_delivery_providers/postmark.ex b/web/lib/memba/messaging/email_delivery_providers/postmark.ex\nindex efc409b..0b78d49 100644\n--- a/web/lib/memba/messaging/email_delivery_providers/postmark.ex\n+++ b/web/lib/memba/messaging/email_delivery_providers/postmark.ex\n@@ -37,6 +37,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do\n     |> from({MemberMessageEmail.from_display_name(request), config.from})\n     |> reply_to(MemberMessageEmail.reply_to(request))\n     |> to(MemberMessageEmail.to(request))\n+    |> header(\"Message-ID\", MemberMessageEmail.message_id(request))\n     |> subject(MemberMessageEmail.subject(request))\n     |> text_body(MemberMessageEmail.text_body(request))\n     |> html_body(MemberMessageEmail.html_body(request))\ndiff --git a/web/lib/memba/messaging/email_delivery_providers/resend.ex b/web/lib/memba/messaging/email_delivery_providers/resend.ex\nindex 05f76f4..8612b2f 100644\n--- a/web/lib/memba/messaging/email_delivery_providers/resend.ex\n+++ b/web/lib/memba/messaging/email_delivery_providers/resend.ex\n@@ -37,6 +37,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do\n     |> from({MemberMessageEmail.from_display_name(request), config.from})\n     |> reply_to(MemberMessageEmail.reply_to(request))\n     |> to(MemberMessageEmail.to(request))\n+    |> header(\"Message-ID\", MemberMessageEmail.message_id(request))\n     |> subject(MemberMessageEmail.subject(request))\n     |> text_body(MemberMessageEmail.text_body(request))\n     |> html_body(MemberMessageEmail.html_body(request))\ndiff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex\nindex d9f8013..5b571d1 100644\n--- a/web/lib/memba/messaging/email_delivery_request.ex\n+++ b/web/lib/memba/messaging/email_delivery_request.ex\n@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do\n     :message_id,\n     :club_id,\n     :delivery_id,\n+    :outbound_message_id,\n     :recipient_id,\n     :recipient_name,\n     :recipient_address,\n@@ -25,6 +26,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do\n     :message_id,\n     :club_id,\n     :delivery_id,\n+    :outbound_message_id,\n     :recipient_id,\n     :recipient_name,\n     :recipient_address,\n@@ -47,6 +49,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do\n           message_id: String.t(),\n           club_id: String.t(),\n           delivery_id: String.t(),\n+          outbound_message_id: String.t(),\n           recipient_id: String.t(),\n           recipient_name: String.t(),\n           recipient_address: String.t(),\ndiff --git a/web/lib/memba/messaging/local_delivery_facts.ex b/web/lib/memba/messaging/local_delivery_facts.ex\nindex 234c317..d32dfdc 100644\n--- a/web/lib/memba/messaging/local_delivery_facts.ex\n+++ b/web/lib/memba/messaging/local_delivery_facts.ex\n@@ -23,6 +23,7 @@ defmodule Memba.Messaging.LocalDeliveryFacts do\n     fact = %{\n       id: request.delivery_id,\n       message_id: request.message_id,\n+      outbound_message_id: request.outbound_message_id,\n       club_id: request.club_id,\n       delivery_id: request.delivery_id,\n       recipient_id: request.recipient_id,\ndiff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex\nindex ec54615..99d6c96 100644\n--- a/web/lib/memba/messaging/member_message_email.ex\n+++ b/web/lib/memba/messaging/member_message_email.ex\n@@ -28,6 +28,11 @@ defmodule Memba.Messaging.MemberMessageEmail do\n     {recipient_name(request), request.recipient_address}\n   end\n \n+  @doc \"Return the persisted RFC Message-ID header value for this outbound email.\"\n+  def message_id(%EmailDeliveryRequest{} = request) do\n+    request.outbound_message_id\n+  end\n+\n   @doc \"Return the sanitized subject for a member-message email header.\"\n   def subject(%EmailDeliveryRequest{} = request) do\n     subject =\ndiff --git a/web/lib/memba/messaging/outbound_message_id.ex b/web/lib/memba/messaging/outbound_message_id.ex\nnew file mode 100644\nindex 0000000..08ffd10\n--- /dev/null\n+++ b/web/lib/memba/messaging/outbound_message_id.ex\n@@ -0,0 +1,32 @@\n+defmodule Memba.Messaging.OutboundMessageID do\n+  @moduledoc \"\"\"\n+  Generates Memba-controlled RFC Message-ID values for outbound member emails.\n+\n+  The value is deterministic from Memba's stable delivery and message IDs so the\n+  read-model mapping can be rebuilt from projected delivery rows.\n+  \"\"\"\n+\n+  @domain \"messages.memba.io\"\n+\n+  @doc \"Return the RFC Message-ID for one outbound member-message delivery.\"\n+  def for_delivery(delivery_id, message_id)\n+      when is_binary(delivery_id) and is_binary(message_id) do\n+    \"<memba.#{delivery_id}.#{message_id}@#{@domain}>\"\n+  end\n+\n+  @doc \"Normalize a provider-supplied Message-ID for lookup.\"\n+  def normalize(value) when is_binary(value) do\n+    case String.trim(value) do\n+      \"\" ->\n+        nil\n+\n+      <<\"<\", _rest::binary>> = message_id ->\n+        message_id\n+\n+      message_id ->\n+        \"<#{message_id}>\"\n+    end\n+  end\n+\n+  def normalize(_value), do: nil\n+end\ndiff --git a/web/lib/memba/messaging/projections/email_delivery.ex b/web/lib/memba/messaging/projections/email_delivery.ex\nindex b5b7a3e..de1d4bf 100644\n--- a/web/lib/memba/messaging/projections/email_delivery.ex\n+++ b/web/lib/memba/messaging/projections/email_delivery.ex\n@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Projections.EmailDelivery do\n   @primary_key {:delivery_id, :string, autogenerate: false}\n   schema \"messaging_email_deliveries\" do\n     field :message_id, :string\n+    field :outbound_message_id, :string\n     field :recipient_id, :string\n     field :recipient_name, :string\n     field :recipient_address, :string\ndiff --git a/web/lib/memba/messaging/projectors/email_delivery.ex b/web/lib/memba/messaging/projectors/email_delivery.ex\nindex b2d3f15..85f0369 100644\n--- a/web/lib/memba/messaging/projectors/email_delivery.ex\n+++ b/web/lib/memba/messaging/projectors/email_delivery.ex\n@@ -11,12 +11,14 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do\n \n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.EmailDeliveryStatus\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n \n   project(%EmailDeliveryCreated{} = event, fn multi ->\n     Ecto.Multi.insert(multi, :messaging_email_delivery, %EmailDeliveryProjection{\n       delivery_id: event.delivery_id,\n       message_id: event.message_id,\n+      outbound_message_id: OutboundMessageID.for_delivery(event.delivery_id, event.message_id),\n       recipient_id: event.recipient_id,\n       recipient_name: event.recipient_name,\n       recipient_address: event.recipient_email,\ndiff --git a/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs b/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs\nnew file mode 100644\nindex 0000000..f7b565e\n--- /dev/null\n+++ b/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs\n@@ -0,0 +1,29 @@\n+defmodule Memba.Repo.Migrations.AddOutboundMessageIdToMessagingEmailDeliveries do\n+  use Ecto.Migration\n+\n+  def up do\n+    alter table(:messaging_email_deliveries) do\n+      add :outbound_message_id, :text\n+    end\n+\n+    execute(\"\"\"\n+    UPDATE messaging_email_deliveries\n+    SET outbound_message_id = '<memba.' || delivery_id || '.' || message_id || '@messages.memba.io>'\n+    WHERE outbound_message_id IS NULL\n+    \"\"\")\n+\n+    alter table(:messaging_email_deliveries) do\n+      modify :outbound_message_id, :text, null: false\n+    end\n+\n+    create unique_index(:messaging_email_deliveries, [:outbound_message_id])\n+  end\n+\n+  def down do\n+    drop_if_exists unique_index(:messaging_email_deliveries, [:outbound_message_id])\n+\n+    alter table(:messaging_email_deliveries) do\n+      remove :outbound_message_id\n+    end\n+  end\n+end\ndiff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\nindex db20001..0e63a38 100644\n--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n+++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n@@ -13,6 +13,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n   alias Memba.Messaging.Events.EmailDeliveryDelivered\n   alias Memba.Messaging\n   alias Memba.Messaging.ConversationStopFollowToken\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n@@ -265,6 +266,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n                  message_id: message_id,\n                  club_id: club_id,\n                  delivery_id: delivery_id,\n+                 outbound_message_id: outbound_message_id,\n                  recipient_id: ^recipient_id,\n                  recipient_name: \"Bob Member\",\n                  recipient_address: \"bob.member@example.com\",\n@@ -281,6 +283,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n       assert message_id == message.message_id\n       assert club_id == club.club_id\n       assert delivery_id == delivery.delivery_id\n+      assert outbound_message_id == delivery.outbound_message_id\n     end\n \n     test \"builds reply provider requests with conversation context\" do\n@@ -338,6 +341,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n                  message_id: reply_message_id,\n                  club_id: club_id,\n                  delivery_id: delivery_id,\n+                 outbound_message_id: outbound_message_id,\n                  recipient_id: ^recipient_id,\n                  recipient_name: \"Carol Member\",\n                  recipient_address: \"carol.member@example.com\",\n@@ -359,6 +363,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n       assert reply_message_id == reply_message.message_id\n       assert club_id == club.club_id\n       assert delivery_id == delivery.delivery_id\n+      assert outbound_message_id == delivery.outbound_message_id\n       assert conversation_id == root_message.message_id\n       assert reply_to_message_id == root_message.message_id\n       assert conversation_url =~ \"/messages/#{root_message.message_id}\"\n@@ -676,10 +681,18 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n \n   defp insert_email_delivery!(attrs) when is_list(attrs) do\n     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)\n+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)\n \n     Repo.insert!(%EmailDeliveryProjection{\n-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),\n-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),\n+      delivery_id: delivery_id,\n+      message_id: message_id,\n+      outbound_message_id:\n+        Keyword.get(\n+          attrs,\n+          :outbound_message_id,\n+          OutboundMessageID.for_delivery(delivery_id, message_id)\n+        ),\n       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),\n       recipient_name: Keyword.get(attrs, :recipient_name, \"Ada Member\"),\n       recipient_address: Keyword.get(attrs, :recipient_address, \"ada@example.test\"),\ndiff --git a/web/test/memba/messaging/email_delivery_provider_test.exs b/web/test/memba/messaging/email_delivery_provider_test.exs\nindex 3faac78..1396c09 100644\n--- a/web/test/memba/messaging/email_delivery_provider_test.exs\n+++ b/web/test/memba/messaging/email_delivery_provider_test.exs\n@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do\n   alias Memba.Messaging.EmailDeliveryProviders.Fake\n   alias Memba.Messaging.EmailDeliveryProviders.Postmark\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.OutboundMessageID\n \n   setup do\n     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)\n@@ -68,10 +69,14 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do\n   end\n \n   defp email_delivery_request do\n+    message_id = Memba.ID.generate(:message)\n+    delivery_id = Memba.ID.generate(:delivery)\n+\n     %EmailDeliveryRequest{\n-      message_id: Memba.ID.generate(:message),\n+      message_id: message_id,\n       club_id: Memba.ID.generate(:club),\n-      delivery_id: Memba.ID.generate(:delivery),\n+      delivery_id: delivery_id,\n+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),\n       recipient_id: Memba.ID.generate(:person),\n       recipient_name: \"Alice\",\n       recipient_address: \"alice@example.com\",\ndiff --git a/web/test/memba/messaging/email_delivery_providers/fake_test.exs b/web/test/memba/messaging/email_delivery_providers/fake_test.exs\nindex b7474eb..db946c7 100644\n--- a/web/test/memba/messaging/email_delivery_providers/fake_test.exs\n+++ b/web/test/memba/messaging/email_delivery_providers/fake_test.exs\n@@ -4,6 +4,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do\n   alias Memba.Messaging.EmailDeliveryProvider\n   alias Memba.Messaging.EmailDeliveryProviders.Fake\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.OutboundMessageID\n \n   setup do\n     Fake.reset()\n@@ -21,10 +22,14 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do\n   end\n \n   defp email_delivery_request(name) do\n+    message_id = Memba.ID.generate(:message)\n+    delivery_id = Memba.ID.generate(:delivery)\n+\n     %EmailDeliveryRequest{\n-      message_id: Memba.ID.generate(:message),\n+      message_id: message_id,\n       club_id: Memba.ID.generate(:club),\n-      delivery_id: Memba.ID.generate(:delivery),\n+      delivery_id: delivery_id,\n+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),\n       recipient_id: Memba.ID.generate(:person),\n       recipient_name: name,\n       recipient_address: String.downcase(name) <> \"@example.com\",\ndiff --git a/web/test/memba/messaging/email_delivery_providers/local_test.exs b/web/test/memba/messaging/email_delivery_providers/local_test.exs\nindex 00b7a2e..b10c067 100644\n--- a/web/test/memba/messaging/email_delivery_providers/local_test.exs\n+++ b/web/test/memba/messaging/email_delivery_providers/local_test.exs\n@@ -6,6 +6,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do\n   alias Memba.Messaging.EmailDeliveryProviders.Local\n   alias Memba.Messaging.EmailDeliveryRequest\n   alias Memba.Messaging.LocalDeliveryFacts\n+  alias Memba.Messaging.OutboundMessageID\n \n   setup do\n     original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n@@ -45,6 +46,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do\n       assert email.from == {\"Bob via Memba\", \"messages@mail.memba.io\"}\n       assert email.reply_to == {\"Bob\", \"bob@example.test\"}\n       assert email.to == [{\"Alice\", \"alice@example.test\"}]\n+      assert email.headers[\"Message-ID\"] == request.outbound_message_id\n       assert email.subject == \"[kmc] Trip planning night\"\n \n       assert email.text_body ==\n@@ -76,6 +78,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do\n     assert [fact] = LocalDeliveryFacts.list()\n     assert fact.delivery_id == request.delivery_id\n     assert fact.message_id == request.message_id\n+    assert fact.outbound_message_id == request.outbound_message_id\n     assert fact.recipient_address == \"alice@example.test\"\n     assert fact.to == [\"Alice <alice@example.test>\"]\n     assert fact.from == \"Bob via Memba <messages@mail.memba.io>\"\n@@ -115,11 +118,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do\n   end\n \n   defp email_delivery_request(overrides) do\n+    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)\n+\n+    delivery_id =\n+      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)\n+\n     %EmailDeliveryRequest{\n-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),\n+      message_id: message_id,\n       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),\n-      delivery_id:\n-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),\n+      delivery_id: delivery_id,\n+      outbound_message_id:\n+        Keyword.get(\n+          overrides,\n+          :outbound_message_id,\n+          OutboundMessageID.for_delivery(delivery_id, message_id)\n+        ),\n       recipient_id:\n         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),\n       recipient_name: Keyword.get(overrides, :recipient_name, \"Alice\"),\ndiff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\nindex 986f686..d5e591a 100644\n--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\n+++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\n@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n \n   alias Memba.Messaging.EmailDeliveryProviders.Postmark\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.OutboundMessageID\n \n   setup do\n     original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n@@ -43,6 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n     assert email.from == {\"Bob Barker via Memba\", \"messages@mail.memba.io\"}\n     assert email.reply_to == {\"Bob Barker\", \"bob@example.com\"}\n     assert email.to == [{\"Alice Adams\", \"alice@example.com\"}]\n+    assert email.headers[\"Message-ID\"] == request.outbound_message_id\n     assert email.subject == \"[kmc] Trip planning night\"\n \n     assert email.text_body ==\n@@ -125,6 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n     assert email.from == {\"Kootenay <Mountaineers> via Memba\", \"messages@mail.memba.io\"}\n     assert email.reply_to == {\"Bob Barker\", \"bob@example.com\"}\n     assert email.to == [{\"Alice Adams\", \"alice@example.com\"}]\n+    assert email.headers[\"Message-ID\"] == request.outbound_message_id\n     assert email.subject == \"[kmc] Re: Trip planning night\"\n \n     assert email.text_body =~\n@@ -225,11 +228,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n   end\n \n   defp email_delivery_request(overrides \\\\ []) do\n+    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)\n+\n+    delivery_id =\n+      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)\n+\n     %EmailDeliveryRequest{\n-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),\n+      message_id: message_id,\n       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),\n-      delivery_id:\n-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),\n+      delivery_id: delivery_id,\n+      outbound_message_id:\n+        Keyword.get(\n+          overrides,\n+          :outbound_message_id,\n+          OutboundMessageID.for_delivery(delivery_id, message_id)\n+        ),\n       recipient_id:\n         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),\n       recipient_name: Keyword.get(overrides, :recipient_name, \"Alice Adams\"),\ndiff --git a/web/test/memba/messaging/email_delivery_providers/resend_test.exs b/web/test/memba/messaging/email_delivery_providers/resend_test.exs\nindex 8e87b89..a861377 100644\n--- a/web/test/memba/messaging/email_delivery_providers/resend_test.exs\n+++ b/web/test/memba/messaging/email_delivery_providers/resend_test.exs\n@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do\n \n   alias Memba.Messaging.EmailDeliveryProviders.Resend\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.OutboundMessageID\n \n   setup do\n     original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n@@ -43,6 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do\n     assert email.from == {\"Bob Barker via Memba\", \"messages@mail.memba.io\"}\n     assert email.reply_to == {\"Bob Barker\", \"bob@example.com\"}\n     assert email.to == [{\"Alice Adams\", \"alice@example.com\"}]\n+    assert email.headers[\"Message-ID\"] == request.outbound_message_id\n     assert email.subject == \"[kmc] Trip planning night\"\n \n     assert email.text_body ==\n@@ -168,11 +170,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do\n   end\n \n   defp email_delivery_request(overrides \\\\ []) do\n+    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)\n+\n+    delivery_id =\n+      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)\n+\n     %EmailDeliveryRequest{\n-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),\n+      message_id: message_id,\n       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),\n-      delivery_id:\n-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),\n+      delivery_id: delivery_id,\n+      outbound_message_id:\n+        Keyword.get(\n+          overrides,\n+          :outbound_message_id,\n+          OutboundMessageID.for_delivery(delivery_id, message_id)\n+        ),\n       recipient_id:\n         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),\n       recipient_name: Keyword.get(overrides, :recipient_name, \"Alice Adams\"),\ndiff --git a/web/test/memba/messaging/email_delivery_status_constraints_test.exs b/web/test/memba/messaging/email_delivery_status_constraints_test.exs\nindex 0532646..02c2ddc 100644\n--- a/web/test/memba/messaging/email_delivery_status_constraints_test.exs\n+++ b/web/test/memba/messaging/email_delivery_status_constraints_test.exs\n@@ -2,6 +2,7 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do\n   use Memba.DataCase, async: true\n \n   alias Memba.Messaging.EmailDeliveryStatus\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n \n   @valid_statuses EmailDeliveryStatus.valid_statuses()\n@@ -55,9 +56,13 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do\n   end\n \n   defp email_delivery_row(attrs) when is_list(attrs) do\n+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)\n+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)\n+\n     %{\n-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),\n-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),\n+      delivery_id: delivery_id,\n+      message_id: message_id,\n+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),\n       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),\n       recipient_name: Keyword.fetch!(attrs, :recipient_name),\n       recipient_address: Keyword.fetch!(attrs, :recipient_address),\ndiff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs\nindex 52f8bde..8aa6dd1 100644\n--- a/web/test/memba/messaging/message_projection_test.exs\n+++ b/web/test/memba/messaging/message_projection_test.exs\n@@ -6,6 +6,7 @@ defmodule Memba.Messaging.MessageProjectionTest do\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Projections.Message, as: MessageProjection\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Recipient\n \n   test \"SendMessage is projected into public Messaging message and delivery queries\" do\n@@ -59,6 +60,7 @@ defmodule Memba.Messaging.MessageProjectionTest do\n              %EmailDeliveryProjection{\n                delivery_id: ^alice_delivery_id,\n                message_id: ^message_id,\n+               outbound_message_id: alice_outbound_message_id,\n                recipient_id: ^sender_id,\n                recipient_name: \"Alice\",\n                recipient_address: \"alice@example.com\",\n@@ -74,6 +76,7 @@ defmodule Memba.Messaging.MessageProjectionTest do\n              %EmailDeliveryProjection{\n                delivery_id: ^bob_delivery_id,\n                message_id: ^message_id,\n+               outbound_message_id: bob_outbound_message_id,\n                recipient_id: ^bob_id,\n                recipient_name: \"Bob\",\n                recipient_address: \"bob@example.com\",\n@@ -88,6 +91,30 @@ defmodule Memba.Messaging.MessageProjectionTest do\n              }\n            ] = Messaging.list_recipient_deliveries(message_id)\n \n+    assert alice_outbound_message_id ==\n+             OutboundMessageID.for_delivery(alice_delivery_id, message_id)\n+\n+    assert bob_outbound_message_id == OutboundMessageID.for_delivery(bob_delivery_id, message_id)\n+\n+    assert %{\n+             outbound_message_id: ^alice_outbound_message_id,\n+             delivery_id: ^alice_delivery_id,\n+             message_id: ^message_id,\n+             conversation_id: ^message_id,\n+             club_id: ^club_id\n+           } = Messaging.get_outbound_message_reference(alice_outbound_message_id)\n+\n+    assert %{\n+             outbound_message_id: ^bob_outbound_message_id,\n+             delivery_id: ^bob_delivery_id,\n+             message_id: ^message_id,\n+             conversation_id: ^message_id,\n+             club_id: ^club_id\n+           } =\n+             Messaging.get_outbound_message_reference(String.trim(bob_outbound_message_id, \"<>\"))\n+\n+    assert is_nil(Messaging.get_outbound_message_reference(\"<unknown@example.test>\"))\n+\n     assert %EmailDeliveryProjection{\n              delivery_id: ^bob_delivery_id,\n              message_id: ^message_id,\ndiff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\nindex a361d91..7991be3 100644\n--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\n@@ -8,6 +8,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.EmailDeliveryProviders.Postmark\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.OutboundMessageID\n   alias Memba.Messaging.Recipient\n \n   import Plug.Conn\n@@ -384,6 +385,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do\n       message_id: message.message_id,\n       club_id: message.club_id,\n       delivery_id: recipient.delivery_id,\n+      outbound_message_id:\n+        OutboundMessageID.for_delivery(recipient.delivery_id, message.message_id),\n       recipient_id: recipient.person_id,\n       recipient_name: recipient.name,\n       recipient_address: recipient.email,\n",
+        "summary": {
+          "files_changed": 22,
+          "additions": 226,
+          "deletions": 17
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T17:29:47.881774465Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "command.output": "blob://sha256/54141d0c68c26a1be7b682be54d135883f40cb7d536e1abfa918dcc527ae8b3a",
           "thread.todo_readable.current_node": "all_tasks_done",
           "internal.retry_count.start": 0,
           "internal.retry_count.read_plan": 0,
@@ -2414,14 +2632,15 @@
           "failure_class": "",
           "internal.retry_count.sync_task_list": 0,
           "internal.node_visit_count": 1,
-          "current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "current_node": "pre_validate_snapshot",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.fidelity": "summary:high",
           "outcome": "succeeded",
           "graph.max_node_visits": "80",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.run_id": "01KVNJJ02226WWG9STMV6AGVH9",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "thread.start.current_node": "read_plan",
           "thread.preflight_sandbox.current_node": "resume_gate",
@@ -2436,6 +2655,7 @@
           "last_stage": "implement_next_task",
           "failure_signature": "",
           "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.pre_validate_snapshot": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
         },
         "node_outcomes": {
@@ -2497,6 +2717,20 @@
               "inference_time_ms": 0,
               "tool_time_ms": 166,
               "active_time_ms": 166
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/54141d0c68c26a1be7b682be54d135883f40cb7d536e1abfa918dcc527ae8b3a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
             }
           },
           "implement_next_task": {
@@ -2578,12 +2812,13 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "sync_task_list": 1,
           "start": 1,
           "wip_gate": 1,
           "all_tasks_done": 1,
+          "pre_validate_snapshot": 1,
           "implement_next_task": 1,
           "read_plan": 1,
           "preflight_sandbox": 1,
@@ -2765,7 +3000,12 @@
       "first_event_seq": 95,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-21T17:29:44.515362357Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -2779,13 +3019,20 @@
       "output": null,
       "started_at": "2026-06-21T17:12:55.758085451Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 1008757,
+        "inference_time_ms": 763052,
+        "tool_time_ms": 245192,
+        "active_time_ms": 1008244
+      },
       "usage": {
-        "input_tokens": 893606,
-        "output_tokens": 15414,
-        "total_tokens": 6256862,
-        "reasoning_tokens": 5634,
-        "cache_read_tokens": 5342208,
-        "cache_write_tokens": 0
+        "input_tokens": 900637,
+        "output_tokens": 16072,
+        "total_tokens": 6392555,
+        "reasoning_tokens": 6150,
+        "cache_read_tokens": 5469696,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 7904693
       },
       "model": {
         "provider": "openai",
@@ -2924,32 +3171,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 130890,
-        "usage_percent": 48.12132352941177,
+        "input_tokens": 134519,
+        "usage_percent": 49.45551470588235,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-21T17:28:47.306854509Z",
-        "event_seq": 402,
+        "generated_at": "2026-06-21T17:29:44.511964066Z",
+        "event_seq": 412,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 926,
-            "usage_percent": 0.34044117647058825
+            "tokens": 928,
+            "usage_percent": 0.3411764705882353
           },
           {
             "category": "tools",
-            "tokens": 1342,
-            "usage_percent": 0.4933823529411765
+            "tokens": 1343,
+            "usage_percent": 0.49375
           },
           {
             "category": "memory",
-            "tokens": 360,
-            "usage_percent": 0.1323529411764706
+            "tokens": 361,
+            "usage_percent": 0.13272058823529412
           },
           {
             "category": "conversation",
-            "tokens": 128256,
-            "usage_percent": 47.15294117647059
+            "tokens": 131881,
+            "usage_percent": 48.48566176470588
           },
           {
             "category": "other",
@@ -2959,7 +3206,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "read_plan@1": {
       "first_event_seq": 25,
@@ -3155,6 +3402,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@1": {
+      "first_event_seq": 422,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/041-reply-by-email-threading/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T17:29:47.716350713Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 21,

@@ -1,0 +1,647 @@
+diff --git a/docs/iterations/041-reply-by-email-threading/todo.md b/docs/iterations/041-reply-by-email-threading/todo.md
+index 11f4fc9..55c2fa7 100644
+--- a/docs/iterations/041-reply-by-email-threading/todo.md
++++ b/docs/iterations/041-reply-by-email-threading/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add outbound message-id support: generate Memba-controlled RFC `Message-ID` values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club. Likely touchpoints: `Memba.Messaging.MemberMessageEmail`, provider adapters, `EmailDeliveryRequest`, and a projection/table or fields that make lookup deterministic.
++- [x] 001 Add outbound message-id support: generate Memba-controlled RFC `Message-ID` values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club. Likely touchpoints: `Memba.Messaging.MemberMessageEmail`, provider adapters, `EmailDeliveryRequest`, and a projection/table or fields that make lookup deterministic.
+ - [ ] 002 Set reply email headers: club/reply emails should route normal replies to `<club-slug>@clubs.memba.io`; reply notification emails should set `In-Reply-To` / `References` so email clients thread and Memba can recognize the conversation on inbound.
+ - [ ] 003 Extend inbound parsing: parse `In-Reply-To` and all `References` message ids in Postmark/Resend provider-neutral inbound structs. Likely touchpoints: `MembaWeb.PostmarkInboundEmailParser`, `MembaWeb.ResendInboundEmailParser`, and `Memba.Messaging.InboundEmail`.
+ - [ ] 004 Extend inbound routing: before creating a new club-wide message, attempt a same-club header match; when found, post via the 039 reply path, apply current-member authorization, auto-follow the replier, fan out to followers, and apply basic quoted-history stripping.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index ba1f3d8..89e6750 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -29,6 +29,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.InboundEmail
+   alias Memba.Messaging.InboundEmailBody
+   alias Memba.Messaging.InboundEmailReceipt
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+@@ -439,6 +440,32 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Resolve a persisted outbound RFC Message-ID to its Memba message context.
++
++  Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,
++  or belongs to a delivery whose message projection is absent.
++  """
++  def get_outbound_message_reference(rfc_message_id) do
++    with message_id when is_binary(message_id) <- OutboundMessageID.normalize(rfc_message_id) do
++      EmailDeliveryProjection
++      |> join(:inner, [delivery], message in MessageProjection,
++        on: message.message_id == delivery.message_id
++      )
++      |> where([delivery, _message], delivery.outbound_message_id == ^message_id)
++      |> select([delivery, message], %{
++        outbound_message_id: delivery.outbound_message_id,
++        delivery_id: delivery.delivery_id,
++        message_id: message.message_id,
++        conversation_id: message.conversation_id,
++        club_id: message.club_id
++      })
++      |> Repo.one()
++    else
++      nil -> nil
++    end
++  end
++
+   @doc """
+   Manually retry provider dispatch for one failed email delivery.
+ 
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index dbd20c4..1062971 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -360,6 +360,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          message_id: message.message_id,
+          club_id: message.club_id,
+          delivery_id: delivery.delivery_id,
++         outbound_message_id: delivery.outbound_message_id,
+          recipient_id: delivery.recipient_id,
+          recipient_name: delivery.recipient_name,
+          recipient_address: delivery.recipient_address,
+diff --git a/web/lib/memba/messaging/email_delivery_providers/local.ex b/web/lib/memba/messaging/email_delivery_providers/local.ex
+index 91651b9..8e8e244 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/local.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/local.ex
+@@ -32,6 +32,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+     |> from({MemberMessageEmail.from_display_name(request), from_address()})
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
++    |> header("Message-ID", MemberMessageEmail.message_id(request))
+     |> subject(MemberMessageEmail.subject(request))
+     |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+diff --git a/web/lib/memba/messaging/email_delivery_providers/postmark.ex b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+index efc409b..0b78d49 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+@@ -37,6 +37,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+     |> from({MemberMessageEmail.from_display_name(request), config.from})
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
++    |> header("Message-ID", MemberMessageEmail.message_id(request))
+     |> subject(MemberMessageEmail.subject(request))
+     |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+diff --git a/web/lib/memba/messaging/email_delivery_providers/resend.ex b/web/lib/memba/messaging/email_delivery_providers/resend.ex
+index 05f76f4..8612b2f 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/resend.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/resend.ex
+@@ -37,6 +37,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
+     |> from({MemberMessageEmail.from_display_name(request), config.from})
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
++    |> header("Message-ID", MemberMessageEmail.message_id(request))
+     |> subject(MemberMessageEmail.subject(request))
+     |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+diff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex
+index d9f8013..5b571d1 100644
+--- a/web/lib/memba/messaging/email_delivery_request.ex
++++ b/web/lib/memba/messaging/email_delivery_request.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :message_id,
+     :club_id,
+     :delivery_id,
++    :outbound_message_id,
+     :recipient_id,
+     :recipient_name,
+     :recipient_address,
+@@ -25,6 +26,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :message_id,
+     :club_id,
+     :delivery_id,
++    :outbound_message_id,
+     :recipient_id,
+     :recipient_name,
+     :recipient_address,
+@@ -47,6 +49,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+           message_id: String.t(),
+           club_id: String.t(),
+           delivery_id: String.t(),
++          outbound_message_id: String.t(),
+           recipient_id: String.t(),
+           recipient_name: String.t(),
+           recipient_address: String.t(),
+diff --git a/web/lib/memba/messaging/local_delivery_facts.ex b/web/lib/memba/messaging/local_delivery_facts.ex
+index 234c317..d32dfdc 100644
+--- a/web/lib/memba/messaging/local_delivery_facts.ex
++++ b/web/lib/memba/messaging/local_delivery_facts.ex
+@@ -23,6 +23,7 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
+     fact = %{
+       id: request.delivery_id,
+       message_id: request.message_id,
++      outbound_message_id: request.outbound_message_id,
+       club_id: request.club_id,
+       delivery_id: request.delivery_id,
+       recipient_id: request.recipient_id,
+diff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex
+index ec54615..99d6c96 100644
+--- a/web/lib/memba/messaging/member_message_email.ex
++++ b/web/lib/memba/messaging/member_message_email.ex
+@@ -28,6 +28,11 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     {recipient_name(request), request.recipient_address}
+   end
+ 
++  @doc "Return the persisted RFC Message-ID header value for this outbound email."
++  def message_id(%EmailDeliveryRequest{} = request) do
++    request.outbound_message_id
++  end
++
+   @doc "Return the sanitized subject for a member-message email header."
+   def subject(%EmailDeliveryRequest{} = request) do
+     subject =
+diff --git a/web/lib/memba/messaging/outbound_message_id.ex b/web/lib/memba/messaging/outbound_message_id.ex
+new file mode 100644
+index 0000000..08ffd10
+--- /dev/null
++++ b/web/lib/memba/messaging/outbound_message_id.ex
+@@ -0,0 +1,32 @@
++defmodule Memba.Messaging.OutboundMessageID do
++  @moduledoc """
++  Generates Memba-controlled RFC Message-ID values for outbound member emails.
++
++  The value is deterministic from Memba's stable delivery and message IDs so the
++  read-model mapping can be rebuilt from projected delivery rows.
++  """
++
++  @domain "messages.memba.io"
++
++  @doc "Return the RFC Message-ID for one outbound member-message delivery."
++  def for_delivery(delivery_id, message_id)
++      when is_binary(delivery_id) and is_binary(message_id) do
++    "<memba.#{delivery_id}.#{message_id}@#{@domain}>"
++  end
++
++  @doc "Normalize a provider-supplied Message-ID for lookup."
++  def normalize(value) when is_binary(value) do
++    case String.trim(value) do
++      "" ->
++        nil
++
++      <<"<", _rest::binary>> = message_id ->
++        message_id
++
++      message_id ->
++        "<#{message_id}>"
++    end
++  end
++
++  def normalize(_value), do: nil
++end
+diff --git a/web/lib/memba/messaging/projections/email_delivery.ex b/web/lib/memba/messaging/projections/email_delivery.ex
+index b5b7a3e..de1d4bf 100644
+--- a/web/lib/memba/messaging/projections/email_delivery.ex
++++ b/web/lib/memba/messaging/projections/email_delivery.ex
+@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
+   @primary_key {:delivery_id, :string, autogenerate: false}
+   schema "messaging_email_deliveries" do
+     field :message_id, :string
++    field :outbound_message_id, :string
+     field :recipient_id, :string
+     field :recipient_name, :string
+     field :recipient_address, :string
+diff --git a/web/lib/memba/messaging/projectors/email_delivery.ex b/web/lib/memba/messaging/projectors/email_delivery.ex
+index b2d3f15..85f0369 100644
+--- a/web/lib/memba/messaging/projectors/email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/email_delivery.ex
+@@ -11,12 +11,14 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
+ 
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.EmailDeliveryStatus
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
+   project(%EmailDeliveryCreated{} = event, fn multi ->
+     Ecto.Multi.insert(multi, :messaging_email_delivery, %EmailDeliveryProjection{
+       delivery_id: event.delivery_id,
+       message_id: event.message_id,
++      outbound_message_id: OutboundMessageID.for_delivery(event.delivery_id, event.message_id),
+       recipient_id: event.recipient_id,
+       recipient_name: event.recipient_name,
+       recipient_address: event.recipient_email,
+diff --git a/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs b/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs
+new file mode 100644
+index 0000000..f7b565e
+--- /dev/null
++++ b/web/priv/repo/migrations/20260621171600_add_outbound_message_id_to_messaging_email_deliveries.exs
+@@ -0,0 +1,29 @@
++defmodule Memba.Repo.Migrations.AddOutboundMessageIdToMessagingEmailDeliveries do
++  use Ecto.Migration
++
++  def up do
++    alter table(:messaging_email_deliveries) do
++      add :outbound_message_id, :text
++    end
++
++    execute("""
++    UPDATE messaging_email_deliveries
++    SET outbound_message_id = '<memba.' || delivery_id || '.' || message_id || '@messages.memba.io>'
++    WHERE outbound_message_id IS NULL
++    """)
++
++    alter table(:messaging_email_deliveries) do
++      modify :outbound_message_id, :text, null: false
++    end
++
++    create unique_index(:messaging_email_deliveries, [:outbound_message_id])
++  end
++
++  def down do
++    drop_if_exists unique_index(:messaging_email_deliveries, [:outbound_message_id])
++
++    alter table(:messaging_email_deliveries) do
++      remove :outbound_message_id
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index db20001..0e63a38 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -13,6 +13,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+   alias Memba.Messaging.Events.EmailDeliveryDelivered
+   alias Memba.Messaging
+   alias Memba.Messaging.ConversationStopFollowToken
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+@@ -265,6 +266,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+                  message_id: message_id,
+                  club_id: club_id,
+                  delivery_id: delivery_id,
++                 outbound_message_id: outbound_message_id,
+                  recipient_id: ^recipient_id,
+                  recipient_name: "Bob Member",
+                  recipient_address: "bob.member@example.com",
+@@ -281,6 +283,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+       assert message_id == message.message_id
+       assert club_id == club.club_id
+       assert delivery_id == delivery.delivery_id
++      assert outbound_message_id == delivery.outbound_message_id
+     end
+ 
+     test "builds reply provider requests with conversation context" do
+@@ -338,6 +341,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+                  message_id: reply_message_id,
+                  club_id: club_id,
+                  delivery_id: delivery_id,
++                 outbound_message_id: outbound_message_id,
+                  recipient_id: ^recipient_id,
+                  recipient_name: "Carol Member",
+                  recipient_address: "carol.member@example.com",
+@@ -359,6 +363,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+       assert reply_message_id == reply_message.message_id
+       assert club_id == club.club_id
+       assert delivery_id == delivery.delivery_id
++      assert outbound_message_id == delivery.outbound_message_id
+       assert conversation_id == root_message.message_id
+       assert reply_to_message_id == root_message.message_id
+       assert conversation_url =~ "/messages/#{root_message.message_id}"
+@@ -676,10 +681,18 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+ 
+   defp insert_email_delivery!(attrs) when is_list(attrs) do
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+ 
+     Repo.insert!(%EmailDeliveryProjection{
+-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
+-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      delivery_id: delivery_id,
++      message_id: message_id,
++      outbound_message_id:
++        Keyword.get(
++          attrs,
++          :outbound_message_id,
++          OutboundMessageID.for_delivery(delivery_id, message_id)
++        ),
+       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(attrs, :recipient_name, "Ada Member"),
+       recipient_address: Keyword.get(attrs, :recipient_address, "ada@example.test"),
+diff --git a/web/test/memba/messaging/email_delivery_provider_test.exs b/web/test/memba/messaging/email_delivery_provider_test.exs
+index 3faac78..1396c09 100644
+--- a/web/test/memba/messaging/email_delivery_provider_test.exs
++++ b/web/test/memba/messaging/email_delivery_provider_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.OutboundMessageID
+ 
+   setup do
+     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+@@ -68,10 +69,14 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
+   end
+ 
+   defp email_delivery_request do
++    message_id = Memba.ID.generate(:message)
++    delivery_id = Memba.ID.generate(:delivery)
++
+     %EmailDeliveryRequest{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Memba.ID.generate(:club),
+-      delivery_id: Memba.ID.generate(:delivery),
++      delivery_id: delivery_id,
++      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
+       recipient_id: Memba.ID.generate(:person),
+       recipient_name: "Alice",
+       recipient_address: "alice@example.com",
+diff --git a/web/test/memba/messaging/email_delivery_providers/fake_test.exs b/web/test/memba/messaging/email_delivery_providers/fake_test.exs
+index b7474eb..db946c7 100644
+--- a/web/test/memba/messaging/email_delivery_providers/fake_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/fake_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.OutboundMessageID
+ 
+   setup do
+     Fake.reset()
+@@ -21,10 +22,14 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do
+   end
+ 
+   defp email_delivery_request(name) do
++    message_id = Memba.ID.generate(:message)
++    delivery_id = Memba.ID.generate(:delivery)
++
+     %EmailDeliveryRequest{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Memba.ID.generate(:club),
+-      delivery_id: Memba.ID.generate(:delivery),
++      delivery_id: delivery_id,
++      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
+       recipient_id: Memba.ID.generate(:person),
+       recipient_name: name,
+       recipient_address: String.downcase(name) <> "@example.com",
+diff --git a/web/test/memba/messaging/email_delivery_providers/local_test.exs b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+index 00b7a2e..b10c067 100644
+--- a/web/test/memba/messaging/email_delivery_providers/local_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+   alias Memba.Messaging.EmailDeliveryProviders.Local
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.LocalDeliveryFacts
++  alias Memba.Messaging.OutboundMessageID
+ 
+   setup do
+     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+@@ -45,6 +46,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
+       assert email.reply_to == {"Bob", "bob@example.test"}
+       assert email.to == [{"Alice", "alice@example.test"}]
++      assert email.headers["Message-ID"] == request.outbound_message_id
+       assert email.subject == "[kmc] Trip planning night"
+ 
+       assert email.text_body ==
+@@ -76,6 +78,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+     assert [fact] = LocalDeliveryFacts.list()
+     assert fact.delivery_id == request.delivery_id
+     assert fact.message_id == request.message_id
++    assert fact.outbound_message_id == request.outbound_message_id
+     assert fact.recipient_address == "alice@example.test"
+     assert fact.to == ["Alice <alice@example.test>"]
+     assert fact.from == "Bob via Memba <messages@mail.memba.io>"
+@@ -115,11 +118,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+   end
+ 
+   defp email_delivery_request(overrides) do
++    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
++
++    delivery_id =
++      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++
+     %EmailDeliveryRequest{
+-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
+-      delivery_id:
+-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
++      delivery_id: delivery_id,
++      outbound_message_id:
++        Keyword.get(
++          overrides,
++          :outbound_message_id,
++          OutboundMessageID.for_delivery(delivery_id, message_id)
++        ),
+       recipient_id:
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index 986f686..d5e591a 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+ 
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.OutboundMessageID
+ 
+   setup do
+     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+@@ -43,6 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+     assert email.reply_to == {"Bob Barker", "bob@example.com"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.subject == "[kmc] Trip planning night"
+ 
+     assert email.text_body ==
+@@ -125,6 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
+     assert email.reply_to == {"Bob Barker", "bob@example.com"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.subject == "[kmc] Re: Trip planning night"
+ 
+     assert email.text_body =~
+@@ -225,11 +228,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+   end
+ 
+   defp email_delivery_request(overrides \\ []) do
++    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
++
++    delivery_id =
++      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++
+     %EmailDeliveryRequest{
+-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
+-      delivery_id:
+-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
++      delivery_id: delivery_id,
++      outbound_message_id:
++        Keyword.get(
++          overrides,
++          :outbound_message_id,
++          OutboundMessageID.for_delivery(delivery_id, message_id)
++        ),
+       recipient_id:
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
+diff --git a/web/test/memba/messaging/email_delivery_providers/resend_test.exs b/web/test/memba/messaging/email_delivery_providers/resend_test.exs
+index 8e87b89..a861377 100644
+--- a/web/test/memba/messaging/email_delivery_providers/resend_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/resend_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
+ 
+   alias Memba.Messaging.EmailDeliveryProviders.Resend
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.OutboundMessageID
+ 
+   setup do
+     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+@@ -43,6 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
+     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+     assert email.reply_to == {"Bob Barker", "bob@example.com"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.subject == "[kmc] Trip planning night"
+ 
+     assert email.text_body ==
+@@ -168,11 +170,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
+   end
+ 
+   defp email_delivery_request(overrides \\ []) do
++    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
++
++    delivery_id =
++      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++
+     %EmailDeliveryRequest{
+-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
+-      delivery_id:
+-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
++      delivery_id: delivery_id,
++      outbound_message_id:
++        Keyword.get(
++          overrides,
++          :outbound_message_id,
++          OutboundMessageID.for_delivery(delivery_id, message_id)
++        ),
+       recipient_id:
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
+diff --git a/web/test/memba/messaging/email_delivery_status_constraints_test.exs b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+index 0532646..02c2ddc 100644
+--- a/web/test/memba/messaging/email_delivery_status_constraints_test.exs
++++ b/web/test/memba/messaging/email_delivery_status_constraints_test.exs
+@@ -2,6 +2,7 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
+   use Memba.DataCase, async: true
+ 
+   alias Memba.Messaging.EmailDeliveryStatus
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
+   @valid_statuses EmailDeliveryStatus.valid_statuses()
+@@ -55,9 +56,13 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
+   end
+ 
+   defp email_delivery_row(attrs) when is_list(attrs) do
++    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
++
+     %{
+-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
+-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      delivery_id: delivery_id,
++      message_id: message_id,
++      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
+       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.fetch!(attrs, :recipient_name),
+       recipient_address: Keyword.fetch!(attrs, :recipient_address),
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index 52f8bde..8aa6dd1 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Recipient
+ 
+   test "SendMessage is projected into public Messaging message and delivery queries" do
+@@ -59,6 +60,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
+              %EmailDeliveryProjection{
+                delivery_id: ^alice_delivery_id,
+                message_id: ^message_id,
++               outbound_message_id: alice_outbound_message_id,
+                recipient_id: ^sender_id,
+                recipient_name: "Alice",
+                recipient_address: "alice@example.com",
+@@ -74,6 +76,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
+              %EmailDeliveryProjection{
+                delivery_id: ^bob_delivery_id,
+                message_id: ^message_id,
++               outbound_message_id: bob_outbound_message_id,
+                recipient_id: ^bob_id,
+                recipient_name: "Bob",
+                recipient_address: "bob@example.com",
+@@ -88,6 +91,30 @@ defmodule Memba.Messaging.MessageProjectionTest do
+              }
+            ] = Messaging.list_recipient_deliveries(message_id)
+ 
++    assert alice_outbound_message_id ==
++             OutboundMessageID.for_delivery(alice_delivery_id, message_id)
++
++    assert bob_outbound_message_id == OutboundMessageID.for_delivery(bob_delivery_id, message_id)
++
++    assert %{
++             outbound_message_id: ^alice_outbound_message_id,
++             delivery_id: ^alice_delivery_id,
++             message_id: ^message_id,
++             conversation_id: ^message_id,
++             club_id: ^club_id
++           } = Messaging.get_outbound_message_reference(alice_outbound_message_id)
++
++    assert %{
++             outbound_message_id: ^bob_outbound_message_id,
++             delivery_id: ^bob_delivery_id,
++             message_id: ^message_id,
++             conversation_id: ^message_id,
++             club_id: ^club_id
++           } =
++             Messaging.get_outbound_message_reference(String.trim(bob_outbound_message_id, "<>"))
++
++    assert is_nil(Messaging.get_outbound_message_reference("<unknown@example.test>"))
++
+     assert %EmailDeliveryProjection{
+              delivery_id: ^bob_delivery_id,
+              message_id: ^message_id,
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index a361d91..7991be3 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -8,6 +8,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Recipient
+ 
+   import Plug.Conn
+@@ -384,6 +385,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+       message_id: message.message_id,
+       club_id: message.club_id,
+       delivery_id: recipient.delivery_id,
++      outbound_message_id:
++        OutboundMessageID.for_delivery(recipient.delivery_id, message.message_id),
+       recipient_id: recipient.person_id,
+       recipient_name: recipient.name,
+       recipient_address: recipient.email,
