@@ -1,0 +1,467 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index dad4fea..3092a40 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -1,4 +1,4 @@
+-@iteration-039
++@not-ui @iteration-039
+ Feature: Club message replies (conversations)
+   Club members want to reply to a club message and keep the conversation in Memba,
+   instead of replies scattering to private inboxes and never being tracked.
+@@ -77,6 +77,15 @@ Feature: Club message replies (conversations)
+     Scenario: A member of another club cannot reply
+       Then Pat should not be able to reply to "Trip planning night"
+ 
++<<<<<<< HEAD
++  Rule: Email replies use the everyone address on the club email subdomain
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Bob replies by email through the KMC everyone address
++      When Bob replies by email to "Trip planning night" through everyone@kmc.clubs.memba.io
++      Then the conversation for "Trip planning night" should show Bob's reply
++      And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
++=======
+   @iteration-041
+   Rule: Email replies use standard reply headers to join conversations
+ 
+@@ -114,3 +123,4 @@ Feature: Club message replies (conversations)
+       When Alice emails "Re: Paddle planning" to kmc@clubs.memba.io with reply headers from "Paddle planning"
+       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
+       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
++>>>>>>> 96e867a (iteration 041: Reply by email)
+diff --git a/acceptance-tests/features/member_message_deliverability.feature b/acceptance-tests/features/member_message_deliverability.feature
+index a16d29d..99f02b9 100644
+--- a/acceptance-tests/features/member_message_deliverability.feature
++++ b/acceptance-tests/features/member_message_deliverability.feature
+@@ -77,6 +77,45 @@ Rule: Active members can send new club messages by email
+       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+       And each addressed member should receive an email from Alice via Memba
+ 
++
++Rule: Club email subdomains identify the club and the everyone route
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Alice emails the KMC everyone address on the club email subdomain
++      When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io
++      Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
++      And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
++      And Alice should not see Pat in the addressed members
++      And each addressed member should receive an email from Alice via Memba
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Alice emails the KMC everyone address from an alternate address
++      Given Alice's alternate email address is "alice.outdoors@example.test"
++      When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io from "alice.outdoors@example.test"
++      Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
++      And each addressed member should receive an email from Alice via Memba
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Alice emails an unsupported route on KMC's club email subdomain
++      When Alice emails "Trip planning night" to committee@kmc.clubs.memba.io
++      Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
++      And Alice should receive a rejection email explaining the message was not posted
++      And Alice should be told how to contact support
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Alice emails an unknown club subdomain
++      When Alice emails "Trip planning night" to everyone@unknown.clubs.memba.io
++      Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
++      And Alice should receive a rejection email explaining the message was not posted
++      And Alice should be told how to contact support
++
++    @iteration-042 @todo-domain @todo-ui
++    Scenario: Alice emails the old flat club address after the cutover
++      When Alice emails "Trip planning night" to kmc@clubs.memba.io
++      Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
++      And Alice should receive a rejection email explaining the message was not posted
++      And Alice should be told how to contact support
++
+ Rule: Inbound club email is rejected when it cannot be posted safely
+ 
+     Scenario: An unknown sender emails the KMC everyone address
+diff --git a/docs/iterations/041-reply-by-email-threading/plan.md b/docs/iterations/041-reply-by-email-threading/plan.md
+index efccdfa..7ade2d1 100644
+--- a/docs/iterations/041-reply-by-email-threading/plan.md
++++ b/docs/iterations/041-reply-by-email-threading/plan.md
+@@ -1,7 +1,7 @@
+ # Reply by email
+ 
+ Date: 2026-06-19
+-Status: implementing
++Status: merged
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/042-club-email-subdomains/plan.md b/docs/iterations/042-club-email-subdomains/plan.md
+new file mode 100644
+index 0000000..461698d
+--- /dev/null
++++ b/docs/iterations/042-club-email-subdomains/plan.md
+@@ -0,0 +1,196 @@
++# Club email subdomains
++
++Date: 2026-06-21
++Status: validated
++
++## Goal
++
++Move Memba's club inbound email addresses from a flat club-slug address to a Topicbox-style club email subdomain.
++
++After this iteration, members email a club-wide message to:
++
++```text
++everyone@<club-slug>.clubs.memba.io
++```
++
++For example, Kootenay Mountaineering Club members use:
++
++```text
++everyone@kmc.clubs.memba.io
++```
++
++This replaces the current `kmc@clubs.memba.io` shape. The `everyone` local part is the only supported route in this slice. Reply-by-email behaviour from iteration 041 stays header-based: the visible reply destination changes to the new `everyone@<club>.clubs.memba.io` address, while `In-Reply-To` / `References` still decide whether inbound mail is a reply or a new club-wide message.
++
++## Background / Context
++
++Iteration 019 introduced inbound club messages at `<club-slug>@clubs.memba.io`, and iteration 020 moved production inbound mail to Postmark. Iteration 041 is in progress and keeps the simple visible club address while adding header-based reply routing.
++
++Matt noticed Topicbox uses a per-group subdomain, such as `kmc.topicbox.com`. We want the same mental model for Memba email while keeping the namespace away from root `memba.io` subdomains such as `www`, `mail`, `admin`, or future app/service hosts. The agreed shape is therefore under `clubs.memba.io`, not `memba.io`:
++
++```text
++everyone@kmc.clubs.memba.io
++```
++
++A read-only Postmark investigation found that Postmark supports wildcard inbound domains such as `*.yourdomain.com` with an MX record pointing to `inbound.postmarkapp.com`. Current production Postmark is configured for `clubs.memba.io`; Matt will update Postmark/DNS to the wildcard setup before the iteration implementation runs.
++
++## Related Problems
++
++- [`docs/problems/2026-06-02-send-club-message-by-email.md`](../../problems/2026-06-02-send-club-message-by-email.md): **refines a resolved problem.** Iterations 019/020 resolved the ability to send club messages by email. This iteration answers the remaining address-shape question with the new canonical `everyone@<club>.clubs.memba.io` convention.
++- [`docs/problems/2026-06-01-cant-reply-to-email-message.md`](../../problems/2026-06-01-cant-reply-to-email-message.md): **depends on iteration 041 and preserves its resolution.** This iteration should keep reply-by-email header routing working while changing the visible reply destination address.
++- [`docs/problems/2026-06-04-rejected-inbound-emails-not-visible.md`](../../problems/2026-06-04-rejected-inbound-emails-not-visible.md): **intentionally unresolved.** Unsupported local parts, unknown club subdomains, and old flat addresses may create rejection records, but this iteration does not add a staff/moderator inbox for rejected inbound mail.
++
++## Scope
++
++### In scope
++
++- Replace the canonical inbound club-wide address with `everyone@<club-slug>.clubs.memba.io`.
++- Treat `everyone` as the only supported route/local part in this slice.
++- Resolve the club slug from the first label before `.clubs.memba.io`, for example `kmc` from `everyone@kmc.clubs.memba.io`.
++- Reject unsupported local parts such as `committee@kmc.clubs.memba.io` without creating a club message.
++- Reject unknown club subdomains such as `everyone@unknown.clubs.memba.io` without creating a club message.
++- Hard cutover from the old flat address: `kmc@clubs.memba.io` is no longer a member-facing or accepted address.
++- Update member-facing address display on the member dashboard and member compose surfaces.
++- Update generated reply destinations after iteration 041 so reply notification emails use `everyone@<club-slug>.clubs.memba.io` as the reply destination while preserving 041's header-based reply-vs-new decision.
++- Update inbound rejection copy only where needed to explain unsupported/unknown recipient addresses safely.
++- Update Postmark/DNS documentation and runbooks to describe the new wildcard setup.
++- Update production smoke-test configuration, assertions, and docs from `test@clubs.memba.io` to `everyone@test.clubs.memba.io`.
++- Run the production inbound smoke test after Matt has completed the Postmark/DNS prerequisite setup.
++- Keep `dev check` green.
++
++### Out of scope
++
++- Channels/groups beyond the `everyone` route.
++- Aliases such as `all@` or `members@`.
++- Accepting arbitrary local parts as club-wide messages.
++- Supporting the old `kmc@clubs.memba.io` shape as a compatibility alias.
++- Root wildcard mail under `*.memba.io`.
++- Club-owned custom inbound domains.
++- Mutating Postmark or DNS from the implementation agent. Matt will perform the external configuration before implementation runs.
++- Adding staff/moderator UI for rejected inbound email.
++- Changing the reply-by-email matching policy from iteration 041. Header matching remains the routing mechanism for replies.
++
++## Iteration Type
++
++Behaviour-facing.
++
++The user-observable rule changes from “email `<club-slug>@clubs.memba.io`” to “email `everyone@<club-slug>.clubs.memba.io`.” The visible address on member pages and reply emails changes, and inbound mail sent to unsupported routes, unknown club subdomains, or the old flat address is rejected safely.
++
++## Acceptance Scenarios / Feature Files
++
++BDD decision: **Required.**
++
++This iteration changes the public email address convention, club resolution rule, unsupported-address policy, reply destination, and production smoke-test expectations. Stakeholder-readable examples are useful because the address shape is the product behaviour.
++
++Updated during planning:
++
++- `acceptance-tests/features/member_message_deliverability.feature`
++  - Added `@iteration-042 @todo-domain @todo-ui` examples for the new canonical `everyone@kmc.clubs.memba.io` accepted path, alternate sender accepted path, unsupported local parts, unknown club subdomains, and the old flat address being rejected.
++  - Existing executable `kmc@clubs.memba.io` scenarios are left in place during planning so the current mainline remains green; implementation should update or replace them when it performs the hard cutover.
++- `acceptance-tests/features/club_message_replies.feature`
++  - Added an `@iteration-042 @todo-domain @todo-ui` example showing a reply-by-email coming through `everyone@kmc.clubs.memba.io` while still landing in the conversation.
++
++The `@todo-domain` / `@todo-ui` tags preserve the green mainline while these future-facing examples wait for implementation.
++
++## Allowed acceptance feature changes
++
++- `acceptance-tests/features/member_message_deliverability.feature`: update inbound club-message scenarios from `kmc@clubs.memba.io` to `everyone@kmc.clubs.memba.io`; add examples for unsupported local parts, unknown club subdomains, and old flat address rejection; remove or narrow `@todo-domain` / `@todo-ui` as implementation makes each scenario executable.
++- `acceptance-tests/features/club_message_replies.feature`: update or add reply-by-email examples so reply emails use `everyone@<club-slug>.clubs.memba.io` as the visible reply destination after iteration 041; preserve 039/040/041 conversation, follower, and header-routing rules.
++- `acceptance-tests/features/email_branding.feature`: during implementation, update any inbound rejection branding examples that still use the old flat address only as needed to preserve the same branding coverage under the new address convention.
++- `smoke-tests/features/inbound_club_email.feature`: during implementation, update production smoke examples and support to use `everyone@test.clubs.memba.io` for the smoke club.
++
++## Designs
++
++No new design mock is needed.
++
++This iteration changes visible copy/address text on existing surfaces rather than adding a new page, component, or state:
++
++- Member dashboard inbound-address note: covered by `design-system/wireframes/club-home.html`, which already includes the “Prefer email?” note and mailto address.
++- Member compose and message surfaces: covered by the existing member messaging designs and sketches, including `design-system/wireframes/member-messaging.html` and the reply-threading sketch in `docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`.
++- Reply notification email: covered by the existing reply-notification design referenced by iterations 040/041; 042 changes the `Reply-To` destination address, not the email layout.
++
++## Acceptance Criteria
++
++- The KMC member dashboard shows `everyone@kmc.clubs.memba.io` as the address members can email to message the club.
++- The KMC member compose page shows `everyone@kmc.clubs.memba.io` as the address members can email to message the club.
++- `everyone@kmc.clubs.memba.io` resolves to Kootenay Mountaineering Club by the existing `kmc` club slug.
++- An inbound email to `everyone@kmc.clubs.memba.io` from Alice's primary email address creates a KMC club message from Alice.
++- An inbound email to `everyone@kmc.clubs.memba.io` from one of Alice's alternate email addresses also creates a KMC club message from Alice.
++- Accepted inbound messages keep the same authorization, body handling, attachment rejection, idempotency, delivery, and visibility semantics already implemented for inbound club email.
++- `committee@kmc.clubs.memba.io` and other unsupported local parts are rejected without creating a club message.
++- `everyone@unknown.clubs.memba.io` and other unknown club subdomains are rejected without creating a club message.
++- `kmc@clubs.memba.io` is no longer displayed as a member-facing address and is rejected if it reaches the app.
++- Reply notification emails generated after iteration 041 use `everyone@<club-slug>.clubs.memba.io` as the reply destination.
++- Reply-by-email still routes by recognized same-club `In-Reply-To` / `References` headers; no recognized same-club header still means a new club-wide message at the addressed club.
++- Inbound emails addressed to the new shape preserve safe rejection behaviour for unknown senders, inactive members, non-members, unsupported attachments, and missing usable plain text.
++- Postmark/DNS docs describe the prerequisite wildcard setup: `*.clubs.memba.io` as the inbound domain and wildcard MX to `inbound.postmarkapp.com`.
++- Production smoke-test docs and config defaults use `everyone@test.clubs.memba.io` for the smoke club.
++- After Matt applies the Postmark/DNS prerequisite, the production inbound smoke test passes against `everyone@test.clubs.memba.io`.
++- `dev check` passes.
++
++## Open Business Decisions
++
++None known.
++
++Confirmed decisions:
++
++- Use `clubs.memba.io` as the namespace, not root `memba.io`.
++- Hard cutover; do not keep the old flat address as an alias.
++- Support only `everyone` in this slice.
++- Defer channels/groups and aliases.
++- Matt performs external Postmark/DNS setup before implementation.
++
++## Implementation Plan
++
++1. Inspect the current inbound address helper, destination resolver, Postmark/Resend inbound parsers, member dashboard/compose display, reply email generation from iteration 041, production smoke-test config, and Postmark docs.
++2. Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
++3. Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
++4. Accept only `local_part == "everyone"` for now.
++5. Resolve `<club-slug>` through the existing Membership slug lookup.
++6. Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
++7. Update member dashboard and member compose copy/mailto links to display the new address.
++8. After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
++9. Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
++10. Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
++11. Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
++12. Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
++13. Run `dev check`.
++14. After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result.
++
++## Open Technical Decisions
++
++None that require product decisions before implementation.
++
++Implementation choices left to the implementer, with constraints:
++
++- The configured inbound namespace should remain environment-configurable, so local/dev can use a different domain while preserving the `everyone@<club>.<namespace>` shape.
++- Rejection reason atoms/copy may reuse existing unsupported-recipient wording or add more specific `unsupported_inbound_route` / `unknown_club_subdomain` reasons if that keeps tests and support diagnostics clearer.
++- If Postmark delivers `OriginalRecipient` with case, display name, or angle-bracket wrapping, normalization should remain case-insensitive and preserve enough original address for diagnostics.
++- If 041 lands with specific message-id mapping modules, 042 should adapt to that design rather than introducing a parallel reply routing path.
++
++## New Capability
++
++Memba has a clearer club email namespace: each club owns a subdomain under `clubs.memba.io`, and the first route on that subdomain is `everyone`. This is a better foundation for future addresses such as channels or special-purpose routes while avoiding root `memba.io` subdomain reservation problems.
++
++## Validation Plan
++
++- Unit/domain tests for inbound address generation: `kmc` renders as `everyone@kmc.clubs.memba.io`.
++- Unit/domain tests for destination resolution:
++  - accepts `everyone@kmc.clubs.memba.io`;
++  - rejects unsupported local parts;
++  - rejects unknown club subdomains;
++  - rejects unsupported domains;
++  - rejects or no longer accepts `kmc@clubs.memba.io`.
++- Existing inbound email acceptance tests rerun under the new address shape for primary address, alternate address, unknown sender, non-member, attachment rejection, HTML-only rejection, and quote/signature stripping.
++- Reply-by-email tests from 041 rerun under the new reply destination address.
++- Member dashboard and compose tests assert the new displayed address and mailto link.
++- Documentation/runbook review confirms Postmark/DNS setup instructions use `*.clubs.memba.io` and `everyone@test.clubs.memba.io` for smoke tests.
++- Production smoke tests are updated and run after Matt's Postmark/DNS prerequisite setup.
++- Full `dev check`.
++
++## Risks / Follow-ups
++
++- **External prerequisite risk:** implementation expects Matt to configure Postmark/DNS first. If wildcard inbound mail is not live, automated app tests can pass but the production smoke test will fail at the provider/DNS boundary.
++- **041 integration risk:** 041 is in progress. 042 must adapt to its final message-id/reply-destination implementation without regressing header-based reply routing.
++- **Hard cutover risk:** any manual habits, seed data, docs, or smoke tests that still use `kmc@clubs.memba.io` will fail until updated. This is accepted because the app is still pre-launch.
++- **Future channel semantics:** only `everyone` is accepted now. Channels such as `trips@kmc.clubs.memba.io` should be a separate future iteration with explicit membership/audience rules.
++- **Rejected inbound visibility remains unresolved:** unsupported or unknown recipient mail can be rejected and recorded, but there is still no staff/moderator UI for rejected inbound email.
+diff --git a/docs/iterations/042-club-email-subdomains/postmark-dns-prerequisite.md b/docs/iterations/042-club-email-subdomains/postmark-dns-prerequisite.md
+new file mode 100644
+index 0000000..119ee34
+--- /dev/null
++++ b/docs/iterations/042-club-email-subdomains/postmark-dns-prerequisite.md
+@@ -0,0 +1,58 @@
++# Postmark and DNS prerequisite for iteration 042
++
++Before running implementation for iteration 042, Matt should update production inbound mail routing so Postmark receives mail for club email subdomains.
++
++## Desired production shape
++
++Members send club-wide messages to:
++
++```text
++everyone@<club-slug>.clubs.memba.io
++```
++
++Smoke-test club address:
++
++```text
++everyone@test.clubs.memba.io
++```
++
++## Postmark
++
++On the production Postmark server currently used for Memba inbound mail:
++
++- Inbound domain: `*.clubs.memba.io`
++- Inbound webhook URL: keep `https://memba.io/webhooks/postmark/inbound`
++
++Postmark documentation says wildcard inbound domains are supported and route messages addressed to any subdomain of the configured domain to the inbound endpoint.
++
++## DNS
++
++Add or update the wildcard MX record for club email subdomains:
++
++```text
++*.clubs.memba.io MX 10 inbound.postmarkapp.com
++```
++
++The existing flat-domain record may still exist during setup:
++
++```text
++clubs.memba.io MX 10 inbound.postmarkapp.com
++```
++
++Iteration 042 will hard-cut the app behaviour to the new address shape; keeping the old MX temporarily should not make the old address accepted by the app.
++
++## Pre-implementation check
++
++After changing Postmark/DNS, wait for DNS propagation and verify:
++
++```bash
++dig +short MX test.clubs.memba.io
++```
++
++Expected result includes:
++
++```text
++10 inbound.postmarkapp.com.
++```
++
++Then run iteration 042 implementation. The implementation should update and run the production smoke test against `everyone@test.clubs.memba.io`.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 034930f..4cc2c75 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -50,7 +50,12 @@ green than before.
+ | 038 | 2026-06-19 | merged | Async email delivery dispatch | [plan](038-email-delivery-handoff-boundary/plan.md) |
+ | 039 | 2026-06-19 | merged | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
+ | 040 | 2026-06-19 | merged | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
++<<<<<<< HEAD
+ | 041 | 2026-06-19 | implementing | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
++| 042 | 2026-06-21 | validated | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
++=======
++| 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
++>>>>>>> 96e867a (iteration 041: Reply by email)
+ 
+ Status notes:
+ 
+@@ -62,7 +67,7 @@ Status notes:
+ Shared acceptance feature files used across these iterations:
+ 
+ - [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
+-- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation)
++- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation; iteration 042 changes the inbound address convention to `everyone@<club>.clubs.memba.io`)
+ - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
+ - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@todo-domain`/`@todo-ui` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
+ - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
+@@ -73,4 +78,4 @@ Shared acceptance feature files used across these iterations:
+ - [`club_member_invitations.feature`](../../acceptance-tests/features/club_member_invitations.feature) (`@iteration-028` with `@todo-domain`/`@todo-ui` planning scenarios until Staff invitation and profile-completion behaviour is implemented; iteration 029 adds `@iteration-029` Membership Admin invitation scenarios under the same temporary runner-debt tags until member-admin invitation behaviour is implemented)
+ - [`homepage.feature`](../../acceptance-tests/features/homepage.feature) (iteration 031 adds an `@not-domain @todo-ui` homepage volunteering-vision scenario)
+ - [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)
+-- [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour)
++- [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
+diff --git a/docs/kaizen/2026-06-21-fabro-commit-attribution.md b/docs/kaizen/2026-06-21-fabro-commit-attribution.md
+new file mode 100644
+index 0000000..a2cd512
+--- /dev/null
++++ b/docs/kaizen/2026-06-21-fabro-commit-attribution.md
+@@ -0,0 +1,69 @@
++# Problem: Fabro-published commits are attributed to the GitHub user `fabro`
++
++Date: 2026-06-21
++
++## Context
++
++Matt observed that GitHub commit history for this repository shows commits attributed to a user called `fabro`, for example:
++
++https://github.com/mattwynne/memba/commits?author=fabro
++
++This affects the delivery machinery around Fabro workflow commits and publication steps, not ordinary product code behavior.
++
++## Expected standard
++
++Commits that land on `main` should have clear, intentional attribution. If automation publishes commits, the author/committer identity should be an approved project identity and should not make GitHub history look like work was authored by an unexpected or unrelated user.
++
++## What happened
++
++Recent commits on `origin/main` match `--author=fabro`. Local inspection showed examples such as:
++
++```text
++d48758270  Fabro <noreply@fabro.sh>              Fabro <fabro@users.noreply.github.com>  fabro(01KVNM68WX9Z56FVEWAGK1BW3V): synthesis_gate (succeeded)
++3e44b68f8  Fabro <fabro@users.noreply.github.com> Fabro <fabro@users.noreply.github.com> Mark iteration plan validated
++8e7d40031  Fabro <fabro@users.noreply.github.com> Fabro <fabro@users.noreply.github.com> iteration 040: Follow a conversation, and send replies only to followers
++```
++
++The repository workflows include hard-coded Git identities in publish/finalization scripts:
++
++- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`
++- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`
++- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`
++- `.fabro/workflows/plan-validation/scripts/publish_ready.sh`
++
++Each configures `user.name` as `Fabro` and uses `fabro@users.noreply.github.com` for commits that can be pushed to the shared repository history.
++
++## Impact
++
++This creates audit and ownership confusion in GitHub history. Product and workflow state changes can appear to be authored by an unexpected `fabro` identity rather than by Matt or by a clearly approved bot identity for this repository. It also makes GitHub author filters and contribution views misleading.
++
++Severity: quality and traceability risk. It does not appear to block delivery immediately, but it affects every automated publish step until fixed.
++
++## What allowed it to happen
++
++The workflow publish scripts set their own Git author/committer identity locally and push commits without a guardrail checking that the resulting identity matches the repository's expected attribution policy.
++
++There also appears to be no documented standard for which identity Fabro should use when committing to this repository, and no preflight/CI check that flags unapproved author or committer emails before changes land on `main`.
++
++## Observations
++
++- The local user Git config is `Matt Wynne <matt@mattwynne.net>`, so the unexpected attribution is not coming from Matt's normal global Git identity.
++- `git log origin/main --author=fabro` returns recent Fabro workflow, plan-validation, review, and iteration publish commits.
++- The scripts above explicitly run `git config user.name "Fabro"` and `git config user.email "fabro@users.noreply.github.com"` before committing.
++- Some Fabro checkpoint commits also use `Fabro <noreply@fabro.sh>`, which means there may be more than one automation identity involved.
++
++## Why this matters
++
++Commit attribution is part of the delivery system's audit trail. If automated commits use an unexpected GitHub identity, future investigation has to distinguish real authorship, automation provenance, and GitHub account mapping after the fact. That weakens trust in the history and makes regressions or workflow changes harder to trace.
++
++## Open questions
++
++- What exact author and committer identity should Fabro use for commits that land on `main`?
++- Should workflow checkpoint commits and final publish commits use the same identity or distinct approved identities?
++- Are existing commits worth rewriting, or is the fix only for future commits?
++
++## Possible prevention ideas
++
++- Document the approved Git identities for human, Fabro checkpoint, and Fabro publish commits.
++- Centralize Fabro Git identity setup in one helper instead of hard-coding it in multiple scripts.
++- Add a publish-time or CI guard that fails when commits destined for `main` use an unapproved author or committer email.
