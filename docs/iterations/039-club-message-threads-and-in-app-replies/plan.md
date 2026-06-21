@@ -1,7 +1,7 @@
 # Club message conversations and replies
 
 Date: 2026-06-19
-Status: implementing
+Status: merged
 
 ## Goal
 
