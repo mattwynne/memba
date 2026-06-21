@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T15:05:31.404100744Z",
-  "last_event_at": "2026-06-21T15:06:42.606895916Z",
+  "last_event_at": "2026-06-21T15:08:31.631857719Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -711,9 +711,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 65,
       "checkpoint": {
-        "timestamp": "2026-06-21T15:07:33.074982815Z",
+        "timestamp": "2026-06-21T15:07:36.142379574Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -722,25 +722,179 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "truncate",
+          "outcome": "succeeded",
+          "gemini_review_blocking_gap_count": 3,
+          "internal.retry_count.claude_review": 0,
+          "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1. **Quote-stripping specificity**: \"Basic quoted-history stripping\" appears in scope and implementation but could be more concrete about what qualifies as \"basic\" (e.g., \"strip lines starting with `>` and common email signatures\") vs. deferred to follow-up. This is mild—acceptable to refine during implementation.\n\n2. **Token generation timing**: Implementation step 1 says \"generate a token per conversation\" but doesn't clarify whether tokens are generated for all existing conversations on deploy or lazily on first email send. This is likely an implementation detail that can be decided during work, but clarifying \"backfill on deploy\" vs. \"lazy generation on first email render\" would tighten the plan.\n\n3. **Header confirmation logic**: The plan states headers are \"secondary\" confirmation but doesn't specify what happens if the address matches but headers don't (e.g., forwarded email, different `Message-ID`). Likely acceptable to discover during implementation, but worth noting as an edge case to handle.\n\n## Smallest Viable Iteration\n\nThe plan is already well-scoped and minimal. The smallest useful slice would be:\n\n**\"Reply by email lands in conversation for members\"** — exactly what's in scope, minus the reserved `+g.` namespace documentation. However, the namespace reservation is a good design affordance with negligible cost, so keeping it is pragmatic.\n\nNo further reduction recommended; this iteration is already a coherent minimum.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe plan includes a clear validation section:\n\n- **Unit/integration tests**: Token resolution, `Reply-To` header generation, membership authorization, quote stripping, rejection handling, backward compatibility (bare club address).\n- **Acceptance scenarios**: `@iteration-041` scenarios in `club_message_replies.feature` covering happy path (member reply lands and fans out), rejection (non-member), unmatchable/garbled addresses, and backward compatibility.\n- **`dev check` passes**: Full test suite, static analysis, and acceptance tests green.\n\n### How to prove success after implementation:\n\n1. Send a reply notification email for a conversation; verify `Reply-To` is `<club-slug>+c.<token>@clubs.memba.io` and `Message-ID`/`References` are set.\n2. Simulate an inbound email to that address from the conversation's club member via Postmark; verify the reply posts to the conversation, auto-follows the replier, and fans out to followers.\n3. Simulate an inbound email from a non-member; verify rejection email sent.\n4. Simulate inbound to an unknown token or garbled address; verify safe handling (no crash, no stray post).\n5. Simulate inbound to `<club-slug>@clubs.memba.io` with no `+c.` suffix; verify it still creates a club-wide message (backward compatibility).\n6. All `@iteration-041` scenarios pass; all existing scenarios stay green.\n7. `dev check` passes on committed code.\n\n---\n\n## Detailed Review Against Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated**: Yes. \"Let members reply to a club conversation straight from their email client and have that reply land in the right Memba conversation.\"\n- **User/business outcome**: Yes. The goal states the member capability (reply from inbox → lands in conversation) and the business outcome (completes the reply loop from 039/040).\n- **Beneficiary clear**: Yes. Members of a club who receive reply notification emails and want to respond from their inbox.\n\n### 2. Scope Focus ✅\n\n- **One coherent outcome**: Yes. Enable email replies to conversations, routed by conversation-addressed reply address.\n- **Could it be smaller**: The iteration is already minimal. It could theoretically be split into \"address schema only\" and \"inbound routing,\" but that would leave the schema unused and untested—not useful on its own.\n- **Non-goals clear**: Yes. Groups/channels, perfect quote parsing, attachments, in-app reply changes, and new provider integrations are all explicitly out of scope.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Criteria concrete and testable**: Yes. Each criterion has a clear pass/fail condition: `Reply-To` set to conversation address; member reply posts and fans out; non-member rejected; unmatchable handled safely; bare club address backward-compatible; scenarios pass; `dev check` passes.\n- **Coverage complete**: Yes. Happy path (member reply), error states (non-member, unmatchable, garbled), permissions (membership check), state changes (auto-follow, fan-out), and backward compatibility (bare club address) are all covered.\n- **Iteration type classified**: Yes. \"Behaviour-facing.\"\n- **Acceptance scenarios section present**: Yes. Section \"Acceptance Scenarios / Feature Files\" is explicit. It names `club_message_replies.feature`, lists required scenarios (member reply lands and reaches followers; non-member rejected; unmatchable safely handled), and tags them `@iteration-041`.\n- **Business decisions resolved**: One open decision noted (reject vs. silent drop for unmatchable inbound), with a clear recommendation (reuse rejection email, confirm copy during implementation). All other decisions confirmed (membership required, auto-follow, follower delivery, address schema).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Steps clear and ordered**: Yes. Six numbered steps: (1) token mapping, (2) set `Reply-To`/headers, (3) extend inbound pipeline, (4) apply authorization/rejection, (5) make scenarios runnable, (6) `dev check`.\n- **Files/modules/interfaces named**: Yes. `emails/reply-notification.html`, `club_message_replies.feature`, inbound pipeline (iterations 019/020), 039 reply path, 040 follower fan-out, and Postmark MX (`clubs.memba.io`).\n- **Data model clear**: Yes. Conversation routing token ↔ conversation mapping (implementation detail: random vs. signed, where it lives—noted as open technical decision).\n- **Integration points clear**: Yes. Postmark inbound webhook, existing inbound pipeline, 039 reply creation, 040 follower delivery.\n- **Technical decisions**: Three open technical decisions listed (token format/storage, quote-stripping library vs. heuristic, spoofing trust model). All are appropriately scoped as implementation details that don't require product decisions.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after**: Clearly stated. Members can reply from their inbox and it lands in the Memba conversation, routed by conversation-addressed reply address, with same rules as in-app replies (membership, auto-follow, fan-out).\n- **How to prove success**: Validation plan lists unit/integration tests, acceptance scenarios (`@iteration-041`), and `dev check`.\n- **Clear stop condition**: Yes. `@iteration-041` scenarios pass, existing scenarios green, `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **well-structured, complete, and ready for implementation**. It demonstrates strong continuity with prior iterations (039/040), clear scope boundaries, explicit acceptance scenarios, and thoughtful forward-compatibility (reserved `+g.` namespace). The open business decision (rejection email vs. silent drop) has a clear recommendation and can be confirmed during implementation. The open technical decisions are appropriately scoped as implementation details.\n\nThe plan meets all readiness criteria with high confidence.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "gemini_review_confidence": "High",
+          "internal.run_id": "01KVNBE4TG154YV6NP4GDH20ZT",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.start.current_node": "gemini_review",
+          "last_stage": "claude_review",
+          "claude_review_blocking_gaps": "None",
+          "gemini_review_decision": "NOT READY",
+          "claude_review_required_edits": "None",
+          "failure_signature": "",
+          "internal.retry_count.gemini_review": 0,
+          "current_node": "claude_review",
+          "claude_review_blocking_gap_count": 0,
+          "graph.default_fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_blocking_gaps": "Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved",
+          "internal.work_dir": "/workspace/memba",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garbled addresses reuse existing fallback and do not create stray replies, but `## Open Business Decisions` still asks whether to reject with feedback or silently drop and says to confirm copy during implementation. That is a product/workflow/copy decision and should be resolved before implementation.\n\n2. **Core token strategy and persistence are unresolved.**  \n   The iteration depends on a conversation-addressed reply token, but `## Open Technical Decisions` leaves token format/derivation and where the token↔conversation mapping lives undecided. That affects schema, migration shape, lookup semantics, security, and test design.\n\n3. **Inbound sender authenticity / spoofing policy is still unresolved.**  \n   The plan says to require current membership, but also leaves open how far to trust `From` under the existing inbound pipeline. Because this affects authorization and abuse handling for posting into conversations, the plan should explicitly state the trust model for this iteration and what hardening is deferred.\n\n## Non-blocking improvements\n\n1. **Name likely implementation modules/files.**  \n   The implementation plan is understandable, but would be easier to execute if it named the existing inbound mail handler, reply notification mailer/template, conversation/reply context modules, and expected migration/test files.\n\n2. **Clarify header behavior.**  \n   The plan says email headers are secondary confirmation and also says `Message-ID`/`References` should be set, but it should clarify whether an address-token match succeeds when headers are absent or malformed.\n\n3. **Define “basic quoted-history stripping” more concretely.**  \n   The plan can keep this lightweight, but should define the minimum acceptable behavior, e.g. remove common quoted blocks while preserving the sender’s new text, and never reject solely because quote stripping fails.\n\n4. **Clarify ambiguous-address handling.**  \n   “Ambiguous addresses” are mentioned, but tokenized conversation routing should usually be unambiguous. The plan could define examples: multiple matching recipients, multiple club addresses, malformed typed segments, or token/club mismatch.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist an opaque conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Parse inbound mail sent to that address.\n- If the sender is a current club member, post the inbound body as a reply in the matched conversation, attribute it to the sender, auto-follow them, and fan out to followers.\n- If the sender is not a member or the address/token cannot be resolved, create no reply and follow one explicitly defined fallback/rejection behavior.\n- Preserve existing bare `<club-slug>@clubs.memba.io` behavior.\n\nDefer advanced quote parsing, attachments, groups/channels, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve `## Open Business Decisions` by choosing the exact unmatched-reply behavior: reject with existing rejection email, silently drop, or another defined action. Include whether copy changes are in or out of scope.\n\n2. Resolve token design: specify random opaque vs signed token, whether it is stored on conversations or in a separate mapping table, uniqueness constraints, when it is generated, and whether it rotates.\n\n3. Resolve inbound authenticity policy for this iteration: explicitly state how the sender email is matched to a member, what existing Postmark/inbound trust assumptions are reused, and what spoofing protections are deferred.\n\n4. Update acceptance criteria to reflect those decisions, especially unmatched-address behavior and sender-authentication behavior.\n\n5. Optionally add likely implementation touchpoints: migration/schema, inbound parser/handler, reply mailer/template/header code, conversation reply context, and tests.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` tagged `@iteration-041`.\n2. Test that reply notification emails use `Reply-To: <club-slug>+c.<token>@clubs.memba.io`.\n3. Test that the conversation token resolves only to the correct conversation and club.\n4. Test that a current member’s inbound email reply creates a conversation reply, attributes it correctly, auto-follows the sender, and fans out to followers.\n5. Test that a non-member inbound reply creates no reply and follows the decided rejection/drop behavior.\n6. Test that unknown, malformed, token/club-mismatched, or otherwise unmatchable inbound addresses create no stray reply and follow the decided fallback behavior.\n7. Test that bare `<club-slug>@clubs.memba.io` still follows the existing club-wide inbound message path.\n8. Test the minimum quote-stripping behavior.\n9. Run the `@iteration-041` acceptance scenarios with temporary todo tags removed or narrowed.\n10. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved\",\"gemini_review_required_edits\":\"Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions\"}}",
+          "failure_class": "",
+          "internal.retry_count.start": 0,
+          "internal.thread_id": "gemini_review",
+          "internal.node_visit_count": 1,
+          "claude_review_confidence": "High",
+          "claude_review_decision": "READY",
+          "gemini_review_required_edits": "Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions",
+          "graph.rankdir": "LR",
+          "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1."
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garbled addresses reuse existing fallback and do not create stray replies, but `## Open Business Decisions` still asks whether to reject with feedback or silently drop and says to confirm copy during implementation. That is a product/workflow/copy decision and should be resolved before implementation.\n\n2. **Core token strategy and persistence are unresolved.**  \n   The iteration depends on a conversation-addressed reply token, but `## Open Technical Decisions` leaves token format/derivation and where the token↔conversation mapping lives undecided. That affects schema, migration shape, lookup semantics, security, and test design.\n\n3. **Inbound sender authenticity / spoofing policy is still unresolved.**  \n   The plan says to require current membership, but also leaves open how far to trust `From` under the existing inbound pipeline. Because this affects authorization and abuse handling for posting into conversations, the plan should explicitly state the trust model for this iteration and what hardening is deferred.\n\n## Non-blocking improvements\n\n1. **Name likely implementation modules/files.**  \n   The implementation plan is understandable, but would be easier to execute if it named the existing inbound mail handler, reply notification mailer/template, conversation/reply context modules, and expected migration/test files.\n\n2. **Clarify header behavior.**  \n   The plan says email headers are secondary confirmation and also says `Message-ID`/`References` should be set, but it should clarify whether an address-token match succeeds when headers are absent or malformed.\n\n3. **Define “basic quoted-history stripping” more concretely.**  \n   The plan can keep this lightweight, but should define the minimum acceptable behavior, e.g. remove common quoted blocks while preserving the sender’s new text, and never reject solely because quote stripping fails.\n\n4. **Clarify ambiguous-address handling.**  \n   “Ambiguous addresses” are mentioned, but tokenized conversation routing should usually be unambiguous. The plan could define examples: multiple matching recipients, multiple club addresses, malformed typed segments, or token/club mismatch.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist an opaque conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Parse inbound mail sent to that address.\n- If the sender is a current club member, post the inbound body as a reply in the matched conversation, attribute it to the sender, auto-follow them, and fan out to followers.\n- If the sender is not a member or the address/token cannot be resolved, create no reply and follow one explicitly defined fallback/rejection behavior.\n- Preserve existing bare `<club-slug>@clubs.memba.io` behavior.\n\nDefer advanced quote parsing, attachments, groups/channels, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve `## Open Business Decisions` by choosing the exact unmatched-reply behavior: reject with existing rejection email, silently drop, or another defined action. Include whether copy changes are in or out of scope.\n\n2. Resolve token design: specify random opaque vs signed token, whether it is stored on conversations or in a separate mapping table, uniqueness constraints, when it is generated, and whether it rotates.\n\n3. Resolve inbound authenticity policy for this iteration: explicitly state how the sender email is matched to a member, what existing Postmark/inbound trust assumptions are reused, and what spoofing protections are deferred.\n\n4. Update acceptance criteria to reflect those decisions, especially unmatched-address behavior and sender-authentication behavior.\n\n5. Optionally add likely implementation touchpoints: migration/schema, inbound parser/handler, reply mailer/template/header code, conversation reply context, and tests.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` tagged `@iteration-041`.\n2. Test that reply notification emails use `Reply-To: <club-slug>+c.<token>@clubs.memba.io`.\n3. Test that the conversation token resolves only to the correct conversation and club.\n4. Test that a current member’s inbound email reply creates a conversation reply, attributes it correctly, auto-follows the sender, and fans out to followers.\n5. Test that a non-member inbound reply creates no reply and follows the decided rejection/drop behavior.\n6. Test that unknown, malformed, token/club-mismatched, or otherwise unmatchable inbound addresses create no stray reply and follow the decided fallback behavior.\n7. Test that bare `<club-slug>@clubs.memba.io` still follows the existing club-wide inbound message path.\n8. Test the minimum quote-stripping behavior.\n9. Run the `@iteration-041` acceptance scenarios with temporary todo tags removed or narrowed.\n10. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved\",\"gemini_review_required_edits\":\"Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions\"}}",
+              "gemini_review_required_edits": "Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garb",
+              "gemini_review_blocking_gaps": "Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 3
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17567,
+                    "output_tokens": 1245,
+                    "reasoning_tokens": 645,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 144535
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 61999,
+              "tool_time_ms": 87,
+              "active_time_ms": 62086
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_decision": "READY",
+              "claude_review_required_edits": "None",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1. **Quote-stripping specificity**: \"Basic quoted-history stripping\" appears in scope and implementation but could be more concrete about what qualifies as \"basic\" (e.g., \"strip lines starting with `>` and common email signatures\") vs. deferred to follow-up. This is mild—acceptable to refine during implementation.\n\n2. **Token generation timing**: Implementation step 1 says \"generate a token per conversation\" but doesn't clarify whether tokens are generated for all existing conversations on deploy or lazily on first email send. This is likely an implementation detail that can be decided during work, but clarifying \"backfill on deploy\" vs. \"lazy generation on first email render\" would tighten the plan.\n\n3. **Header confirmation logic**: The plan states headers are \"secondary\" confirmation but doesn't specify what happens if the address matches but headers don't (e.g., forwarded email, different `Message-ID`). Likely acceptable to discover during implementation, but worth noting as an edge case to handle.\n\n## Smallest Viable Iteration\n\nThe plan is already well-scoped and minimal. The smallest useful slice would be:\n\n**\"Reply by email lands in conversation for members\"** — exactly what's in scope, minus the reserved `+g.` namespace documentation. However, the namespace reservation is a good design affordance with negligible cost, so keeping it is pragmatic.\n\nNo further reduction recommended; this iteration is already a coherent minimum.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe plan includes a clear validation section:\n\n- **Unit/integration tests**: Token resolution, `Reply-To` header generation, membership authorization, quote stripping, rejection handling, backward compatibility (bare club address).\n- **Acceptance scenarios**: `@iteration-041` scenarios in `club_message_replies.feature` covering happy path (member reply lands and fans out), rejection (non-member), unmatchable/garbled addresses, and backward compatibility.\n- **`dev check` passes**: Full test suite, static analysis, and acceptance tests green.\n\n### How to prove success after implementation:\n\n1. Send a reply notification email for a conversation; verify `Reply-To` is `<club-slug>+c.<token>@clubs.memba.io` and `Message-ID`/`References` are set.\n2. Simulate an inbound email to that address from the conversation's club member via Postmark; verify the reply posts to the conversation, auto-follows the replier, and fans out to followers.\n3. Simulate an inbound email from a non-member; verify rejection email sent.\n4. Simulate inbound to an unknown token or garbled address; verify safe handling (no crash, no stray post).\n5. Simulate inbound to `<club-slug>@clubs.memba.io` with no `+c.` suffix; verify it still creates a club-wide message (backward compatibility).\n6. All `@iteration-041` scenarios pass; all existing scenarios stay green.\n7. `dev check` passes on committed code.\n\n---\n\n## Detailed Review Against Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated**: Yes. \"Let members reply to a club conversation straight from their email client and have that reply land in the right Memba conversation.\"\n- **User/business outcome**: Yes. The goal states the member capability (reply from inbox → lands in conversation) and the business outcome (completes the reply loop from 039/040).\n- **Beneficiary clear**: Yes. Members of a club who receive reply notification emails and want to respond from their inbox.\n\n### 2. Scope Focus ✅\n\n- **One coherent outcome**: Yes. Enable email replies to conversations, routed by conversation-addressed reply address.\n- **Could it be smaller**: The iteration is already minimal. It could theoretically be split into \"address schema only\" and \"inbound routing,\" but that would leave the schema unused and untested—not useful on its own.\n- **Non-goals clear**: Yes. Groups/channels, perfect quote parsing, attachments, in-app reply changes, and new provider integrations are all explicitly out of scope.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Criteria concrete and testable**: Yes. Each criterion has a clear pass/fail condition: `Reply-To` set to conversation address; member reply posts and fans out; non-member rejected; unmatchable handled safely; bare club address backward-compatible; scenarios pass; `dev check` passes.\n- **Coverage complete**: Yes. Happy path (member reply), error states (non-member, unmatchable, garbled), permissions (membership check), state changes (auto-follow, fan-out), and backward compatibility (bare club address) are all covered.\n- **Iteration type classified**: Yes. \"Behaviour-facing.\"\n- **Acceptance scenarios section present**: Yes. Section \"Acceptance Scenarios / Feature Files\" is explicit. It names `club_message_replies.feature`, lists required scenarios (member reply lands and reaches followers; non-member rejected; unmatchable safely handled), and tags them `@iteration-041`.\n- **Business decisions resolved**: One open decision noted (reject vs. silent drop for unmatchable inbound), with a clear recommendation (reuse rejection email, confirm copy during implementation). All other decisions confirmed (membership required, auto-follow, follower delivery, address schema).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Steps clear and ordered**: Yes. Six numbered steps: (1) token mapping, (2) set `Reply-To`/headers, (3) extend inbound pipeline, (4) apply authorization/rejection, (5) make scenarios runnable, (6) `dev check`.\n- **Files/modules/interfaces named**: Yes. `emails/reply-notification.html`, `club_message_replies.feature`, inbound pipeline (iterations 019/020), 039 reply path, 040 follower fan-out, and Postmark MX (`clubs.memba.io`).\n- **Data model clear**: Yes. Conversation routing token ↔ conversation mapping (implementation detail: random vs. signed, where it lives—noted as open technical decision).\n- **Integration points clear**: Yes. Postmark inbound webhook, existing inbound pipeline, 039 reply creation, 040 follower delivery.\n- **Technical decisions**: Three open technical decisions listed (token format/storage, quote-stripping library vs. heuristic, spoofing trust model). All are appropriately scoped as implementation details that don't require product decisions.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after**: Clearly stated. Members can reply from their inbox and it lands in the Memba conversation, routed by conversation-addressed reply address, with same rules as in-app replies (membership, auto-follow, fan-out).\n- **How to prove success**: Validation plan lists unit/integration tests, acceptance scenarios (`@iteration-041`), and `dev check`.\n- **Clear stop condition**: Yes. `@iteration-041` scenarios pass, existing scenarios green, `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **well-structured, complete, and ready for implementation**. It demonstrates strong continuity with prior iterations (039/040), clear scope boundaries, explicit acceptance scenarios, and thoughtful forward-compatibility (reserved `+g.` namespace). The open business decision (rejection email vs. silent drop) has a clear recommendation and can be confirmed during implementation. The open technical decisions are appropriately scoped as implementation details.\n\nThe plan meets all readiness criteria with high confidence.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "last_stage": "claude_review",
+              "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1.",
+              "claude_review_blocking_gap_count": 0
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4806,
+                    "output_tokens": 2019,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 5036,
+                    "cache_write_tokens": 6302
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6302,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 69845
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 53754,
+              "tool_time_ms": 49,
+              "active_time_ms": 53803
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "2798b1723f23231477b4457aa56b8ad360e0f1b2",
+        "node_visits": {
+          "gemini_review": 1,
+          "start": 1,
+          "claude_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T15:09:10.383809528Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.node_visit_count": 1,
           "claude_review_blocking_gaps": "None",
-          "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1.",
+          "internal.retry_count.codex_review": 0,
+          "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/041-reply-by-email-threading/plan.md`.\n\n## Blocking gaps\n\n1. **An open business decision remai",
           "claude_review_confidence": "High",
           "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 041 Plan Validation Report\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone\n\n## Non-Blocking Improvements\n\n1. **Quote-stripping specificity**: \"Basic quoted-history stripping\" appears in scope and implementation but could be more concrete about what qualifies as \"basic\" (e.g., \"strip lines starting with `>` and common email signatures\") vs. deferred to follow-up. This is mild—acceptable to refine during implementation.\n\n2. **Token generation timing**: Implementation step 1 says \"generate a token per conversation\" but doesn't clarify whether tokens are generated for all existing conversations on deploy or lazily on first email send. This is likely an implementation detail that can be decided during work, but clarifying \"backfill on deploy\" vs. \"lazy generation on first email render\" would tighten the plan.\n\n3. **Header confirmation logic**: The plan states headers are \"secondary\" confirmation but doesn't specify what happens if the address matches but headers don't (e.g., forwarded email, different `Message-ID`). Likely acceptable to discover during implementation, but worth noting as an edge case to handle.\n\n## Smallest Viable Iteration\n\nThe plan is already well-scoped and minimal. The smallest useful slice would be:\n\n**\"Reply by email lands in conversation for members\"** — exactly what's in scope, minus the reserved `+g.` namespace documentation. However, the namespace reservation is a good design affordance with negligible cost, so keeping it is pragmatic.\n\nNo further reduction recommended; this iteration is already a coherent minimum.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe plan includes a clear validation section:\n\n- **Unit/integration tests**: Token resolution, `Reply-To` header generation, membership authorization, quote stripping, rejection handling, backward compatibility (bare club address).\n- **Acceptance scenarios**: `@iteration-041` scenarios in `club_message_replies.feature` covering happy path (member reply lands and fans out), rejection (non-member), unmatchable/garbled addresses, and backward compatibility.\n- **`dev check` passes**: Full test suite, static analysis, and acceptance tests green.\n\n### How to prove success after implementation:\n\n1. Send a reply notification email for a conversation; verify `Reply-To` is `<club-slug>+c.<token>@clubs.memba.io` and `Message-ID`/`References` are set.\n2. Simulate an inbound email to that address from the conversation's club member via Postmark; verify the reply posts to the conversation, auto-follows the replier, and fans out to followers.\n3. Simulate an inbound email from a non-member; verify rejection email sent.\n4. Simulate inbound to an unknown token or garbled address; verify safe handling (no crash, no stray post).\n5. Simulate inbound to `<club-slug>@clubs.memba.io` with no `+c.` suffix; verify it still creates a club-wide message (backward compatibility).\n6. All `@iteration-041` scenarios pass; all existing scenarios stay green.\n7. `dev check` passes on committed code.\n\n---\n\n## Detailed Review Against Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated**: Yes. \"Let members reply to a club conversation straight from their email client and have that reply land in the right Memba conversation.\"\n- **User/business outcome**: Yes. The goal states the member capability (reply from inbox → lands in conversation) and the business outcome (completes the reply loop from 039/040).\n- **Beneficiary clear**: Yes. Members of a club who receive reply notification emails and want to respond from their inbox.\n\n### 2. Scope Focus ✅\n\n- **One coherent outcome**: Yes. Enable email replies to conversations, routed by conversation-addressed reply address.\n- **Could it be smaller**: The iteration is already minimal. It could theoretically be split into \"address schema only\" and \"inbound routing,\" but that would leave the schema unused and untested—not useful on its own.\n- **Non-goals clear**: Yes. Groups/channels, perfect quote parsing, attachments, in-app reply changes, and new provider integrations are all explicitly out of scope.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Criteria concrete and testable**: Yes. Each criterion has a clear pass/fail condition: `Reply-To` set to conversation address; member reply posts and fans out; non-member rejected; unmatchable handled safely; bare club address backward-compatible; scenarios pass; `dev check` passes.\n- **Coverage complete**: Yes. Happy path (member reply), error states (non-member, unmatchable, garbled), permissions (membership check), state changes (auto-follow, fan-out), and backward compatibility (bare club address) are all covered.\n- **Iteration type classified**: Yes. \"Behaviour-facing.\"\n- **Acceptance scenarios section present**: Yes. Section \"Acceptance Scenarios / Feature Files\" is explicit. It names `club_message_replies.feature`, lists required scenarios (member reply lands and reaches followers; non-member rejected; unmatchable safely handled), and tags them `@iteration-041`.\n- **Business decisions resolved**: One open decision noted (reject vs. silent drop for unmatchable inbound), with a clear recommendation (reuse rejection email, confirm copy during implementation). All other decisions confirmed (membership required, auto-follow, follower delivery, address schema).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Steps clear and ordered**: Yes. Six numbered steps: (1) token mapping, (2) set `Reply-To`/headers, (3) extend inbound pipeline, (4) apply authorization/rejection, (5) make scenarios runnable, (6) `dev check`.\n- **Files/modules/interfaces named**: Yes. `emails/reply-notification.html`, `club_message_replies.feature`, inbound pipeline (iterations 019/020), 039 reply path, 040 follower fan-out, and Postmark MX (`clubs.memba.io`).\n- **Data model clear**: Yes. Conversation routing token ↔ conversation mapping (implementation detail: random vs. signed, where it lives—noted as open technical decision).\n- **Integration points clear**: Yes. Postmark inbound webhook, existing inbound pipeline, 039 reply creation, 040 follower delivery.\n- **Technical decisions**: Three open technical decisions listed (token format/storage, quote-stripping library vs. heuristic, spoofing trust model). All are appropriately scoped as implementation details that don't require product decisions.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after**: Clearly stated. Members can reply from their inbox and it lands in the Memba conversation, routed by conversation-addressed reply address, with same rules as in-app replies (membership, auto-follow, fan-out).\n- **How to prove success**: Validation plan lists unit/integration tests, acceptance scenarios (`@iteration-041`), and `dev check`.\n- **Clear stop condition**: Yes. `@iteration-041` scenarios pass, existing scenarios green, `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **well-structured, complete, and ready for implementation**. It demonstrates strong continuity with prior iterations (039/040), clear scope boundaries, explicit acceptance scenarios, and thoughtful forward-compatibility (reserved `+g.` namespace). The open business decision (rejection email vs. silent drop) has a clear recommendation and can be confirmed during implementation. The open technical decisions are appropriately scoped as implementation details.\n\nThe plan meets all readiness criteria with high confidence.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
           "outcome": "succeeded",
-          "current_node": "claude_review",
+          "current_node": "codex_review",
           "thread.gemini_review.current_node": "claude_review",
           "failure_class": "",
           "failure_signature": "",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "internal.retry_count.gemini_review": 0,
+          "codex_review_confidence": "High",
           "internal.fidelity": "truncate",
           "gemini_review_blocking_gap_count": 3,
           "gemini_review_required_edits": "Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions",
           "internal.work_dir": "/workspace/memba",
           "graph.rankdir": "LR",
-          "internal.thread_id": "gemini_review",
-          "last_stage": "claude_review",
+          "internal.thread_id": "claude_review",
+          "last_stage": "codex_review",
           "internal.retry_count.claude_review": 0,
           "graph.default_fidelity": "summary:high",
           "internal.run_id": "01KVNBE4TG154YV6NP4GDH20ZT",
@@ -748,17 +902,64 @@
           "claude_review_required_edits": "None",
           "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garbled addresses reuse existing fallback and do not create stray replies, but `## Open Business Decisions` still asks whether to reject with feedback or silently drop and says to confirm copy during implementation. That is a product/workflow/copy decision and should be resolved before implementation.\n\n2. **Core token strategy and persistence are unresolved.**  \n   The iteration depends on a conversation-addressed reply token, but `## Open Technical Decisions` leaves token format/derivation and where the token↔conversation mapping lives undecided. That affects schema, migration shape, lookup semantics, security, and test design.\n\n3. **Inbound sender authenticity / spoofing policy is still unresolved.**  \n   The plan says to require current membership, but also leaves open how far to trust `From` under the existing inbound pipeline. Because this affects authorization and abuse handling for posting into conversations, the plan should explicitly state the trust model for this iteration and what hardening is deferred.\n\n## Non-blocking improvements\n\n1. **Name likely implementation modules/files.**  \n   The implementation plan is understandable, but would be easier to execute if it named the existing inbound mail handler, reply notification mailer/template, conversation/reply context modules, and expected migration/test files.\n\n2. **Clarify header behavior.**  \n   The plan says email headers are secondary confirmation and also says `Message-ID`/`References` should be set, but it should clarify whether an address-token match succeeds when headers are absent or malformed.\n\n3. **Define “basic quoted-history stripping” more concretely.**  \n   The plan can keep this lightweight, but should define the minimum acceptable behavior, e.g. remove common quoted blocks while preserving the sender’s new text, and never reject solely because quote stripping fails.\n\n4. **Clarify ambiguous-address handling.**  \n   “Ambiguous addresses” are mentioned, but tokenized conversation routing should usually be unambiguous. The plan could define examples: multiple matching recipients, multiple club addresses, malformed typed segments, or token/club mismatch.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist an opaque conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Parse inbound mail sent to that address.\n- If the sender is a current club member, post the inbound body as a reply in the matched conversation, attribute it to the sender, auto-follow them, and fan out to followers.\n- If the sender is not a member or the address/token cannot be resolved, create no reply and follow one explicitly defined fallback/rejection behavior.\n- Preserve existing bare `<club-slug>@clubs.memba.io` behavior.\n\nDefer advanced quote parsing, attachments, groups/channels, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve `## Open Business Decisions` by choosing the exact unmatched-reply behavior: reject with existing rejection email, silently drop, or another defined action. Include whether copy changes are in or out of scope.\n\n2. Resolve token design: specify random opaque vs signed token, whether it is stored on conversations or in a separate mapping table, uniqueness constraints, when it is generated, and whether it rotates.\n\n3. Resolve inbound authenticity policy for this iteration: explicitly state how the sender email is matched to a member, what existing Postmark/inbound trust assumptions are reused, and what spoofing protections are deferred.\n\n4. Update acceptance criteria to reflect those decisions, especially unmatched-address behavior and sender-authentication behavior.\n\n5. Optionally add likely implementation touchpoints: migration/schema, inbound parser/handler, reply mailer/template/header code, conversation reply context, and tests.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` tagged `@iteration-041`.\n2. Test that reply notification emails use `Reply-To: <club-slug>+c.<token>@clubs.memba.io`.\n3. Test that the conversation token resolves only to the correct conversation and club.\n4. Test that a current member’s inbound email reply creates a conversation reply, attributes it correctly, auto-follows the sender, and fans out to followers.\n5. Test that a non-member inbound reply creates no reply and follows the decided rejection/drop behavior.\n6. Test that unknown, malformed, token/club-mismatched, or otherwise unmatchable inbound addresses create no stray reply and follow the decided fallback behavior.\n7. Test that bare `<club-slug>@clubs.memba.io` still follows the existing club-wide inbound message path.\n8. Test the minimum quote-stripping behavior.\n9. Run the `@iteration-041` acceptance scenarios with temporary todo tags removed or narrowed.\n10. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved\",\"gemini_review_required_edits\":\"Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions\"}}",
           "gemini_review_decision": "NOT READY",
+          "codex_review_blocking_gap_count": 4,
+          "codex_review_decision": "NOT READY",
+          "codex_review_blocking_gaps": "Unmatched inbound fallback/rejection behavior remains an open business decision; Conversation token format/storage/lifecycle is unresolved; Inbound sender authenticity/member matching policy is unresolved; Secondary header confirmation behavior is underspecified",
           "thread.start.current_node": "gemini_review",
           "gemini_review_blocking_gaps": "Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved",
           "gemini_review_confidence": "High",
           "internal.retry_count.start": 0,
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/041-reply-by-email-threading/plan.md`.\n\n## Blocking gaps\n\n1. **An open business decision remains unresolved.**  \n   The plan explicitly lists “Fallback when an inbound reply can't be matched” as an open business decision, with “reject with a conversation-aware rejection email, or silently drop” still to confirm. The acceptance criteria also use the ambiguous phrase “rejected/ignored safely,” which is not objectively testable.\n\n2. **Core token/mapping design is still unresolved.**  \n   The plan depends on a conversation routing token but leaves open whether it is random opaque vs. signed, where the token-to-conversation mapping lives, and by implication how it is generated, persisted, migrated/backfilled, and constrained for uniqueness. This is central to the data model and implementation.\n\n3. **Inbound authenticity / sender trust policy is unresolved.**  \n   The plan says to reuse the existing inbound path’s assumptions but still lists spoofing/authenticity as an open technical decision. Since this feature creates replies attributed to members from inbound email, the plan needs a clear implementation rule for how `From` is matched and trusted, and what happens on ambiguous/multiple/no member matches.\n\n4. **Header confirmation behavior is underspecified.**  \n   The plan says `In-Reply-To` / `References` are a secondary confirmation, but does not define what happens when headers are missing, mismatched, or point elsewhere while the address token resolves. That affects safety and edge-case behavior.\n\n## Non-blocking improvements\n\n1. Name likely implementation files/modules/migrations/tests once the token strategy is chosen, especially for inbound parsing, reply email generation, and conversation persistence.\n2. Define “basic quoted-history stripping” with a minimal objective stop condition, for example “store the visible new reply body and remove common quoted sections when detectable; never reject solely because stripping fails.”\n3. Clarify whether rejection emails should include conversation context, and if so what minimal copy is acceptable.\n4. Separate “email client threading headers” from “server-side routing safety” so implementers know which parts are required for correctness versus UX polish.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist a stable, unguessable conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Accept inbound email sent to that address from a current club member.\n- Create a reply in the matched conversation, attribute it to the member, auto-follow the replier, and fan out to followers.\n- Safely handle non-members, unknown tokens, garbled addresses, and bare club addresses with explicitly defined behavior.\n- Add acceptance coverage for the member happy path and the key rejection/fallback paths.\n\nDefer groups/channels, attachments, sophisticated quote parsing, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve the unmatched inbound behavior: choose reject-with-feedback or silent drop, and make each relevant acceptance criterion objectively testable.\n2. Specify the routing token design: random opaque or signed, storage location, uniqueness constraints, generation timing, and migration/backfill approach for existing conversations.\n3. Define the inbound sender-authentication policy: how `From` maps to a member, what existing inbound assumptions are reused, and what happens for ambiguous, absent, or spoof-suspect senders.\n4. Define header-confirmation semantics: whether missing/mismatched `In-Reply-To` / `References` are ignored, logged, rejected, or used only for diagnostics/threading.\n5. Update acceptance criteria and scenarios to reflect those decisions precisely.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Unit/integration tests for conversation reply address generation and token resolution.\n2. Email-generation tests proving reply notifications use the conversation `Reply-To` and expected threading headers.\n3. Inbound tests for:\n   - current member reply posts into the correct conversation;\n   - reply is attributed to the sender;\n   - replier auto-follows;\n   - followers receive fan-out;\n   - non-member inbound creates no reply and follows the chosen rejection/drop behavior;\n   - unknown/garbled token creates no stray reply;\n   - bare `<club-slug>@clubs.memba.io` still follows the existing club-wide message path;\n   - missing/mismatched headers follow the newly specified rule.\n4. `@iteration-041` acceptance scenarios passing with temporary todo tags removed or narrowed.\n5. Existing 039/040 reply/follower scenarios remaining green.\n6. Full `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Unmatched inbound fallback/rejection behavior remains an open business decision; Conversation token format/storage/lifecycle is unresolved; Inbound sender authenticity/member matching policy is unresolved; Secondary header confirmation behavior is underspecified\",\"codex_review_required_edits\":\"Choose and specify unmatched inbound behavior; Define token generation/storage/constraints/migration; Define From-to-member trust and ambiguity policy; Define missing/mismatched header semantics; Update acceptance criteria and scenarios accordingly\"}}",
           "claude_review_decision": "READY",
-          "claude_review_blocking_gap_count": 0
+          "claude_review_blocking_gap_count": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "codex_review_required_edits": "Choose and specify unmatched inbound behavior; Define token generation/storage/constraints/migration; Define From-to-member trust and ambiguity policy; Define missing/mismatched header semantics; Update acceptance criteria and scenarios accordingly"
         },
         "node_outcomes": {
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 4,
+              "last_stage": "codex_review",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/041-reply-by-email-threading/plan.md`.\n\n## Blocking gaps\n\n1. **An open business decision remai",
+              "codex_review_decision": "NOT READY",
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/041-reply-by-email-threading/plan.md`.\n\n## Blocking gaps\n\n1. **An open business decision remains unresolved.**  \n   The plan explicitly lists “Fallback when an inbound reply can't be matched” as an open business decision, with “reject with a conversation-aware rejection email, or silently drop” still to confirm. The acceptance criteria also use the ambiguous phrase “rejected/ignored safely,” which is not objectively testable.\n\n2. **Core token/mapping design is still unresolved.**  \n   The plan depends on a conversation routing token but leaves open whether it is random opaque vs. signed, where the token-to-conversation mapping lives, and by implication how it is generated, persisted, migrated/backfilled, and constrained for uniqueness. This is central to the data model and implementation.\n\n3. **Inbound authenticity / sender trust policy is unresolved.**  \n   The plan says to reuse the existing inbound path’s assumptions but still lists spoofing/authenticity as an open technical decision. Since this feature creates replies attributed to members from inbound email, the plan needs a clear implementation rule for how `From` is matched and trusted, and what happens on ambiguous/multiple/no member matches.\n\n4. **Header confirmation behavior is underspecified.**  \n   The plan says `In-Reply-To` / `References` are a secondary confirmation, but does not define what happens when headers are missing, mismatched, or point elsewhere while the address token resolves. That affects safety and edge-case behavior.\n\n## Non-blocking improvements\n\n1. Name likely implementation files/modules/migrations/tests once the token strategy is chosen, especially for inbound parsing, reply email generation, and conversation persistence.\n2. Define “basic quoted-history stripping” with a minimal objective stop condition, for example “store the visible new reply body and remove common quoted sections when detectable; never reject solely because stripping fails.”\n3. Clarify whether rejection emails should include conversation context, and if so what minimal copy is acceptable.\n4. Separate “email client threading headers” from “server-side routing safety” so implementers know which parts are required for correctness versus UX polish.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist a stable, unguessable conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Accept inbound email sent to that address from a current club member.\n- Create a reply in the matched conversation, attribute it to the member, auto-follow the replier, and fan out to followers.\n- Safely handle non-members, unknown tokens, garbled addresses, and bare club addresses with explicitly defined behavior.\n- Add acceptance coverage for the member happy path and the key rejection/fallback paths.\n\nDefer groups/channels, attachments, sophisticated quote parsing, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve the unmatched inbound behavior: choose reject-with-feedback or silent drop, and make each relevant acceptance criterion objectively testable.\n2. Specify the routing token design: random opaque or signed, storage location, uniqueness constraints, generation timing, and migration/backfill approach for existing conversations.\n3. Define the inbound sender-authentication policy: how `From` maps to a member, what existing inbound assumptions are reused, and what happens for ambiguous, absent, or spoof-suspect senders.\n4. Define header-confirmation semantics: whether missing/mismatched `In-Reply-To` / `References` are ignored, logged, rejected, or used only for diagnostics/threading.\n5. Update acceptance criteria and scenarios to reflect those decisions precisely.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Unit/integration tests for conversation reply address generation and token resolution.\n2. Email-generation tests proving reply notifications use the conversation `Reply-To` and expected threading headers.\n3. Inbound tests for:\n   - current member reply posts into the correct conversation;\n   - reply is attributed to the sender;\n   - replier auto-follows;\n   - followers receive fan-out;\n   - non-member inbound creates no reply and follows the chosen rejection/drop behavior;\n   - unknown/garbled token creates no stray reply;\n   - bare `<club-slug>@clubs.memba.io` still follows the existing club-wide message path;\n   - missing/mismatched headers follow the newly specified rule.\n4. `@iteration-041` acceptance scenarios passing with temporary todo tags removed or narrowed.\n5. Existing 039/040 reply/follower scenarios remaining green.\n6. Full `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Unmatched inbound fallback/rejection behavior remains an open business decision; Conversation token format/storage/lifecycle is unresolved; Inbound sender authenticity/member matching policy is unresolved; Secondary header confirmation behavior is underspecified\",\"codex_review_required_edits\":\"Choose and specify unmatched inbound behavior; Define token generation/storage/constraints/migration; Define From-to-member trust and ambiguity policy; Define missing/mismatched header semantics; Update acceptance criteria and scenarios accordingly\"}}",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gaps": "Unmatched inbound fallback/rejection behavior remains an open business decision; Conversation token format/storage/lifecycle is unresolved; Inbound sender authenticity/member matching policy is unresolved; Secondary header confirmation behavior is underspecified",
+              "codex_review_required_edits": "Choose and specify unmatched inbound behavior; Define token generation/storage/constraints/migration; Define From-to-member trust and ambiguity policy; Define missing/mismatched header semantics; Update acceptance criteria and scenarios accordingly"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 22165,
+                    "output_tokens": 1282,
+                    "reasoning_tokens": 1086,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 181865
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 93866,
+              "tool_time_ms": 45,
+              "active_time_ms": 93911
+            }
           },
           "claude_review": {
             "status": "succeeded",
@@ -845,11 +1046,12 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "synthesize",
         "node_visits": {
+          "gemini_review": 1,
           "claude_review": 1,
-          "start": 1,
-          "gemini_review": 1
+          "codex_review": 1,
+          "start": 1
         }
       },
       "diff": {}
@@ -875,11 +1077,240 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "codex_review@1": {
+      "first_event_seq": 68,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T15:07:36.142839539Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 14694,
+        "output_tokens": 190,
+        "total_tokens": 15454,
+        "reasoning_tokens": 570,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:5584db65-cd44-4a7a-ba01-1b788c011f2d",
+        "items": [
+          {
+            "id": "86596c2abc5bf6e7",
+            "status": "completed",
+            "order": 0,
+            "subject": "Read the complete iteration plan file"
+          },
+          {
+            "id": "5378d0ef92f425a5",
+            "status": "completed",
+            "order": 1,
+            "subject": "Assess readiness against requested criteria"
+          },
+          {
+            "id": "01394860f873466a",
+            "status": "in_progress",
+            "order": 2,
+            "subject": "Return Markdown report with routing JSON"
+          }
+        ]
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 6870,
+        "usage_percent": 2.525735294117647,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-21T15:08:31.630828350Z",
+        "event_seq": 85,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1030,
+            "usage_percent": 0.3786764705882353
+          },
+          {
+            "category": "tools",
+            "tokens": 1497,
+            "usage_percent": 0.5503676470588236
+          },
+          {
+            "category": "memory",
+            "tokens": 402,
+            "usage_percent": 0.14779411764705883
+          },
+          {
+            "category": "conversation",
+            "tokens": 3935,
+            "usage_percent": 1.4466911764705883
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
+    },
     "claude_review@1": {
       "first_event_seq": 46,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-21T15:07:33.074844078Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "anthropic",
@@ -893,17 +1324,24 @@
       "output": null,
       "started_at": "2026-06-21T15:06:38.953310796Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 54121,
+        "inference_time_ms": 53754,
+        "tool_time_ms": 49,
+        "active_time_ms": 53803
+      },
       "usage": {
-        "input_tokens": 1275,
-        "output_tokens": 175,
-        "total_tokens": 6486,
+        "input_tokens": 4806,
+        "output_tokens": 2019,
+        "total_tokens": 18163,
         "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 5036
+        "cache_read_tokens": 5036,
+        "cache_write_tokens": 6302,
+        "total_usd_micros": 69845
       },
       "model": {
         "provider": "anthropic",
-        "model_id": "claude-sonnet-4-5-20250929"
+        "model_id": "claude-sonnet-4-5"
       },
       "permission_level": "full",
       "agent_tools": [
@@ -1065,42 +1503,42 @@
         "provider": "anthropic",
         "model": "claude-sonnet-4-5",
         "context_window_tokens": 200000,
-        "input_tokens": 6311,
-        "usage_percent": 3.1555,
+        "input_tokens": 9833,
+        "usage_percent": 4.9165,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-21T15:06:42.557715046Z",
-        "event_seq": 54,
+        "generated_at": "2026-06-21T15:07:33.073793088Z",
+        "event_seq": 59,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1990,
-            "usage_percent": 0.995
+            "tokens": 1930,
+            "usage_percent": 0.965
           },
           {
             "category": "tools",
-            "tokens": 2293,
-            "usage_percent": 1.1465
+            "tokens": 2224,
+            "usage_percent": 1.112
           },
           {
             "category": "memory",
-            "tokens": 903,
-            "usage_percent": 0.4515
+            "tokens": 875,
+            "usage_percent": 0.4375
           },
           {
             "category": "conversation",
-            "tokens": 1117,
-            "usage_percent": 0.5585
+            "tokens": 4797,
+            "usage_percent": 2.3985
           },
           {
             "category": "other",
-            "tokens": 8,
-            "usage_percent": 0.004
+            "tokens": 7,
+            "usage_percent": 0.0035
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 17,
