@@ -37,12 +37,36 @@ defmodule Memba.Cucumber.MessagingSteps do
     Fake.reset()
 
     context
-    |> send_message_to_kootenay_members(sender_name, subject)
+    |> send_message_to_club_members(sender_name, subject, "Kootenay Mountaineering Club")
+    |> dispatch_and_clear_background_message_deliveries()
+  end
+
+  step "{word} sent the message {string} to Nelson Paddling Club members",
+       %{args: [sender_name, subject]} = context do
+    Fake.reset()
+
+    context
+    |> send_message_to_club_members(sender_name, subject, "Nelson Paddling Club")
     |> dispatch_and_clear_background_message_deliveries()
   end
 
   step "{word} replies {string} to {string}", %{args: [sender_name, body, subject]} = context do
     post_reply_to_message(context, sender_name, subject, body)
+  end
+
+  step "{word} replies by email to {string} with:",
+       %{args: [sender_name, subject]} = context do
+    receive_inbound_reply_email(context, sender_name, subject, Map.fetch!(context, :docstring))
+  end
+
+  step ~r/^(\w+) emails "([^"]+)" to kmc@clubs\.memba\.io with reply headers from "([^"]+)"$/,
+       %{args: [sender_name, subject, referenced_subject]} = context do
+    referenced_outbound_message_id =
+      outbound_message_id_for_subject!(context, referenced_subject, sender_name)
+
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+      in_reply_to_message_ids: [referenced_outbound_message_id]
+    )
   end
 
   step "{word} follows the conversation for {string}",
@@ -76,6 +100,11 @@ defmodule Memba.Cucumber.MessagingSteps do
   step "the conversation for {string} should show {string} before {string}",
        %{args: [subject, earlier_body, later_body]} = context do
     assert_conversation_order(context, subject, earlier_body, later_body)
+  end
+
+  step ~r/^the conversation for "([^"]+)" should not show (\w+)'s reply "([^"]+)"$/,
+       %{args: [subject, sender_name, body]} = context do
+    assert_conversation_does_not_show_reply(context, subject, sender_name, body)
   end
 
   step ~r/^(.+) should(?: each)? receive (\w+)'s reply by email from (.+) via Memba$/,
@@ -452,8 +481,12 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   defp send_message_to_kootenay_members(context, sender_name, subject) do
+    send_message_to_club_members(context, sender_name, subject, "Kootenay Mountaineering Club")
+  end
+
+  defp send_message_to_club_members(context, sender_name, subject, club_name) do
     message_id = Memba.ID.generate(:message)
-    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+    club_id = fetch_from_context!(context, :clubs, club_name)
     sender_id = person_id_from_context!(context, sender_name)
     body = "#{subject} details."
 
@@ -591,6 +624,18 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     assert Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
              message.sender_id == sender_id and message.body == body
+           end)
+
+    context
+  end
+
+  defp assert_conversation_does_not_show_reply(context, subject, sender_name, body) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    sender_id = person_id_from_context!(context, sender_name)
+
+    refute Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
+             message.sender_id == sender_id and message.body == body and
+               is_binary(message.reply_to_message_id)
            end)
 
     context
@@ -815,6 +860,8 @@ defmodule Memba.Cucumber.MessagingSteps do
     text_body = Keyword.get(opts, :text_body, "#{subject} details.")
     html_body = Keyword.get(opts, :html_body)
     attachments = Keyword.get(opts, :attachments, [])
+    in_reply_to_message_ids = Keyword.get(opts, :in_reply_to_message_ids, [])
+    references_message_ids = Keyword.get(opts, :references_message_ids, [])
 
     result =
       Messaging.receive_inbound_club_email(
@@ -826,6 +873,8 @@ defmodule Memba.Cucumber.MessagingSteps do
           subject: subject,
           text_body: text_body,
           html_body: html_body,
+          in_reply_to_message_ids: in_reply_to_message_ids,
+          references_message_ids: references_message_ids,
           attachments: attachments
         },
         consistency: :strong
@@ -844,25 +893,79 @@ defmodule Memba.Cucumber.MessagingSteps do
       {:ok, %{message_id: message_id, club_id: club_id, sender_id: sender_id}} ->
         message = Messaging.get_message(message_id)
 
-        context
-        |> Map.put(:sent_message, %{
-          message_id: message_id,
-          club_id: club_id,
-          sender_id: sender_id,
-          subject: message.subject,
-          body: message.body
-        })
-        |> Map.put(:last_message_id, message_id)
-        |> update_context_map(:messages, subject, %{
-          message_id: message_id,
-          club_id: club_id,
-          sender_id: sender_id,
-          subject: message.subject,
-          body: message.body
-        })
+        if is_binary(message.reply_to_message_id) do
+          record_inbound_reply_context(context, message, sender_name)
+        else
+          context
+          |> Map.put(:sent_message, %{
+            message_id: message_id,
+            club_id: club_id,
+            sender_id: sender_id,
+            subject: message.subject,
+            body: message.body
+          })
+          |> Map.put(:last_message_id, message_id)
+          |> update_context_map(:messages, subject, %{
+            message_id: message_id,
+            club_id: club_id,
+            sender_id: sender_id,
+            subject: message.subject,
+            body: message.body
+          })
+        end
 
       {:error, reason} ->
         flunk("Expected inbound email not to error; got #{inspect(reason)}")
+    end
+  end
+
+  defp receive_inbound_reply_email(context, sender_name, subject, body) do
+    outbound_message_id = outbound_message_id_for_subject!(context, subject, sender_name)
+
+    receive_inbound_club_email(context, sender_name, "Re: #{subject}", "kmc@clubs.memba.io",
+      text_body: body,
+      in_reply_to_message_ids: [outbound_message_id]
+    )
+  end
+
+  defp record_inbound_reply_context(context, message, sender_name) do
+    reply_context = %{
+      body: message.body,
+      club_id: message.club_id,
+      conversation_id: message.conversation_id,
+      message_id: message.message_id,
+      sender_id: message.sender_id,
+      sender_name: sender_name,
+      subject: message.subject
+    }
+
+    context
+    |> Map.put(:last_reply, reply_context)
+    |> update_context_map({:replies, message.subject}, {sender_name, message.body}, reply_context)
+  end
+
+  defp outbound_message_id_for_subject!(context, subject, preferred_recipient_name) do
+    message = fetch_from_context!(context, :messages, subject)
+
+    preferred_recipient_id =
+      if Map.has_key?(Map.get(context, :people, %{}), preferred_recipient_name) do
+        person_id_from_context!(context, preferred_recipient_name)
+      end
+
+    deliveries = Messaging.list_recipient_deliveries(message.message_id)
+
+    delivery =
+      (preferred_recipient_id &&
+         Enum.find(deliveries, &(&1.recipient_id == preferred_recipient_id))) ||
+        List.first(deliveries)
+
+    case delivery do
+      %{outbound_message_id: outbound_message_id}
+      when is_binary(outbound_message_id) and outbound_message_id != "" ->
+        outbound_message_id
+
+      _missing ->
+        flunk("Expected outbound Message-ID for #{inspect(subject)}")
     end
   end
 

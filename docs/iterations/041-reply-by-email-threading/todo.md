@@ -5,5 +5,5 @@
 - [x] 003 Extend inbound parsing: parse `In-Reply-To` and all `References` message ids in Postmark/Resend provider-neutral inbound structs. Likely touchpoints: `MembaWeb.PostmarkInboundEmailParser`, `MembaWeb.ResendInboundEmailParser`, and `Memba.Messaging.InboundEmail`.
 - [x] 004 Extend inbound routing: before creating a new club-wide message, attempt a same-club header match; when found, post via the 039 reply path, apply current-member authorization, auto-follow the replier, fan out to followers, and apply basic quoted-history stripping.
 - [x] 005 Preserve and test fallback behaviour: no same-club header match remains the existing club-wide inbound message path; non-members, ambiguous senders, unsupported bodies/attachments, unknown clubs, and malformed provider payloads keep using existing rejection behaviour.
-- [ ] 006 Make the `@iteration-041` scenarios executable; remove/narrow `@todo-*`.
+- [x] 006 Make the `@iteration-041` scenarios executable; remove/narrow `@todo-*`.
 - [ ] 007 Run `dev check`.
