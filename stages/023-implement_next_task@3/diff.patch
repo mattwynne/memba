@@ -1,0 +1,512 @@
+diff --git a/docs/iterations/041-reply-by-email-threading/todo.md b/docs/iterations/041-reply-by-email-threading/todo.md
+index 2ed7698..7b74e6f 100644
+--- a/docs/iterations/041-reply-by-email-threading/todo.md
++++ b/docs/iterations/041-reply-by-email-threading/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Add outbound message-id support: generate Memba-controlled RFC `Message-ID` values for outbound club/reply emails and persist a mapping from message id to Memba message/conversation/club. Likely touchpoints: `Memba.Messaging.MemberMessageEmail`, provider adapters, `EmailDeliveryRequest`, and a projection/table or fields that make lookup deterministic.
+ - [x] 002 Set reply email headers: club/reply emails should route normal replies to `<club-slug>@clubs.memba.io`; reply notification emails should set `In-Reply-To` / `References` so email clients thread and Memba can recognize the conversation on inbound.
+-- [ ] 003 Extend inbound parsing: parse `In-Reply-To` and all `References` message ids in Postmark/Resend provider-neutral inbound structs. Likely touchpoints: `MembaWeb.PostmarkInboundEmailParser`, `MembaWeb.ResendInboundEmailParser`, and `Memba.Messaging.InboundEmail`.
++- [x] 003 Extend inbound parsing: parse `In-Reply-To` and all `References` message ids in Postmark/Resend provider-neutral inbound structs. Likely touchpoints: `MembaWeb.PostmarkInboundEmailParser`, `MembaWeb.ResendInboundEmailParser`, and `Memba.Messaging.InboundEmail`.
+ - [ ] 004 Extend inbound routing: before creating a new club-wide message, attempt a same-club header match; when found, post via the 039 reply path, apply current-member authorization, auto-follow the replier, fan out to followers, and apply basic quoted-history stripping.
+ - [ ] 005 Preserve and test fallback behaviour: no same-club header match remains the existing club-wide inbound message path; non-members, ambiguous senders, unsupported bodies/attachments, unknown clubs, and malformed provider payloads keep using existing rejection behaviour.
+ - [ ] 006 Make the `@iteration-041` scenarios executable; remove/narrow `@todo-*`.
+diff --git a/web/lib/memba/messaging/inbound_email.ex b/web/lib/memba/messaging/inbound_email.ex
+index 6c78ec4..95bca8e 100644
+--- a/web/lib/memba/messaging/inbound_email.ex
++++ b/web/lib/memba/messaging/inbound_email.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Messaging.InboundEmail do
+ 
+   alias Memba.ID
+   alias Memba.Messaging.InboundEmailAttachment
++  alias Memba.Messaging.InboundEmailReplyHeaders
+ 
+   @enforce_keys [
+     :provider,
+@@ -27,6 +28,8 @@ defmodule Memba.Messaging.InboundEmail do
+     :text_body,
+     :html_body,
+     :original_message_id,
++    in_reply_to_message_ids: [],
++    references_message_ids: [],
+     attachments: []
+   ]
+ 
+@@ -40,6 +43,8 @@ defmodule Memba.Messaging.InboundEmail do
+           text_body: String.t() | nil,
+           html_body: String.t() | nil,
+           original_message_id: String.t() | nil,
++          in_reply_to_message_ids: [String.t()],
++          references_message_ids: [String.t()],
+           attachments: [InboundEmailAttachment.t()]
+         }
+ 
+@@ -73,6 +78,8 @@ defmodule Memba.Messaging.InboundEmail do
+              fetch_optional(attrs, :original_message_id),
+              :invalid_original_message_id
+            ),
++         {:ok, in_reply_to_message_ids} <- normalize_message_ids(in_reply_to_values(attrs)),
++         {:ok, references_message_ids} <- normalize_message_ids(references_values(attrs)),
+          {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
+       {:ok,
+        %__MODULE__{
+@@ -85,6 +92,8 @@ defmodule Memba.Messaging.InboundEmail do
+          text_body: text_body,
+          html_body: html_body,
+          original_message_id: original_message_id,
++         in_reply_to_message_ids: in_reply_to_message_ids,
++         references_message_ids: references_message_ids,
+          attachments: attachments
+        }}
+     end
+@@ -150,6 +159,10 @@ defmodule Memba.Messaging.InboundEmail do
+   defp normalize_optional_body(value, _error) when is_binary(value), do: {:ok, value}
+   defp normalize_optional_body(_value, error), do: {:error, error}
+ 
++  defp normalize_message_ids(value) do
++    {:ok, InboundEmailReplyHeaders.message_ids(value)}
++  end
++
+   defp normalize_recipient_addresses(addresses) when is_list(addresses) and addresses != [] do
+     addresses
+     |> Enum.reduce_while({:ok, []}, fn address, {:ok, normalized_addresses} ->
+@@ -209,4 +222,20 @@ defmodule Memba.Messaging.InboundEmail do
+   end
+ 
+   defp normalize_attachments(_attachments), do: {:error, :invalid_attachments}
++
++  defp in_reply_to_values(attrs) do
++    [
++      fetch_optional(attrs, :in_reply_to_message_ids),
++      fetch_optional(attrs, :in_reply_to_message_id)
++    ]
++  end
++
++  defp references_values(attrs) do
++    [
++      fetch_optional(attrs, :references_message_ids),
++      fetch_optional(attrs, :reference_message_ids),
++      fetch_optional(attrs, :references_message_id),
++      fetch_optional(attrs, :reference_message_id)
++    ]
++  end
+ end
+diff --git a/web/lib/memba/messaging/inbound_email_reply_headers.ex b/web/lib/memba/messaging/inbound_email_reply_headers.ex
+new file mode 100644
+index 0000000..7daaeeb
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email_reply_headers.ex
+@@ -0,0 +1,74 @@
++defmodule Memba.Messaging.InboundEmailReplyHeaders do
++  @moduledoc """
++  Parses RFC Message-ID values from inbound email reply-threading headers.
++  """
++
++  alias Memba.Messaging.OutboundMessageID
++
++  @message_id_regex ~r/<([^<>\s]+@[^<>\s]+)>|([^\s,<>]+@[^\s,<>]+)/
++
++  @doc """
++  Extract normalized RFC Message-ID values from one or more header values.
++
++  Values are returned in header order, deduplicated, and normalized to angle
++  brackets so they can be compared with persisted outbound Message-ID values.
++  Malformed tokens are ignored; an unrecognized reply header should simply fail
++  to match later routing rather than reject the email during parsing.
++  """
++  def message_ids(value) do
++    value
++    |> collect_message_ids()
++    |> Enum.map(&normalize_message_id/1)
++    |> Enum.reject(&is_nil/1)
++    |> unique_in_order()
++  end
++
++  defp collect_message_ids(nil), do: []
++
++  defp collect_message_ids(value) when is_binary(value) do
++    value
++    |> unfold_header_value()
++    |> scan_message_ids()
++  end
++
++  defp collect_message_ids(values) when is_list(values) do
++    Enum.flat_map(values, &collect_message_ids/1)
++  end
++
++  defp collect_message_ids(_value), do: []
++
++  defp unfold_header_value(value) do
++    String.replace(value, ~r/\r?\n[ \t]+/, " ")
++  end
++
++  defp scan_message_ids(value) do
++    @message_id_regex
++    |> Regex.scan(value, capture: :all_but_first)
++    |> Enum.map(fn captures ->
++      captures
++      |> Enum.reject(&(&1 == ""))
++      |> List.first()
++    end)
++  end
++
++  defp normalize_message_id(nil), do: nil
++
++  defp normalize_message_id(value) when is_binary(value) do
++    value
++    |> String.trim(" \t\r\n<>\"'()[];,")
++    |> OutboundMessageID.normalize()
++  end
++
++  defp unique_in_order(message_ids) do
++    {_seen, message_ids} =
++      Enum.reduce(message_ids, {MapSet.new(), []}, fn message_id, {seen, message_ids} ->
++        if MapSet.member?(seen, message_id) do
++          {seen, message_ids}
++        else
++          {MapSet.put(seen, message_id), [message_id | message_ids]}
++        end
++      end)
++
++    Enum.reverse(message_ids)
++  end
++end
+diff --git a/web/lib/memba_web/postmark_inbound_email_parser.ex b/web/lib/memba_web/postmark_inbound_email_parser.ex
+index 1eb9312..52a0ec8 100644
+--- a/web/lib/memba_web/postmark_inbound_email_parser.ex
++++ b/web/lib/memba_web/postmark_inbound_email_parser.ex
+@@ -7,6 +7,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+   @provider_message_id_keys [:MessageID, "MessageID", :message_id, "message_id"]
+   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
+ 
++  alias Memba.Messaging.InboundEmailReplyHeaders
++
+   @doc """
+   Translate a Postmark inbound webhook payload into attrs accepted by Messaging's
+   provider-neutral inbound email API.
+@@ -21,6 +23,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+          {:ok, html_body} <-
+            optional_binary(payload, [:HtmlBody, "HtmlBody"], :invalid_html_body),
+          {:ok, attachments} <- attachments(payload) do
++      headers = value(payload, [:Headers, "Headers"])
++
+       {:ok,
+        %{
+          provider: @provider,
+@@ -30,9 +34,11 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+          subject: String.trim(subject),
+          text_body: text_body,
+          html_body: html_body,
+-         original_message_id: original_message_id(value(payload, [:Headers, "Headers"])),
++         original_message_id: original_message_id(headers),
++         in_reply_to_message_ids: reply_message_ids(headers, "in-reply-to"),
++         references_message_ids: reply_message_ids(headers, "references"),
+          attachments: attachments,
+-         headers: value(payload, [:Headers, "Headers"])
++         headers: headers
+        }}
+     end
+   end
+@@ -228,6 +234,12 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+     |> optional_trimmed_string()
+   end
+ 
++  defp reply_message_ids(headers, name) do
++    headers
++    |> header_values(name)
++    |> InboundEmailReplyHeaders.message_ids()
++  end
++
+   defp header_value(headers, name) when is_map(headers) do
+     Enum.find_value(headers, fn {header_name, value} ->
+       if normalize_header_name(header_name) == name, do: value
+@@ -250,6 +262,31 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+ 
+   defp header_value(_headers, _name), do: nil
+ 
++  defp header_values(headers, name) when is_map(headers) do
++    headers
++    |> Enum.filter(fn {header_name, _value} -> normalize_header_name(header_name) == name end)
++    |> Enum.map(fn {_header_name, value} -> value end)
++  end
++
++  defp header_values(headers, name) when is_list(headers) do
++    headers
++    |> Enum.flat_map(fn
++      header when is_map(header) ->
++        header_name = value(header, [:Name, "Name", :name, "name"])
++
++        if normalize_header_name(header_name) == name do
++          [value(header, [:Value, "Value", :value, "value"])]
++        else
++          []
++        end
++
++      _header ->
++        []
++    end)
++  end
++
++  defp header_values(_headers, _name), do: []
++
+   defp normalize_header_name(name) when is_binary(name) do
+     name
+     |> String.trim()
+diff --git a/web/lib/memba_web/resend_inbound_email_parser.ex b/web/lib/memba_web/resend_inbound_email_parser.ex
+index 358a90e..62aa929 100644
+--- a/web/lib/memba_web/resend_inbound_email_parser.ex
++++ b/web/lib/memba_web/resend_inbound_email_parser.ex
+@@ -6,6 +6,8 @@ defmodule MembaWeb.ResendInboundEmailParser do
+   @provider "resend"
+   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
+ 
++  alias Memba.Messaging.InboundEmailReplyHeaders
++
+   @doc """
+   Translate a Resend inbound webhook payload into attrs accepted by Messaging's
+   provider-neutral inbound email API.
+@@ -20,6 +22,8 @@ defmodule MembaWeb.ResendInboundEmailParser do
+          {:ok, text_body} <- optional_binary(data, [:text, "text"], :invalid_text_body),
+          {:ok, html_body} <- optional_binary(data, [:html, "html"], :invalid_html_body),
+          {:ok, attachments} <- attachments(data) do
++      headers = value(data, [:headers, "headers"])
++
+       {:ok,
+        %{
+          provider: @provider,
+@@ -31,9 +35,11 @@ defmodule MembaWeb.ResendInboundEmailParser do
+          subject: String.trim(subject),
+          text_body: text_body,
+          html_body: html_body,
+-         original_message_id: original_message_id(value(data, [:headers, "headers"])),
++         original_message_id: original_message_id(headers),
++         in_reply_to_message_ids: reply_message_ids(headers, "in-reply-to"),
++         references_message_ids: reply_message_ids(headers, "references"),
+          attachments: attachments,
+-         headers: value(data, [:headers, "headers"])
++         headers: headers
+        }}
+     end
+   end
+@@ -222,6 +228,12 @@ defmodule MembaWeb.ResendInboundEmailParser do
+     |> optional_trimmed_string()
+   end
+ 
++  defp reply_message_ids(headers, name) do
++    headers
++    |> header_values(name)
++    |> InboundEmailReplyHeaders.message_ids()
++  end
++
+   defp header_value(headers, name) when is_map(headers) do
+     Enum.find_value(headers, fn {header_name, value} ->
+       if normalize_header_name(header_name) == name, do: value
+@@ -244,6 +256,31 @@ defmodule MembaWeb.ResendInboundEmailParser do
+ 
+   defp header_value(_headers, _name), do: nil
+ 
++  defp header_values(headers, name) when is_map(headers) do
++    headers
++    |> Enum.filter(fn {header_name, _value} -> normalize_header_name(header_name) == name end)
++    |> Enum.map(fn {_header_name, value} -> value end)
++  end
++
++  defp header_values(headers, name) when is_list(headers) do
++    headers
++    |> Enum.flat_map(fn
++      header when is_map(header) ->
++        header_name = value(header, [:name, "name", :Name, "Name"])
++
++        if normalize_header_name(header_name) == name do
++          [value(header, [:value, "value", :Value, "Value"])]
++        else
++          []
++        end
++
++      _header ->
++        []
++    end)
++  end
++
++  defp header_values(_headers, _name), do: []
++
+   defp normalize_header_name(name) when is_binary(name) do
+     name
+     |> String.trim()
+diff --git a/web/test/memba/messaging/inbound_email_api_test.exs b/web/test/memba/messaging/inbound_email_api_test.exs
+index 95065c0..b6f24fd 100644
+--- a/web/test/memba/messaging/inbound_email_api_test.exs
++++ b/web/test/memba/messaging/inbound_email_api_test.exs
+@@ -17,6 +17,11 @@ defmodule Memba.Messaging.InboundEmailApiTest do
+         subject: "Trip planning night",
+         text_body: "Bring route ideas.",
+         html_body: "<p>Bring route ideas.</p>",
++        in_reply_to_message_ids: [" memba.parent-delivery.parent-message@messages.memba.io "],
++        references_message_ids: [
++          "<memba.root-delivery.root-message@messages.memba.io>",
++          "memba.parent-delivery.parent-message@messages.memba.io"
++        ],
+         attachments: [
+           %{
+             filename: "route.gpx",
+@@ -39,6 +44,13 @@ defmodule Memba.Messaging.InboundEmailApiTest do
+                   subject: "Trip planning night",
+                   text_body: "Bring route ideas.",
+                   html_body: "<p>Bring route ideas.</p>",
++                  in_reply_to_message_ids: [
++                    "<memba.parent-delivery.parent-message@messages.memba.io>"
++                  ],
++                  references_message_ids: [
++                    "<memba.root-delivery.root-message@messages.memba.io>",
++                    "<memba.parent-delivery.parent-message@messages.memba.io>"
++                  ],
+                   attachments: [
+                     %InboundEmailAttachment{
+                       filename: "route.gpx",
+@@ -72,6 +84,8 @@ defmodule Memba.Messaging.InboundEmailApiTest do
+                   subject: "Trail conditions",
+                   text_body: nil,
+                   html_body: nil,
++                  in_reply_to_message_ids: [],
++                  references_message_ids: [],
+                   attachments: []
+                 }
+               }} = Messaging.receive_inbound_club_email_command(attrs)
+diff --git a/web/test/memba/messaging/inbound_email_reply_headers_test.exs b/web/test/memba/messaging/inbound_email_reply_headers_test.exs
+new file mode 100644
+index 0000000..271f8a7
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_reply_headers_test.exs
+@@ -0,0 +1,33 @@
++defmodule Memba.Messaging.InboundEmailReplyHeadersTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.InboundEmailReplyHeaders
++
++  describe "message_ids/1" do
++    test "extracts angle-bracketed and bare Message-IDs in header order" do
++      header =
++        " <memba.root-delivery.root-message@messages.memba.io>\r\n\t" <>
++          "<external-parent@example.net>, " <>
++          "memba.latest-delivery.latest-message@messages.memba.io"
++
++      assert InboundEmailReplyHeaders.message_ids(header) == [
++               "<memba.root-delivery.root-message@messages.memba.io>",
++               "<external-parent@example.net>",
++               "<memba.latest-delivery.latest-message@messages.memba.io>"
++             ]
++    end
++
++    test "combines multiple header values and ignores malformed tokens" do
++      values = [
++        "not-a-message-id <memba.parent-delivery.parent-message@messages.memba.io>",
++        "still-not-an-id, memba.parent-delivery.parent-message@messages.memba.io",
++        "<memba.trailing-delivery.trailing-message@messages.memba.io>"
++      ]
++
++      assert InboundEmailReplyHeaders.message_ids(values) == [
++               "<memba.parent-delivery.parent-message@messages.memba.io>",
++               "<memba.trailing-delivery.trailing-message@messages.memba.io>"
++             ]
++    end
++  end
++end
+diff --git a/web/test/memba_web/postmark_inbound_email_parser_test.exs b/web/test/memba_web/postmark_inbound_email_parser_test.exs
+index 1eee11d..ad8d228 100644
+--- a/web/test/memba_web/postmark_inbound_email_parser_test.exs
++++ b/web/test/memba_web/postmark_inbound_email_parser_test.exs
+@@ -61,6 +61,8 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
+               text_body: "Bring route ideas.",
+               html_body: "<p>Bring route ideas.</p>",
+               original_message_id: "<postmark-message@example.com>",
++              in_reply_to_message_ids: [],
++              references_message_ids: [],
+               attachments: [
+                 %{
+                   filename: "route.gpx",
+@@ -76,6 +78,42 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
+             }} = PostmarkInboundEmailParser.parse(payload)
+   end
+ 
++  test "parses In-Reply-To and all References Message-IDs from Postmark headers" do
++    payload =
++      valid_payload(%{
++        "Headers" => [
++          %{
++            "Name" => "In-Reply-To",
++            "Value" => " \r\n\t<memba.parent-delivery.parent-message@messages.memba.io> "
++          },
++          %{
++            "Name" => "References",
++            "Value" =>
++              "<memba.root-delivery.root-message@messages.memba.io>\r\n " <>
++                "<external-parent@example.net>, " <>
++                "memba.latest-delivery.latest-message@messages.memba.io"
++          },
++          %{
++            "Name" => "references",
++            "Value" => "<memba.trailing-delivery.trailing-message@messages.memba.io>"
++          }
++        ]
++      })
++
++    assert {:ok,
++            %{
++              in_reply_to_message_ids: [
++                "<memba.parent-delivery.parent-message@messages.memba.io>"
++              ],
++              references_message_ids: [
++                "<memba.root-delivery.root-message@messages.memba.io>",
++                "<external-parent@example.net>",
++                "<memba.latest-delivery.latest-message@messages.memba.io>",
++                "<memba.trailing-delivery.trailing-message@messages.memba.io>"
++              ]
++            }} = PostmarkInboundEmailParser.parse(payload)
++  end
++
+   test "uses OriginalRecipient when the visible recipient is a Postmark forwarding address" do
+     payload =
+       valid_payload(%{
+diff --git a/web/test/memba_web/resend_inbound_email_parser_test.exs b/web/test/memba_web/resend_inbound_email_parser_test.exs
+index 5613d54..6cb2fbe 100644
+--- a/web/test/memba_web/resend_inbound_email_parser_test.exs
++++ b/web/test/memba_web/resend_inbound_email_parser_test.exs
+@@ -57,12 +57,38 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
+                 }
+               ],
+               original_message_id: "<email_123@example.com>",
++              in_reply_to_message_ids: [],
++              references_message_ids: [],
+               headers: [
+                 %{"name" => "Message-ID", "value" => "<email_123@example.com>"}
+               ]
+             }} = ResendInboundEmailParser.parse(payload)
+   end
+ 
++  test "parses In-Reply-To and all References Message-IDs from Resend headers" do
++    payload =
++      valid_payload()
++      |> put_in(["data", "headers"], %{
++        "In-Reply-To" => " \n <memba.parent-delivery.parent-message@messages.memba.io> ",
++        "References" =>
++          "<memba.root-delivery.root-message@messages.memba.io>\n\t" <>
++            "<external-parent@example.net>, " <>
++            "memba.latest-delivery.latest-message@messages.memba.io"
++      })
++
++    assert {:ok,
++            %{
++              in_reply_to_message_ids: [
++                "<memba.parent-delivery.parent-message@messages.memba.io>"
++              ],
++              references_message_ids: [
++                "<memba.root-delivery.root-message@messages.memba.io>",
++                "<external-parent@example.net>",
++                "<memba.latest-delivery.latest-message@messages.memba.io>"
++              ]
++            }} = ResendInboundEmailParser.parse(payload)
++  end
++
+   test "uses the data id as the provider message id when email_id is absent" do
+     payload =
+       valid_payload()
