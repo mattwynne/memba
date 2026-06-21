@@ -7,7 +7,7 @@
 - [x] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
 - [x] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
 - [x] 007 Update member dashboard and member compose copy/mailto links to display the new address.
-- [ ] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
+- [x] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
 - [ ] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
 - [ ] 010 Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
 - [ ] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
