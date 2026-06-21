@@ -1,0 +1,190 @@
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index fefd8d6..330cbda 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current inbound address helper, destination resolver, Postmark/Resend inbound parsers, member dashboard/compose display, reply email generation from iteration 041, production smoke-test config, and Postmark docs.
+-- [ ] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
++- [x] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
+ - [ ] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
+ - [ ] 004 Accept only `local_part == "everyone"` for now.
+ - [ ] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
+diff --git a/web/lib/memba/club_inbound_email_address.ex b/web/lib/memba/club_inbound_email_address.ex
+index 7ac6fe6..49693b1 100644
+--- a/web/lib/memba/club_inbound_email_address.ex
++++ b/web/lib/memba/club_inbound_email_address.ex
+@@ -2,8 +2,8 @@ defmodule Memba.ClubInboundEmailAddress do
+   @moduledoc """
+   Derives member-facing inbound email addresses for clubs.
+ 
+-  The current slice uses one implicit whole-club address per club:
+-  `<club-slug>@<configured-domain>`.
++  The current slice uses one implicit whole-club address per club subdomain:
++  `everyone@<club-slug>.<configured-domain>`.
+   """
+ 
+   alias Memba.Membership.Slug
+@@ -21,7 +21,7 @@ defmodule Memba.ClubInboundEmailAddress do
+ 
+   def address(slug) when is_binary(slug) do
+     with {:ok, normalized_slug} <- Slug.normalize_for_lookup(slug) do
+-      normalized_slug <> "@" <> domain()
++      "everyone@" <> normalized_slug <> "." <> domain()
+     else
+       {:error, _reason} -> nil
+     end
+diff --git a/web/test/memba/club_inbound_email_address_test.exs b/web/test/memba/club_inbound_email_address_test.exs
+index b840b0e..9ba7e11 100644
+--- a/web/test/memba/club_inbound_email_address_test.exs
++++ b/web/test/memba/club_inbound_email_address_test.exs
+@@ -4,25 +4,29 @@ defmodule Memba.ClubInboundEmailAddressTest do
+   alias Memba.ClubInboundEmailAddress
+ 
+   test "builds the default whole-club inbound address from a club slug" do
+-    assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
+-    assert ClubInboundEmailAddress.address("nelson-paddling") == "nelson-paddling@clubs.memba.io"
++    assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "everyone@kmc.clubs.memba.io"
++
++    assert ClubInboundEmailAddress.address("nelson-paddling") ==
++             "everyone@nelson-paddling.clubs.memba.io"
+   end
+ 
+   test "normalizes lookup-style slug casing and whitespace" do
+-    assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "kmc@clubs.memba.io"
++    assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "everyone@kmc.clubs.memba.io"
+   end
+ 
+   test "uses the configured inbound email domain" do
+     with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
+       assert ClubInboundEmailAddress.domain() == "example.clubs.memba.io"
+-      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@example.clubs.memba.io"
++
++      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) ==
++               "everyone@kmc.example.clubs.memba.io"
+     end)
+   end
+ 
+   test "falls back to the iteration default domain when no domain is configured" do
+     with_club_inbound_email_config([], fn ->
+       assert ClubInboundEmailAddress.domain() == "clubs.memba.io"
+-      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
++      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "everyone@kmc.clubs.memba.io"
+     end)
+   end
+ 
+diff --git a/web/test/memba/messaging/email_delivery_providers/local_test.exs b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+index 34d589c..d95d582 100644
+--- a/web/test/memba/messaging/email_delivery_providers/local_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+@@ -44,7 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+ 
+     assert_email_sent(fn email ->
+       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
+-      assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
++      assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
+       assert email.to == [{"Alice", "alice@example.test"}]
+       assert email.headers["Message-ID"] == request.outbound_message_id
+       assert email.subject == "[kmc] Trip planning night"
+@@ -127,7 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+     assert :ok = Local.deliver(request)
+ 
+     assert_email_sent(fn email ->
+-      assert email.reply_to == {"Kootenay Mountaineering Club", "kmc@clubs.memba.io"}
++      assert email.reply_to == {"Kootenay Mountaineering Club", "everyone@kmc.clubs.memba.io"}
+       assert email.headers["Message-ID"] == request.outbound_message_id
+       assert email.headers["In-Reply-To"] == "<memba.parent@example.test>"
+ 
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index d6a33c5..e2ae11b 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -42,7 +42,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+-    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
++    assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
+     assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.subject == "[kmc] Trip planning night"
+@@ -127,7 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+     assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
+-    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
++    assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
+     assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.headers["In-Reply-To"] == "<memba.root@example.test>"
+diff --git a/web/test/memba/messaging/email_delivery_providers/resend_test.exs b/web/test/memba/messaging/email_delivery_providers/resend_test.exs
+index 0dc3a92..cadc4b1 100644
+--- a/web/test/memba/messaging/email_delivery_providers/resend_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/resend_test.exs
+@@ -42,7 +42,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+-    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
++    assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
+     assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.subject == "[kmc] Trip planning night"
+@@ -135,7 +135,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
+ 
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+-    assert email.reply_to == {"Kootenay Mountaineers", "kmc@clubs.memba.io"}
++    assert email.reply_to == {"Kootenay Mountaineers", "everyone@kmc.clubs.memba.io"}
+     assert email.headers["Message-ID"] == request.outbound_message_id
+     assert email.headers["In-Reply-To"] == "<memba.parent@example.test>"
+     assert email.headers["References"] == "<memba.root@example.test> <memba.parent@example.test>"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 205bd80..cf2c803 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -547,7 +547,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++             "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+            )
+ 
+     assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
+@@ -560,8 +560,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
+-             "kmc@clubs.memba.io"
++             "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
++             "everyone@kmc.clubs.memba.io"
+            )
+   end
+ 
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 9303185..385bad1 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -227,7 +227,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++             "#member-compose-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+            )
+ 
+     assert has_element?(view, "#member-compose-inbound-email", "Prefer email?")
+@@ -240,8 +240,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
+-             "kmc@clubs.memba.io"
++             "#member-compose-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
++             "everyone@kmc.clubs.memba.io"
+            )
+   end
+ 
