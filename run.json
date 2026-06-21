@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-21T12:29:48.619045572Z",
-  "last_event_at": "2026-06-21T13:49:04.452643173Z",
+  "last_event_at": "2026-06-21T13:49:38.001556531Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -8471,9 +8471,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1633,
       "checkpoint": {
-        "timestamp": "2026-06-21T13:49:34.749732223Z",
+        "timestamp": "2026-06-21T13:49:37.963453873Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -8509,13 +8509,322 @@
         ],
         "node_retries": {},
         "context_values": {
+          "failure_class": "",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.start.current_node": "read_plan",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.todo_readable": 0,
+          "internal.run_id": "01KVN2FJS9ZMT166JRRS6TKCT2",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "task_valid": true,
+          "graph.default_fidelity": "summary:high",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "command.output": "blob://sha256/b0ef0f9f9ca32fb6b0de7cc1214c7a85b566d0dc646ab978eed32aef6c1c1f56",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.task_gate": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "task_retry_available": false,
+          "internal.retry_count.wip_gate": 0,
+          "response.implement_next_task": "Implemented the next unchecked task: **004**.\n\n1. **Selected todo line**\n   - `004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n\n2. **Changes made**\n   - Added encrypted/signed long-lived stop-follow tokens:\n     - `Memba.Messaging.ConversationStopFollowToken`\n     - Token scope: `club_id`, `conversation_id`, `member_id`\n     - Uses `Phoenix.Token.encrypt/4` with `max_age: :infinity`.\n   - Added a Messaging API:\n     - `Memba.Messaging.stop_following_conversation_from_email_token/2`\n     - Verifies token scope against the conversation root.\n     - Does not require sign-in/current membership.\n     - Idempotently succeeds when already unfollowed.\n     - Handles auto-follow projection state so stop-follow actually clears future reply delivery.\n   - Added per-recipient `stop_follow_url` to reply email delivery requests.\n   - Added reply email footer/text copy:\n     - “You’re following this conversation.”\n     - “Stop following this conversation”\n   - Added no-login browser endpoint:\n     - `GET /messages/conversations/stop-following/:token`\n     - Success page with link back to the conversation.\n     - Generic invalid-link failure page that reveals no club/conversation/member existence.\n   - Extended shared email footer support for trusted extra footer detail HTML.\n   - Added tests for:\n     - Token opacity/tamper rejection.\n     - Valid/reused/wrong-scope/invalid stop-follow links.\n     - Stop-follow halting future reply email.\n     - Dispatcher-generated stop-follow URLs scoped to the recipient.\n     - Reply email text/HTML footer rendering.\n\n3. **Focused validation commands/results**\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted ...`\n     - Passed.\n   - Direct focused test attempt:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test ...`\n     - Failed before tests due sandbox PGHOST mismatch (`/tmp/devenv/postgres` vs running `/tmp/devenv-...` socket).\n   - Focused tests via devenv shell:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba/messaging/conversation_stop_follow_token_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/email_delivery_providers/postmark_test.exs`\n     - Passed: `30 tests, 0 failures`.\n   - Related follow/reply/provider tests:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/email_delivery_providers/local_test.exs test/memba/messaging/email_delivery_providers/resend_test.exs`\n     - Passed: `22 tests, 0 failures`.\n   - Controller rerun after template class adjustment:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba_web/controllers/conversation_follow_controller_test.exs`\n     - Passed: `3 tests, 0 failures`.\n   - Full check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Failed in acceptance: `86 scenarios (1 failed, 85 passed)`.\n     - The remaining failure corresponds to the stale `club_message_replies.feature` rule still expecting “every current member” reply delivery; updating that feature is the next unchecked task 005.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n   - To:\n     - `- [x] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No `docs/adr/*.md` files are present.\n   - Kept write behaviour in `Memba.Messaging` application-service APIs.\n   - Kept follow/unfollow state changes event-sourced through the existing Messaging commands.\n   - Added the browser endpoint as a thin controller over the Messaging API.\n   - Did not edit acceptance feature files; those are explicitly reserved for todo 005.",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.all_tasks_done": 0,
+          "graph.max_node_visits": "80",
+          "failure_signature": "",
+          "outcome": "succeeded",
+          "internal.node_visit_count": 4,
+          "internal.retry_count.resume_gate": 0,
+          "internal.thread_id": "all_tasks_done",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.validate_task": 0,
+          "current_node": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean (`git status --short` empty); validation snapshot also showed no uncommitted diff.\n  - Recent checkpoint `a3654a7 fabro(...): implement_next_task (succeeded)` contains the just-completed work.\n  - `git show a3654a7 -- todo.md` shows exactly one ordinary task line changed:\n    - `003 Add the in-app follow/unfollow control + copy...` from `- [ ]` to `- [x]`.\n  - Parent state had 001–002 checked and 003 unchecked, so 003 was the first unchecked task when this attempt started.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging.ex`\n    - Added `follow_conversation_as_current_member/2`.\n    - Added `unfollow_conversation_as_current_member/2`.\n    - Added current-member/conversation ownership authorization before in-app follow/unfollow dispatch.\n  - `web/lib/memba_web/member_message_detail.ex`\n    - Loads `:current_member`, `:can_follow_conversation`, and `:following_conversation` for the message-detail surface.\n  - `web/lib/memba_web/live/member_message_live/show.ex`\n    - Handles `follow_conversation` / `unfollow_conversation` LiveView events.\n    - Refreshes detail state after follow projection changes.\n  - `web/lib/memba_web/controllers/page_html/message.html.heex`\n    - Adds the in-app follow/unfollow control and required copy.\n    - Updates reply copy from all/current members to current followers.\n  - No `*.feature` files were edited in this task.\n\n- Tests run/results found:\n  - Implementation summary reported focused formatting and test runs passing, with `dev check` failing only on the known pending acceptance-feature update reserved for todo 005.\n  - I reran focused validation tests:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/live/member_message_live/show_test.exs test/memba_web/member_message_detail_loader_test.exs`\n    - Result: `17 tests, 0 failures`.\n  - Worktree remained clean after validation tests.\n\n- ADR/plan conformance notes:\n  - No `docs/adr/*.md` files are present to enforce.\n  - The task stays within implementation-plan item 003: member message-detail UI/control/copy plus current-member-only in-app authorization.\n  - Todo changes did not split, reorder, delete, or weaken plan-required work.\n  - Acceptance feature edits are explicitly reserved for todo 005 and were not touched here.\n  - The checkpoint is appropriately small and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.fidelity": "summary:high",
+          "last_stage": "implement_next_task",
+          "graph.rankdir": "LR",
+          "last_response": "Implemented the next unchecked task: **004**.\n\n1. **Selected todo line**\n   - `004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure "
+        },
+        "node_outcomes": {
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean (`git status --short` empty); validation snapshot also showed no uncommitted diff.\n  - Recent checkpoint `a3654a7 fabro(...): implement_next_task (succeeded)` contains the just-completed work.\n  - `git show a3654a7 -- todo.md` shows exactly one ordinary task line changed:\n    - `003 Add the in-app follow/unfollow control + copy...` from `- [ ]` to `- [x]`.\n  - Parent state had 001–002 checked and 003 unchecked, so 003 was the first unchecked task when this attempt started.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging.ex`\n    - Added `follow_conversation_as_current_member/2`.\n    - Added `unfollow_conversation_as_current_member/2`.\n    - Added current-member/conversation ownership authorization before in-app follow/unfollow dispatch.\n  - `web/lib/memba_web/member_message_detail.ex`\n    - Loads `:current_member`, `:can_follow_conversation`, and `:following_conversation` for the message-detail surface.\n  - `web/lib/memba_web/live/member_message_live/show.ex`\n    - Handles `follow_conversation` / `unfollow_conversation` LiveView events.\n    - Refreshes detail state after follow projection changes.\n  - `web/lib/memba_web/controllers/page_html/message.html.heex`\n    - Adds the in-app follow/unfollow control and required copy.\n    - Updates reply copy from all/current members to current followers.\n  - No `*.feature` files were edited in this task.\n\n- Tests run/results found:\n  - Implementation summary reported focused formatting and test runs passing, with `dev check` failing only on the known pending acceptance-feature update reserved for todo 005.\n  - I reran focused validation tests:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/live/member_message_live/show_test.exs test/memba_web/member_message_detail_loader_test.exs`\n    - Result: `17 tests, 0 failures`.\n  - Worktree remained clean after validation tests.\n\n- ADR/plan conformance notes:\n  - No `docs/adr/*.md` files are present to enforce.\n  - The task stays within implementation-plan item 003: member message-detail UI/control/copy plus current-member-only in-app authorization.\n  - Todo changes did not split, reorder, delete, or weaken plan-required work.\n  - Acceptance feature edits are explicitly reserved for todo 005 and were not touched here.\n  - The checkpoint is appropriately small and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean (`git status --short` empty); validation snapshot also showed no uncommitted diff.\n  - Recent",
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 195514,
+                    "output_tokens": 1679,
+                    "reasoning_tokens": 921,
+                    "cache_read_tokens": 98816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1104978
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 76415,
+              "tool_time_ms": 4886,
+              "active_time_ms": 81301
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b0ef0f9f9ca32fb6b0de7cc1214c7a85b566d0dc646ab978eed32aef6c1c1f56"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149,
+              "active_time_ms": 149
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/daa99b48f4bec3968c86013940c67feeedcfe3e5df660a82e52a167ec35077d4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d89a3cda9c8f29448711f1c19ca85e576e0fdeeb8ab8bc5ee3c93776b5f2d48d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ca0b3f7fb8ee0a9bc23bf71200d829a965bd2f514b41959b4d2275d157962e07"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19ed8f1a1cb9723ef0f4dea554eed3c64b3d77ade4830e0046225269bf3e14c0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/594c687a2f35b0f9eb1217b1d9d5630a14b85e946a55b5f08a9e442369740f42"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1721,
+              "active_time_ms": 1721
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9d87fa83c729563265cf433d0f96c7dc3c37c489b5f5d26b1be7e682d389f7ee"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the next unchecked task: **004**.\n\n1. **Selected todo line**\n   - `004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure ",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked task: **004**.\n\n1. **Selected todo line**\n   - `004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n\n2. **Changes made**\n   - Added encrypted/signed long-lived stop-follow tokens:\n     - `Memba.Messaging.ConversationStopFollowToken`\n     - Token scope: `club_id`, `conversation_id`, `member_id`\n     - Uses `Phoenix.Token.encrypt/4` with `max_age: :infinity`.\n   - Added a Messaging API:\n     - `Memba.Messaging.stop_following_conversation_from_email_token/2`\n     - Verifies token scope against the conversation root.\n     - Does not require sign-in/current membership.\n     - Idempotently succeeds when already unfollowed.\n     - Handles auto-follow projection state so stop-follow actually clears future reply delivery.\n   - Added per-recipient `stop_follow_url` to reply email delivery requests.\n   - Added reply email footer/text copy:\n     - “You’re following this conversation.”\n     - “Stop following this conversation”\n   - Added no-login browser endpoint:\n     - `GET /messages/conversations/stop-following/:token`\n     - Success page with link back to the conversation.\n     - Generic invalid-link failure page that reveals no club/conversation/member existence.\n   - Extended shared email footer support for trusted extra footer detail HTML.\n   - Added tests for:\n     - Token opacity/tamper rejection.\n     - Valid/reused/wrong-scope/invalid stop-follow links.\n     - Stop-follow halting future reply email.\n     - Dispatcher-generated stop-follow URLs scoped to the recipient.\n     - Reply email text/HTML footer rendering.\n\n3. **Focused validation commands/results**\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted ...`\n     - Passed.\n   - Direct focused test attempt:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test ...`\n     - Failed before tests due sandbox PGHOST mismatch (`/tmp/devenv/postgres` vs running `/tmp/devenv-...` socket).\n   - Focused tests via devenv shell:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba/messaging/conversation_stop_follow_token_test.exs test/memba_web/controllers/conversation_follow_controller_test.exs test/memba/messaging/email_delivery_dispatcher_test.exs test/memba/messaging/email_delivery_providers/postmark_test.exs`\n     - Passed: `30 tests, 0 failures`.\n   - Related follow/reply/provider tests:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/post_message_reply_test.exs test/memba/messaging/email_delivery_providers/local_test.exs test/memba/messaging/email_delivery_providers/resend_test.exs`\n     - Passed: `22 tests, 0 failures`.\n   - Controller rerun after template class adjustment:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba_web/controllers/conversation_follow_controller_test.exs`\n     - Passed: `3 tests, 0 failures`.\n   - Full check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Failed in acceptance: `86 scenarios (1 failed, 85 passed)`.\n     - The remaining failure corresponds to the stale `club_message_replies.feature` rule still expecting “every current member” reply delivery; updating that feature is the next unchecked task 005.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n   - To:\n     - `- [x] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - No `docs/adr/*.md` files are present.\n   - Kept write behaviour in `Memba.Messaging` application-service APIs.\n   - Kept follow/unfollow state changes event-sourced through the existing Messaging commands.\n   - Added the browser endpoint as a thin controller over the Messaging API.\n   - Did not edit acceptance feature files; those are explicitly reserved for todo 005."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1605241,
+                    "output_tokens": 20908,
+                    "reasoning_tokens": 8406,
+                    "cache_read_tokens": 7538176,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 12674713
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 926508,
+              "tool_time_ms": 354437,
+              "active_time_ms": 1280945
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1b0470120578b53883b4e32f900759b1fe0849255e459b7974d373e3017db506"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 99877,
+              "active_time_ms": 99877
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "adce43b34e775ae4168e1d5bcb66485c0dd7db18",
+        "node_visits": {
+          "start": 1,
+          "sync_task_list": 4,
+          "validate_task": 3,
+          "wip_gate": 1,
+          "read_plan": 1,
+          "todo_readable": 4,
+          "task_gate": 3,
+          "pre_validate_snapshot": 3,
+          "preflight_sandbox": 1,
+          "all_tasks_done": 4,
+          "implement_next_task": 4,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md\nindex 42acfa7..5badaee 100644\n--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md\n+++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md\n@@ -3,6 +3,6 @@\n - [x] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).\n - [x] 002 Rewire the reply delivery introduced in 039 from \"all current members\" to \"current club-member followers of the conversation,\" excluding the author and excluding former/non-current members even when a historical follow record exists.\n - [x] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.\n-- [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.\n+- [x] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.\n - [ ] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.\n - [ ] 006 Run `dev check`.\ndiff --git a/web/lib/memba/email_templates.ex b/web/lib/memba/email_templates.ex\nindex 10ea30c..99f86ff 100644\n--- a/web/lib/memba/email_templates.ex\n+++ b/web/lib/memba/email_templates.ex\n@@ -323,6 +323,7 @@ defmodule Memba.EmailTemplates do\n     recipient_email = opts |> Keyword.get(:recipient_email) |> sanitize_header_text()\n     reply_to_email = opts |> Keyword.get(:reply_to_email) |> sanitize_header_text()\n     reason = opts |> Keyword.get(:reason) |> sanitize_header_text()\n+    extra_detail_html = Keyword.get(opts, :extra_detail_html, [])\n \n     delivered_line =\n       if group_name == \"\" do\n@@ -335,8 +336,10 @@ defmodule Memba.EmailTemplates do\n       [\n         footer_sentence(\"Sent to\", recipient_email),\n         if(reason == \"\", do: nil, else: escaped_text(reason)),\n+        extra_detail_html,\n         support_sentence(reply_to_email)\n       ]\n+      |> List.flatten()\n       |> Enum.reject(&is_nil/1)\n       |> Enum.join(\"<br>\\n\")\n \ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex 28e6bf4..ba1f3d8 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -20,6 +20,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.Commands.UnfollowConversation\n   alias Memba.Messaging.ConversationReference\n   alias Memba.Messaging.ConversationFollowers\n+  alias Memba.Messaging.ConversationStopFollowToken\n   alias Memba.Messaging.EmailDeliveryDispatcher\n   alias Memba.Messaging.InboundClubAuthorization\n   alias Memba.Messaging.InboundClubDestination\n@@ -129,6 +130,36 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  @doc \"\"\"\n+  Stop following a conversation from a signed reply-email link.\n+\n+  The token scopes the action to the intended club, conversation, and member.\n+  This API intentionally does not require current club membership because it only\n+  reduces notifications and old emails should remain useful.\n+  \"\"\"\n+  def stop_following_conversation_from_email_token(token, dispatch_opts \\\\ [])\n+      when is_list(dispatch_opts) do\n+    with {:ok, scope} <- ConversationStopFollowToken.verify(token),\n+         {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),\n+         :ok <- ensure_stop_follow_scope(root_message, scope),\n+         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do\n+      case unfollow_conversation(\n+             %{\n+               club_id: scope.club_id,\n+               conversation_id: scope.conversation_id,\n+               member_id: scope.member_id\n+             },\n+             dispatch_opts\n+           ) do\n+        {:error, _reason} = error -> error\n+        dispatch_result -> {:ok, Map.put(scope, :dispatch_result, dispatch_result)}\n+      end\n+    else\n+      {:error, _reason} -> {:error, :invalid_stop_follow_token}\n+      nil -> {:error, :invalid_stop_follow_token}\n+    end\n+  end\n+\n   @doc \"\"\"\n   Build a provider-neutral command for an inbound club-message email.\n \n@@ -1101,6 +1132,36 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp ensure_stop_follow_scope(\n+         %MessageProjection{club_id: club_id, message_id: conversation_id},\n+         %{\n+           club_id: club_id,\n+           conversation_id: conversation_id\n+         }\n+       ) do\n+    :ok\n+  end\n+\n+  defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}\n+\n+  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do\n+    if following_conversation?(scope.conversation_id, scope.member_id) do\n+      case follow_conversation(\n+             %{\n+               club_id: scope.club_id,\n+               conversation_id: scope.conversation_id,\n+               member_id: scope.member_id\n+             },\n+             dispatch_opts\n+           ) do\n+        {:error, _reason} = error -> error\n+        _dispatch_result -> :ok\n+      end\n+    else\n+      :ok\n+    end\n+  end\n+\n   defp resolve_recipients(club_id, opts \\\\ []) do\n     except_person_id = Keyword.get(opts, :except_person_id)\n \ndiff --git a/web/lib/memba/messaging/conversation_stop_follow_token.ex b/web/lib/memba/messaging/conversation_stop_follow_token.ex\nnew file mode 100644\nindex 0000000..3f219c3\n--- /dev/null\n+++ b/web/lib/memba/messaging/conversation_stop_follow_token.ex\n@@ -0,0 +1,73 @@\n+defmodule Memba.Messaging.ConversationStopFollowToken do\n+  @moduledoc \"\"\"\n+  Encrypted, signed tokens for one-click reply-email stop-follow links.\n+\n+  The token payload is scoped to exactly one club, conversation, and member. The\n+  encrypted Phoenix token keeps those identifiers opaque to recipients while the\n+  signature prevents tampering.\n+  \"\"\"\n+\n+  alias Memba.ID\n+  alias MembaWeb.Endpoint\n+\n+  @salt \"conversation stop follow v1\"\n+  @version 1\n+\n+  @type scope :: %{\n+          club_id: String.t(),\n+          conversation_id: String.t(),\n+          member_id: String.t()\n+        }\n+\n+  @doc \"\"\"\n+  Create a long-lived opaque token scoped to one follow state.\n+  \"\"\"\n+  @spec sign(scope()) :: {:ok, String.t()} | {:error, :invalid}\n+  def sign(attrs) when is_map(attrs) do\n+    with {:ok, scope} <- normalize_scope(attrs) do\n+      token =\n+        Phoenix.Token.encrypt(\n+          Endpoint,\n+          @salt,\n+          Map.put(scope, :version, @version),\n+          max_age: :infinity\n+        )\n+\n+      {:ok, token}\n+    end\n+  end\n+\n+  def sign(_attrs), do: {:error, :invalid}\n+\n+  @doc \"\"\"\n+  Verify and decrypt a stop-follow token.\n+  \"\"\"\n+  @spec verify(String.t()) :: {:ok, scope()} | {:error, :invalid}\n+  def verify(token) when is_binary(token) do\n+    case Phoenix.Token.decrypt(Endpoint, @salt, token, max_age: :infinity) do\n+      {:ok, %{version: @version} = scope} -> normalize_scope(scope)\n+      {:ok, _wrong_shape} -> {:error, :invalid}\n+      {:error, _reason} -> {:error, :invalid}\n+    end\n+  end\n+\n+  def verify(_token), do: {:error, :invalid}\n+\n+  defp normalize_scope(attrs) do\n+    with {:ok, club_id} <- cast_id(attrs, :club_id, :club),\n+         {:ok, conversation_id} <- cast_id(attrs, :conversation_id, :message),\n+         {:ok, member_id} <- cast_id(attrs, :member_id, :person) do\n+      {:ok, %{club_id: club_id, conversation_id: conversation_id, member_id: member_id}}\n+    else\n+      :error -> {:error, :invalid}\n+      {:error, :invalid} -> {:error, :invalid}\n+    end\n+  end\n+\n+  defp cast_id(attrs, key, type) do\n+    case Map.fetch(attrs, key) do\n+      {:ok, value} -> ID.cast(type, value)\n+      :error -> :error\n+    end\n+  end\n+end\ndiff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex\nindex af411b9..dbd20c4 100644\n--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex\n+++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex\n@@ -19,6 +19,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n   alias Memba.Messaging.EmailDeliveryProvider\n   alias Memba.Messaging.EmailDeliveryRequest\n   alias Memba.Messaging.EmailDeliveryStatus\n+  alias Memba.Messaging.ConversationStopFollowToken\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n@@ -352,7 +353,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n          {:ok, channel} <- request_channel(delivery.channel),\n          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do\n       club = Membership.get_club(message.club_id)\n-      reply_context = reply_context(message, club)\n+      reply_context = reply_context(message, club, delivery)\n \n       {:ok,\n        %EmailDeliveryRequest{\n@@ -369,6 +370,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n          conversation_id: message.conversation_id,\n          reply_to_message_id: message.reply_to_message_id,\n          conversation_url: Map.get(reply_context, :conversation_url),\n+         stop_follow_url: Map.get(reply_context, :stop_follow_url),\n          reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),\n          reply_to_body: Map.get(reply_context, :reply_to_body),\n          channel: channel,\n@@ -424,20 +426,39 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do\n   defp club_slug(%{slug: slug}), do: slug\n   defp club_slug(_club), do: nil\n \n-  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club), do: %{}\n+  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}\n \n-  defp reply_context(%MessageProjection{} = message, club) do\n+  defp reply_context(%MessageProjection{} = message, club, %EmailDeliveryProjection{} = delivery) do\n     message\n-    |> base_reply_context(club)\n+    |> base_reply_context(club, delivery)\n     |> Map.merge(replied_to_message_context(message.reply_to_message_id))\n   end\n \n-  defp base_reply_context(%MessageProjection{conversation_id: conversation_id}, club) do\n+  defp base_reply_context(\n+         %MessageProjection{club_id: club_id, conversation_id: conversation_id},\n+         club,\n+         %EmailDeliveryProjection{recipient_id: recipient_id}\n+       ) do\n     %{\n-      conversation_url: ClubSite.url(club, \"/messages/#{conversation_id}\")\n+      conversation_url: ClubSite.url(club, \"/messages/#{conversation_id}\"),\n+      stop_follow_url: stop_follow_url(club, club_id, conversation_id, recipient_id)\n     }\n   end\n \n+  defp stop_follow_url(club, club_id, conversation_id, member_id) do\n+    case ConversationStopFollowToken.sign(%{\n+           club_id: club_id,\n+           conversation_id: conversation_id,\n+           member_id: member_id\n+         }) do\n+      {:ok, token} ->\n+        ClubSite.url(club, \"/messages/conversations/stop-following/#{token}\")\n+\n+      {:error, :invalid} ->\n+        nil\n+    end\n+  end\n+\n   defp replied_to_message_context(nil), do: %{}\n \n   defp replied_to_message_context(reply_to_message_id) do\ndiff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex\nindex 05d6634..d9f8013 100644\n--- a/web/lib/memba/messaging/email_delivery_request.ex\n+++ b/web/lib/memba/messaging/email_delivery_request.ex\n@@ -35,6 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do\n     :conversation_id,\n     :reply_to_message_id,\n     :conversation_url,\n+    :stop_follow_url,\n     :reply_to_sender_name,\n     :reply_to_body,\n     :channel,\n@@ -56,6 +57,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do\n           conversation_id: String.t() | nil,\n           reply_to_message_id: String.t() | nil,\n           conversation_url: String.t() | nil,\n+          stop_follow_url: String.t() | nil,\n           reply_to_sender_name: String.t() | nil,\n           reply_to_body: String.t() | nil,\n           channel: :email,\ndiff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex\nindex dde3348..ec54615 100644\n--- a/web/lib/memba/messaging/member_message_email.ex\n+++ b/web/lib/memba/messaging/member_message_email.ex\n@@ -110,12 +110,7 @@ defmodule Memba.Messaging.MemberMessageEmail do\n       title: title,\n       preheader: \"#{sender_name} replied in the #{conversation_subject(request)} conversation.\",\n       content: content,\n-      footer:\n-        EmailTemplates.memba_footer(\n-          group_name: group_name,\n-          recipient_email: request.recipient_address,\n-          reason: membership_reason(request.club_name, group_name)\n-        )\n+      footer: reply_footer(request, group_name)\n     )\n   end\n \n@@ -125,6 +120,7 @@ defmodule Memba.Messaging.MemberMessageEmail do\n       \"\",\n       request.body,\n       view_conversation_text(request.conversation_url),\n+      stop_follow_text(request.stop_follow_url),\n       replied_to_context_text(request)\n     ]\n     |> Enum.reject(&is_nil/1)\n@@ -314,6 +310,15 @@ defmodule Memba.Messaging.MemberMessageEmail do\n     end\n   end\n \n+  defp stop_follow_text(nil), do: nil\n+\n+  defp stop_follow_text(url) do\n+    case String.trim(to_string(url)) do\n+      \"\" -> nil\n+      url -> \"\\nYou're following this conversation.\\nStop following this conversation:\\n#{url}\"\n+    end\n+  end\n+\n   defp replied_to_context_text(%EmailDeliveryRequest{} = request) do\n     cond do\n       blank?(request.reply_to_sender_name) or blank?(request.reply_to_body) ->\n@@ -337,6 +342,26 @@ defmodule Memba.Messaging.MemberMessageEmail do\n     end\n   end\n \n+  defp reply_footer(%EmailDeliveryRequest{} = request, group_name) do\n+    stop_follow_line =\n+      case String.trim(to_string(request.stop_follow_url || \"\")) do\n+        \"\" ->\n+          nil\n+\n+        stop_follow_url ->\n+          \"\"\"\n+          You're following this conversation. <a href=\"#{EmailTemplates.escaped_text(stop_follow_url)}\" style=\"color:#7d877f; text-decoration:underline;\">Stop following this conversation</a>.\n+          \"\"\"\n+      end\n+\n+    EmailTemplates.memba_footer(\n+      group_name: group_name,\n+      recipient_email: request.recipient_address,\n+      reason: membership_reason(request.club_name, group_name),\n+      extra_detail_html: stop_follow_line\n+    )\n+  end\n+\n   defp default_text(\"\", fallback), do: fallback\n   defp default_text(text, _fallback), do: text\n end\ndiff --git a/web/lib/memba_web/controllers/conversation_follow_controller.ex b/web/lib/memba_web/controllers/conversation_follow_controller.ex\nnew file mode 100644\nindex 0000000..d8280c5\n--- /dev/null\n+++ b/web/lib/memba_web/controllers/conversation_follow_controller.ex\n@@ -0,0 +1,44 @@\n+defmodule MembaWeb.ConversationFollowController do\n+  use MembaWeb, :controller\n+\n+  require Logger\n+\n+  alias Memba.Membership\n+  alias Memba.Messaging\n+  alias MembaWeb.ClubSite\n+\n+  def stop_following(conn, %{\"token\" => token}) do\n+    case Messaging.stop_following_conversation_from_email_token(token, consistency: :strong) do\n+      {:ok, scope} ->\n+        render_stop_following_success(conn, scope)\n+\n+      {:error, reason} ->\n+        Logger.warning(\"Rejected conversation stop-follow link: #{inspect(reason)}\")\n+        render_stop_following_failure(conn)\n+    end\n+  end\n+\n+  defp render_stop_following_success(conn, scope) do\n+    conn\n+    |> assign(:page_title, \"Stopped following\")\n+    |> assign(:status, :success)\n+    |> assign(:conversation_url, conversation_url(scope))\n+    |> render(:stop_following)\n+  end\n+\n+  defp render_stop_following_failure(conn) do\n+    conn\n+    |> put_status(:unprocessable_entity)\n+    |> assign(:page_title, \"Stop-follow link not valid\")\n+    |> assign(:status, :failure)\n+    |> assign(:conversation_url, nil)\n+    |> render(:stop_following)\n+  end\n+\n+  defp conversation_url(%{club_id: club_id, conversation_id: conversation_id}) do\n+    case Membership.get_club(club_id) do\n+      nil -> nil\n+      club -> ClubSite.url(club, \"/messages/#{conversation_id}\")\n+    end\n+  end\n+end\ndiff --git a/web/lib/memba_web/controllers/conversation_follow_html.ex b/web/lib/memba_web/controllers/conversation_follow_html.ex\nnew file mode 100644\nindex 0000000..b96e093\n--- /dev/null\n+++ b/web/lib/memba_web/controllers/conversation_follow_html.ex\n@@ -0,0 +1,9 @@\n+defmodule MembaWeb.ConversationFollowHTML do\n+  @moduledoc \"\"\"\n+  Renders one-click conversation follow/unfollow result pages.\n+  \"\"\"\n+\n+  use MembaWeb, :html\n+\n+  embed_templates \"conversation_follow_html/*\"\n+end\ndiff --git a/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex b/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex\nnew file mode 100644\nindex 0000000..024563b\n--- /dev/null\n+++ b/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex\n@@ -0,0 +1,36 @@\n+<Layouts.app flash={@flash}>\n+  <section id=\"conversation-stop-follow-result\" data-status={@status} class=\"mx-auto max-w-2xl\">\n+    <div class=\"rounded-3xl border border-line bg-paper p-8 shadow-sm\">\n+      <%= case @status do %>\n+        <% :success -> %>\n+          <p class=\"text-sm font-semibold uppercase tracking-[0.2em] text-sage-600\">\n+            Conversation notifications\n+          </p>\n+          <h1 class=\"mt-3 text-4xl font-semibold tracking-tight text-ink\">\n+            You’ve stopped following this conversation\n+          </h1>\n+          <p class=\"mt-4 leading-8 text-ink-2\">\n+            We won’t email you new replies to this conversation. If you sign in and visit the conversation later, you can follow it again from Memba.\n+          </p>\n+          <a\n+            :if={@conversation_url}\n+            id=\"conversation-stop-follow-view-conversation-link\"\n+            href={@conversation_url}\n+            class=\"mt-6 inline-flex rounded-full bg-sage-600 px-5 py-3 text-sm font-semibold text-cream transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700\"\n+          >\n+            View the conversation\n+          </a>\n+        <% :failure -> %>\n+          <p class=\"text-sm font-semibold uppercase tracking-[0.2em] text-sage-600\">\n+            Conversation notifications\n+          </p>\n+          <h1 class=\"mt-3 text-4xl font-semibold tracking-tight text-ink\">\n+            This stop-follow link isn’t valid\n+          </h1>\n+          <p class=\"mt-4 leading-8 text-ink-2\">\n+            We couldn’t update conversation notifications from this link. Sign in to Memba to manage the conversation from your club site.\n+          </p>\n+      <% end %>\n+    </div>\n+  </section>\n+</Layouts.app>\ndiff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex\nindex 1e6e6fd..5d2260b 100644\n--- a/web/lib/memba_web/router.ex\n+++ b/web/lib/memba_web/router.ex\n@@ -93,6 +93,11 @@ defmodule MembaWeb.Router do\n     get \"/invitations/club-members/profile\", ClubMemberInvitationController, :profile\n     post \"/invitations/club-members/profile\", ClubMemberInvitationController, :complete_profile\n     get \"/invitations/club-members/:token\", ClubMemberInvitationController, :callback\n+\n+    get \"/messages/conversations/stop-following/:token\",\n+        ConversationFollowController,\n+        :stop_following\n+\n     delete \"/auth\", AuthController, :delete\n     get \"/about\", PageController, :about\n     get \"/get-started\", PageController, :get_started\ndiff --git a/web/test/memba/messaging/conversation_stop_follow_token_test.exs b/web/test/memba/messaging/conversation_stop_follow_token_test.exs\nnew file mode 100644\nindex 0000000..f81b6e9\n--- /dev/null\n+++ b/web/test/memba/messaging/conversation_stop_follow_token_test.exs\n@@ -0,0 +1,36 @@\n+defmodule Memba.Messaging.ConversationStopFollowTokenTest do\n+  use ExUnit.Case, async: true\n+\n+  alias Memba.Messaging.ConversationStopFollowToken\n+\n+  test \"signs and verifies an opaque token scoped to a club, conversation, and member\" do\n+    scope = %{\n+      club_id: Memba.ID.generate(:club),\n+      conversation_id: Memba.ID.generate(:message),\n+      member_id: Memba.ID.generate(:person)\n+    }\n+\n+    assert {:ok, token} = ConversationStopFollowToken.sign(scope)\n+\n+    refute token =~ scope.club_id\n+    refute token =~ scope.conversation_id\n+    refute token =~ scope.member_id\n+\n+    assert {:ok, ^scope} = ConversationStopFollowToken.verify(token)\n+  end\n+\n+  test \"rejects missing, malformed, or tampered tokens\" do\n+    assert {:error, :invalid} = ConversationStopFollowToken.sign(%{})\n+    assert {:error, :invalid} = ConversationStopFollowToken.verify(nil)\n+    assert {:error, :invalid} = ConversationStopFollowToken.verify(\"not-a-token\")\n+\n+    scope = %{\n+      club_id: Memba.ID.generate(:club),\n+      conversation_id: Memba.ID.generate(:message),\n+      member_id: Memba.ID.generate(:person)\n+    }\n+\n+    assert {:ok, token} = ConversationStopFollowToken.sign(scope)\n+    assert {:error, :invalid} = ConversationStopFollowToken.verify(token <> \"tampered\")\n+  end\n+end\ndiff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\nindex 6118894..db20001 100644\n--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n+++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs\n@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Events.EmailDeliveryDelivered\n   alias Memba.Messaging\n+  alias Memba.Messaging.ConversationStopFollowToken\n   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector\n   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector\n   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection\n@@ -347,6 +348,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n                  conversation_id: conversation_id,\n                  reply_to_message_id: reply_to_message_id,\n                  conversation_url: conversation_url,\n+                 stop_follow_url: stop_follow_url,\n                  reply_to_sender_name: \"Alice Sender\",\n                  reply_to_body: \"Bring route ideas.\",\n                  subject: \"Trip planning night\",\n@@ -360,6 +362,20 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do\n       assert conversation_id == root_message.message_id\n       assert reply_to_message_id == root_message.message_id\n       assert conversation_url =~ \"/messages/#{root_message.message_id}\"\n+      assert stop_follow_url =~ \"/messages/conversations/stop-following/\"\n+\n+      token = stop_follow_url |> String.split(\"/\") |> List.last()\n+\n+      assert {:ok,\n+              %{\n+                club_id: club_id,\n+                conversation_id: conversation_id,\n+                member_id: member_id\n+              }} = ConversationStopFollowToken.verify(token)\n+\n+      assert club_id == club.club_id\n+      assert conversation_id == root_message.message_id\n+      assert member_id == recipient_id\n     end\n \n     test \"does not call the provider when the delivery's message projection is missing\" do\ndiff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\nindex 14f2e73..986f686 100644\n--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\n+++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs\n@@ -110,6 +110,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n         conversation_id: conversation_id,\n         reply_to_message_id: conversation_id,\n         conversation_url: \"https://kmc.memba.test/messages/#{conversation_id}\",\n+        stop_follow_url:\n+          \"https://kmc.memba.test/messages/conversations/stop-following/signed-token\",\n         reply_to_sender_name: \"Alice Sender\",\n         reply_to_body: \"Bring route ideas.\",\n         sender_name: \"Bob Barker\",\n@@ -131,6 +133,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n     assert email.text_body =~ \"I can bring maps.\"\n     assert email.text_body =~ \"View the conversation:\"\n     assert email.text_body =~ request.conversation_url\n+    assert email.text_body =~ \"You're following this conversation.\"\n+    assert email.text_body =~ \"Stop following this conversation:\"\n+    assert email.text_body =~ request.stop_follow_url\n     assert email.text_body =~ \"In reply to Alice Sender:\"\n     assert email.text_body =~ \"Bring route ideas.\"\n \n@@ -142,13 +147,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n     assert email.html_body =~ \"I can bring maps.\"\n     assert email.html_body =~ \"View the conversation\"\n     assert email.html_body =~ request.conversation_url\n+    assert email.html_body =~ \"You're following this conversation.\"\n+    assert email.html_body =~ \"Stop following this conversation\"\n+    assert email.html_body =~ request.stop_follow_url\n     assert email.html_body =~ \"In reply to Alice Sender:\"\n     assert email.html_body =~ \"Bring route ideas.\"\n     assert email.html_body =~ \"Delivered for Kootenay &lt;Mountaineers&gt; by\"\n     assert email.html_body =~ \"active member of Kootenay &lt;Mountaineers&gt;\"\n \n-    refute email.html_body =~ \"You're following\"\n-    refute email.html_body =~ \"Stop following\"\n+    refute email.html_body =~ \"<script>\"\n   end\n \n   test \"uses the verified Memba sender address even when no provider reply-to is configured\" do\n@@ -234,6 +241,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do\n       conversation_id: Keyword.get(overrides, :conversation_id),\n       reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),\n       conversation_url: Keyword.get(overrides, :conversation_url),\n+      stop_follow_url: Keyword.get(overrides, :stop_follow_url),\n       reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),\n       reply_to_body: Keyword.get(overrides, :reply_to_body),\n       channel: Keyword.get(overrides, :channel, :email),\ndiff --git a/web/test/memba_web/controllers/conversation_follow_controller_test.exs b/web/test/memba_web/controllers/conversation_follow_controller_test.exs\nnew file mode 100644\nindex 0000000..1e90568\n--- /dev/null\n+++ b/web/test/memba_web/controllers/conversation_follow_controller_test.exs\n@@ -0,0 +1,166 @@\n+defmodule MembaWeb.ConversationFollowControllerTest do\n+  use MembaWeb.ConnCase, async: false\n+\n+  alias Memba.Membership.App, as: MembershipApp\n+  alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.CreateClub\n+  alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Messaging\n+  alias Memba.Messaging.ConversationStopFollowToken\n+\n+  setup do\n+    Memba.EventSourcedCase.reset_event_sourced_system!()\n+    :ok\n+  end\n+\n+  test \"a valid stop-follow link unfollows the intended recipient and halts future reply email\",\n+       %{conn: conn} do\n+    club = create_club!()\n+    alice = create_person!(name: \"Alice Sender\", email: \"alice@example.com\")\n+    bob = create_person!(name: \"Bob Replier\", email: \"bob@example.com\")\n+\n+    add_member!(club.club_id, alice.person_id)\n+    add_member!(club.club_id, bob.person_id)\n+\n+    conversation_id = send_root_message!(club.club_id, alice.person_id)\n+    assert Messaging.following_conversation?(conversation_id, alice.person_id)\n+\n+    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)\n+\n+    conn = get(conn, ~p\"/messages/conversations/stop-following/#{token}\")\n+\n+    assert html_response(conn, 200) =~ \"You’ve stopped following this conversation\"\n+    refute Messaging.following_conversation?(conversation_id, alice.person_id)\n+\n+    reuse_conn = get(build_conn(), ~p\"/messages/conversations/stop-following/#{token}\")\n+    assert html_response(reuse_conn, 200) =~ \"You’ve stopped following this conversation\"\n+    refute Messaging.following_conversation?(conversation_id, alice.person_id)\n+\n+    reply_message_id = post_reply!(conversation_id, bob.person_id)\n+    assert Messaging.list_recipient_deliveries(reply_message_id) == []\n+  end\n+\n+  test \"an invalid stop-follow link changes nothing and shows a generic failure\", %{conn: conn} do\n+    club = create_club!()\n+    alice = create_person!(name: \"Alice Sender\", email: \"alice@example.com\")\n+\n+    add_member!(club.club_id, alice.person_id)\n+\n+    conversation_id = send_root_message!(club.club_id, alice.person_id)\n+    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)\n+\n+    conn = get(conn, ~p\"/messages/conversations/stop-following/#{token <> \"tampered\"}\")\n+\n+    assert html_response(conn, 422) =~ \"This stop-follow link isn’t valid\"\n+    refute html_response(conn, 422) =~ club.name\n+    assert Messaging.following_conversation?(conversation_id, alice.person_id)\n+  end\n+\n+  test \"a valid token with the wrong club scope changes nothing\", %{conn: conn} do\n+    club = create_club!()\n+    other_club_id = Memba.ID.generate(:club)\n+    alice = create_person!(name: \"Alice Sender\", email: \"alice@example.com\")\n+\n+    add_member!(club.club_id, alice.person_id)\n+\n+    conversation_id = send_root_message!(club.club_id, alice.person_id)\n+    token = stop_follow_token!(other_club_id, conversation_id, alice.person_id)\n+\n+    conn = get(conn, ~p\"/messages/conversations/stop-following/#{token}\")\n+\n+    assert html_response(conn, 422) =~ \"This stop-follow link isn’t valid\"\n+    assert Messaging.following_conversation?(conversation_id, alice.person_id)\n+  end\n+\n+  defp create_club!(attrs \\\\ []) do\n+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)\n+    name = Keyword.get(attrs, :name, \"Kootenay Mountaineering Club\")\n+    slug = Keyword.get(attrs, :slug, \"kmc\")\n+\n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %CreateClub{club_id: club_id, name: name, slug: slug},\n+               consistency: :strong\n+             )\n+\n+    Memba.Membership.get_club(club_id)\n+  end\n+\n+  defp create_person!(attrs) do\n+    person = %{\n+      person_id: Memba.ID.generate(:person),\n+      name: Keyword.fetch!(attrs, :name),\n+      email: Keyword.fetch!(attrs, :email)\n+    }\n+\n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %CreatePerson{\n+                 person_id: person.person_id,\n+                 name: person.name,\n+                 email: person.email\n+               },\n+               consistency: :strong\n+             )\n+\n+    person\n+  end\n+\n+  defp add_member!(club_id, person_id) do\n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %AddMember{\n+                 membership_id: Memba.ID.generate(:membership),\n+                 club_id: club_id,\n+                 person_id: person_id\n+               },\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp send_root_message!(club_id, sender_id) do\n+    message_id = Memba.ID.generate(:message)\n+\n+    assert :ok =\n+             Messaging.send_club_message(\n+               %{\n+                 message_id: message_id,\n+                 club_id: club_id,\n+                 sender_id: sender_id,\n+                 subject: \"Trip planning night\",\n+                 body: \"Bring route ideas.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    message_id\n+  end\n+\n+  defp post_reply!(conversation_id, sender_id) do\n+    message_id = Memba.ID.generate(:message)\n+\n+    assert :ok =\n+             Messaging.post_message_reply(\n+               %{\n+                 message_id: message_id,\n+                 conversation_id: conversation_id,\n+                 sender_id: sender_id,\n+                 body: \"I can bring maps.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    message_id\n+  end\n+\n+  defp stop_follow_token!(club_id, conversation_id, member_id) do\n+    assert {:ok, token} =\n+             ConversationStopFollowToken.sign(%{\n+               club_id: club_id,\n+               conversation_id: conversation_id,\n+               member_id: member_id\n+             })\n+\n+    token\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 39,
+          "additions": 1660,
+          "deletions": 30
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T13:49:38.167013706Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.preflight_sandbox": 0,
           "task_valid": true,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.all_tasks_done": 0,
           "internal.retry_count.validate_task": 0,
           "failure_signature": "",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.node_visit_count": 4,
           "thread.start.current_node": "read_plan",
           "thread.todo_readable.current_node": "all_tasks_done",
@@ -8528,7 +8837,7 @@
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "graph.rankdir": "LR",
           "internal.fidelity": "summary:high",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live worktree is clean (`git status --short` empty); validation snapshot also showed no uncommitted diff.\n  - Recent checkpoint `a3654a7 fabro(...): implement_next_task (succeeded)` contains the just-completed work.\n  - `git show a3654a7 -- todo.md` shows exactly one ordinary task line changed:\n    - `003 Add the in-app follow/unfollow control + copy...` from `- [ ]` to `- [x]`.\n  - Parent state had 001–002 checked and 003 unchecked, so 003 was the first unchecked task when this attempt started.\n\n- Implementation artifacts found:\n  - `web/lib/memba/messaging.ex`\n    - Added `follow_conversation_as_current_member/2`.\n    - Added `unfollow_conversation_as_current_member/2`.\n    - Added current-member/conversation ownership authorization before in-app follow/unfollow dispatch.\n  - `web/lib/memba_web/member_message_detail.ex`\n    - Loads `:current_member`, `:can_follow_conversation`, and `:following_conversation` for the message-detail surface.\n  - `web/lib/memba_web/live/member_message_live/show.ex`\n    - Handles `follow_conversation` / `unfollow_conversation` LiveView events.\n    - Refreshes detail state after follow projection changes.\n  - `web/lib/memba_web/controllers/page_html/message.html.heex`\n    - Adds the in-app follow/unfollow control and required copy.\n    - Updates reply copy from all/current members to current followers.\n  - No `*.feature` files were edited in this task.\n\n- Tests run/results found:\n  - Implementation summary reported focused formatting and test runs passing, with `dev check` failing only on the known pending acceptance-feature update reserved for todo 005.\n  - I reran focused validation tests:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba_web/live/member_message_live/show_reply_test.exs test/memba_web/live/member_message_live/show_test.exs test/memba_web/member_message_detail_loader_test.exs`\n    - Result: `17 tests, 0 failures`.\n  - Worktree remained clean after validation tests.\n\n- ADR/plan conformance notes:\n  - No `docs/adr/*.md` files are present to enforce.\n  - The task stays within implementation-plan item 003: member message-detail UI/control/copy plus current-member-only in-app authorization.\n  - Todo changes did not split, reorder, delete, or weaken plan-required work.\n  - Acceptance feature edits are explicitly reserved for todo 005 and were not touched here.\n  - The checkpoint is appropriately small and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "internal.run_id": "01KVN2FJS9ZMT166JRRS6TKCT2",
@@ -8547,7 +8856,7 @@
           "thread.wip_gate.current_node": "preflight_sandbox",
           "internal.retry_count.todo_readable": 0,
           "internal.retry_count.pre_validate_snapshot": 0,
-          "command.output": "blob://sha256/b0ef0f9f9ca32fb6b0de7cc1214c7a85b566d0dc646ab978eed32aef6c1c1f56",
+          "command.output": "blob://sha256/171748def8ba2ddc604e4086be02a0e969f8e2ba965e0e3629ee0ebe67dd42c1",
           "failure_class": "",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.retry_count.resume_gate": 0,
@@ -8615,15 +8924,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/ca0b3f7fb8ee0a9bc23bf71200d829a965bd2f514b41959b4d2275d157962e07"
+              "command.output": "blob://sha256/171748def8ba2ddc604e4086be02a0e969f8e2ba965e0e3629ee0ebe67dd42c1"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 154,
-              "active_time_ms": 154
+              "tool_time_ms": 151,
+              "active_time_ms": 151
             }
           },
           "wip_gate": {
@@ -8752,7 +9061,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "validate_task": 3,
           "implement_next_task": 4,
@@ -8761,7 +9070,7 @@
           "todo_readable": 4,
           "wip_gate": 1,
           "all_tasks_done": 4,
-          "pre_validate_snapshot": 3,
+          "pre_validate_snapshot": 4,
           "start": 1,
           "read_plan": 1,
           "preflight_sandbox": 1,
@@ -9547,7 +9856,12 @@
       "first_event_seq": 1294,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-21T13:49:34.740845061Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -9561,13 +9875,20 @@
       "output": null,
       "started_at": "2026-06-21T13:28:13.233378295Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 1281507,
+        "inference_time_ms": 926508,
+        "tool_time_ms": 354437,
+        "active_time_ms": 1280945
+      },
       "usage": {
-        "input_tokens": 1602702,
-        "output_tokens": 19922,
-        "total_tokens": 8998710,
+        "input_tokens": 1605241,
+        "output_tokens": 20908,
+        "total_tokens": 9172731,
         "reasoning_tokens": 8406,
-        "cache_read_tokens": 7367680,
-        "cache_write_tokens": 0
+        "cache_read_tokens": 7538176,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 12674713
       },
       "model": {
         "provider": "openai",
@@ -9706,22 +10027,22 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 172620,
-        "usage_percent": 63.463235294117645,
+        "input_tokens": 173035,
+        "usage_percent": 63.61580882352941,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-21T13:49:04.389869183Z",
-        "event_seq": 1622,
+        "generated_at": "2026-06-21T13:49:34.737667948Z",
+        "event_seq": 1626,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 978,
-            "usage_percent": 0.35955882352941176
+            "tokens": 976,
+            "usage_percent": 0.3588235294117647
           },
           {
             "category": "tools",
-            "tokens": 1394,
-            "usage_percent": 0.5125
+            "tokens": 1392,
+            "usage_percent": 0.5117647058823529
           },
           {
             "category": "memory",
@@ -9730,16 +10051,44 @@
           },
           {
             "category": "conversation",
-            "tokens": 169867,
-            "usage_percent": 62.45110294117647
+            "tokens": 170287,
+            "usage_percent": 62.60551470588236
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@4": {
+      "first_event_seq": 1636,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/040-thread-follow-and-reply-notification-emails/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T13:49:37.994446963Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "running"
     },

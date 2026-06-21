@@ -1,0 +1,790 @@
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+index 42acfa7..5badaee 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+@@ -3,6 +3,6 @@
+ - [x] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+ - [x] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
+ - [x] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
+-- [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
++- [x] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+ - [ ] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+ - [ ] 006 Run `dev check`.
+diff --git a/web/lib/memba/email_templates.ex b/web/lib/memba/email_templates.ex
+index 10ea30c..99f86ff 100644
+--- a/web/lib/memba/email_templates.ex
++++ b/web/lib/memba/email_templates.ex
+@@ -323,6 +323,7 @@ defmodule Memba.EmailTemplates do
+     recipient_email = opts |> Keyword.get(:recipient_email) |> sanitize_header_text()
+     reply_to_email = opts |> Keyword.get(:reply_to_email) |> sanitize_header_text()
+     reason = opts |> Keyword.get(:reason) |> sanitize_header_text()
++    extra_detail_html = Keyword.get(opts, :extra_detail_html, [])
+ 
+     delivered_line =
+       if group_name == "" do
+@@ -335,8 +336,10 @@ defmodule Memba.EmailTemplates do
+       [
+         footer_sentence("Sent to", recipient_email),
+         if(reason == "", do: nil, else: escaped_text(reason)),
++        extra_detail_html,
+         support_sentence(reply_to_email)
+       ]
++      |> List.flatten()
+       |> Enum.reject(&is_nil/1)
+       |> Enum.join("<br>\n")
+ 
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 28e6bf4..ba1f3d8 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -20,6 +20,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.UnfollowConversation
+   alias Memba.Messaging.ConversationReference
+   alias Memba.Messaging.ConversationFollowers
++  alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.InboundClubAuthorization
+   alias Memba.Messaging.InboundClubDestination
+@@ -129,6 +130,36 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Stop following a conversation from a signed reply-email link.
++
++  The token scopes the action to the intended club, conversation, and member.
++  This API intentionally does not require current club membership because it only
++  reduces notifications and old emails should remain useful.
++  """
++  def stop_following_conversation_from_email_token(token, dispatch_opts \\ [])
++      when is_list(dispatch_opts) do
++    with {:ok, scope} <- ConversationStopFollowToken.verify(token),
++         {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),
++         :ok <- ensure_stop_follow_scope(root_message, scope),
++         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
++      case unfollow_conversation(
++             %{
++               club_id: scope.club_id,
++               conversation_id: scope.conversation_id,
++               member_id: scope.member_id
++             },
++             dispatch_opts
++           ) do
++        {:error, _reason} = error -> error
++        dispatch_result -> {:ok, Map.put(scope, :dispatch_result, dispatch_result)}
++      end
++    else
++      {:error, _reason} -> {:error, :invalid_stop_follow_token}
++      nil -> {:error, :invalid_stop_follow_token}
++    end
++  end
++
+   @doc """
+   Build a provider-neutral command for an inbound club-message email.
+ 
+@@ -1101,6 +1132,36 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp ensure_stop_follow_scope(
++         %MessageProjection{club_id: club_id, message_id: conversation_id},
++         %{
++           club_id: club_id,
++           conversation_id: conversation_id
++         }
++       ) do
++    :ok
++  end
++
++  defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}
++
++  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
++    if following_conversation?(scope.conversation_id, scope.member_id) do
++      case follow_conversation(
++             %{
++               club_id: scope.club_id,
++               conversation_id: scope.conversation_id,
++               member_id: scope.member_id
++             },
++             dispatch_opts
++           ) do
++        {:error, _reason} = error -> error
++        _dispatch_result -> :ok
++      end
++    else
++      :ok
++    end
++  end
++
+   defp resolve_recipients(club_id, opts \\ []) do
+     except_person_id = Keyword.get(opts, :except_person_id)
+ 
+diff --git a/web/lib/memba/messaging/conversation_stop_follow_token.ex b/web/lib/memba/messaging/conversation_stop_follow_token.ex
+new file mode 100644
+index 0000000..3f219c3
+--- /dev/null
++++ b/web/lib/memba/messaging/conversation_stop_follow_token.ex
+@@ -0,0 +1,73 @@
++defmodule Memba.Messaging.ConversationStopFollowToken do
++  @moduledoc """
++  Encrypted, signed tokens for one-click reply-email stop-follow links.
++
++  The token payload is scoped to exactly one club, conversation, and member. The
++  encrypted Phoenix token keeps those identifiers opaque to recipients while the
++  signature prevents tampering.
++  """
++
++  alias Memba.ID
++  alias MembaWeb.Endpoint
++
++  @salt "conversation stop follow v1"
++  @version 1
++
++  @type scope :: %{
++          club_id: String.t(),
++          conversation_id: String.t(),
++          member_id: String.t()
++        }
++
++  @doc """
++  Create a long-lived opaque token scoped to one follow state.
++  """
++  @spec sign(scope()) :: {:ok, String.t()} | {:error, :invalid}
++  def sign(attrs) when is_map(attrs) do
++    with {:ok, scope} <- normalize_scope(attrs) do
++      token =
++        Phoenix.Token.encrypt(
++          Endpoint,
++          @salt,
++          Map.put(scope, :version, @version),
++          max_age: :infinity
++        )
++
++      {:ok, token}
++    end
++  end
++
++  def sign(_attrs), do: {:error, :invalid}
++
++  @doc """
++  Verify and decrypt a stop-follow token.
++  """
++  @spec verify(String.t()) :: {:ok, scope()} | {:error, :invalid}
++  def verify(token) when is_binary(token) do
++    case Phoenix.Token.decrypt(Endpoint, @salt, token, max_age: :infinity) do
++      {:ok, %{version: @version} = scope} -> normalize_scope(scope)
++      {:ok, _wrong_shape} -> {:error, :invalid}
++      {:error, _reason} -> {:error, :invalid}
++    end
++  end
++
++  def verify(_token), do: {:error, :invalid}
++
++  defp normalize_scope(attrs) do
++    with {:ok, club_id} <- cast_id(attrs, :club_id, :club),
++         {:ok, conversation_id} <- cast_id(attrs, :conversation_id, :message),
++         {:ok, member_id} <- cast_id(attrs, :member_id, :person) do
++      {:ok, %{club_id: club_id, conversation_id: conversation_id, member_id: member_id}}
++    else
++      :error -> {:error, :invalid}
++      {:error, :invalid} -> {:error, :invalid}
++    end
++  end
++
++  defp cast_id(attrs, key, type) do
++    case Map.fetch(attrs, key) do
++      {:ok, value} -> ID.cast(type, value)
++      :error -> :error
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index af411b9..dbd20c4 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -19,6 +19,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.EmailDeliveryStatus
++  alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+@@ -352,7 +353,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          {:ok, channel} <- request_channel(delivery.channel),
+          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
+       club = Membership.get_club(message.club_id)
+-      reply_context = reply_context(message, club)
++      reply_context = reply_context(message, club, delivery)
+ 
+       {:ok,
+        %EmailDeliveryRequest{
+@@ -369,6 +370,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          conversation_id: message.conversation_id,
+          reply_to_message_id: message.reply_to_message_id,
+          conversation_url: Map.get(reply_context, :conversation_url),
++         stop_follow_url: Map.get(reply_context, :stop_follow_url),
+          reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
+          reply_to_body: Map.get(reply_context, :reply_to_body),
+          channel: channel,
+@@ -424,20 +426,39 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp club_slug(%{slug: slug}), do: slug
+   defp club_slug(_club), do: nil
+ 
+-  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club), do: %{}
++  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}
+ 
+-  defp reply_context(%MessageProjection{} = message, club) do
++  defp reply_context(%MessageProjection{} = message, club, %EmailDeliveryProjection{} = delivery) do
+     message
+-    |> base_reply_context(club)
++    |> base_reply_context(club, delivery)
+     |> Map.merge(replied_to_message_context(message.reply_to_message_id))
+   end
+ 
+-  defp base_reply_context(%MessageProjection{conversation_id: conversation_id}, club) do
++  defp base_reply_context(
++         %MessageProjection{club_id: club_id, conversation_id: conversation_id},
++         club,
++         %EmailDeliveryProjection{recipient_id: recipient_id}
++       ) do
+     %{
+-      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}")
++      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}"),
++      stop_follow_url: stop_follow_url(club, club_id, conversation_id, recipient_id)
+     }
+   end
+ 
++  defp stop_follow_url(club, club_id, conversation_id, member_id) do
++    case ConversationStopFollowToken.sign(%{
++           club_id: club_id,
++           conversation_id: conversation_id,
++           member_id: member_id
++         }) do
++      {:ok, token} ->
++        ClubSite.url(club, "/messages/conversations/stop-following/#{token}")
++
++      {:error, :invalid} ->
++        nil
++    end
++  end
++
+   defp replied_to_message_context(nil), do: %{}
+ 
+   defp replied_to_message_context(reply_to_message_id) do
+diff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex
+index 05d6634..d9f8013 100644
+--- a/web/lib/memba/messaging/email_delivery_request.ex
++++ b/web/lib/memba/messaging/email_delivery_request.ex
+@@ -35,6 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :conversation_id,
+     :reply_to_message_id,
+     :conversation_url,
++    :stop_follow_url,
+     :reply_to_sender_name,
+     :reply_to_body,
+     :channel,
+@@ -56,6 +57,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+           conversation_id: String.t() | nil,
+           reply_to_message_id: String.t() | nil,
+           conversation_url: String.t() | nil,
++          stop_follow_url: String.t() | nil,
+           reply_to_sender_name: String.t() | nil,
+           reply_to_body: String.t() | nil,
+           channel: :email,
+diff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex
+index dde3348..ec54615 100644
+--- a/web/lib/memba/messaging/member_message_email.ex
++++ b/web/lib/memba/messaging/member_message_email.ex
+@@ -110,12 +110,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
+       title: title,
+       preheader: "#{sender_name} replied in the #{conversation_subject(request)} conversation.",
+       content: content,
+-      footer:
+-        EmailTemplates.memba_footer(
+-          group_name: group_name,
+-          recipient_email: request.recipient_address,
+-          reason: membership_reason(request.club_name, group_name)
+-        )
++      footer: reply_footer(request, group_name)
+     )
+   end
+ 
+@@ -125,6 +120,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
+       "",
+       request.body,
+       view_conversation_text(request.conversation_url),
++      stop_follow_text(request.stop_follow_url),
+       replied_to_context_text(request)
+     ]
+     |> Enum.reject(&is_nil/1)
+@@ -314,6 +310,15 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     end
+   end
+ 
++  defp stop_follow_text(nil), do: nil
++
++  defp stop_follow_text(url) do
++    case String.trim(to_string(url)) do
++      "" -> nil
++      url -> "\nYou're following this conversation.\nStop following this conversation:\n#{url}"
++    end
++  end
++
+   defp replied_to_context_text(%EmailDeliveryRequest{} = request) do
+     cond do
+       blank?(request.reply_to_sender_name) or blank?(request.reply_to_body) ->
+@@ -337,6 +342,26 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     end
+   end
+ 
++  defp reply_footer(%EmailDeliveryRequest{} = request, group_name) do
++    stop_follow_line =
++      case String.trim(to_string(request.stop_follow_url || "")) do
++        "" ->
++          nil
++
++        stop_follow_url ->
++          """
++          You're following this conversation. <a href="#{EmailTemplates.escaped_text(stop_follow_url)}" style="color:#7d877f; text-decoration:underline;">Stop following this conversation</a>.
++          """
++      end
++
++    EmailTemplates.memba_footer(
++      group_name: group_name,
++      recipient_email: request.recipient_address,
++      reason: membership_reason(request.club_name, group_name),
++      extra_detail_html: stop_follow_line
++    )
++  end
++
+   defp default_text("", fallback), do: fallback
+   defp default_text(text, _fallback), do: text
+ end
+diff --git a/web/lib/memba_web/controllers/conversation_follow_controller.ex b/web/lib/memba_web/controllers/conversation_follow_controller.ex
+new file mode 100644
+index 0000000..d8280c5
+--- /dev/null
++++ b/web/lib/memba_web/controllers/conversation_follow_controller.ex
+@@ -0,0 +1,44 @@
++defmodule MembaWeb.ConversationFollowController do
++  use MembaWeb, :controller
++
++  require Logger
++
++  alias Memba.Membership
++  alias Memba.Messaging
++  alias MembaWeb.ClubSite
++
++  def stop_following(conn, %{"token" => token}) do
++    case Messaging.stop_following_conversation_from_email_token(token, consistency: :strong) do
++      {:ok, scope} ->
++        render_stop_following_success(conn, scope)
++
++      {:error, reason} ->
++        Logger.warning("Rejected conversation stop-follow link: #{inspect(reason)}")
++        render_stop_following_failure(conn)
++    end
++  end
++
++  defp render_stop_following_success(conn, scope) do
++    conn
++    |> assign(:page_title, "Stopped following")
++    |> assign(:status, :success)
++    |> assign(:conversation_url, conversation_url(scope))
++    |> render(:stop_following)
++  end
++
++  defp render_stop_following_failure(conn) do
++    conn
++    |> put_status(:unprocessable_entity)
++    |> assign(:page_title, "Stop-follow link not valid")
++    |> assign(:status, :failure)
++    |> assign(:conversation_url, nil)
++    |> render(:stop_following)
++  end
++
++  defp conversation_url(%{club_id: club_id, conversation_id: conversation_id}) do
++    case Membership.get_club(club_id) do
++      nil -> nil
++      club -> ClubSite.url(club, "/messages/#{conversation_id}")
++    end
++  end
++end
+diff --git a/web/lib/memba_web/controllers/conversation_follow_html.ex b/web/lib/memba_web/controllers/conversation_follow_html.ex
+new file mode 100644
+index 0000000..b96e093
+--- /dev/null
++++ b/web/lib/memba_web/controllers/conversation_follow_html.ex
+@@ -0,0 +1,9 @@
++defmodule MembaWeb.ConversationFollowHTML do
++  @moduledoc """
++  Renders one-click conversation follow/unfollow result pages.
++  """
++
++  use MembaWeb, :html
++
++  embed_templates "conversation_follow_html/*"
++end
+diff --git a/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex b/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex
+new file mode 100644
+index 0000000..024563b
+--- /dev/null
++++ b/web/lib/memba_web/controllers/conversation_follow_html/stop_following.html.heex
+@@ -0,0 +1,36 @@
++<Layouts.app flash={@flash}>
++  <section id="conversation-stop-follow-result" data-status={@status} class="mx-auto max-w-2xl">
++    <div class="rounded-3xl border border-line bg-paper p-8 shadow-sm">
++      <%= case @status do %>
++        <% :success -> %>
++          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
++            Conversation notifications
++          </p>
++          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-ink">
++            You’ve stopped following this conversation
++          </h1>
++          <p class="mt-4 leading-8 text-ink-2">
++            We won’t email you new replies to this conversation. If you sign in and visit the conversation later, you can follow it again from Memba.
++          </p>
++          <a
++            :if={@conversation_url}
++            id="conversation-stop-follow-view-conversation-link"
++            href={@conversation_url}
++            class="mt-6 inline-flex rounded-full bg-sage-600 px-5 py-3 text-sm font-semibold text-cream transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700"
++          >
++            View the conversation
++          </a>
++        <% :failure -> %>
++          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
++            Conversation notifications
++          </p>
++          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-ink">
++            This stop-follow link isn’t valid
++          </h1>
++          <p class="mt-4 leading-8 text-ink-2">
++            We couldn’t update conversation notifications from this link. Sign in to Memba to manage the conversation from your club site.
++          </p>
++      <% end %>
++    </div>
++  </section>
++</Layouts.app>
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 1e6e6fd..5d2260b 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -93,6 +93,11 @@ defmodule MembaWeb.Router do
+     get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
+     post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
+     get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
++
++    get "/messages/conversations/stop-following/:token",
++        ConversationFollowController,
++        :stop_following
++
+     delete "/auth", AuthController, :delete
+     get "/about", PageController, :about
+     get "/get-started", PageController, :get_started
+diff --git a/web/test/memba/messaging/conversation_stop_follow_token_test.exs b/web/test/memba/messaging/conversation_stop_follow_token_test.exs
+new file mode 100644
+index 0000000..f81b6e9
+--- /dev/null
++++ b/web/test/memba/messaging/conversation_stop_follow_token_test.exs
+@@ -0,0 +1,36 @@
++defmodule Memba.Messaging.ConversationStopFollowTokenTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.ConversationStopFollowToken
++
++  test "signs and verifies an opaque token scoped to a club, conversation, and member" do
++    scope = %{
++      club_id: Memba.ID.generate(:club),
++      conversation_id: Memba.ID.generate(:message),
++      member_id: Memba.ID.generate(:person)
++    }
++
++    assert {:ok, token} = ConversationStopFollowToken.sign(scope)
++
++    refute token =~ scope.club_id
++    refute token =~ scope.conversation_id
++    refute token =~ scope.member_id
++
++    assert {:ok, ^scope} = ConversationStopFollowToken.verify(token)
++  end
++
++  test "rejects missing, malformed, or tampered tokens" do
++    assert {:error, :invalid} = ConversationStopFollowToken.sign(%{})
++    assert {:error, :invalid} = ConversationStopFollowToken.verify(nil)
++    assert {:error, :invalid} = ConversationStopFollowToken.verify("not-a-token")
++
++    scope = %{
++      club_id: Memba.ID.generate(:club),
++      conversation_id: Memba.ID.generate(:message),
++      member_id: Memba.ID.generate(:person)
++    }
++
++    assert {:ok, token} = ConversationStopFollowToken.sign(scope)
++    assert {:error, :invalid} = ConversationStopFollowToken.verify(token <> "tampered")
++  end
++end
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 6118894..db20001 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.EmailDeliveryDelivered
+   alias Memba.Messaging
++  alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+@@ -347,6 +348,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+                  conversation_id: conversation_id,
+                  reply_to_message_id: reply_to_message_id,
+                  conversation_url: conversation_url,
++                 stop_follow_url: stop_follow_url,
+                  reply_to_sender_name: "Alice Sender",
+                  reply_to_body: "Bring route ideas.",
+                  subject: "Trip planning night",
+@@ -360,6 +362,20 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+       assert conversation_id == root_message.message_id
+       assert reply_to_message_id == root_message.message_id
+       assert conversation_url =~ "/messages/#{root_message.message_id}"
++      assert stop_follow_url =~ "/messages/conversations/stop-following/"
++
++      token = stop_follow_url |> String.split("/") |> List.last()
++
++      assert {:ok,
++              %{
++                club_id: club_id,
++                conversation_id: conversation_id,
++                member_id: member_id
++              }} = ConversationStopFollowToken.verify(token)
++
++      assert club_id == club.club_id
++      assert conversation_id == root_message.message_id
++      assert member_id == recipient_id
+     end
+ 
+     test "does not call the provider when the delivery's message projection is missing" do
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index 14f2e73..986f686 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -110,6 +110,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+         conversation_id: conversation_id,
+         reply_to_message_id: conversation_id,
+         conversation_url: "https://kmc.memba.test/messages/#{conversation_id}",
++        stop_follow_url:
++          "https://kmc.memba.test/messages/conversations/stop-following/signed-token",
+         reply_to_sender_name: "Alice Sender",
+         reply_to_body: "Bring route ideas.",
+         sender_name: "Bob Barker",
+@@ -131,6 +133,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert email.text_body =~ "I can bring maps."
+     assert email.text_body =~ "View the conversation:"
+     assert email.text_body =~ request.conversation_url
++    assert email.text_body =~ "You're following this conversation."
++    assert email.text_body =~ "Stop following this conversation:"
++    assert email.text_body =~ request.stop_follow_url
+     assert email.text_body =~ "In reply to Alice Sender:"
+     assert email.text_body =~ "Bring route ideas."
+ 
+@@ -142,13 +147,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert email.html_body =~ "I can bring maps."
+     assert email.html_body =~ "View the conversation"
+     assert email.html_body =~ request.conversation_url
++    assert email.html_body =~ "You're following this conversation."
++    assert email.html_body =~ "Stop following this conversation"
++    assert email.html_body =~ request.stop_follow_url
+     assert email.html_body =~ "In reply to Alice Sender:"
+     assert email.html_body =~ "Bring route ideas."
+     assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
+     assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
+ 
+-    refute email.html_body =~ "You're following"
+-    refute email.html_body =~ "Stop following"
++    refute email.html_body =~ "<script>"
+   end
+ 
+   test "uses the verified Memba sender address even when no provider reply-to is configured" do
+@@ -234,6 +241,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+       conversation_id: Keyword.get(overrides, :conversation_id),
+       reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
+       conversation_url: Keyword.get(overrides, :conversation_url),
++      stop_follow_url: Keyword.get(overrides, :stop_follow_url),
+       reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),
+       reply_to_body: Keyword.get(overrides, :reply_to_body),
+       channel: Keyword.get(overrides, :channel, :email),
+diff --git a/web/test/memba_web/controllers/conversation_follow_controller_test.exs b/web/test/memba_web/controllers/conversation_follow_controller_test.exs
+new file mode 100644
+index 0000000..1e90568
+--- /dev/null
++++ b/web/test/memba_web/controllers/conversation_follow_controller_test.exs
+@@ -0,0 +1,166 @@
++defmodule MembaWeb.ConversationFollowControllerTest do
++  use MembaWeb.ConnCase, async: false
++
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Messaging
++  alias Memba.Messaging.ConversationStopFollowToken
++
++  setup do
++    Memba.EventSourcedCase.reset_event_sourced_system!()
++    :ok
++  end
++
++  test "a valid stop-follow link unfollows the intended recipient and halts future reply email",
++       %{conn: conn} do
++    club = create_club!()
++    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
++    bob = create_person!(name: "Bob Replier", email: "bob@example.com")
++
++    add_member!(club.club_id, alice.person_id)
++    add_member!(club.club_id, bob.person_id)
++
++    conversation_id = send_root_message!(club.club_id, alice.person_id)
++    assert Messaging.following_conversation?(conversation_id, alice.person_id)
++
++    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
++
++    conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
++
++    assert html_response(conn, 200) =~ "You’ve stopped following this conversation"
++    refute Messaging.following_conversation?(conversation_id, alice.person_id)
++
++    reuse_conn = get(build_conn(), ~p"/messages/conversations/stop-following/#{token}")
++    assert html_response(reuse_conn, 200) =~ "You’ve stopped following this conversation"
++    refute Messaging.following_conversation?(conversation_id, alice.person_id)
++
++    reply_message_id = post_reply!(conversation_id, bob.person_id)
++    assert Messaging.list_recipient_deliveries(reply_message_id) == []
++  end
++
++  test "an invalid stop-follow link changes nothing and shows a generic failure", %{conn: conn} do
++    club = create_club!()
++    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
++
++    add_member!(club.club_id, alice.person_id)
++
++    conversation_id = send_root_message!(club.club_id, alice.person_id)
++    token = stop_follow_token!(club.club_id, conversation_id, alice.person_id)
++
++    conn = get(conn, ~p"/messages/conversations/stop-following/#{token <> "tampered"}")
++
++    assert html_response(conn, 422) =~ "This stop-follow link isn’t valid"
++    refute html_response(conn, 422) =~ club.name
++    assert Messaging.following_conversation?(conversation_id, alice.person_id)
++  end
++
++  test "a valid token with the wrong club scope changes nothing", %{conn: conn} do
++    club = create_club!()
++    other_club_id = Memba.ID.generate(:club)
++    alice = create_person!(name: "Alice Sender", email: "alice@example.com")
++
++    add_member!(club.club_id, alice.person_id)
++
++    conversation_id = send_root_message!(club.club_id, alice.person_id)
++    token = stop_follow_token!(other_club_id, conversation_id, alice.person_id)
++
++    conn = get(conn, ~p"/messages/conversations/stop-following/#{token}")
++
++    assert html_response(conn, 422) =~ "This stop-follow link isn’t valid"
++    assert Messaging.following_conversation?(conversation_id, alice.person_id)
++  end
++
++  defp create_club!(attrs \\ []) do
++    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
++    name = Keyword.get(attrs, :name, "Kootenay Mountaineering Club")
++    slug = Keyword.get(attrs, :slug, "kmc")
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateClub{club_id: club_id, name: name, slug: slug},
++               consistency: :strong
++             )
++
++    Memba.Membership.get_club(club_id)
++  end
++
++  defp create_person!(attrs) do
++    person = %{
++      person_id: Memba.ID.generate(:person),
++      name: Keyword.fetch!(attrs, :name),
++      email: Keyword.fetch!(attrs, :email)
++    }
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreatePerson{
++                 person_id: person.person_id,
++                 name: person.name,
++                 email: person.email
++               },
++               consistency: :strong
++             )
++
++    person
++  end
++
++  defp add_member!(club_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddMember{
++                 membership_id: Memba.ID.generate(:membership),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp send_root_message!(club_id, sender_id) do
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               consistency: :strong
++             )
++
++    message_id
++  end
++
++  defp post_reply!(conversation_id, sender_id) do
++    message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 message_id: message_id,
++                 conversation_id: conversation_id,
++                 sender_id: sender_id,
++                 body: "I can bring maps."
++               },
++               consistency: :strong
++             )
++
++    message_id
++  end
++
++  defp stop_follow_token!(club_id, conversation_id, member_id) do
++    assert {:ok, token} =
++             ConversationStopFollowToken.sign(%{
++               club_id: club_id,
++               conversation_id: conversation_id,
++               member_id: member_id
++             })
++
++    token
++  end
++end
