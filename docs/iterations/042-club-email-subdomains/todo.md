@@ -2,7 +2,7 @@
 
 - [x] 001 Inspect the current inbound address helper, destination resolver, Postmark/Resend inbound parsers, member dashboard/compose display, reply email generation from iteration 041, production smoke-test config, and Postmark docs.
 - [x] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
-- [ ] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
+- [x] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
 - [ ] 004 Accept only `local_part == "everyone"` for now.
 - [ ] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
 - [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.

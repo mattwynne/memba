@@ -208,9 +208,9 @@ defmodule Memba.Messaging do
   Resolve an inbound club-message email's recipient addresses to a destination club.
 
   Supports the current whole-club address shape
-  `<club-slug>@<configured inbound domain>`, returning a resolved destination
-  with club id and normalized to-address, or a typed rejection reason for
-  unsupported recipient addresses and unknown club slugs.
+  `everyone@<club-slug>.<configured inbound domain>`, returning a resolved
+  destination with club id and normalized to-address, or a typed rejection reason
+  for unsupported recipient addresses and unknown club slugs.
   """
   def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)

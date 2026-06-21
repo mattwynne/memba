@@ -3,7 +3,7 @@ defmodule Memba.Messaging.InboundClubDestination do
   Resolved destination for a provider-neutral inbound club-message email.
 
   The current slice supports one whole-club inbound address shape:
-  `<club-slug>@<configured inbound domain>`. Resolution deliberately uses
+  `everyone@<club-slug>.<configured inbound domain>`. Resolution deliberately uses
   Membership's public slug lookup API so Messaging does not couple to
   Membership projection internals.
   """
@@ -29,9 +29,10 @@ defmodule Memba.Messaging.InboundClubDestination do
   @doc """
   Resolve recipient addresses to the destination club for an inbound email.
 
-  Returns `{:ok, destination}` when any recipient address uses the configured
-  inbound club domain and its local part matches an existing club slug. Unrelated
-  copied recipients are ignored once a supported club destination is found.
+  Returns `{:ok, destination}` when any recipient address uses a club subdomain
+  under the configured inbound domain and the subdomain matches an existing club
+  slug. Unrelated copied recipients are ignored once a supported club destination
+  is found.
 
   Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is
   present but no matching club exists, or
@@ -52,9 +53,8 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   defp candidate(address) do
     with {:ok, normalized_address} <- normalize_address(address),
-         {:ok, local_part, domain} <- split_address(normalized_address),
-         true <- domain == ClubInboundEmailAddress.domain(),
-         {:ok, slug} <- Slug.normalize_for_lookup(local_part) do
+         {:ok, local_part, host} <- split_address(normalized_address),
+         {:ok, slug} <- resolve_club_slug(local_part, host) do
       {:club_candidate, slug, normalized_address}
     else
       {:error, _reason} -> unsupported_candidate(address)
@@ -73,11 +73,44 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   defp split_address(address) do
     case String.split(address, "@") do
-      [local_part, domain] when local_part != "" and domain != "" ->
-        {:ok, local_part, domain}
+      [local_part, host] when local_part != "" and host != "" ->
+        {:ok, local_part, host}
 
       _parts ->
         {:error, :invalid_address}
+    end
+  end
+
+  defp resolve_club_slug(local_part, host) do
+    case club_slug_from_subdomain_host(host) do
+      {:ok, slug} -> {:ok, slug}
+      {:error, :not_club_subdomain_host} -> club_slug_from_flat_address(local_part, host)
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp club_slug_from_subdomain_host(host) do
+    inbound_domain = ClubInboundEmailAddress.domain()
+    subdomain_suffix = "." <> inbound_domain
+
+    cond do
+      host == inbound_domain ->
+        {:error, :not_club_subdomain_host}
+
+      String.ends_with?(host, subdomain_suffix) ->
+        host
+        |> String.replace_suffix(subdomain_suffix, "")
+        |> Slug.normalize_for_lookup()
+
+      true ->
+        {:error, :not_club_subdomain_host}
+    end
+  end
+
+  defp club_slug_from_flat_address(local_part, host) do
+    with true <- host == ClubInboundEmailAddress.domain(),
+         {:ok, slug} <- Slug.normalize_for_lookup(local_part) do
+      {:ok, slug}
     end
   end
 
