@@ -82,6 +82,152 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
+  test "routed message detail renders the conversation and inline reply composer", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Clark",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    first_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I'll bring snacks."
+      )
+
+    second_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I can drive."
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(view, "#member-conversation[data-message-count='3']")
+
+    assert has_element?(
+             view,
+             "#member-conversation-original " <>
+               "#member-conversation-entry-#{message.message_id}" <>
+               "[data-conversation-kind='original']" <>
+               "[data-sender-id='#{alice.person_id}']",
+             "Bring your maps."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{first_reply.message_id}" <>
+               "[data-conversation-kind='reply']" <>
+               "[data-sender-id='#{bob.person_id}']",
+             "I'll bring snacks."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{second_reply.message_id}" <>
+               "[data-conversation-kind='reply']" <>
+               "[data-sender-id='#{carol.person_id}']",
+             "I can drive."
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-from[data-sender-id='#{bob.person_id}']",
+             "Replying as Bob Builder"
+           )
+
+    assert has_element?(view, "#member-message-reply-form")
+    assert has_element?(view, "#member-message-reply-body-input")
+    refute has_element?(view, "#member-message-reply-subject-input")
+  end
+
+  test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    view
+    |> element("#member-message-reply-form")
+    |> render_submit(%{"reply" => %{"body" => " \n\t "}})
+
+    assert has_element?(view, "#member-message-detail[data-reply-state='composing']")
+    assert has_element?(view, "#member-message-reply-body-error", "Reply body can’t be blank.")
+    assert has_element?(view, "#member-message-reply-body-input")
+    refute has_element?(view, "#member-message-reply-success")
+    refute has_element?(view, "#member-message-reply-error")
+
+    assert Enum.map(
+             Memba.Messaging.list_conversation_messages(message.message_id),
+             & &1.message_id
+           ) == [
+             message.message_id
+           ]
+  end
+
   test "routed message detail renders the delivery summary and polished group headers", %{
     conn: conn
   } do

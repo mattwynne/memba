@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageDetail do
   initial controller pipeline.
   """
 
+  alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
   alias Memba.Messaging
@@ -22,16 +23,19 @@ defmodule MembaWeb.MemberMessageDetail do
     * `{:error, :forbidden}` for missing, invalid, or inactive selected clubs;
     * `{:error, :not_found}` for missing messages or message/club mismatches.
   """
-  def load(params, active_clubs) when is_map(params) and is_list(active_clubs) do
+  def load(params, active_clubs, current_identity \\ nil)
+
+  def load(params, active_clubs, current_identity)
+      when is_map(params) and is_list(active_clubs) do
     with {:ok, club_id} <- cast_selected_club_id(params),
          {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
          {:ok, message} <- fetch_message(params),
          :ok <- require_message_in_club(message, club_id) do
-      {:ok, detail_assigns(selected_club, message)}
+      {:ok, detail_assigns(selected_club, message, current_identity)}
     end
   end
 
-  def load(_params, _active_clubs), do: {:error, :forbidden}
+  def load(_params, _active_clubs, _current_identity), do: {:error, :forbidden}
 
   defp cast_selected_club_id(params) do
     case ID.cast(:club, Map.get(params, "club_id")) do
@@ -62,25 +66,65 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
-  defp detail_assigns(selected_club, message) do
+  defp detail_assigns(selected_club, message, current_identity) do
     receipt_model =
       message.message_id
       |> Messaging.list_member_email_deliverys()
       |> MemberEmailDeliveryPresentation.present_receipts()
 
     sender = Membership.get_person(message.sender_id)
+    active_members = Membership.list_active_members_of_club(selected_club.club_id)
+    conversation_messages = Messaging.list_conversation_messages(message.message_id)
 
     %{
       page_title: message.subject,
       selected_club: selected_club,
       message: message,
       sender_name: sender_name(sender),
+      current_member: current_member_for_identity(active_members, current_identity),
+      conversation_entries: conversation_entries(conversation_messages),
       member_email_deliverys: receipt_model.receipts,
       member_email_delivery_count: receipt_model.total_count,
       member_email_delivery_summary: receipt_model.summary,
       member_email_delivery_groups: receipt_model.groups
     }
   end
+
+  defp current_member_for_identity(_active_members, nil), do: nil
+
+  defp current_member_for_identity(active_members, %{email: email}) do
+    identity_email = Accounts.normalize_email(email)
+
+    Enum.find(active_members, fn member ->
+      Accounts.normalize_email(member.email) == identity_email
+    end)
+  end
+
+  defp current_member_for_identity(_active_members, _identity), do: nil
+
+  defp conversation_entries(messages) do
+    sender_summaries =
+      messages
+      |> Enum.map(& &1.sender_id)
+      |> Membership.list_person_contact_summaries()
+
+    Enum.map(messages, fn message ->
+      %{
+        message: message,
+        sender_name: conversation_sender_name(sender_summaries, message.sender_id),
+        kind: conversation_entry_kind(message)
+      }
+    end)
+  end
+
+  defp conversation_sender_name(sender_summaries, sender_id) do
+    sender_summaries
+    |> Map.get(sender_id, %{})
+    |> sender_name()
+  end
+
+  defp conversation_entry_kind(%{reply_to_message_id: nil}), do: :original
+  defp conversation_entry_kind(_message), do: :reply
 
   defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
   defp sender_name(_sender), do: "Club member"

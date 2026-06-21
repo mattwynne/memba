@@ -49,6 +49,11 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     assert assigns.selected_club.club_id == alice.club_id
     assert assigns.message.message_id == message.message_id
     assert assigns.sender_name == "Alice Adams"
+    assert assigns.current_member == nil
+
+    assert [%{kind: :original, sender_name: "Alice Adams", message: ^message}] =
+             assigns.conversation_entries
+
     assert assigns.member_email_delivery_count == 1
 
     assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) ==
@@ -60,6 +65,78 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
     assert [%{status: "delivered", status_label: "Delivered", count: 1}] =
              assigns.member_email_delivery_groups
+  end
+
+  test "loads the conversation in order with sender names and the signed-in current member" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Clark",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    first_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I'll bring snacks."
+      )
+
+    second_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I can drive."
+      )
+
+    assert {:ok, assigns} =
+             MemberMessageDetail.load(
+               %{"club_id" => alice.club_id, "message_id" => message.message_id},
+               [alice],
+               %{email: "bob@example.com"}
+             )
+
+    assert assigns.current_member.id == bob.person_id
+
+    assert Enum.map(
+             assigns.conversation_entries,
+             &{&1.kind, &1.sender_name, &1.message.message_id}
+           ) ==
+             [
+               {:original, "Alice Adams", message.message_id},
+               {:reply, "Bob Builder", first_reply.message_id},
+               {:reply, "Carol Clark", second_reply.message_id}
+             ]
   end
 
   test "forbids missing, invalid, or unauthorized selected clubs" do

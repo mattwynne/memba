@@ -8,6 +8,9 @@ defmodule MembaWeb.MemberMessageLive.Show do
   """
   use MembaWeb, :live_view
 
+  require Logger
+
+  alias Memba.Messaging
   alias Memba.ReadModelChanges
   alias MembaWeb.MemberMessageDetail
 
@@ -18,7 +21,11 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
     case params do
       %{"club_id" => _club_id, "message_id" => _message_id} ->
-        case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
+        case MemberMessageDetail.load(
+               params,
+               socket.assigns.current_identity_clubs,
+               socket.assigns.current_identity
+             ) do
           {:ok, detail_assigns} ->
             if connected?(socket) do
               Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
@@ -28,6 +35,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
              socket
              |> assign(:route_params, params)
              |> assign(detail_assigns)
+             |> assign_initial_reply_state()
              |> assign(:expanded_receipt_groups, MapSet.new())}
 
           {:error, :forbidden} ->
@@ -59,6 +67,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
+  def handle_info(
+        {:read_model_changed,
+         %{projector: Memba.Messaging.Projectors.Message, source_event: event}},
+        %{assigns: %{message: message}} = socket
+      ) do
+    if Map.get(event, :conversation_id) == message.conversation_id do
+      {:noreply, refresh_message_detail(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
@@ -66,6 +86,42 @@ defmodule MembaWeb.MemberMessageLive.Show do
     expanded_receipt_groups = toggle_receipt_group(socket, status)
 
     {:noreply, assign(socket, :expanded_receipt_groups, expanded_receipt_groups)}
+  end
+
+  def handle_event("post_reply", %{"reply" => reply_params}, socket) do
+    if blank_reply_body?(reply_params) do
+      {:noreply,
+       socket
+       |> assign(:reply_state, :composing)
+       |> assign(:reply_body_error, "Reply body can’t be blank.")
+       |> assign(:reply_error, nil)
+       |> assign(:reply_form, reply_form(reply_params))}
+    else
+      case post_current_member_reply(socket, reply_params) do
+        {:ok, _reply_message_id} ->
+          {:noreply,
+           socket
+           |> refresh_message_detail()
+           |> assign(:reply_state, :posted)
+           |> assign(:reply_body_error, nil)
+           |> assign(:reply_error, nil)
+           |> assign(:reply_form, reply_form())}
+
+        {:error, reason} ->
+          log_reply_failure(socket, reason)
+
+          {:noreply,
+           socket
+           |> assign(:reply_state, :failed)
+           |> assign(:reply_body_error, nil)
+           |> assign(:reply_error, reason)
+           |> assign(:reply_form, reply_form(reply_params))}
+      end
+    end
+  end
+
+  def handle_event("post_reply", _params, socket) do
+    handle_event("post_reply", %{"reply" => %{}}, socket)
   end
 
   @impl Phoenix.LiveView
@@ -130,7 +186,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
   defp refresh_message_detail(socket) do
     case MemberMessageDetail.load(
            socket.assigns.route_params,
-           socket.assigns.current_identity_clubs
+           socket.assigns.current_identity_clubs,
+           socket.assigns.current_identity
          ) do
       {:ok, detail_assigns} ->
         assign(socket, detail_assigns)
@@ -142,6 +199,67 @@ defmodule MembaWeb.MemberMessageLive.Show do
         not_found!(socket)
     end
   end
+
+  defp assign_initial_reply_state(socket) do
+    socket
+    |> assign(:reply_state, :composing)
+    |> assign(:reply_body_error, nil)
+    |> assign(:reply_error, nil)
+    |> assign(:reply_form, reply_form())
+  end
+
+  defp post_current_member_reply(socket, reply_params) do
+    with %{message: %{conversation_id: conversation_id}, current_member: %{id: sender_id}} <-
+           socket.assigns do
+      reply_message_id = Memba.ID.generate(:message)
+
+      attrs = %{
+        "message_id" => reply_message_id,
+        "conversation_id" => conversation_id,
+        "sender_id" => sender_id,
+        "body" => Map.get(reply_params, "body", "")
+      }
+
+      case Messaging.post_message_reply(attrs, consistency: :strong) do
+        :ok -> {:ok, reply_message_id}
+        {:ok, _result} -> {:ok, reply_message_id}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      _missing_reply_context -> {:error, :forbidden}
+    end
+  end
+
+  defp blank_reply_body?(reply_params) do
+    reply_params
+    |> Map.get("body", "")
+    |> to_string()
+    |> String.trim()
+    |> Kernel.==("")
+  end
+
+  defp reply_form do
+    reply_form(%{"body" => ""})
+  end
+
+  defp reply_form(reply_params) do
+    reply_params
+    |> Map.take(["body"])
+    |> Map.put_new("body", "")
+    |> to_form(as: :reply)
+  end
+
+  defp log_reply_failure(socket, reason) do
+    Logger.error("Member message reply failed",
+      club_id: socket.assigns.selected_club.club_id,
+      conversation_id: socket.assigns.message.conversation_id,
+      sender_id: current_member_id(socket.assigns.current_member),
+      reason: inspect(reason)
+    )
+  end
+
+  defp current_member_id(nil), do: nil
+  defp current_member_id(current_member), do: current_member.id
 
   defp ensure_identity_assigns(socket) do
     socket

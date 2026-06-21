@@ -8,6 +8,7 @@
     data-live-view="member-message-detail"
     data-club-id={@selected_club.club_id}
     data-message-id={@message.message_id}
+    data-reply-state={@reply_state}
     class="mx-auto max-w-3xl"
   >
     <.link
@@ -20,7 +21,7 @@
 
     <section class="mt-5 border-b border-base-300 pb-8">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
-        Club message
+        Club conversation
       </p>
       <h1 class="mt-2 text-4xl font-semibold leading-tight tracking-tight text-base-content sm:text-5xl">
         {@message.subject}
@@ -33,12 +34,100 @@
         </span>
         member{if(@member_email_delivery_count == 1, do: "", else: "s")}
       </p>
-      <p
-        id="member-message-body"
-        class="mt-6 whitespace-pre-wrap text-base leading-8 text-ink-2"
+    </section>
+
+    <section
+      id="member-conversation"
+      data-message-count={Enum.count(@conversation_entries)}
+      class="mt-8 space-y-5"
+    >
+      <% {original_entries, reply_entries} = split_conversation_entries(@conversation_entries) %>
+
+      <div id="member-conversation-original" class="space-y-4">
+        <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
+      </div>
+
+      <section
+        id="member-message-reply-composer"
+        class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
       >
-        {@message.body}
-      </p>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
+              <.icon name="hero-chat-bubble-left-right" class="size-5 text-primary" />
+              Reply to this conversation
+            </h2>
+            <p class="mt-1 text-sm leading-6 text-ink-2">
+              Your reply inherits the subject and is emailed to current club members except you.
+            </p>
+          </div>
+          <p
+            :if={@current_member}
+            id="member-message-reply-from"
+            data-sender-id={@current_member.id}
+            class="w-fit rounded-full border border-base-300 bg-base-100 px-3 py-1 text-sm font-semibold text-ink-2"
+          >
+            Replying as <span class="text-base-content">{@current_member.name}</span>
+          </p>
+        </div>
+
+        <p
+          :if={@reply_state == :posted}
+          id="member-message-reply-success"
+          class="mt-4 rounded-2xl border border-success/20 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
+        >
+          Your reply is being sent.
+        </p>
+
+        <p
+          :if={@reply_state == :failed}
+          id="member-message-reply-error"
+          data-reply-error={inspect(@reply_error)}
+          class="mt-4 rounded-2xl border border-error/20 bg-error-soft px-4 py-3 text-sm font-semibold text-error"
+        >
+          Your reply was not sent. Please try again.
+        </p>
+
+        <.form
+          for={@reply_form}
+          id="member-message-reply-form"
+          phx-submit="post_reply"
+          class="mt-5 grid gap-4"
+        >
+          <.input
+            field={@reply_form[:body]}
+            id="member-message-reply-body-input"
+            label="Reply"
+            type="textarea"
+            placeholder="Write your reply to the club."
+            rows="5"
+            class="min-h-32 w-full resize-y rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-base-content placeholder:text-ink-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
+          />
+          <p
+            :if={@reply_body_error}
+            id="member-message-reply-body-error"
+            class="text-sm font-semibold text-error"
+          >
+            {@reply_body_error}
+          </p>
+
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <.button
+              id="member-message-reply-submit-button"
+              type="submit"
+              variant="primary"
+              size="lg"
+              disabled={is_nil(@current_member)}
+            >
+              <.icon name="hero-paper-airplane" class="size-4" /> Post reply
+            </.button>
+          </div>
+        </.form>
+      </section>
+
+      <div id="member-conversation-replies" class="space-y-4">
+        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
+      </div>
     </section>
 
     <section id="member-receipt-summary" class="mt-8">

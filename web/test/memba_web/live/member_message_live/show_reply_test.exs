@@ -1,0 +1,134 @@
+defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+  use MembaWeb.FeatureCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  alias Memba.Membership
+  alias Memba.Messaging
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias MembaWeb.ClubSite
+  alias MembaWeb.IdentityAuth
+
+  setup do
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+    Fake.reset()
+
+    on_exit(fn ->
+      restore_env(:messaging_email_delivery_provider, original_provider)
+      Fake.reset()
+    end)
+
+    :ok
+  end
+
+  test "submit posts a reply as the signed-in member and refreshes the conversation", %{
+    conn: conn
+  } do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring your maps."
+               },
+               consistency: :strong
+             )
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
+      |> live(~p"/messages/#{message.message_id}")
+
+    view
+    |> element("#member-message-reply-form")
+    |> render_submit(%{
+      "reply" => %{"sender_id" => alice.person_id, "body" => "I'll bring snacks."}
+    })
+
+    assert [root, reply] = Messaging.list_conversation_messages(message.message_id)
+    assert root.message_id == message.message_id
+    assert Memba.ID.valid?(:message, reply.message_id)
+    assert reply.sender_id == bob.person_id
+    assert reply.conversation_id == message.message_id
+    assert reply.reply_to_message_id == message.message_id
+    assert reply.subject == "Trip planning night"
+    assert reply.body == "I'll bring snacks."
+
+    assert [receipt] = Messaging.list_member_email_deliverys(reply.message_id)
+    assert receipt.recipient_id == alice.person_id
+    assert receipt.status == "sent"
+
+    assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
+    assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
+
+    assert has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{reply.message_id}" <>
+               "[data-conversation-kind='reply']" <>
+               "[data-sender-id='#{bob.person_id}']",
+             "I'll bring snacks."
+           )
+  end
+
+  defp signed_in_club_host(conn, email, club) do
+    conn
+    |> club_host(club)
+    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
+  end
+
+  defp club_host(conn, club) do
+    club = Memba.Membership.get_club(club.club_id) || club
+    %{host: host} = URI.parse(ClubSite.url(club))
+    Map.put(conn, :host, host)
+  end
+
+  defp create_active_member(club_id, attrs) do
+    person_id = Memba.ID.generate(:person)
+    email = Keyword.fetch!(attrs, :email)
+
+    if is_nil(Membership.get_club(club_id)) do
+      assert :ok =
+               Membership.create_club(
+                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+                 consistency: :strong
+               )
+    end
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: email,
+                 email_addresses: [%{email: email, is_primary: true}]
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    %{club_id: club_id, person_id: person_id}
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+end
