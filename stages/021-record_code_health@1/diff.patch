@@ -1,0 +1,19 @@
+diff --git a/docs/code-health.md b/docs/code-health.md
+index 93efad5..1e8c23e 100644
+--- a/docs/code-health.md
++++ b/docs/code-health.md
+@@ -54,3 +54,14 @@ Note: no reviewer-report or review-synthesis artifact files were visible in this
+    - Evidence: `docs/iterations/036-ds-catchup-member-management-and-auth/preview-conventions.md` maps the auth preview as `design-system/wireframes/auth-check-email.html` → `wireframes/auth-check-email.html`, but the delivered preview file is `design-system/wireframes/check-email-delivery-progress.html` and labels itself as `repo: wireframes/check-email-delivery-progress.html`.
+    - Risk: the manual post-merge DesignSync push can miss the auth preview or push it under an unexpected cloud path, leaving the cloud design system out of sync even though the repo artifact exists.
+    - Suggested next action: reconcile the preview-conventions mapping with the shipped file name before the cloud DS push, and consider a small manifest/card-index check if future DS catch-up iterations add more repo-to-cloud preview paths.
++
++## 2026-06-21 — Iteration 038: Async email delivery dispatch
++
++Plan: `docs/iterations/038-email-delivery-handoff-boundary/plan.md`
++
++Note: no reviewer-report or review-synthesis artifact files were visible in this checkout; the finding below is recorded from independent inspection of the merged iteration artifacts.
++
++1. **Projector replay can still nudge the supervised dispatcher if it is running.**
++   - Evidence: `web/lib/memba/messaging/projectors/email_delivery.ex` publishes every committed `EmailDeliveryCreated` projection change from `after_update/3`, and `web/lib/memba/messaging/email_delivery_dispatcher.ex` subscribes to `Memba.ReadModelChanges.topic()` and dispatches pending deliveries for those events. The replay-safety test in `web/test/memba/messaging/send_club_message_test.exs` stops the supervised dispatcher in setup before rebuilding projections, so it proves projections themselves do not call the provider but does not cover a rebuild while the dispatcher is subscribed.
++   - Risk: an operator/projector rebuild or replay performed with the dispatcher enabled could hand historical pending deliveries to the configured provider, resend email, or mutate rebuilt dispatch rows to `sent`/`failed`, violating the intended replay/side-effect boundary.
++   - Suggested next action: add an explicit replay/maintenance suppression guard for dispatcher nudges (for example, ignore projection-rebuild metadata or require replay tooling to disable the dispatcher) and cover the running-dispatcher replay scenario with an automated test.
