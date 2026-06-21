@@ -366,6 +366,34 @@ async function waitForProjectedText(
   );
 }
 
+async function waitForProjectedAttribute(
+  world,
+  locator,
+  attributeName,
+  expectedValue,
+  description,
+  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  await withProjectionWait(description, () =>
+    expect(locator, description).toHaveAttribute(attributeName, expectedValue, { timeout: timeoutMs })
+  );
+}
+
+function conversationFollowControl(world) {
+  return world.page.locator("#member-conversation-follow-control");
+}
+
+async function waitForProjectedFollowState(world, expectedFollowing, description, options = {}) {
+  await waitForProjectedAttribute(
+    world,
+    conversationFollowControl(world),
+    "data-following",
+    String(expectedFollowing),
+    description,
+    options
+  );
+}
+
 async function waitForProjectedVisible(
   world,
   locator,
@@ -580,6 +608,80 @@ async function postMemberReply(
   world.replies[replyKey(subject, replierName, body)] = reply;
   world.lastReply = reply;
   world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
+
+  return world;
+}
+
+async function followConversation(world, memberName, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  const control = conversationFollowControl(world);
+  await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
+    expect,
+    timeoutMs
+  });
+
+  if ((await control.getAttribute("data-following")) === "true") {
+    return world;
+  }
+
+  await browserInteraction(`${memberName} follows ${JSON.stringify(subject)}`, () =>
+    world.page.locator("#member-conversation-follow-button").click()
+  );
+
+  await waitForProjectedFollowState(world, true, `${memberName} follows ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  return world;
+}
+
+async function unfollowConversation(world, memberName, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  const control = conversationFollowControl(world);
+  await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
+    expect,
+    timeoutMs
+  });
+
+  if ((await control.getAttribute("data-following")) === "false") {
+    return world;
+  }
+
+  await browserInteraction(`${memberName} stops following ${JSON.stringify(subject)}`, () =>
+    world.page.locator("#member-conversation-unfollow-button").click()
+  );
+
+  await waitForProjectedFollowState(world, false, `${memberName} stops following ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  return world;
+}
+
+async function assertConversationFollowingState(
+  world,
+  memberName,
+  subject,
+  expectedFollowing,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+  await waitForProjectedFollowState(
+    world,
+    expectedFollowing,
+    `${memberName} ${expectedFollowing ? "following" : "not following"} ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
 
   return world;
 }
@@ -1445,6 +1547,34 @@ async function assertReplyEmailDeliveredToMembers(
   return world;
 }
 
+async function assertReplyEmailNotDeliveredToMembers(world, senderName, recipientNames) {
+  ensureState(world);
+
+  const reply = latestReplyFor(world, senderName);
+  const emails = await replyDeliveryFactsForLatestReply(world, reply);
+
+  for (const recipientName of recipientNames) {
+    const person = world.people[recipientName];
+    assert.ok(person, `Expected ${recipientName} to have been created`);
+
+    const matchingEmail = emails.find(
+      (email) => email.subject === replyEmailSubjectFor(world, reply.subject) && mailboxEmailTo(email).includes(person.email)
+    );
+
+    assertFinalBrowserState(`${recipientName} should not receive ${senderName}'s reply`, () =>
+      assert.equal(
+        matchingEmail,
+        undefined,
+        `Expected no reply email to ${recipientName} <${person.email}>; saw ${JSON.stringify(
+          emails.map(mailboxEmailSummary)
+        )}`
+      )
+    );
+  }
+
+  return world;
+}
+
 async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
   ensureState(world);
 
@@ -1463,6 +1593,81 @@ async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
       undefined,
       `Expected no reply email to ${senderName} <${sender.email}>; saw ${JSON.stringify(emails.map(mailboxEmailSummary))}`
     )
+  );
+
+  return world;
+}
+
+async function followStopFollowLinkFromReplyEmail(
+  world,
+  recipientName,
+  senderName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const reply = latestReplyFor(world, senderName);
+  const person = world.people[recipientName];
+  assert.ok(person, `Expected ${recipientName} to have been created`);
+
+  const emails = await replyDeliveryFactsForLatestReply(world, reply);
+  const email = emails.find(
+    (candidate) =>
+      candidate.subject === replyEmailSubjectFor(world, reply.subject) &&
+      mailboxEmailTo(candidate).includes(person.email) &&
+      mailboxEmailText(candidate).includes(reply.body)
+  );
+
+  assert.ok(
+    email,
+    `Expected ${recipientName}'s reply email from ${senderName} before following its stop-follow link; saw ${JSON.stringify(
+      emails.map(mailboxEmailSummary)
+    )}`
+  );
+
+  const stopFollowUrl = stopFollowUrlFromEmail(email);
+
+  await browserInteraction(`${recipientName} follows stop-follow link for ${JSON.stringify(reply.subject)}`, () =>
+    world.page.goto(stopFollowUrl)
+  );
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator('#conversation-stop-follow-result[data-status="success"]'),
+    "stop-follow success page",
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function followTamperedStopFollowLink(
+  world,
+  recipientName,
+  subject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const stopFollowUrl = tamperedStopFollowUrl(world, recipientName, subject);
+
+  await browserInteraction(`${recipientName} follows a tampered stop-follow link for ${JSON.stringify(subject)}`, () =>
+    world.page.goto(stopFollowUrl)
+  );
+
+  await assertStopFollowLinkNotValid(world, { expect, timeoutMs });
+
+  return world;
+}
+
+async function assertStopFollowLinkNotValid(world, { expect = playwrightExpect, timeoutMs } = {}) {
+  await waitForProjectedVisible(
+    world,
+    world.page.locator('#conversation-stop-follow-result[data-status="failure"]', {
+      hasText: "This stop-follow link isn’t valid"
+    }),
+    "stop-follow failure page",
+    { expect, timeoutMs }
   );
 
   return world;
@@ -1493,6 +1698,31 @@ async function assertMemberCannotReplyToMessage(
   );
 
   await expect(world.page.locator("#member-message-reply-form")).toHaveCount(0, { timeout: timeoutMs || 1000 });
+
+  return world;
+}
+
+function removeMemberFromClub(world, personName, clubName) {
+  ensureState(world);
+
+  const membershipKey = `${clubName}:${personName}`;
+  const membership = world.memberships[membershipKey];
+  assert.ok(membership, `Expected ${personName} to be a member of ${clubName} before removing them`);
+
+  serverCommands.runCommand(
+    `
+membership_id = Map.fetch!(payload, "membershipId")
+
+case Memba.Membership.remove_member(%{membership_id: membership_id}, consistency: :strong) do
+  :ok -> %{status: "removed", membershipId: membership_id}
+  {:ok, _result} -> %{status: "removed", membershipId: membership_id}
+  {:error, reason} -> raise "Could not remove member #{membership_id}: #{inspect(reason)}"
+end
+`,
+    { membershipId: membership.membershipId }
+  );
+
+  delete world.memberships[membershipKey];
 
   return world;
 }
@@ -2370,6 +2600,28 @@ async function waitForLocalDeliveryFacts(world, expectedCount, description) {
   );
 }
 
+async function replyDeliveryFactsForLatestReply(world, reply) {
+  const cachedEmails = world.replyDeliveryFactsAfterSend || [];
+  const cachedForReply = cachedEmails.filter((email) => email.message_id === reply.messageId);
+
+  if (cachedForReply.length > 0) {
+    return cachedForReply;
+  }
+
+  const previousEmails = world.replyDeliveryFactsBeforeSend || [];
+  const emails = await waitForLocalDeliveryFacts(
+    world,
+    previousEmails.length,
+    `local provider delivery facts for ${reply.senderName}'s reply to ${JSON.stringify(reply.subject)}`
+  );
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+
+  world.replyDeliveryFactsAfterSend = newEmails;
+
+  return newEmails.filter((email) => email.message_id === reply.messageId);
+}
+
 async function testMailboxEmails(world) {
   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
   if (!request || typeof request.get !== "function") {
@@ -2477,6 +2729,14 @@ function mailboxEmailSummary(email) {
   };
 }
 
+function stopFollowUrlFromEmail(email) {
+  const text = mailboxEmailText(email);
+  const match = text.match(/https?:\/\/\S+\/messages\/conversations\/stop-following\/\S+/);
+  assert.ok(match, `Expected reply email to contain a stop-follow URL; saw ${JSON.stringify(text)}`);
+
+  return match[0].replace(/[),.;]+$/u, "");
+}
+
 function conversationReplyRow(world, senderName, body) {
   const sender = world.people[senderName];
   assert.ok(sender, `Expected ${senderName} to have been created`);
@@ -2507,6 +2767,37 @@ function latestReplyFor(world, senderName) {
   assert.ok(reply, `Expected ${senderName} to have replied before checking reply email`);
 
   return reply;
+}
+
+function tamperedStopFollowUrl(world, recipientName, subject) {
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} before making a stop-follow link`);
+
+  const club = clubById(world, message.clubId);
+  assert.ok(club, `Expected club ${message.clubId} before making a stop-follow link`);
+
+  const person = world.people[recipientName];
+  assert.ok(person, `Expected ${recipientName} to have been created`);
+
+  const token = serverCommands.runCommand(
+    `
+{:ok, token} =
+  Memba.Messaging.ConversationStopFollowToken.sign(%{
+    club_id: Map.fetch!(payload, "clubId"),
+    conversation_id: Map.fetch!(payload, "conversationId"),
+    member_id: Map.fetch!(payload, "memberId")
+  })
+
+%{token: token}
+`,
+    {
+      clubId: message.clubId,
+      conversationId: message.messageId,
+      memberId: person.personId
+    }
+  ).token;
+
+  return clubSiteUrl(world.baseUrl, club, `/messages/conversations/stop-following/${token}tampered`);
 }
 
 async function capturedInboundRejectionEmail(world, senderName) {
@@ -2815,6 +3106,7 @@ module.exports = {
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
+  assertConversationFollowingState,
   assertConversationReplyOrder,
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
@@ -2829,7 +3121,9 @@ module.exports = {
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReplyEmailDeliveredToMembers,
+  assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,
+  assertStopFollowLinkNotValid,
   assertReceiptStatus,
   createClub,
   createPeople,
@@ -2839,6 +3133,9 @@ module.exports = {
   emailFor,
   ensureClubSlugMatchesInboundAddress,
   ensureState,
+  followConversation,
+  followStopFollowLinkFromReplyEmail,
+  followTamperedStopFollowLink,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
   memberReceiptIconForLabel,
@@ -2858,6 +3155,7 @@ module.exports = {
   openDeliveriesOverview,
   openClub,
   openMessage,
+  removeMemberFromClub,
   restoreClubMessageSending,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
@@ -2869,6 +3167,7 @@ module.exports = {
   trySendMemberMessageToKootenayMembers,
   updateClubSlug,
   updatePersonEmailAddresses,
+  unfollowConversation,
   visitClubsIndex,
   waitForLocalDeliveryFacts,
   waitForMailboxEmails

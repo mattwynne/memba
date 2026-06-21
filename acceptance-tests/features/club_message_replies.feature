@@ -2,8 +2,8 @@
 Feature: Club message replies (conversations)
   Club members want to reply to a club message and keep the conversation in Memba,
   instead of replies scattering to private inboxes and never being tracked.
-  A reply belongs to the original message's conversation, and is emailed to the club.
-  (A later iteration lets members follow a conversation so only followers are emailed.)
+  A reply belongs to the original message's conversation, and is emailed to the
+  current club-member followers of that conversation.
 
   Background:
     Given Kootenay Mountaineering Club is a club
@@ -26,12 +26,51 @@ Feature: Club message replies (conversations)
       And Carol replies "I'll bring the maps" to "Trip planning night"
       Then the conversation for "Trip planning night" should show "I can drive, three seats spare" before "I'll bring the maps"
 
-  Rule: A reply is emailed to every current member of the club
+  @iteration-040
+  Rule: A reply is emailed to current club-member followers
 
-    Scenario: Every other member receives Bob's reply
+    Scenario: The sender and repliers automatically follow the conversation
+      Then Alice should be following the conversation for "Trip planning night"
+      And Carol should not be following the conversation for "Trip planning night"
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
-      Then Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+      Then Bob should be following the conversation for "Trip planning night"
+      And Carol should not be following the conversation for "Trip planning night"
+
+    Scenario: A member can follow and stop following the conversation
+      When Carol follows the conversation for "Trip planning night"
+      Then Carol should be following the conversation for "Trip planning night"
+      When Carol stops following the conversation for "Trip planning night"
+      Then Carol should not be following the conversation for "Trip planning night"
+
+    Scenario: Followers receive Bob's reply, but non-followers and the author do not
+      Given Carol follows the conversation for "Trip planning night"
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Alice and Carol should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+      And Dana should not receive Bob's reply by email
       And Bob should not receive his own reply by email
+
+    Scenario: Former members do not receive replies even if they followed before leaving
+      Given Dana follows the conversation for "Trip planning night"
+      And Dana is no longer a member of Kootenay Mountaineering Club
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+      And Dana should not receive Bob's reply by email
+
+    Scenario: A reply-email stop-follow link unfollows only that recipient
+      Given Carol follows the conversation for "Trip planning night"
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Alice and Carol should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+      When Carol follows the stop-follow link from Bob's reply email
+      Then Carol should not be following the conversation for "Trip planning night"
+      When Alice replies "Leaving at seven from the trailhead" to "Trip planning night"
+      Then Bob should receive Alice's reply by email from Kootenay Mountaineering Club via Memba
+      And Carol should not receive Alice's reply by email
+
+    Scenario: A tampered stop-follow link changes nothing
+      Given Carol follows the conversation for "Trip planning night"
+      When Carol follows a tampered stop-follow link for "Trip planning night"
+      Then Carol should be told the stop-follow link is not valid
+      And Carol should be following the conversation for "Trip planning night"
 
   Rule: Only a current member of the club can reply to its messages
 
