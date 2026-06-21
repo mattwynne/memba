@@ -79,6 +79,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
+  def handle_info(
+        {:read_model_changed,
+         %{projector: Memba.Messaging.Projectors.ConversationFollow, source_event: event}},
+        %{assigns: %{message: message}} = socket
+      ) do
+    if event_conversation_id(event) == message.conversation_id do
+      {:noreply, refresh_message_detail(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
@@ -118,6 +130,14 @@ defmodule MembaWeb.MemberMessageLive.Show do
            |> assign(:reply_form, reply_form(reply_params))}
       end
     end
+  end
+
+  def handle_event("follow_conversation", _params, socket) do
+    update_current_member_follow(socket, :follow)
+  end
+
+  def handle_event("unfollow_conversation", _params, socket) do
+    update_current_member_follow(socket, :unfollow)
   end
 
   def handle_event("post_reply", _params, socket) do
@@ -200,6 +220,73 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
+  defp update_current_member_follow(socket, action) do
+    case current_member_follow_attrs(socket) do
+      {:ok, attrs} ->
+        dispatch_current_member_follow(socket, action, attrs)
+
+      {:error, :forbidden} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Only current club members can follow conversations in Memba."
+         )}
+    end
+  end
+
+  defp dispatch_current_member_follow(socket, action, attrs) do
+    case run_current_member_follow_action(action, attrs) do
+      :ok ->
+        {:noreply, refresh_message_detail(socket)}
+
+      {:ok, _result} ->
+        {:noreply, refresh_message_detail(socket)}
+
+      {:error, reason} ->
+        log_follow_failure(socket, action, reason)
+
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Your conversation notification setting was not changed. Please try again."
+         )}
+    end
+  end
+
+  defp current_member_follow_attrs(socket) do
+    with %{
+           selected_club: %{club_id: club_id},
+           message: %{conversation_id: conversation_id},
+           current_member: %{id: member_id}
+         } <- socket.assigns do
+      {:ok,
+       %{
+         club_id: club_id,
+         conversation_id: conversation_id,
+         member_id: member_id
+       }}
+    else
+      _missing_follow_context -> {:error, :forbidden}
+    end
+  end
+
+  defp run_current_member_follow_action(:follow, attrs) do
+    Messaging.follow_conversation_as_current_member(attrs, consistency: :strong)
+  end
+
+  defp run_current_member_follow_action(:unfollow, attrs) do
+    Messaging.unfollow_conversation_as_current_member(attrs, consistency: :strong)
+  end
+
+  defp event_conversation_id(%{conversation_id: conversation_id})
+       when is_binary(conversation_id),
+       do: conversation_id
+
+  defp event_conversation_id(%{message_id: message_id}), do: message_id
+  defp event_conversation_id(_event), do: nil
+
   defp assign_initial_reply_state(socket) do
     socket
     |> assign(:reply_state, :composing)
@@ -254,6 +341,16 @@ defmodule MembaWeb.MemberMessageLive.Show do
       club_id: socket.assigns.selected_club.club_id,
       conversation_id: socket.assigns.message.conversation_id,
       sender_id: current_member_id(socket.assigns.current_member),
+      reason: inspect(reason)
+    )
+  end
+
+  defp log_follow_failure(socket, action, reason) do
+    Logger.error("Member conversation follow setting failed",
+      action: action,
+      club_id: socket.assigns.selected_club.club_id,
+      conversation_id: socket.assigns.message.conversation_id,
+      member_id: current_member_id(socket.assigns.current_member),
       reason: inspect(reason)
     )
   end

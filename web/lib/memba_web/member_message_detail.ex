@@ -74,6 +74,7 @@ defmodule MembaWeb.MemberMessageDetail do
 
     sender = Membership.get_person(message.sender_id)
     active_members = Membership.list_active_members_of_club(selected_club.club_id)
+    current_member = current_member_for_identity(active_members, current_identity)
     conversation_messages = Messaging.list_conversation_messages(message.message_id)
 
     %{
@@ -81,7 +82,9 @@ defmodule MembaWeb.MemberMessageDetail do
       selected_club: selected_club,
       message: message,
       sender_name: sender_name(sender),
-      current_member: current_member_for_identity(active_members, current_identity),
+      current_member: current_member,
+      can_follow_conversation: not is_nil(current_member),
+      following_conversation: following_conversation?(message, current_member),
       conversation_entries: conversation_entries(conversation_messages),
       member_email_deliverys: receipt_model.receipts,
       member_email_delivery_count: receipt_model.total_count,
@@ -101,6 +104,12 @@ defmodule MembaWeb.MemberMessageDetail do
   end
 
   defp current_member_for_identity(_active_members, _identity), do: nil
+
+  defp following_conversation?(_message, nil), do: false
+
+  defp following_conversation?(%{conversation_id: conversation_id}, %{id: member_id}) do
+    Messaging.following_conversation?(conversation_id, member_id)
+  end
 
   defp conversation_entries(messages) do
     sender_summaries =

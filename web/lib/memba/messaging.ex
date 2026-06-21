@@ -87,11 +87,43 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  Follow a conversation from an in-app current-member surface.
+
+  The raw `follow_conversation/2` command records follow state for system and
+  future email-unsubscribe workflows. Browser surfaces should use this wrapper
+  so only current club members can opt in through the app.
+  """
+  def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- follow_conversation_command(attrs),
+         :ok <- authorize_current_member_conversation_action(command),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
   Stop following a club-message conversation.
   """
   def unfollow_conversation(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- unfollow_conversation_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Stop following a conversation from an in-app current-member surface.
+
+  Email stop-follow links intentionally use the raw unfollow command so former
+  members can reduce notifications without signing in. In-app unfollow remains
+  limited to current club members.
+  """
+  def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- unfollow_conversation_command(attrs),
+         :ok <- authorize_current_member_conversation_action(command),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1055,6 +1087,17 @@ defmodule Memba.Messaging do
       :ok
     else
       {:error, :not_current_member}
+    end
+  end
+
+  defp authorize_current_member_conversation_action(command) do
+    with :ok <- authorize_reply_sender(command.club_id, command.member_id),
+         {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
+      if root_message.club_id == command.club_id do
+        :ok
+      else
+        {:error, :conversation_not_found}
+      end
     end
   end
 
