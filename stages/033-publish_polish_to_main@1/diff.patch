@@ -1,0 +1,188 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index f2671e1..d02d25c 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -95,8 +95,9 @@ Feature: Club message replies (conversations)
+       And Dana should not receive Bob's reply by email
+       And Bob should not receive his own reply by email
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: Email to the club address without reply headers starts a new club-wide message
+-      When Bob emails "Re: Trip planning night" to kmc@clubs.memba.io
++      When Bob emails "Re: Trip planning night" to everyone@kmc.clubs.memba.io
+       Then Bob should see the message "Re: Trip planning night" in Kootenay Mountaineering Club
+       And the conversation for "Trip planning night" should not show Bob's reply "Re: Trip planning night details."
+ 
+@@ -109,9 +110,10 @@ Feature: Club message replies (conversations)
+       And Pat should receive a rejection email explaining the message was not posted
+       And Pat should be told how to contact support
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: Reply headers from another club do not create a cross-club reply
+       Given Pat sent the message "Paddle planning" to Nelson Paddling Club members
+-      When Alice emails "Re: Paddle planning" to kmc@clubs.memba.io with reply headers from "Paddle planning"
++      When Alice emails "Re: Paddle planning" to everyone@kmc.clubs.memba.io with reply headers from "Paddle planning"
+       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
+       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
+ 
+diff --git a/acceptance-tests/features/email_branding.feature b/acceptance-tests/features/email_branding.feature
+index 6b21b1a..91ce85f 100644
+--- a/acceptance-tests/features/email_branding.feature
++++ b/acceptance-tests/features/email_branding.feature
+@@ -12,9 +12,9 @@ Rule: Memba transactional emails use consistent Memba branding
+ 
+ Rule: Club-message rejection emails identify the club
+ 
+-    @iteration-031 @todo-domain
++    @iteration-031 @iteration-042 @todo-domain @todo-ui
+     Scenario: Robin receives a KMC rejection email
+       Given Kootenay Mountaineering Club has the slug "kmc"
+-      When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
++      When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
+       Then Robin should receive a rejection email from "Kootenay Mountaineering Club via Memba"
+       And the rejection email should use the standard Memba footer
+diff --git a/acceptance-tests/features/member_message_deliverability.feature b/acceptance-tests/features/member_message_deliverability.feature
+index 99f02b9..de6832d 100644
+--- a/acceptance-tests/features/member_message_deliverability.feature
++++ b/acceptance-tests/features/member_message_deliverability.feature
+@@ -64,24 +64,8 @@ Rule: Members are told when a club message is not sent
+ 
+ Rule: Active members can send new club messages by email
+ 
+-    Scenario: Alice emails the KMC everyone address
+-      When Alice emails "Trip planning night" to kmc@clubs.memba.io
+-      Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+-      And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
+-      And Alice should not see Pat in the addressed members
+-      And each addressed member should receive an email from Alice via Memba
+-
+-    Scenario: Alice emails from an alternate address
+-      Given Alice's alternate email address is "alice.outdoors@example.test"
+-      When Alice emails "Trip planning night" to kmc@clubs.memba.io from "alice.outdoors@example.test"
+-      Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+-      And each addressed member should receive an email from Alice via Memba
+-
+-
+-Rule: Club email subdomains identify the club and the everyone route
+-
+     @iteration-042 @todo-domain @todo-ui
+-    Scenario: Alice emails the KMC everyone address on the club email subdomain
++    Scenario: Alice emails the KMC everyone address
+       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io
+       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+       And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
+@@ -89,12 +73,14 @@ Rule: Club email subdomains identify the club and the everyone route
+       And each addressed member should receive an email from Alice via Memba
+ 
+     @iteration-042 @todo-domain @todo-ui
+-    Scenario: Alice emails the KMC everyone address from an alternate address
++    Scenario: Alice emails from an alternate address
+       Given Alice's alternate email address is "alice.outdoors@example.test"
+       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io from "alice.outdoors@example.test"
+       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+       And each addressed member should receive an email from Alice via Memba
+ 
++Rule: Only the everyone route on a known club email subdomain is accepted
++
+     @iteration-042 @todo-domain @todo-ui
+     Scenario: Alice emails an unsupported route on KMC's club email subdomain
+       When Alice emails "Trip planning night" to committee@kmc.clubs.memba.io
+@@ -118,34 +104,39 @@ Rule: Club email subdomains identify the club and the everyone route
+ 
+ Rule: Inbound club email is rejected when it cannot be posted safely
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: An unknown sender emails the KMC everyone address
+-      When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
++      When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
+       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
+       And Robin should receive a rejection email explaining the message was not posted
+       And Robin should be told how to contact support
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: A member of another club emails the KMC everyone address
+-      When Pat emails "Trip planning night" to kmc@clubs.memba.io
++      When Pat emails "Trip planning night" to everyone@kmc.clubs.memba.io
+       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
+       And Pat should receive a rejection email explaining the message was not posted
+       And Pat should be told how to contact support
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: Alice emails an attachment to the KMC everyone address
+-      When Alice emails "Trip planning night" to kmc@clubs.memba.io with an attachment
++      When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with an attachment
+       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
+       And Alice should receive a rejection email explaining attachments are not supported
+       And Alice should be told how to contact support
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: Alice emails without a plain-text message body
+-      When Alice emails "Trip planning night" to kmc@clubs.memba.io with only an HTML body
++      When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with only an HTML body
+       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
+       And Alice should receive a rejection email explaining a plain-text message body is required
+       And Alice should be told how to contact support
+ 
+ Rule: Inbound club email body keeps only the sender's new plain-text message
+ 
++    @iteration-042 @todo-domain @todo-ui
+     Scenario: Alice emails new text above a signature and quoted message
+-      When Alice emails "Trip planning night" to kmc@clubs.memba.io with the body:
++      When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with the body:
+         """
+         Let's meet at 7pm in the clubhouse.
+ 
+diff --git a/docs/iterations/042-club-email-subdomains/plan.md b/docs/iterations/042-club-email-subdomains/plan.md
+index 461698d..289e3db 100644
+--- a/docs/iterations/042-club-email-subdomains/plan.md
++++ b/docs/iterations/042-club-email-subdomains/plan.md
+@@ -1,7 +1,7 @@
+ # Club email subdomains
+ 
+ Date: 2026-06-21
+-Status: validated
++Status: implementing
+ 
+ ## Goal
+ 
+@@ -84,18 +84,20 @@ This iteration changes the public email address convention, club resolution rule
+ Updated during planning:
+ 
+ - `acceptance-tests/features/member_message_deliverability.feature`
+-  - Added `@iteration-042 @todo-domain @todo-ui` examples for the new canonical `everyone@kmc.clubs.memba.io` accepted path, alternate sender accepted path, unsupported local parts, unknown club subdomains, and the old flat address being rejected.
+-  - Existing executable `kmc@clubs.memba.io` scenarios are left in place during planning so the current mainline remains green; implementation should update or replace them when it performs the hard cutover.
++  - Inbound club-message scenarios now describe the post-042 address convention: the accepted path, alternate sender path, unsafe-mail rejection paths, and body-stripping path use `everyone@kmc.clubs.memba.io`.
++  - Added examples for unsupported local parts, unknown club subdomains, and the old flat `kmc@clubs.memba.io` address being rejected.
+ - `acceptance-tests/features/club_message_replies.feature`
+-  - Added an `@iteration-042 @todo-domain @todo-ui` example showing a reply-by-email coming through `everyone@kmc.clubs.memba.io` while still landing in the conversation.
++  - Reply-by-email and no-header inbound examples now describe the post-042 visible destination, `everyone@kmc.clubs.memba.io`, while preserving 041's header-based reply routing rule.
++- `acceptance-tests/features/email_branding.feature`
++  - The club rejection-branding example now uses the post-042 `everyone@kmc.clubs.memba.io` address.
+ 
+-The `@todo-domain` / `@todo-ui` tags preserve the green mainline while these future-facing examples wait for implementation.
++The `@todo-domain` / `@todo-ui` tags mark scenarios that describe the post-042 truth but will fail against the current pre-042 implementation, preserving the green mainline until implementation removes or narrows those tags.
+ 
+ ## Allowed acceptance feature changes
+ 
+-- `acceptance-tests/features/member_message_deliverability.feature`: update inbound club-message scenarios from `kmc@clubs.memba.io` to `everyone@kmc.clubs.memba.io`; add examples for unsupported local parts, unknown club subdomains, and old flat address rejection; remove or narrow `@todo-domain` / `@todo-ui` as implementation makes each scenario executable.
+-- `acceptance-tests/features/club_message_replies.feature`: update or add reply-by-email examples so reply emails use `everyone@<club-slug>.clubs.memba.io` as the visible reply destination after iteration 041; preserve 039/040/041 conversation, follower, and header-routing rules.
+-- `acceptance-tests/features/email_branding.feature`: during implementation, update any inbound rejection branding examples that still use the old flat address only as needed to preserve the same branding coverage under the new address convention.
++- `acceptance-tests/features/member_message_deliverability.feature`: remove or narrow `@todo-domain` / `@todo-ui` as the post-042 `everyone@kmc.clubs.memba.io` scenarios become executable; preserve examples for unsupported local parts, unknown club subdomains, and old flat address rejection.
++- `acceptance-tests/features/club_message_replies.feature`: remove or narrow `@todo-domain` / `@todo-ui` as reply-by-email examples using `everyone@<club-slug>.clubs.memba.io` become executable; preserve 039/040/041 conversation, follower, and header-routing rules.
++- `acceptance-tests/features/email_branding.feature`: remove or narrow `@todo-domain` / `@todo-ui` from the inbound rejection branding example once the new address convention is implemented and the same branding coverage is executable.
+ - `smoke-tests/features/inbound_club_email.feature`: during implementation, update production smoke examples and support to use `everyone@test.clubs.memba.io` for the smoke club.
+ 
+ ## Designs
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 6463282..359355a 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -51,7 +51,7 @@ green than before.
+ | 039 | 2026-06-19 | merged | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
+ | 040 | 2026-06-19 | merged | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
+ | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
+-| 042 | 2026-06-21 | validated | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
++| 042 | 2026-06-21 | implementing | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
+ 
+ Status notes:
+ 
