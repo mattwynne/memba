@@ -10,10 +10,10 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
       "data" => %{
         "email_id" => "email_123",
         "from" => "Alice Example <Alice@Example.COM>",
-        "to" => ["KMC <kmc@clubs.memba.io>"],
+        "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
         "cc" => [
           %{"email" => "bob@example.com", "name" => "Bob Example"},
-          "NPC <npc@clubs.memba.io>"
+          "NPC <everyone@npc.clubs.memba.io>"
         ],
         "bcc" => "Archive <archive@example.com>",
         "subject" => " Trip planning night ",
@@ -40,9 +40,9 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
               provider_event_id: "evt_123",
               from_address: "alice@example.com",
               recipient_addresses: [
-                "kmc@clubs.memba.io",
+                "everyone@kmc.clubs.memba.io",
                 "bob@example.com",
-                "npc@clubs.memba.io",
+                "everyone@npc.clubs.memba.io",
                 "archive@example.com"
               ],
               subject: "Trip planning night",
@@ -164,7 +164,7 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
         "id" => "email_fallback_id",
         "email_id" => "email_123",
         "from" => "alice@example.com",
-        "to" => ["kmc@clubs.memba.io"],
+        "to" => ["everyone@kmc.clubs.memba.io"],
         "subject" => "Trip planning night",
         "text" => "Bring route ideas."
       }

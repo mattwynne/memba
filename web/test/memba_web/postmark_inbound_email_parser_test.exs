@@ -13,12 +13,12 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
         "Name" => "Alice Example",
         "MailboxHash" => ""
       },
-      "OriginalRecipient" => "kmc@clubs.memba.io",
-      "To" => "KMC <kmc@clubs.memba.io>, Board <board@example.com>",
+      "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
+      "To" => "KMC <everyone@kmc.clubs.memba.io>, Board <board@example.com>",
       "ToFull" => [
-        %{"Email" => "kmc@clubs.memba.io", "Name" => "KMC", "MailboxHash" => ""}
+        %{"Email" => "everyone@kmc.clubs.memba.io", "Name" => "KMC", "MailboxHash" => ""}
       ],
-      "Cc" => "NPC <npc@clubs.memba.io>",
+      "Cc" => "NPC <everyone@npc.clubs.memba.io>",
       "CcFull" => [
         %{"Email" => "bob@example.com", "Name" => "Bob Example", "MailboxHash" => ""}
       ],
@@ -50,10 +50,10 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
               provider_message_id: "73e6d360-66eb-11e1-8e72-a8904824019b",
               from_address: "alice@example.com",
               recipient_addresses: [
-                "kmc@clubs.memba.io",
+                "everyone@kmc.clubs.memba.io",
                 "board@example.com",
                 "bob@example.com",
-                "npc@clubs.memba.io",
+                "everyone@npc.clubs.memba.io",
                 "archive@example.com",
                 "audit@example.com"
               ],
@@ -117,7 +117,7 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
   test "uses OriginalRecipient when the visible recipient is a Postmark forwarding address" do
     payload =
       valid_payload(%{
-        "OriginalRecipient" => "KMC@clubs.memba.io",
+        "OriginalRecipient" => "KMC Everyone <Everyone@KMC.Clubs.Memba.IO>",
         "To" => "inbound-stream@example.postmarkapp.com",
         "ToFull" => [
           %{"Email" => "inbound-stream@example.postmarkapp.com", "Name" => "Postmark Inbound"}
@@ -127,7 +127,7 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
     assert {:ok,
             %{
               recipient_addresses: [
-                "kmc@clubs.memba.io",
+                "everyone@kmc.clubs.memba.io",
                 "inbound-stream@example.postmarkapp.com"
               ]
             }} = PostmarkInboundEmailParser.parse(payload)
@@ -213,8 +213,8 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
         "MessageID" => "73e6d360-66eb-11e1-8e72-a8904824019b",
         "MessageStream" => "inbound",
         "From" => "Alice Example <alice@example.com>",
-        "To" => "KMC <kmc@clubs.memba.io>",
-        "OriginalRecipient" => "kmc@clubs.memba.io",
+        "To" => "KMC <everyone@kmc.clubs.memba.io>",
+        "OriginalRecipient" => "everyone@kmc.clubs.memba.io",
         "Subject" => "Trip planning night",
         "TextBody" => "Bring route ideas."
       },
