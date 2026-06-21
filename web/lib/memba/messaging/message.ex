@@ -21,6 +21,7 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryBounced
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -197,7 +198,7 @@ defmodule Memba.Messaging.Message do
   end
 
   defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
-    conversation_id = conversation_id || message_id
+    conversation_id = conversation_id || ConversationReference.root_conversation_id(message_id)
 
     with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
          :ok <- validate_optional_id(:message, reply_to_message_id, :invalid_reply_to_message_id),

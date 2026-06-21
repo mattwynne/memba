@@ -9,6 +9,7 @@ defmodule Memba.Messaging.Projectors.Message do
     name: "Memba.Messaging.Projectors.Message",
     consistency: :strong
 
+  alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.Message, as: MessageProjection
 
@@ -17,7 +18,8 @@ defmodule Memba.Messaging.Projectors.Message do
       message_id: event.message_id,
       club_id: event.club_id,
       sender_id: event.sender_id,
-      conversation_id: event.conversation_id || event.message_id,
+      conversation_id:
+        event.conversation_id || ConversationReference.root_conversation_id(event.message_id),
       reply_to_message_id: event.reply_to_message_id,
       subject: event.subject,
       body: event.body

@@ -16,6 +16,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
@@ -871,7 +872,7 @@ defmodule Memba.Messaging do
          club_id: root_message.club_id,
          sender_id: sender_id,
          conversation_id: conversation_id,
-         reply_to_message_id: conversation_id,
+         reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
          subject: root_message.subject,
          body: body,
          recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
