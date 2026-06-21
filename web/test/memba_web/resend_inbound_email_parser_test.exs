@@ -57,8 +57,34 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
                 }
               ],
               original_message_id: "<email_123@example.com>",
+              in_reply_to_message_ids: [],
+              references_message_ids: [],
               headers: [
                 %{"name" => "Message-ID", "value" => "<email_123@example.com>"}
+              ]
+            }} = ResendInboundEmailParser.parse(payload)
+  end
+
+  test "parses In-Reply-To and all References Message-IDs from Resend headers" do
+    payload =
+      valid_payload()
+      |> put_in(["data", "headers"], %{
+        "In-Reply-To" => " \n <memba.parent-delivery.parent-message@messages.memba.io> ",
+        "References" =>
+          "<memba.root-delivery.root-message@messages.memba.io>\n\t" <>
+            "<external-parent@example.net>, " <>
+            "memba.latest-delivery.latest-message@messages.memba.io"
+      })
+
+    assert {:ok,
+            %{
+              in_reply_to_message_ids: [
+                "<memba.parent-delivery.parent-message@messages.memba.io>"
+              ],
+              references_message_ids: [
+                "<memba.root-delivery.root-message@messages.memba.io>",
+                "<external-parent@example.net>",
+                "<memba.latest-delivery.latest-message@messages.memba.io>"
               ]
             }} = ResendInboundEmailParser.parse(payload)
   end

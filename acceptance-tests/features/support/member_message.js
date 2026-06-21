@@ -118,6 +118,7 @@ function resendInboundEmailPayload({
   attachments,
   eventId = randomUUID(),
   fromAddress,
+  headers,
   htmlBody,
   providerMessageId = randomUUID(),
   subject,
@@ -138,6 +139,10 @@ function resendInboundEmailPayload({
 
   if (attachments !== undefined) {
     data.attachments = attachments;
+  }
+
+  if (headers !== undefined) {
+    data.headers = headers;
   }
 
   return {
@@ -1088,6 +1093,7 @@ async function sendInboundClubEmail(
   {
     attachments,
     fromAddress,
+    headers,
     htmlBody,
     htmlOnly = false,
     providerMessageId,
@@ -1106,6 +1112,7 @@ async function sendInboundClubEmail(
   const payload = resendInboundEmailPayload({
     attachments,
     fromAddress: senderEmail,
+    headers,
     htmlBody: messageHtmlBody,
     providerMessageId,
     subject,
@@ -1138,6 +1145,64 @@ async function sendInboundClubEmail(
   if (expect !== false) {
     await waitForInboundWebhookAccepted(world, payload);
   }
+
+  return world;
+}
+
+async function sendInboundClubEmailReply(
+  world,
+  senderName,
+  subject,
+  body,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const outboundMessageId = await outboundMessageIdForSubject(world, subject, senderName);
+  const rootMessage = world.messages[subject];
+  assert.ok(rootMessage, `Expected message ${JSON.stringify(subject)} before replying by email`);
+
+  const club = clubById(world, rootMessage.clubId);
+  assert.ok(club && club.slug, `Expected club slug for message ${JSON.stringify(subject)}`);
+
+  const providerMessageId = `acceptance-reply-${randomUUID()}`;
+  const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+
+  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, `${club.slug}@clubs.memba.io`, {
+    expect,
+    headers: { "In-Reply-To": outboundMessageId },
+    providerMessageId,
+    textBody: body
+  });
+
+  world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
+
+  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
+
+  return world;
+}
+
+async function sendInboundClubEmailWithReplyHeaders(
+  world,
+  senderName,
+  subject,
+  toAddress,
+  referencedSubject,
+  { expect = playwrightExpect, textBody } = {}
+) {
+  ensureState(world);
+
+  const outboundMessageId = await outboundMessageIdForSubject(world, referencedSubject, senderName);
+  const providerMessageId = `acceptance-referenced-reply-${randomUUID()}`;
+
+  await sendInboundClubEmail(world, senderName, subject, toAddress, {
+    expect,
+    headers: { "In-Reply-To": outboundMessageId },
+    providerMessageId,
+    textBody: textBody ?? `${subject} details.`
+  });
+
+  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
 
   return world;
 }
@@ -1437,6 +1502,45 @@ async function assertConversationShowsReply(
     conversationReplyRow(world, senderName, body),
     `${senderName}'s reply ${JSON.stringify(body)} in conversation ${JSON.stringify(subject)}`,
     { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertConversationDoesNotShowReply(world, subject, senderName, body) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} before checking its conversation`);
+
+  const sender = world.people[senderName];
+  assert.ok(sender, `Expected ${senderName} to have been created`);
+
+  const result = serverCommands.runCommand(
+    `
+conversation_id = Map.fetch!(payload, "conversationId")
+sender_id = Map.fetch!(payload, "senderId")
+body = Map.fetch!(payload, "body")
+
+found? =
+  conversation_id
+  |> Memba.Messaging.list_conversation_messages()
+  |> Enum.any?(fn message ->
+    message.sender_id == sender_id and message.body == body and message.reply_to_message_id != nil
+  end)
+
+%{found: found?}
+`,
+    {
+      body,
+      conversationId: message.messageId,
+      senderId: sender.personId
+    }
+  );
+
+  assertFinalBrowserState(
+    `${senderName}'s reply ${JSON.stringify(body)} should not appear in ${JSON.stringify(subject)}`,
+    () => assert.equal(result.found, false)
   );
 
   return world;
@@ -2753,6 +2857,92 @@ function replyKey(subject, senderName, body) {
   return `${subject}\u0000${senderName}\u0000${body}`;
 }
 
+async function outboundMessageIdForSubject(world, subject, preferredRecipientName) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} before finding an outbound Message-ID`);
+
+  const facts = await testLocalDeliveryFacts(world);
+  const candidates = facts.filter((fact) => fact.message_id === message.messageId);
+
+  assert.ok(
+    candidates.length > 0,
+    `Expected local delivery facts for ${JSON.stringify(subject)}; saw ${JSON.stringify(facts.map(mailboxEmailSummary))}`
+  );
+
+  const preferredRecipient = preferredRecipientName && world.people[preferredRecipientName];
+  const preferred =
+    preferredRecipient &&
+    candidates.find(
+      (fact) =>
+        fact.recipient_id === preferredRecipient.personId ||
+        fact.recipient_name === preferredRecipientName ||
+        fact.recipient_address === preferredRecipient.email
+    );
+
+  const selected = preferred || candidates[0];
+  const outboundMessageId = selected.outbound_message_id;
+
+  assert.ok(
+    outboundMessageId,
+    `Expected outbound Message-ID for ${JSON.stringify(subject)}; saw ${JSON.stringify(selected)}`
+  );
+
+  return outboundMessageId;
+}
+
+function recordInboundReplyIfAccepted(world, providerMessageId, senderName) {
+  const result = serverCommands.runCommand(
+    `
+provider_message_id = Map.fetch!(payload, "providerMessageId")
+source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
+
+message =
+  case source && source.message_id do
+    nil -> nil
+    message_id -> Memba.Messaging.get_message(message_id)
+  end
+
+%{
+  source: if(source, do: %{
+    status: source.status,
+    messageId: source.message_id,
+    rejectionReason: source.rejection_reason
+  }, else: nil),
+  message: if(message, do: %{
+    body: message.body,
+    clubId: message.club_id,
+    conversationId: message.conversation_id,
+    messageId: message.message_id,
+    replyToMessageId: message.reply_to_message_id,
+    senderId: message.sender_id,
+    subject: message.subject
+  }, else: nil)
+}
+`,
+    { providerMessageId }
+  );
+
+  const message = result.message;
+
+  if (!message || !message.replyToMessageId) {
+    return;
+  }
+
+  const reply = {
+    body: message.body,
+    clubId: message.clubId,
+    conversationId: message.conversationId,
+    messageId: message.messageId,
+    senderName,
+    subject: message.subject
+  };
+
+  world.replies[replyKey(reply.subject, senderName, reply.body)] = reply;
+  world.lastReply = reply;
+}
+
 function latestReplyFor(world, senderName) {
   ensureState(world);
 
@@ -3097,6 +3287,7 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
+  assertConversationDoesNotShowReply,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,
@@ -3157,6 +3348,8 @@ module.exports = {
   openMessage,
   removeMemberFromClub,
   restoreClubMessageSending,
+  sendInboundClubEmailReply,
+  sendInboundClubEmailWithReplyHeaders,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,

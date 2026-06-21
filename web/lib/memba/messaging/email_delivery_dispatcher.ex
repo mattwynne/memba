@@ -360,6 +360,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          message_id: message.message_id,
          club_id: message.club_id,
          delivery_id: delivery.delivery_id,
+         outbound_message_id: delivery.outbound_message_id,
          recipient_id: delivery.recipient_id,
          recipient_name: delivery.recipient_name,
          recipient_address: delivery.recipient_address,
@@ -369,6 +370,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          sender_address: sender_address,
          conversation_id: message.conversation_id,
          reply_to_message_id: message.reply_to_message_id,
+         in_reply_to_outbound_message_id:
+           Map.get(reply_context, :in_reply_to_outbound_message_id),
+         references_outbound_message_ids:
+           Map.get(reply_context, :references_outbound_message_ids),
          conversation_url: Map.get(reply_context, :conversation_url),
          stop_follow_url: Map.get(reply_context, :stop_follow_url),
          reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
@@ -431,6 +436,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp reply_context(%MessageProjection{} = message, club, %EmailDeliveryProjection{} = delivery) do
     message
     |> base_reply_context(club, delivery)
+    |> Map.merge(reply_threading_context(message, delivery))
     |> Map.merge(replied_to_message_context(message.reply_to_message_id))
   end
 
@@ -478,6 +484,54 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp person_name(%{name: name}), do: name
   defp person_name(_person), do: nil
+
+  defp reply_threading_context(
+         %MessageProjection{
+           conversation_id: conversation_id,
+           reply_to_message_id: reply_to_message_id
+         },
+         %EmailDeliveryProjection{recipient_id: recipient_id}
+       ) do
+    in_reply_to_outbound_message_id =
+      outbound_message_id_for_message(reply_to_message_id, recipient_id)
+
+    references_outbound_message_ids =
+      [conversation_id, reply_to_message_id]
+      |> Enum.uniq()
+      |> Enum.map(&outbound_message_id_for_message(&1, recipient_id))
+      |> Enum.reject(&is_nil/1)
+
+    %{
+      in_reply_to_outbound_message_id: in_reply_to_outbound_message_id,
+      references_outbound_message_ids: references_outbound_message_ids
+    }
+  end
+
+  defp outbound_message_id_for_message(nil, _recipient_id), do: nil
+
+  defp outbound_message_id_for_message(message_id, recipient_id) do
+    same_recipient_outbound_message_id(message_id, recipient_id) ||
+      first_outbound_message_id(message_id)
+  end
+
+  defp same_recipient_outbound_message_id(message_id, recipient_id) do
+    EmailDeliveryProjection
+    |> where([delivery], delivery.message_id == ^message_id)
+    |> where([delivery], delivery.recipient_id == ^recipient_id)
+    |> order_by([delivery], asc: delivery.inserted_at, asc: delivery.delivery_id)
+    |> select([delivery], delivery.outbound_message_id)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  defp first_outbound_message_id(message_id) do
+    EmailDeliveryProjection
+    |> where([delivery], delivery.message_id == ^message_id)
+    |> order_by([delivery], asc: delivery.inserted_at, asc: delivery.delivery_id)
+    |> select([delivery], delivery.outbound_message_id)
+    |> limit(1)
+    |> Repo.one()
+  end
 
   defp log_dispatch_claimed(%EmailDeliveryProjection{} = delivery) do
     Logger.info(

@@ -9,6 +9,7 @@ defmodule Memba.Messaging.InboundEmail do
 
   alias Memba.ID
   alias Memba.Messaging.InboundEmailAttachment
+  alias Memba.Messaging.InboundEmailReplyHeaders
 
   @enforce_keys [
     :provider,
@@ -27,6 +28,8 @@ defmodule Memba.Messaging.InboundEmail do
     :text_body,
     :html_body,
     :original_message_id,
+    in_reply_to_message_ids: [],
+    references_message_ids: [],
     attachments: []
   ]
 
@@ -40,6 +43,8 @@ defmodule Memba.Messaging.InboundEmail do
           text_body: String.t() | nil,
           html_body: String.t() | nil,
           original_message_id: String.t() | nil,
+          in_reply_to_message_ids: [String.t()],
+          references_message_ids: [String.t()],
           attachments: [InboundEmailAttachment.t()]
         }
 
@@ -73,6 +78,8 @@ defmodule Memba.Messaging.InboundEmail do
              fetch_optional(attrs, :original_message_id),
              :invalid_original_message_id
            ),
+         {:ok, in_reply_to_message_ids} <- normalize_message_ids(in_reply_to_values(attrs)),
+         {:ok, references_message_ids} <- normalize_message_ids(references_values(attrs)),
          {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
       {:ok,
        %__MODULE__{
@@ -85,6 +92,8 @@ defmodule Memba.Messaging.InboundEmail do
          text_body: text_body,
          html_body: html_body,
          original_message_id: original_message_id,
+         in_reply_to_message_ids: in_reply_to_message_ids,
+         references_message_ids: references_message_ids,
          attachments: attachments
        }}
     end
@@ -150,6 +159,10 @@ defmodule Memba.Messaging.InboundEmail do
   defp normalize_optional_body(value, _error) when is_binary(value), do: {:ok, value}
   defp normalize_optional_body(_value, error), do: {:error, error}
 
+  defp normalize_message_ids(value) do
+    {:ok, InboundEmailReplyHeaders.message_ids(value)}
+  end
+
   defp normalize_recipient_addresses(addresses) when is_list(addresses) and addresses != [] do
     addresses
     |> Enum.reduce_while({:ok, []}, fn address, {:ok, normalized_addresses} ->
@@ -209,4 +222,20 @@ defmodule Memba.Messaging.InboundEmail do
   end
 
   defp normalize_attachments(_attachments), do: {:error, :invalid_attachments}
+
+  defp in_reply_to_values(attrs) do
+    [
+      fetch_optional(attrs, :in_reply_to_message_ids),
+      fetch_optional(attrs, :in_reply_to_message_id)
+    ]
+  end
+
+  defp references_values(attrs) do
+    [
+      fetch_optional(attrs, :references_message_ids),
+      fetch_optional(attrs, :reference_message_ids),
+      fetch_optional(attrs, :references_message_id),
+      fetch_optional(attrs, :reference_message_id)
+    ]
+  end
 end

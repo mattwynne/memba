@@ -6,6 +6,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Recipient
 
   test "SendMessage is projected into public Messaging message and delivery queries" do
@@ -59,6 +60,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
              %EmailDeliveryProjection{
                delivery_id: ^alice_delivery_id,
                message_id: ^message_id,
+               outbound_message_id: alice_outbound_message_id,
                recipient_id: ^sender_id,
                recipient_name: "Alice",
                recipient_address: "alice@example.com",
@@ -74,6 +76,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
              %EmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
                message_id: ^message_id,
+               outbound_message_id: bob_outbound_message_id,
                recipient_id: ^bob_id,
                recipient_name: "Bob",
                recipient_address: "bob@example.com",
@@ -87,6 +90,30 @@ defmodule Memba.Messaging.MessageProjectionTest do
                failed_at: nil
              }
            ] = Messaging.list_recipient_deliveries(message_id)
+
+    assert alice_outbound_message_id ==
+             OutboundMessageID.for_delivery(alice_delivery_id, message_id)
+
+    assert bob_outbound_message_id == OutboundMessageID.for_delivery(bob_delivery_id, message_id)
+
+    assert %{
+             outbound_message_id: ^alice_outbound_message_id,
+             delivery_id: ^alice_delivery_id,
+             message_id: ^message_id,
+             conversation_id: ^message_id,
+             club_id: ^club_id
+           } = Messaging.get_outbound_message_reference(alice_outbound_message_id)
+
+    assert %{
+             outbound_message_id: ^bob_outbound_message_id,
+             delivery_id: ^bob_delivery_id,
+             message_id: ^message_id,
+             conversation_id: ^message_id,
+             club_id: ^club_id
+           } =
+             Messaging.get_outbound_message_reference(String.trim(bob_outbound_message_id, "<>"))
+
+    assert is_nil(Messaging.get_outbound_message_reference("<unknown@example.test>"))
 
     assert %EmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,

@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
   @primary_key {:delivery_id, :string, autogenerate: false}
   schema "messaging_email_deliveries" do
     field :message_id, :string
+    field :outbound_message_id, :string
     field :recipient_id, :string
     field :recipient_name, :string
     field :recipient_address, :string

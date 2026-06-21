@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.OutboundMessageID
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
@@ -68,10 +69,14 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
   end
 
   defp email_delivery_request do
+    message_id = Memba.ID.generate(:message)
+    delivery_id = Memba.ID.generate(:delivery)
+
     %EmailDeliveryRequest{
-      message_id: Memba.ID.generate(:message),
+      message_id: message_id,
       club_id: Memba.ID.generate(:club),
-      delivery_id: Memba.ID.generate(:delivery),
+      delivery_id: delivery_id,
+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
       recipient_id: Memba.ID.generate(:person),
       recipient_name: "Alice",
       recipient_address: "alice@example.com",

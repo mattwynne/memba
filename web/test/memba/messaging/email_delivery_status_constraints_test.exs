@@ -2,6 +2,7 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
   use Memba.DataCase, async: true
 
   alias Memba.Messaging.EmailDeliveryStatus
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   @valid_statuses EmailDeliveryStatus.valid_statuses()
@@ -55,9 +56,13 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
   end
 
   defp email_delivery_row(attrs) when is_list(attrs) do
+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+
     %{
-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      delivery_id: delivery_id,
+      message_id: message_id,
+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       recipient_address: Keyword.fetch!(attrs, :recipient_address),
