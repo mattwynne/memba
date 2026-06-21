@@ -147,3 +147,75 @@ Impact:
 - Delivery-status webhook waits now synchronize on committed read-model changes rather than browser page polling.
 - Negative assertions no longer need to wait for a fixed timeout just to prove absence when the relevant projections have already caught up.
 - The projection flake prevention mechanism is now split along standard event-sourced lines: read-model change notifications for positive waits, projection barriers for read-your-writes and absence checks.
+
+## Additional observation: 2026-06-21
+
+### Context
+
+While validating the Fabro commit-attribution workflow fix, the local committed state was `d40520394` (`kaizen: fix Fabro commit attribution`). The workflow step was the required quality gate after changing executable Fabro workflow scripts:
+
+```sh
+./bin/dev check
+```
+
+### Expected standard
+
+After a workflow/tooling fix, `./bin/dev check` should provide a trustworthy pass/fail signal for the committed change. If a browser acceptance scenario fails, the failure should identify either a product regression or a clearly diagnosed harness/synchronization issue.
+
+### What happened
+
+The check reached browser acceptance and failed in an unrelated member-message scenario:
+
+```text
+Scenario: Alice's club-message email subject includes the club slug
+features/member_message_deliverability.feature:25
+
+Error: Projection timing timeout: timed out waiting for projected browser UI: member compose success for "Trip planning night".
+Last assertion error: expect(locator).toBeVisible() failed
+
+Locator: locator('#member-message-compose[data-compose-state="sent"]')
+Expected: visible
+Timeout: 10000ms
+Error: element(s) not found
+```
+
+The attached Phoenix server log included:
+
+```text
+[error] Member message send failed
+```
+
+A full `./bin/dev check` run immediately before the final commit had passed on the same intended diff, so this had the shape of a recurrence rather than a deterministic failure caused by the Fabro identity change.
+
+### Impact
+
+The failure invalidated the final quality-gate signal for a delivery-machinery change that did not touch member-message product code. It also triggered an unnecessary attempt to rerun a narrower acceptance command, which started running more of the suite than intended because the Cucumber CLI path was merged with configured paths.
+
+Severity: recurring quality-gate trust problem. It slows delivery and makes it harder to tell whether a workflow/script change is safe to hand off.
+
+### What allowed it to happen
+
+The earlier fixes removed several setup/projection timing hazards, but this scenario still waits for a browser-visible projected compose success state through `waitForProjectedVisible` / `withProjectionWait` in `acceptance-tests/features/support/member_message.js`. That path still has a fixed default projection timeout of 10 seconds and reports the visible UI timeout as a scenario failure.
+
+The failure also surfaced only a generic `Member message send failed` server log line in the Cucumber attachment, without enough immediate detail to distinguish projection lag, LiveView state, command dispatch failure, email-provider test double failure, or another application-side error.
+
+### Observations
+
+- The failing wait target differed from the original June 4 row-setup failures: this time it was `#member-message-compose[data-compose-state="sent"]` after sending a member message.
+- The failure happened inside the required `dev check` gate after a Fabro workflow-script change, not during work on member-message behavior.
+- The reported timeout was the same fixed 10-second projection wait shape.
+- The scenario immediately preceding it, `Alice sends a club message`, passed in the same run, so the failure was not an obvious suite-wide member-message outage.
+- The existing note had been marked resolved for earlier setup-row projection flakes, which means the remaining timing/error-reporting weakness is narrower or in a different wait path.
+
+### Open questions
+
+- What exactly caused `Member message send failed` in this run?
+- Is the missing compose success state caused by true command/send failure, projection lag, a LiveView state update issue, or test harness synchronization?
+- Should member-message send acceptance steps wait on a stronger application/event boundary before asserting the browser compose state?
+- Should Cucumber attachments include the underlying server exception for `Member message send failed` so the first failure report is diagnostic without log archaeology?
+
+### Possible prevention ideas
+
+- Add richer diagnostics around member-message send failures in acceptance attachments: relevant server exception, message/event IDs, current URL, compose form state, and recent read-model/projection status.
+- Replace the compose-success browser-only wait with a read-model change, projection barrier, or explicit support signal that proves the send command and projections have reached the state the UI is expected to show.
+- Add a documented one-scenario rerun command that avoids Cucumber's configured-path merge surprise.
