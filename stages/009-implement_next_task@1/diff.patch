@@ -1,0 +1,966 @@
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+index b0de0f9..4113b2c 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
++- [x] 001 Add follow/unfollow command(s)/event(s) and a per-(member, conversation) follow read model; auto-follow the sender on conversation creation and a replier on reply (from the 039 events).
+ - [ ] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
+ - [ ] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
+ - [ ] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index c594543..d37a1d9 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -22,6 +22,7 @@ config :memba,
+     :membership_person_email_addresses,
+     :membership_people,
+     :messaging_messages,
++    :messaging_conversation_follows,
+     :messaging_email_deliveries,
+     :messaging_member_email_deliveries,
+     :messaging_memba_staff_email_deliveries,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 27eb075..abc2ec6 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -19,6 +19,7 @@ defmodule Memba.Application do
+        dispatch_enabled:
+          Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
+       Memba.Messaging.Projectors.Message,
++      Memba.Messaging.Projectors.ConversationFollow,
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+diff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex
+index a45fdd4..cf7cd8d 100644
+--- a/web/lib/memba/id.ex
++++ b/web/lib/memba/id.ex
+@@ -14,6 +14,7 @@ defmodule Memba.ID do
+     membership: "mem",
+     message: "msg",
+     delivery: "del",
++    conversation_follow: "cfl",
+     inbound_email: "inb",
+     email_address: "ead",
+     onboarding_request: "req",
+@@ -30,6 +31,7 @@ defmodule Memba.ID do
+           | :membership
+           | :message
+           | :delivery
++          | :conversation_follow
+           | :inbound_email
+           | :email_address
+           | :onboarding_request
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 79193bf..dcf9fef 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -8,6 +8,7 @@ defmodule Memba.Messaging do
+   alias Memba.Membership
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.AcceptInboundClubEmail
++  alias Memba.Messaging.Commands.FollowConversation
+   alias Memba.Messaging.Commands.PostMessageReply
+   alias Memba.Messaging.Commands.RejectInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+@@ -16,7 +17,9 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Commands.UnfollowConversation
+   alias Memba.Messaging.ConversationReference
++  alias Memba.Messaging.ConversationFollowers
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.InboundClubAuthorization
+   alias Memba.Messaging.InboundClubDestination
+@@ -25,6 +28,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.InboundEmail
+   alias Memba.Messaging.InboundEmailBody
+   alias Memba.Messaging.InboundEmailReceipt
++  alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+@@ -67,6 +71,32 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Follow a club-message conversation for reply notifications.
++
++  This command records follow state only. Caller-facing authorization, such as
++  ensuring a person is a current club member before opting in from the app, is
++  applied by the surfaces that expose this capability.
++  """
++  def follow_conversation(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- follow_conversation_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
++  @doc """
++  Stop following a club-message conversation.
++  """
++  def unfollow_conversation(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- unfollow_conversation_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
+   @doc """
+   Build a provider-neutral command for an inbound club-message email.
+ 
+@@ -248,6 +278,50 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Return a projected follow state for a member in a conversation.
++
++  Invalid IDs or missing follow rows return `nil`.
++  """
++  def get_conversation_follow(conversation_id, member_id) do
++    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
++         {:ok, member_id} <- ID.cast(:person, member_id) do
++      Repo.get(
++        ConversationFollowProjection,
++        ConversationFollowers.follow_id(conversation_id, member_id)
++      )
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Return whether a member currently follows a conversation.
++  """
++  def following_conversation?(conversation_id, member_id) do
++    case get_conversation_follow(conversation_id, member_id) do
++      %ConversationFollowProjection{following: true} -> true
++      _not_following -> false
++    end
++  end
++
++  @doc """
++  List current projected followers for a conversation.
++
++  This is the raw Messaging follow state. Delivery eligibility that depends on
++  current club membership is applied by reply-delivery code.
++  """
++  def list_conversation_followers(conversation_id) do
++    with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
++      ConversationFollowProjection
++      |> where([follow], follow.conversation_id == ^conversation_id and follow.following == true)
++      |> order_by([follow], asc: follow.member_id)
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   List projected messages for the Memba staff operations Messages index.
+ 
+@@ -880,6 +954,32 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp follow_conversation_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
++         {:ok, member_id} <- fetch_required(attrs, :member_id) do
++      {:ok,
++       %FollowConversation{
++         club_id: club_id,
++         conversation_id: conversation_id,
++         member_id: member_id
++       }}
++    end
++  end
++
++  defp unfollow_conversation_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
++         {:ok, member_id} <- fetch_required(attrs, :member_id) do
++      {:ok,
++       %UnfollowConversation{
++         club_id: club_id,
++         conversation_id: conversation_id,
++         member_id: member_id
++       }}
++    end
++  end
++
+   defp report_email_delivery_delivered_command(attrs) do
+     with {:ok, message_id} <- fetch_required(attrs, :message_id),
+          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
+diff --git a/web/lib/memba/messaging/commands/follow_conversation.ex b/web/lib/memba/messaging/commands/follow_conversation.ex
+new file mode 100644
+index 0000000..0797c06
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/follow_conversation.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.FollowConversation do
++  @moduledoc """
++  Command to follow a club-message conversation for reply notifications.
++  """
++
++  @enforce_keys [:club_id, :conversation_id, :member_id]
++  defstruct [:club_id, :conversation_id, :member_id]
++end
+diff --git a/web/lib/memba/messaging/commands/unfollow_conversation.ex b/web/lib/memba/messaging/commands/unfollow_conversation.ex
+new file mode 100644
+index 0000000..f1ef25d
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/unfollow_conversation.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.UnfollowConversation do
++  @moduledoc """
++  Command to stop following a club-message conversation.
++  """
++
++  @enforce_keys [:club_id, :conversation_id, :member_id]
++  defstruct [:club_id, :conversation_id, :member_id]
++end
+diff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex
+new file mode 100644
+index 0000000..3f4b9ab
+--- /dev/null
++++ b/web/lib/memba/messaging/conversation_followers.ex
+@@ -0,0 +1,103 @@
++defmodule Memba.Messaging.ConversationFollowers do
++  @moduledoc """
++  Aggregate tracking follower state for one message conversation.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.ID
++  alias Memba.Messaging.Commands.FollowConversation
++  alias Memba.Messaging.Commands.UnfollowConversation
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.ConversationUnfollowed
++
++  @behaviour Aggregate
++
++  defstruct [:conversation_id, :club_id, follower_ids: MapSet.new()]
++
++  @impl Aggregate
++  def execute(%__MODULE__{} = conversation, %FollowConversation{} = command) do
++    with :ok <- validate_command(command),
++         :ok <- validate_same_conversation(conversation, command),
++         :ok <- validate_same_club(conversation, command) do
++      if MapSet.member?(conversation.follower_ids, command.member_id) do
++        []
++      else
++        %ConversationFollowed{
++          follow_id: follow_id(command.conversation_id, command.member_id),
++          club_id: command.club_id,
++          conversation_id: command.conversation_id,
++          member_id: command.member_id
++        }
++      end
++    end
++  end
++
++  def execute(%__MODULE__{} = conversation, %UnfollowConversation{} = command) do
++    with :ok <- validate_command(command),
++         :ok <- validate_same_conversation(conversation, command),
++         :ok <- validate_same_club(conversation, command) do
++      if MapSet.member?(conversation.follower_ids, command.member_id) do
++        %ConversationUnfollowed{
++          follow_id: follow_id(command.conversation_id, command.member_id),
++          club_id: command.club_id,
++          conversation_id: command.conversation_id,
++          member_id: command.member_id
++        }
++      else
++        []
++      end
++    end
++  end
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = conversation, %ConversationFollowed{} = event) do
++    %__MODULE__{
++      conversation
++      | conversation_id: event.conversation_id,
++        club_id: event.club_id,
++        follower_ids: MapSet.put(conversation.follower_ids, event.member_id)
++    }
++  end
++
++  def apply(%__MODULE__{} = conversation, %ConversationUnfollowed{} = event) do
++    %__MODULE__{
++      conversation
++      | conversation_id: event.conversation_id,
++        club_id: event.club_id,
++        follower_ids: MapSet.delete(conversation.follower_ids, event.member_id)
++    }
++  end
++
++  def follow_id(conversation_id, member_id) do
++    ID.deterministic(:conversation_follow, [conversation_id, member_id])
++  end
++
++  defp validate_command(command) do
++    with :ok <- validate_id(:club, command.club_id, :invalid_club_id),
++         :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id) do
++      validate_id(:person, command.member_id, :invalid_member_id)
++    end
++  end
++
++  defp validate_same_conversation(%__MODULE__{conversation_id: nil}, _command), do: :ok
++
++  defp validate_same_conversation(%__MODULE__{conversation_id: conversation_id}, %{
++         conversation_id: conversation_id
++       }) do
++    :ok
++  end
++
++  defp validate_same_conversation(%__MODULE__{}, _command),
++    do: {:error, :conversation_id_mismatch}
++
++  defp validate_same_club(%__MODULE__{club_id: nil}, _command), do: :ok
++  defp validate_same_club(%__MODULE__{club_id: club_id}, %{club_id: club_id}), do: :ok
++  defp validate_same_club(%__MODULE__{}, _command), do: {:error, :club_id_mismatch}
++
++  defp validate_id(type, value, error) do
++    case ID.cast(type, value) do
++      {:ok, ^value} -> :ok
++      _other -> {:error, error}
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/events/conversation_followed.ex b/web/lib/memba/messaging/events/conversation_followed.ex
+new file mode 100644
+index 0000000..7b56d06
+--- /dev/null
++++ b/web/lib/memba/messaging/events/conversation_followed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.ConversationFollowed do
++  @moduledoc """
++  Event raised when a member follows a club-message conversation.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:follow_id, :club_id, :conversation_id, :member_id]
++  defstruct [:follow_id, :club_id, :conversation_id, :member_id]
++end
+diff --git a/web/lib/memba/messaging/events/conversation_unfollowed.ex b/web/lib/memba/messaging/events/conversation_unfollowed.ex
+new file mode 100644
+index 0000000..4d1bdc5
+--- /dev/null
++++ b/web/lib/memba/messaging/events/conversation_unfollowed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.ConversationUnfollowed do
++  @moduledoc """
++  Event raised when a member stops following a club-message conversation.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:follow_id, :club_id, :conversation_id, :member_id]
++  defstruct [:follow_id, :club_id, :conversation_id, :member_id]
++end
+diff --git a/web/lib/memba/messaging/projections/conversation_follow.ex b/web/lib/memba/messaging/projections/conversation_follow.ex
+new file mode 100644
+index 0000000..4a3b95e
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/conversation_follow.ex
+@@ -0,0 +1,17 @@
++defmodule Memba.Messaging.Projections.ConversationFollow do
++  @moduledoc """
++  Read model projection for a member's follow state on a message conversation.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:follow_id, :string, autogenerate: false}
++  schema "messaging_conversation_follows" do
++    field :club_id, :string
++    field :conversation_id, :string
++    field :member_id, :string
++    field :following, :boolean, default: true
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/conversation_follow.ex b/web/lib/memba/messaging/projectors/conversation_follow.ex
+new file mode 100644
+index 0000000..95c1b4d
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/conversation_follow.ex
+@@ -0,0 +1,67 @@
++defmodule Memba.Messaging.Projectors.ConversationFollow do
++  @moduledoc """
++  Projects conversation follow events and auto-follow message events into the follow read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.ConversationFollow",
++    consistency: :strong
++
++  alias Memba.Messaging.ConversationFollowers
++  alias Memba.Messaging.ConversationReference
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
++
++  project(%MessageSent{} = event, fn multi ->
++    conversation_id =
++      event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
++
++    upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)
++  end)
++
++  project(%ConversationFollowed{} = event, fn multi ->
++    upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, true)
++  end)
++
++  project(%ConversationUnfollowed{} = event, fn multi ->
++    upsert_follow(multi, event.club_id, event.conversation_id, event.member_id, false)
++  end)
++
++  @impl Commanded.Projections.Ecto
++  def after_update(event, metadata, changes) do
++    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
++  end
++
++  defp upsert_follow(multi, club_id, conversation_id, member_id, following) do
++    now = DateTime.utc_now(:microsecond)
++    follow_id = ConversationFollowers.follow_id(conversation_id, member_id)
++
++    Ecto.Multi.insert(
++      multi,
++      {:messaging_conversation_follow, follow_id},
++      %ConversationFollowProjection{
++        follow_id: follow_id,
++        club_id: club_id,
++        conversation_id: conversation_id,
++        member_id: member_id,
++        following: following,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: club_id,
++          conversation_id: conversation_id,
++          member_id: member_id,
++          following: following,
++          updated_at: now
++        ]
++      ],
++      conflict_target: :follow_id
++    )
++  end
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index b6468a4..f28eac2 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -7,7 +7,9 @@ defmodule Memba.Messaging.Router do
+ 
+   alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.Message
++  alias Memba.Messaging.ConversationFollowers
+   alias Memba.Messaging.Commands.AcceptInboundClubEmail
++  alias Memba.Messaging.Commands.FollowConversation
+   alias Memba.Messaging.Commands.PostMessageReply
+   alias Memba.Messaging.Commands.RejectInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+@@ -16,9 +18,11 @@ defmodule Memba.Messaging.Router do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Commands.UnfollowConversation
+ 
+   identify(InboundEmailReceipt, by: :inbound_email_id)
+   identify(Message, by: :message_id)
++  identify(ConversationFollowers, by: :conversation_id)
+ 
+   dispatch([ReceiveInboundEmail, AcceptInboundClubEmail, RejectInboundClubEmail],
+     to: InboundEmailReceipt
+@@ -35,4 +39,6 @@ defmodule Memba.Messaging.Router do
+     ],
+     to: Message
+   )
++
++  dispatch([FollowConversation, UnfollowConversation], to: ConversationFollowers)
+ end
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index 83908a8..07332c8 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -17,6 +17,7 @@ defmodule MembaWeb.DevTestSupportController do
+     Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.ConversationFollow,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+diff --git a/web/priv/repo/migrations/20260621123655_create_messaging_conversation_follows_projection.exs b/web/priv/repo/migrations/20260621123655_create_messaging_conversation_follows_projection.exs
+new file mode 100644
+index 0000000..d75816e
+--- /dev/null
++++ b/web/priv/repo/migrations/20260621123655_create_messaging_conversation_follows_projection.exs
+@@ -0,0 +1,19 @@
++defmodule Memba.Repo.Migrations.CreateMessagingConversationFollowsProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_conversation_follows, primary_key: false) do
++      add :follow_id, :string, primary_key: true
++      add :club_id, :string, null: false
++      add :conversation_id, :string, null: false
++      add :member_id, :string, null: false
++      add :following, :boolean, null: false, default: true
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create unique_index(:messaging_conversation_follows, [:conversation_id, :member_id])
++    create index(:messaging_conversation_follows, [:conversation_id, :following])
++    create index(:messaging_conversation_follows, [:club_id, :conversation_id, :following])
++  end
++end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index c31ca3d..f494ef5 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.AppTest do
+ 
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.AcceptInboundClubEmail
++  alias Memba.Messaging.Commands.FollowConversation
+   alias Memba.Messaging.Commands.PostMessageReply
+   alias Memba.Messaging.Commands.RejectInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+@@ -13,6 +14,8 @@ defmodule Memba.Messaging.AppTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Commands.UnfollowConversation
++  alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
+   alias Memba.Messaging.Router
+@@ -27,6 +30,15 @@ defmodule Memba.Messaging.AppTest do
+              _child -> false
+            end)
+ 
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{ConversationFollowProjector, _opts}, pid, :worker, [ConversationFollowProjector]}
++             when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
++
+     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+              {{InboundEmailSourceProjector, _opts}, pid, :worker, [InboundEmailSourceProjector]}
+              when is_pid(pid) ->
+@@ -55,6 +67,8 @@ defmodule Memba.Messaging.AppTest do
+       MapSet.new([
+         SendMessage,
+         PostMessageReply,
++        FollowConversation,
++        UnfollowConversation,
+         ReceiveInboundEmail,
+         AcceptInboundClubEmail,
+         RejectInboundClubEmail,
+diff --git a/web/test/memba/messaging/conversation_follow_projection_test.exs b/web/test/memba/messaging/conversation_follow_projection_test.exs
+new file mode 100644
+index 0000000..c447b1f
+--- /dev/null
++++ b/web/test/memba/messaging/conversation_follow_projection_test.exs
+@@ -0,0 +1,169 @@
++defmodule Memba.Messaging.ConversationFollowProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.PostMessageReply
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
++  alias Memba.Messaging.Recipient
++
++  test "follow and unfollow commands are projected as the member's current conversation follow state" do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    member_id = Memba.ID.generate(:person)
++
++    refute Messaging.following_conversation?(conversation_id, member_id)
++    assert Messaging.list_conversation_followers(conversation_id) == []
++
++    assert {:ok,
++            %ExecutionResult{
++              events: [
++                %ConversationFollowed{
++                  club_id: ^club_id,
++                  conversation_id: ^conversation_id,
++                  member_id: ^member_id
++                }
++              ]
++            }} =
++             Messaging.follow_conversation(
++               %{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: member_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %ConversationFollowProjection{
++             club_id: ^club_id,
++             conversation_id: ^conversation_id,
++             member_id: ^member_id,
++             following: true
++           } = Messaging.get_conversation_follow(conversation_id, member_id)
++
++    assert [%ConversationFollowProjection{member_id: ^member_id}] =
++             Messaging.list_conversation_followers(conversation_id)
++
++    assert true == Messaging.following_conversation?(conversation_id, member_id)
++
++    assert {:ok,
++            %ExecutionResult{
++              events: [
++                %ConversationUnfollowed{
++                  club_id: ^club_id,
++                  conversation_id: ^conversation_id,
++                  member_id: ^member_id
++                }
++              ]
++            }} =
++             Messaging.unfollow_conversation(
++               %{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: member_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %ConversationFollowProjection{following: false} =
++             Messaging.get_conversation_follow(conversation_id, member_id)
++
++    refute Messaging.following_conversation?(conversation_id, member_id)
++    assert Messaging.list_conversation_followers(conversation_id) == []
++  end
++
++  test "repeated follow and unfollow commands are idempotent" do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    member_id = Memba.ID.generate(:person)
++
++    assert {:ok, %ExecutionResult{events: [%ConversationFollowed{}]}} =
++             Messaging.follow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok, %ExecutionResult{events: []}} =
++             Messaging.follow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok, %ExecutionResult{events: [%ConversationUnfollowed{}]}} =
++             Messaging.unfollow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok, %ExecutionResult{events: []}} =
++             Messaging.unfollow_conversation(
++               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
++  test "MessageSent auto-follows the root sender and each reply author" do
++    club_id = Memba.ID.generate(:club)
++    root_message_id = Memba.ID.generate(:message)
++    alice_id = Memba.ID.generate(:person)
++    bob_id = Memba.ID.generate(:person)
++    carol_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: root_message_id,
++                 club_id: club_id,
++                 sender_id: alice_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: [
++                   %Recipient{
++                     delivery_id: Memba.ID.generate(:delivery),
++                     person_id: alice_id,
++                     name: "Alice",
++                     email: "alice@example.com"
++                   }
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert true == Messaging.following_conversation?(root_message_id, alice_id)
++    refute Messaging.following_conversation?(root_message_id, bob_id)
++
++    assert :ok =
++             App.dispatch(
++               %PostMessageReply{
++                 message_id: Memba.ID.generate(:message),
++                 club_id: club_id,
++                 sender_id: bob_id,
++                 conversation_id: root_message_id,
++                 reply_to_message_id: root_message_id,
++                 subject: "Trip planning night",
++                 body: "I can bring maps.",
++                 recipients: []
++               },
++               consistency: :strong
++             )
++
++    follower_ids =
++      root_message_id
++      |> Messaging.list_conversation_followers()
++      |> Enum.map(& &1.member_id)
++
++    assert Enum.sort(follower_ids) == Enum.sort([alice_id, bob_id])
++
++    refute Messaging.following_conversation?(root_message_id, carol_id)
++  end
++end
+diff --git a/web/test/memba/messaging/conversation_followers_test.exs b/web/test/memba/messaging/conversation_followers_test.exs
+new file mode 100644
+index 0000000..8304655
+--- /dev/null
++++ b/web/test/memba/messaging/conversation_followers_test.exs
+@@ -0,0 +1,152 @@
++defmodule Memba.Messaging.ConversationFollowersTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Commands.FollowConversation
++  alias Memba.Messaging.Commands.UnfollowConversation
++  alias Memba.Messaging.ConversationFollowers
++  alias Memba.Messaging.Events.ConversationFollowed
++  alias Memba.Messaging.Events.ConversationUnfollowed
++
++  describe "execute/2 FollowConversation" do
++    test "emits a follow event for a member in a conversation" do
++      club_id = Memba.ID.generate(:club)
++      conversation_id = Memba.ID.generate(:message)
++      member_id = Memba.ID.generate(:person)
++
++      assert %ConversationFollowed{
++               follow_id: follow_id,
++               club_id: ^club_id,
++               conversation_id: ^conversation_id,
++               member_id: ^member_id
++             } =
++               ConversationFollowers.execute(%ConversationFollowers{}, %FollowConversation{
++                 club_id: club_id,
++                 conversation_id: conversation_id,
++                 member_id: member_id
++               })
++
++      assert Memba.ID.valid?(:conversation_follow, follow_id)
++    end
++
++    test "is idempotent when the member already follows the conversation" do
++      conversation = followed_conversation()
++
++      assert [] =
++               ConversationFollowers.execute(conversation, %FollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: hd(MapSet.to_list(conversation.follower_ids))
++               })
++    end
++
++    test "rejects malformed identifiers and mismatched club context" do
++      conversation = followed_conversation()
++      member_id = hd(MapSet.to_list(conversation.follower_ids))
++
++      assert {:error, :invalid_club_id} =
++               ConversationFollowers.execute(%ConversationFollowers{}, %FollowConversation{
++                 club_id: nil,
++                 conversation_id: conversation.conversation_id,
++                 member_id: member_id
++               })
++
++      assert {:error, :invalid_conversation_id} =
++               ConversationFollowers.execute(%ConversationFollowers{}, %FollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: "not-a-uuid",
++                 member_id: member_id
++               })
++
++      assert {:error, :invalid_member_id} =
++               ConversationFollowers.execute(%ConversationFollowers{}, %FollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: nil
++               })
++
++      assert {:error, :club_id_mismatch} =
++               ConversationFollowers.execute(conversation, %FollowConversation{
++                 club_id: Memba.ID.generate(:club),
++                 conversation_id: conversation.conversation_id,
++                 member_id: Memba.ID.generate(:person)
++               })
++    end
++  end
++
++  describe "execute/2 UnfollowConversation" do
++    test "emits an unfollow event for a current follower" do
++      conversation = followed_conversation()
++      member_id = hd(MapSet.to_list(conversation.follower_ids))
++
++      assert %ConversationUnfollowed{
++               club_id: club_id,
++               conversation_id: conversation_id,
++               member_id: ^member_id
++             } =
++               ConversationFollowers.execute(conversation, %UnfollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: member_id
++               })
++
++      assert club_id == conversation.club_id
++      assert conversation_id == conversation.conversation_id
++    end
++
++    test "is idempotent when the member is not following the conversation" do
++      conversation = followed_conversation()
++
++      assert [] =
++               ConversationFollowers.execute(conversation, %UnfollowConversation{
++                 club_id: conversation.club_id,
++                 conversation_id: conversation.conversation_id,
++                 member_id: Memba.ID.generate(:person)
++               })
++    end
++  end
++
++  test "apply/2 records follower state" do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    member_id = Memba.ID.generate(:person)
++
++    followed =
++      ConversationFollowers.apply(%ConversationFollowers{}, %ConversationFollowed{
++        follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
++        club_id: club_id,
++        conversation_id: conversation_id,
++        member_id: member_id
++      })
++
++    assert %ConversationFollowers{
++             club_id: ^club_id,
++             conversation_id: ^conversation_id,
++             follower_ids: follower_ids
++           } = followed
++
++    assert MapSet.member?(follower_ids, member_id)
++
++    unfollowed =
++      ConversationFollowers.apply(followed, %ConversationUnfollowed{
++        follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
++        club_id: club_id,
++        conversation_id: conversation_id,
++        member_id: member_id
++      })
++
++    refute MapSet.member?(unfollowed.follower_ids, member_id)
++  end
++
++  defp followed_conversation do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    member_id = Memba.ID.generate(:person)
++
++    ConversationFollowers.apply(%ConversationFollowers{}, %ConversationFollowed{
++      follow_id: ConversationFollowers.follow_id(conversation_id, member_id),
++      club_id: club_id,
++      conversation_id: conversation_id,
++      member_id: member_id
++    })
++  end
++end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index b3be887..356ba76 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -8,9 +8,14 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+ 
+     assert source =~ "def send_club_message("
+     assert source =~ "def post_message_reply("
++    assert source =~ "def follow_conversation("
++    assert source =~ "def unfollow_conversation("
+     assert source =~ "def get_message("
+     assert source =~ "def list_messages_for_club("
+     assert source =~ "def list_conversation_messages("
++    assert source =~ "def get_conversation_follow("
++    assert source =~ "def following_conversation?("
++    assert source =~ "def list_conversation_followers("
+     assert source =~ "def list_operator_messages("
+     assert source =~ "def get_email_delivery("
+     assert source =~ "def get_member_email_delivery("
+@@ -31,6 +36,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert list_functions == [
+              "list_messages_for_club",
+              "list_conversation_messages",
++             "list_conversation_followers",
+              "list_operator_messages",
+              "list_recipient_deliveries",
+              "list_member_email_deliverys",
+@@ -79,6 +85,11 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+              &String.contains?(&1, "create table(:messaging_memba_staff_email_deliveries")
+            )
+ 
++    assert Enum.any?(
++             migration_sources,
++             &String.contains?(&1, "create table(:messaging_conversation_follows")
++           )
++
+     refute Enum.any?(migration_sources, fn source ->
+              source =~
+                ~r/create\s+table\(\s*:(messages|message_recipients|message_deliveries|recipient_deliveries|deliveries)\b/
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 2edea7e..f387d61 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -17,6 +17,7 @@ defmodule Memba.EventSourcedCase do
+     Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.ConversationFollow,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
