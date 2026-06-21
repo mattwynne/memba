@@ -10,7 +10,7 @@
 - [x] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
 - [x] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
 - [x] 010 Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
-- [ ] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
+- [x] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
 - [ ] 012 Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
 - [ ] 013 Run `dev check`.
 - [ ] 014 After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result.

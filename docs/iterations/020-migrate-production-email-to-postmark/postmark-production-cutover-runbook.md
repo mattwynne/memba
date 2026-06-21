@@ -14,7 +14,7 @@ This cutover moves all production email paths together:
 
 - member-message outbound delivery and rejection emails;
 - magic-link authentication email;
-- inbound club-message email for `<club-slug>@clubs.memba.io`.
+- inbound club-message email for `everyone@<club-slug>.clubs.memba.io`.
 
 Keep the providers aligned. Memba's member-message and auth paths share
 `Memba.Mailer` runtime configuration, so do not intentionally run a mixed
@@ -37,7 +37,8 @@ constraint and provides a dedicated runbook.
 - [ ] Confirm a controlled recipient inbox is available for auth, outbound
       member-message, and rejection-email smoke tests.
 - [ ] Confirm a controlled active member can send from a known address to
-      `kmc@clubs.memba.io` or another known club slug in production.
+      `everyone@test.clubs.memba.io` or another known club subdomain in
+      production.
 
 ### Postmark dashboard and DNS readiness
 
@@ -58,7 +59,7 @@ constraint and provides a dedicated runbook.
       `outbound-authentication`.
 - [ ] Auth stream is not reusing the member broadcast stream and does not point
       auth-only delivery events at Memba's member-message webhook route.
-- [ ] Inbound stream exists for `clubs.memba.io`.
+- [ ] Inbound stream exists for `*.clubs.memba.io`.
 - [ ] Inbound stream webhook points to:
 
   ```text
@@ -68,11 +69,12 @@ constraint and provides a dedicated runbook.
 - [ ] DNS for inbound club messages is ready to route to Postmark:
 
   ```text
-  MX clubs.memba.io 10 inbound.postmarkapp.com
+  MX *.clubs.memba.io 10 inbound.postmarkapp.com
   ```
 
-- [ ] DNS has no higher-priority conflicting MX record for `clubs.memba.io` that
-      would steal inbound club-message mail.
+- [ ] DNS has no higher-priority conflicting MX record for club subdomains such
+      as `test.clubs.memba.io` or `kmc.clubs.memba.io` that would steal inbound
+      club-message mail.
 
 ### Rollback readiness
 
@@ -93,9 +95,10 @@ constraint and provides a dedicated runbook.
       may be used: `MEMBA_RESEND_WEBHOOK_SIGNING_SECRET`.
 - [ ] Decide before cutover whether inbound rollback to Resend is operationally
       available. The current Resend domain/account previously could not receive
-      `clubs.memba.io` without provider changes; if that is still true, rollback
-      can restore outbound/auth email to Resend but cannot fully restore inbound
-      club-message receiving until Resend inbound domain routing is fixed.
+      the `*.clubs.memba.io` namespace without provider changes; if that is
+      still true, rollback can restore outbound/auth email to Resend but cannot
+      fully restore inbound club-message receiving until Resend inbound domain
+      routing is fixed.
 
 ## Cutover steps
 
@@ -158,8 +161,9 @@ or screenshot, and Memba observation for each step.
 
 ### 3. Inbound club message accepted path
 
-- [ ] Email `kmc@clubs.memba.io` or another known club slug from a controlled
-      active member address. Use a unique subject/body for this smoke test.
+- [ ] Email `everyone@test.clubs.memba.io` or another known club subdomain from
+      a controlled active member address. Use a unique subject/body for this
+      smoke test.
 - [ ] Confirm Postmark receives the inbound message and calls
       `https://memba.io/webhooks/postmark/inbound`.
 - [ ] Confirm Memba creates one club message for the email.
@@ -240,13 +244,13 @@ unused Postmark secrets may be removed from Fly if desired.
       for Memba.
 - [ ] Confirm the Resend webhook signing secret in Fly matches the Resend
       dashboard secret.
-- [ ] If inbound rollback to Resend is available, move `clubs.memba.io` inbound
-      DNS/provider routing back to Resend and point inbound webhooks at
+- [ ] If inbound rollback to Resend is available, move `*.clubs.memba.io`
+      inbound DNS/provider routing back to Resend and point inbound webhooks at
       `https://memba.io/webhooks/resend`.
-- [ ] If Resend still cannot receive `clubs.memba.io`, keep or disable Postmark
-      inbound routing deliberately and communicate that inbound club-message
-      email is degraded until Resend inbound setup is fixed. Do not claim rollback
-      is complete for inbound email in that state.
+- [ ] If Resend still cannot receive the `*.clubs.memba.io` namespace, keep or
+      disable Postmark inbound routing deliberately and communicate that inbound
+      club-message email is degraded until Resend inbound setup is fixed. Do not
+      claim rollback is complete for inbound email in that state.
 
 ### Rollback smoke tests
 
@@ -261,7 +265,8 @@ unused Postmark secrets may be removed from Fly if desired.
       through Resend and signs in successfully.
 - [ ] Send a controlled member message and confirm Resend accepts it, the inbox
       receives it, and `POST /webhooks/resend` updates Memba delivery records.
-- [ ] If Resend inbound rollback is available, email `kmc@clubs.memba.io` from a
+- [ ] If Resend inbound rollback is available, email
+      `everyone@test.clubs.memba.io` or another known club subdomain from a
       controlled active member address and confirm Memba creates exactly one club
       message through the Resend inbound path.
 - [ ] If Resend inbound rollback is not available, document the inbound outage or
