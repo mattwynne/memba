@@ -2,8 +2,8 @@ defmodule Memba.ClubInboundEmailAddress do
   @moduledoc """
   Derives member-facing inbound email addresses for clubs.
 
-  The current slice uses one implicit whole-club address per club:
-  `<club-slug>@<configured-domain>`.
+  The current slice uses one implicit whole-club address per club subdomain:
+  `everyone@<club-slug>.<configured-domain>`.
   """
 
   alias Memba.Membership.Slug
@@ -21,7 +21,7 @@ defmodule Memba.ClubInboundEmailAddress do
 
   def address(slug) when is_binary(slug) do
     with {:ok, normalized_slug} <- Slug.normalize_for_lookup(slug) do
-      normalized_slug <> "@" <> domain()
+      "everyone@" <> normalized_slug <> "." <> domain()
     else
       {:error, _reason} -> nil
     end

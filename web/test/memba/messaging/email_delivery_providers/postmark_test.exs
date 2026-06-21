@@ -42,7 +42,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
-    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
+    assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.headers["Message-ID"] == request.outbound_message_id
     assert email.subject == "[kmc] Trip planning night"
@@ -127,7 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
-    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
+    assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.headers["Message-ID"] == request.outbound_message_id
     assert email.headers["In-Reply-To"] == "<memba.root@example.test>"

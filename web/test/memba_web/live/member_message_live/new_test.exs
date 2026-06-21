@@ -227,7 +227,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+             "#member-compose-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
            )
 
     assert has_element?(view, "#member-compose-inbound-email", "Prefer email?")
@@ -240,8 +240,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
-             "kmc@clubs.memba.io"
+             "#member-compose-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+             "everyone@kmc.clubs.memba.io"
            )
   end
 
