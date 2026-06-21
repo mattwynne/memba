@@ -563,6 +563,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
              "everyone@kmc.clubs.memba.io"
            )
+
+    refute has_element?(
+             view,
+             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
+           )
   end
 
   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do

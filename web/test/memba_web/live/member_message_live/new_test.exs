@@ -243,6 +243,16 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
              "#member-compose-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
              "everyone@kmc.clubs.memba.io"
            )
+
+    refute has_element?(
+             view,
+             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
+           )
   end
 
   test "routed GET redirects signed-out visitors and preserves the selected club return path",
