@@ -51,6 +51,7 @@ green than before.
 | 039 | 2026-06-19 | merged | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
 | 040 | 2026-06-19 | merged | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
 | 041 | 2026-06-19 | implementing | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
+| 042 | 2026-06-21 | ready | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
 
 Status notes:
 
@@ -62,7 +63,7 @@ Status notes:
 Shared acceptance feature files used across these iterations:
 
 - [`authentication.feature`](../../acceptance-tests/features/authentication.feature) (iteration 032 adds `@iteration-032 @todo-domain @todo-ui` planning scenarios for privacy-preserving auth email delivery progress)
-- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation)
+- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@todo-domain`/`@todo-ui` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@todo-domain`/`@todo-ui` scenarios for slugged email subjects and blank-body compose validation; iteration 042 changes the inbound address convention to `everyone@<club>.clubs.memba.io`)
 - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@todo-domain`/`@todo-ui` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
 - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
@@ -73,4 +74,4 @@ Shared acceptance feature files used across these iterations:
 - [`club_member_invitations.feature`](../../acceptance-tests/features/club_member_invitations.feature) (`@iteration-028` with `@todo-domain`/`@todo-ui` planning scenarios until Staff invitation and profile-completion behaviour is implemented; iteration 029 adds `@iteration-029` Membership Admin invitation scenarios under the same temporary runner-debt tags until member-admin invitation behaviour is implemented)
 - [`homepage.feature`](../../acceptance-tests/features/homepage.feature) (iteration 031 adds an `@not-domain @todo-ui` homepage volunteering-vision scenario)
 - [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)
-- [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour)
+- [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)

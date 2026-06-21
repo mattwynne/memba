@@ -1,4 +1,4 @@
-@iteration-039
+@not-ui @iteration-039
 Feature: Club message replies (conversations)
   Club members want to reply to a club message and keep the conversation in Memba,
   instead of replies scattering to private inboxes and never being tracked.
@@ -76,3 +76,11 @@ Feature: Club message replies (conversations)
 
     Scenario: A member of another club cannot reply
       Then Pat should not be able to reply to "Trip planning night"
+
+  Rule: Email replies use the everyone address on the club email subdomain
+
+    @iteration-042 @todo-domain @todo-ui
+    Scenario: Bob replies by email through the KMC everyone address
+      When Bob replies by email to "Trip planning night" through everyone@kmc.clubs.memba.io
+      Then the conversation for "Trip planning night" should show Bob's reply
+      And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
