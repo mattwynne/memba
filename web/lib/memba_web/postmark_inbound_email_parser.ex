@@ -7,6 +7,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
   @provider_message_id_keys [:MessageID, "MessageID", :message_id, "message_id"]
   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
 
+  alias Memba.Messaging.InboundEmailReplyHeaders
+
   @doc """
   Translate a Postmark inbound webhook payload into attrs accepted by Messaging's
   provider-neutral inbound email API.
@@ -21,6 +23,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
          {:ok, html_body} <-
            optional_binary(payload, [:HtmlBody, "HtmlBody"], :invalid_html_body),
          {:ok, attachments} <- attachments(payload) do
+      headers = value(payload, [:Headers, "Headers"])
+
       {:ok,
        %{
          provider: @provider,
@@ -30,9 +34,11 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
          subject: String.trim(subject),
          text_body: text_body,
          html_body: html_body,
-         original_message_id: original_message_id(value(payload, [:Headers, "Headers"])),
+         original_message_id: original_message_id(headers),
+         in_reply_to_message_ids: reply_message_ids(headers, "in-reply-to"),
+         references_message_ids: reply_message_ids(headers, "references"),
          attachments: attachments,
-         headers: value(payload, [:Headers, "Headers"])
+         headers: headers
        }}
     end
   end
@@ -228,6 +234,12 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
     |> optional_trimmed_string()
   end
 
+  defp reply_message_ids(headers, name) do
+    headers
+    |> header_values(name)
+    |> InboundEmailReplyHeaders.message_ids()
+  end
+
   defp header_value(headers, name) when is_map(headers) do
     Enum.find_value(headers, fn {header_name, value} ->
       if normalize_header_name(header_name) == name, do: value
@@ -249,6 +261,31 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
   end
 
   defp header_value(_headers, _name), do: nil
+
+  defp header_values(headers, name) when is_map(headers) do
+    headers
+    |> Enum.filter(fn {header_name, _value} -> normalize_header_name(header_name) == name end)
+    |> Enum.map(fn {_header_name, value} -> value end)
+  end
+
+  defp header_values(headers, name) when is_list(headers) do
+    headers
+    |> Enum.flat_map(fn
+      header when is_map(header) ->
+        header_name = value(header, [:Name, "Name", :name, "name"])
+
+        if normalize_header_name(header_name) == name do
+          [value(header, [:Value, "Value", :value, "value"])]
+        else
+          []
+        end
+
+      _header ->
+        []
+    end)
+  end
+
+  defp header_values(_headers, _name), do: []
 
   defp normalize_header_name(name) when is_binary(name) do
     name

@@ -17,6 +17,11 @@ defmodule Memba.Messaging.InboundEmailApiTest do
         subject: "Trip planning night",
         text_body: "Bring route ideas.",
         html_body: "<p>Bring route ideas.</p>",
+        in_reply_to_message_ids: [" memba.parent-delivery.parent-message@messages.memba.io "],
+        references_message_ids: [
+          "<memba.root-delivery.root-message@messages.memba.io>",
+          "memba.parent-delivery.parent-message@messages.memba.io"
+        ],
         attachments: [
           %{
             filename: "route.gpx",
@@ -39,6 +44,13 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                   subject: "Trip planning night",
                   text_body: "Bring route ideas.",
                   html_body: "<p>Bring route ideas.</p>",
+                  in_reply_to_message_ids: [
+                    "<memba.parent-delivery.parent-message@messages.memba.io>"
+                  ],
+                  references_message_ids: [
+                    "<memba.root-delivery.root-message@messages.memba.io>",
+                    "<memba.parent-delivery.parent-message@messages.memba.io>"
+                  ],
                   attachments: [
                     %InboundEmailAttachment{
                       filename: "route.gpx",
@@ -72,6 +84,8 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                   subject: "Trail conditions",
                   text_body: nil,
                   html_body: nil,
+                  in_reply_to_message_ids: [],
+                  references_message_ids: [],
                   attachments: []
                 }
               }} = Messaging.receive_inbound_club_email_command(attrs)
