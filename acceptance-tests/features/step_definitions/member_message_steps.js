@@ -13,6 +13,7 @@ const {
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
   assertConversationFollowingState,
+  assertConversationDoesNotShowReply,
   assertConversationReplyOrder,
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
@@ -43,6 +44,8 @@ const {
   removeMemberFromClub,
   postMemberReply,
   sendInboundClubEmail,
+  sendInboundClubEmailReply,
+  sendInboundClubEmailWithReplyHeaders,
   sendMemberMessageToKootenayMembers,
   trySendBlankMemberMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers,
@@ -181,9 +184,28 @@ Given(
   }
 );
 
+Given(
+  "{word} sent the message {string} to Nelson Paddling Club members",
+  async function (senderName, subject) {
+    await sendMessageToClubMembersDirectly(this, senderName, subject, nelsonClubName);
+  }
+);
+
 When("{word} replies {string} to {string}", async function (senderName, body, subject) {
   await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
 });
+
+When("{word} replies by email to {string} with:", async function (senderName, subject, body) {
+  await sendInboundClubEmailReply(this, senderName, subject, body);
+});
+
+When(
+  /^(\w+) emails "([^"]+)" to ([^\s]+) with reply headers from "([^"]+)"$/,
+  async function (senderName, subject, toAddress, referencedSubject) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmailWithReplyHeaders(this, senderName, subject, toAddress, referencedSubject);
+  }
+);
 
 Given("{word} follows the conversation for {string}", async function (memberName, subject) {
   await withMemberHarness(this, memberName, (member) => followConversation(member, memberName, subject));
@@ -223,6 +245,13 @@ Then(
     await withMemberHarness(this, "Alice", (member) =>
       assertConversationReplyOrder(member, subject, earlierBody, laterBody)
     );
+  }
+);
+
+Then(
+  /^the conversation for "([^"]+)" should not show (\w+)'s reply "([^"]+)"$/,
+  async function (subject, senderName, body) {
+    await assertConversationDoesNotShowReply(this, subject, senderName, body);
   }
 );
 
@@ -600,10 +629,14 @@ function ensureMembersState(world, personNames, clubName) {
 }
 
 async function sendMessageToKootenayMembersDirectly(world, senderName, subject) {
-  ensureState(world);
-  await ensureKootenayMember(world, senderName);
+  await sendMessageToClubMembersDirectly(world, senderName, subject, kootenayClubName);
+}
 
-  const club = world.clubs[kootenayClubName];
+async function sendMessageToClubMembersDirectly(world, senderName, subject, clubName) {
+  ensureState(world);
+  ensureMembersState(world, [senderName], clubName);
+
+  const club = world.clubs[clubName];
   const sender = world.people[senderName];
   const body = `${subject} details.`;
 
@@ -618,6 +651,7 @@ async function sendMessageToKootenayMembersDirectly(world, senderName, subject) 
   world.messages[subject] = {
     body: result.body,
     clubId: result.clubId,
+    clubSlug: club.slug,
     messageId: result.messageId,
     senderName: result.senderName,
     subject: result.subject

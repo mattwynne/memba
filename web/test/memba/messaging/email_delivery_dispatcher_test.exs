@@ -13,6 +13,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -265,6 +266,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  message_id: message_id,
                  club_id: club_id,
                  delivery_id: delivery_id,
+                 outbound_message_id: outbound_message_id,
                  recipient_id: ^recipient_id,
                  recipient_name: "Bob Member",
                  recipient_address: "bob.member@example.com",
@@ -281,6 +283,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert message_id == message.message_id
       assert club_id == club.club_id
       assert delivery_id == delivery.delivery_id
+      assert outbound_message_id == delivery.outbound_message_id
     end
 
     test "builds reply provider requests with conversation context" do
@@ -310,6 +313,17 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           body: "Bring route ideas."
         )
 
+      recipient_id = Memba.ID.generate(:person)
+
+      root_delivery =
+        insert_email_delivery!(
+          message_id: root_message.message_id,
+          recipient_id: recipient_id,
+          recipient_name: "Carol Member",
+          recipient_address: "carol.member@example.com",
+          status: "sent"
+        )
+
       reply_message =
         insert_message_projection!(
           club_id: club.club_id,
@@ -319,8 +333,6 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
           subject: "Trip planning night",
           body: "I can bring maps."
         )
-
-      recipient_id = Memba.ID.generate(:person)
 
       delivery =
         insert_email_delivery!(
@@ -338,6 +350,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  message_id: reply_message_id,
                  club_id: club_id,
                  delivery_id: delivery_id,
+                 outbound_message_id: outbound_message_id,
                  recipient_id: ^recipient_id,
                  recipient_name: "Carol Member",
                  recipient_address: "carol.member@example.com",
@@ -347,6 +360,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  sender_address: "bob.replier@example.com",
                  conversation_id: conversation_id,
                  reply_to_message_id: reply_to_message_id,
+                 in_reply_to_outbound_message_id: in_reply_to_outbound_message_id,
+                 references_outbound_message_ids: references_outbound_message_ids,
                  conversation_url: conversation_url,
                  stop_follow_url: stop_follow_url,
                  reply_to_sender_name: "Alice Sender",
@@ -359,8 +374,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert reply_message_id == reply_message.message_id
       assert club_id == club.club_id
       assert delivery_id == delivery.delivery_id
+      assert outbound_message_id == delivery.outbound_message_id
       assert conversation_id == root_message.message_id
       assert reply_to_message_id == root_message.message_id
+      assert in_reply_to_outbound_message_id == root_delivery.outbound_message_id
+      assert references_outbound_message_ids == [root_delivery.outbound_message_id]
       assert conversation_url =~ "/messages/#{root_message.message_id}"
       assert stop_follow_url =~ "/messages/conversations/stop-following/"
 
@@ -376,6 +394,65 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert club_id == club.club_id
       assert conversation_id == root_message.message_id
       assert member_id == recipient_id
+    end
+
+    test "builds reply provider requests with fallback threading references for new followers" do
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kootenay-mountaineering-club"
+        )
+
+      alice = insert_membership_person!(name: "Alice Sender", email: "alice.sender@example.com")
+      bob = insert_membership_person!(name: "Bob Replier", email: "bob.replier@example.com")
+
+      root_message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: alice.person_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas."
+        )
+
+      root_delivery =
+        insert_email_delivery!(
+          message_id: root_message.message_id,
+          recipient_id: Memba.ID.generate(:person),
+          recipient_name: "Dana Existing",
+          recipient_address: "dana.existing@example.com",
+          status: "sent"
+        )
+
+      reply_message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: bob.person_id,
+          conversation_id: root_message.message_id,
+          reply_to_message_id: root_message.message_id,
+          subject: "Trip planning night",
+          body: "I can bring maps."
+        )
+
+      delivery =
+        insert_email_delivery!(
+          message_id: reply_message.message_id,
+          recipient_id: Memba.ID.generate(:person),
+          recipient_name: "Carol New Follower",
+          recipient_address: "carol.new@example.com",
+          status: "dispatching"
+        )
+
+      assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
+
+      assert [
+               %EmailDeliveryRequest{
+                 in_reply_to_outbound_message_id: in_reply_to_outbound_message_id,
+                 references_outbound_message_ids: references_outbound_message_ids
+               }
+             ] = Fake.deliveries()
+
+      assert in_reply_to_outbound_message_id == root_delivery.outbound_message_id
+      assert references_outbound_message_ids == [root_delivery.outbound_message_id]
     end
 
     test "does not call the provider when the delivery's message projection is missing" do
@@ -676,10 +753,18 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   defp insert_email_delivery!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
     Repo.insert!(%EmailDeliveryProjection{
-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      delivery_id: delivery_id,
+      message_id: message_id,
+      outbound_message_id:
+        Keyword.get(
+          attrs,
+          :outbound_message_id,
+          OutboundMessageID.for_delivery(delivery_id, message_id)
+        ),
       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(attrs, :recipient_name, "Ada Member"),
       recipient_address: Keyword.get(attrs, :recipient_address, "ada@example.test"),

@@ -1,7 +1,7 @@
 # Reply by email
 
 Date: 2026-06-19
-Status: implementing
+Status: merged
 
 ## Goal
 

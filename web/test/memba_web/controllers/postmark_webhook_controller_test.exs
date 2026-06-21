@@ -8,6 +8,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Recipient
 
   import Plug.Conn
@@ -384,6 +385,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       message_id: message.message_id,
       club_id: message.club_id,
       delivery_id: recipient.delivery_id,
+      outbound_message_id:
+        OutboundMessageID.for_delivery(recipient.delivery_id, message.message_id),
       recipient_id: recipient.person_id,
       recipient_name: recipient.name,
       recipient_address: recipient.email,

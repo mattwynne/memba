@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
 
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.OutboundMessageID
 
   setup do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
@@ -41,8 +42,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
-    assert email.reply_to == {"Bob Barker", "bob@example.com"}
+    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
+    assert email.headers["Message-ID"] == request.outbound_message_id
     assert email.subject == "[kmc] Trip planning night"
 
     assert email.text_body ==
@@ -56,8 +58,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert email.html_body =~ "Trip planning night"
     assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
     assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
-    assert email.html_body =~ "Reply to this email and it goes straight to"
-    assert email.html_body =~ "not to the whole group"
+    assert email.html_body =~ "Reply to this email to post back to"
+    assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
     assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
     assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
 
@@ -109,6 +111,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
         club_slug: "kmc",
         conversation_id: conversation_id,
         reply_to_message_id: conversation_id,
+        in_reply_to_outbound_message_id: "<memba.root@example.test>",
+        references_outbound_message_ids: ["<memba.root@example.test>"],
         conversation_url: "https://kmc.memba.test/messages/#{conversation_id}",
         stop_follow_url:
           "https://kmc.memba.test/messages/conversations/stop-following/signed-token",
@@ -123,8 +127,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
-    assert email.reply_to == {"Bob Barker", "bob@example.com"}
+    assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
+    assert email.headers["Message-ID"] == request.outbound_message_id
+    assert email.headers["In-Reply-To"] == "<memba.root@example.test>"
+    assert email.headers["References"] == "<memba.root@example.test>"
     assert email.subject == "[kmc] Re: Trip planning night"
 
     assert email.text_body =~
@@ -225,11 +232,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
   end
 
   defp email_delivery_request(overrides \\ []) do
+    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
+
+    delivery_id =
+      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+
     %EmailDeliveryRequest{
-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
+      message_id: message_id,
       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
-      delivery_id:
-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
+      delivery_id: delivery_id,
+      outbound_message_id:
+        Keyword.get(
+          overrides,
+          :outbound_message_id,
+          OutboundMessageID.for_delivery(delivery_id, message_id)
+        ),
       recipient_id:
         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
@@ -240,6 +257,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
       conversation_id: Keyword.get(overrides, :conversation_id),
       reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
+      in_reply_to_outbound_message_id: Keyword.get(overrides, :in_reply_to_outbound_message_id),
+      references_outbound_message_ids: Keyword.get(overrides, :references_outbound_message_ids),
       conversation_url: Keyword.get(overrides, :conversation_url),
       stop_follow_url: Keyword.get(overrides, :stop_follow_url),
       reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),

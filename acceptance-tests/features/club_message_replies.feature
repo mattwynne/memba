@@ -77,6 +77,44 @@ Feature: Club message replies (conversations)
     Scenario: A member of another club cannot reply
       Then Pat should not be able to reply to "Trip planning night"
 
+  @iteration-041
+  Rule: Email replies use standard reply headers to join conversations
+
+    Scenario: Bob replies by email and followers receive the reply
+      Given Carol follows the conversation for "Trip planning night"
+      When Bob replies by email to "Trip planning night" with:
+        """
+        I can bring maps.
+
+        On Tue, Alice wrote:
+        > Trip planning night details.
+        """
+      Then the conversation for "Trip planning night" should show Bob's reply "I can bring maps."
+      And Bob should be following the conversation for "Trip planning night"
+      And Alice and Carol should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+      And Dana should not receive Bob's reply by email
+      And Bob should not receive his own reply by email
+
+    Scenario: Email to the club address without reply headers starts a new club-wide message
+      When Bob emails "Re: Trip planning night" to kmc@clubs.memba.io
+      Then Bob should see the message "Re: Trip planning night" in Kootenay Mountaineering Club
+      And the conversation for "Trip planning night" should not show Bob's reply "Re: Trip planning night details."
+
+    Scenario: A non-member email reply is rejected
+      When Pat replies by email to "Trip planning night" with:
+        """
+        I should not be able to reply from email.
+        """
+      Then the conversation for "Trip planning night" should not show Pat's reply "I should not be able to reply from email."
+      And Pat should receive a rejection email explaining the message was not posted
+      And Pat should be told how to contact support
+
+    Scenario: Reply headers from another club do not create a cross-club reply
+      Given Pat sent the message "Paddle planning" to Nelson Paddling Club members
+      When Alice emails "Re: Paddle planning" to kmc@clubs.memba.io with reply headers from "Paddle planning"
+      Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
+      And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
+
   Rule: Email replies use the everyone address on the club email subdomain
 
     @iteration-042 @todo-domain @todo-ui

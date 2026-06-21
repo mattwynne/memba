@@ -29,6 +29,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -440,6 +441,32 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  Resolve a persisted outbound RFC Message-ID to its Memba message context.
+
+  Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,
+  or belongs to a delivery whose message projection is absent.
+  """
+  def get_outbound_message_reference(rfc_message_id) do
+    with message_id when is_binary(message_id) <- OutboundMessageID.normalize(rfc_message_id) do
+      EmailDeliveryProjection
+      |> join(:inner, [delivery], message in MessageProjection,
+        on: message.message_id == delivery.message_id
+      )
+      |> where([delivery, _message], delivery.outbound_message_id == ^message_id)
+      |> select([delivery, message], %{
+        outbound_message_id: delivery.outbound_message_id,
+        delivery_id: delivery.delivery_id,
+        message_id: message.message_id,
+        conversation_id: message.conversation_id,
+        club_id: message.club_id
+      })
+      |> Repo.one()
+    else
+      nil -> nil
+    end
+  end
+
+  @doc """
   Manually retry provider dispatch for one failed email delivery.
 
   This internal/operator-facing API does not create message or delivery events.
@@ -814,7 +841,7 @@ defmodule Memba.Messaging do
     else
       case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
         {:ok, body} ->
-          accept_first_inbound_club_email(
+          accept_first_inbound_club_email_or_reply(
             receive_command,
             destination,
             sender,
@@ -838,6 +865,74 @@ defmodule Memba.Messaging do
     do: true
 
   defp inbound_email_has_attachments?(%InboundEmail{}), do: false
+
+  defp accept_first_inbound_club_email_or_reply(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         body,
+         dispatch_opts
+       ) do
+    case resolve_inbound_reply_reference(receive_command.inbound_email, destination) do
+      %{conversation_id: conversation_id} ->
+        accept_first_inbound_club_email_reply(
+          receive_command,
+          destination,
+          sender,
+          body,
+          conversation_id,
+          dispatch_opts
+        )
+
+      nil ->
+        accept_first_inbound_club_email(
+          receive_command,
+          destination,
+          sender,
+          body,
+          dispatch_opts
+        )
+    end
+  end
+
+  defp accept_first_inbound_club_email_reply(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         body,
+         conversation_id,
+         dispatch_opts
+       ) do
+    message_id = Memba.ID.generate(:message)
+
+    with :ok <-
+           post_inbound_club_message_reply(
+             conversation_id,
+             sender,
+             message_id,
+             body,
+             dispatch_opts
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         message_id: message_id,
+         conversation_id: conversation_id,
+         club_id: destination.club_id,
+         sender_id: sender.person_id,
+         from_address: sender.from_address,
+         to_address: destination.to_address
+       }}
+    end
+  end
 
   defp accept_first_inbound_club_email(
          receive_command,
@@ -934,6 +1029,50 @@ defmodule Memba.Messaging do
          ) do
       {:error, _reason} = error -> error
       _send_result -> :ok
+    end
+  end
+
+  defp post_inbound_club_message_reply(
+         conversation_id,
+         %InboundClubSender{} = sender,
+         message_id,
+         body,
+         dispatch_opts
+       ) do
+    case post_message_reply(
+           %{
+             message_id: message_id,
+             conversation_id: conversation_id,
+             sender_id: sender.person_id,
+             body: body
+           },
+           dispatch_opts
+         ) do
+      {:error, _reason} = error -> error
+      _reply_result -> :ok
+    end
+  end
+
+  defp resolve_inbound_reply_reference(
+         %InboundEmail{} = inbound_email,
+         %InboundClubDestination{} = destination
+       ) do
+    inbound_email
+    |> inbound_reply_message_ids()
+    |> Enum.find_value(&same_club_outbound_message_reference(&1, destination))
+  end
+
+  defp inbound_reply_message_ids(%InboundEmail{} = inbound_email) do
+    in_reply_to_message_ids = inbound_email.in_reply_to_message_ids || []
+    references_message_ids = inbound_email.references_message_ids || []
+
+    in_reply_to_message_ids ++ Enum.reverse(references_message_ids)
+  end
+
+  defp same_club_outbound_message_reference(message_id, %InboundClubDestination{} = destination) do
+    case get_outbound_message_reference(message_id) do
+      %{club_id: club_id} = reference when club_id == destination.club_id -> reference
+      _unknown_or_other_club -> nil
     end
   end
 

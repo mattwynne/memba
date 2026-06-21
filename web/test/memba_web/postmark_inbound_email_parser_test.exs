@@ -61,6 +61,8 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
               text_body: "Bring route ideas.",
               html_body: "<p>Bring route ideas.</p>",
               original_message_id: "<postmark-message@example.com>",
+              in_reply_to_message_ids: [],
+              references_message_ids: [],
               attachments: [
                 %{
                   filename: "route.gpx",
@@ -72,6 +74,42 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
               headers: [
                 %{"Name" => "Message-ID", "Value" => "<postmark-message@example.com>"},
                 %{"Name" => "X-Spam-Status", "Value" => "No"}
+              ]
+            }} = PostmarkInboundEmailParser.parse(payload)
+  end
+
+  test "parses In-Reply-To and all References Message-IDs from Postmark headers" do
+    payload =
+      valid_payload(%{
+        "Headers" => [
+          %{
+            "Name" => "In-Reply-To",
+            "Value" => " \r\n\t<memba.parent-delivery.parent-message@messages.memba.io> "
+          },
+          %{
+            "Name" => "References",
+            "Value" =>
+              "<memba.root-delivery.root-message@messages.memba.io>\r\n " <>
+                "<external-parent@example.net>, " <>
+                "memba.latest-delivery.latest-message@messages.memba.io"
+          },
+          %{
+            "Name" => "references",
+            "Value" => "<memba.trailing-delivery.trailing-message@messages.memba.io>"
+          }
+        ]
+      })
+
+    assert {:ok,
+            %{
+              in_reply_to_message_ids: [
+                "<memba.parent-delivery.parent-message@messages.memba.io>"
+              ],
+              references_message_ids: [
+                "<memba.root-delivery.root-message@messages.memba.io>",
+                "<external-parent@example.net>",
+                "<memba.latest-delivery.latest-message@messages.memba.io>",
+                "<memba.trailing-delivery.trailing-message@messages.memba.io>"
               ]
             }} = PostmarkInboundEmailParser.parse(payload)
   end
