@@ -10,10 +10,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.SelectiveFailure do
 
   @behaviour EmailDeliveryProvider
 
-  def start_link(opts \\ []) do
-    name = Keyword.get(opts, :name, __MODULE__)
-
-    Agent.start_link(fn -> %{requests: [], failing_addresses: MapSet.new()} end, name: name)
+  def start_link(_opts \\ []) do
+    Agent.start_link(fn -> %{requests: [], failing_addresses: MapSet.new()} end, name: __MODULE__)
   end
 
   @impl EmailDeliveryProvider
