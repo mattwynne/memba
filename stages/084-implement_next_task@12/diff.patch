@@ -1,0 +1,123 @@
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index 91d0c57..29854cc 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -11,6 +11,6 @@
+ - [x] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
+ - [x] 010 Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
+ - [x] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
+-- [ ] 012 Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
++- [x] 012 Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
+ - [ ] 013 Run `dev check`.
+ - [ ] 014 After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result.
+diff --git a/smoke-tests/README.md b/smoke-tests/README.md
+index 22da3c3..1b0c99e 100644
+--- a/smoke-tests/README.md
++++ b/smoke-tests/README.md
+@@ -6,7 +6,7 @@ This directory contains Cucumber smoke tests for real production inbound club em
+ 
+ - Club name: `Smoke Test Club`
+ - Club slug: `test`
+-- Inbound address: `test@clubs.memba.io`
++- Inbound address: `everyone@test.clubs.memba.io`
+ - Known active member email: `test@memba.io`
+ - Unknown-sender address: an unregistered Fastmail alias such as `test+unknown@memba.io`
+ - The smoke-test club should not appear as a public club page or in ordinary public discovery surfaces.
+@@ -56,7 +56,7 @@ The smoke runner intentionally does not support Hotmail, Yahoo, or arbitrary SMT
+ 
+ ## Run
+ 
+-When `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` is set, each scenario checks Postmark inbound message history immediately after SMTP acceptance. That narrows failures before the mailbox/UI waits: no Postmark inbound message means the problem is still at DNS/provider receiving; a Postmark inbound message with no Memba-visible outcome points to webhook delivery or application processing.
++When `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` is set, each scenario checks Postmark inbound message history immediately after SMTP acceptance for the configured smoke recipient, which defaults to `everyone@test.clubs.memba.io`. That narrows failures before the mailbox/UI waits: no Postmark inbound message means the problem is still at DNS/provider receiving; a Postmark inbound message with no Memba-visible outcome points to webhook delivery or application processing.
+ 
+ The script reuses the Cucumber and Playwright dependencies already installed for `acceptance-tests`:
+ 
+diff --git a/smoke-tests/features/step_definitions/inbound_club_email_steps.js b/smoke-tests/features/step_definitions/inbound_club_email_steps.js
+index 74be14b..2753bb3 100644
+--- a/smoke-tests/features/step_definitions/inbound_club_email_steps.js
++++ b/smoke-tests/features/step_definitions/inbound_club_email_steps.js
+@@ -16,7 +16,7 @@ Given("the production smoke configuration is valid", async function () {
+     "Expected the default smoke club name to be Smoke Test Club"
+   );
+   assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
+-  assert.equal(this.config.inboundAddress, "test@clubs.memba.io", "Expected the default inbound address");
++  assert.equal(this.config.inboundAddress, "everyone@test.clubs.memba.io", "Expected the default inbound address");
+   assert.notEqual(
+     this.config.unknown.email.toLowerCase(),
+     this.config.member.email.toLowerCase(),
+diff --git a/smoke-tests/lib/config.js b/smoke-tests/lib/config.js
+index a534714..5fde102 100644
+--- a/smoke-tests/lib/config.js
++++ b/smoke-tests/lib/config.js
+@@ -56,7 +56,7 @@ function smokeConfig() {
+     clubName,
+     clubSlug,
+     clubSiteBaseDomain,
+-    inboundAddress: `${clubSlug}@${inboundDomain}`,
++    inboundAddress: `everyone@${clubSlug}.${inboundDomain}`,
+     member: {
+       email: memberEmail,
+       name: memberName,
+diff --git a/smoke-tests/test/config.test.js b/smoke-tests/test/config.test.js
+new file mode 100644
+index 0000000..45395a7
+--- /dev/null
++++ b/smoke-tests/test/config.test.js
+@@ -0,0 +1,57 @@
++const assert = require("node:assert/strict");
++const { describe, it } = require("node:test");
++
++const { smokeConfig } = require("../lib/config");
++
++describe("smokeConfig", () => {
++  it("uses the production smoke club subdomain address by default", () => {
++    withSmokeEnv({}, () => {
++      assert.equal(smokeConfig().inboundAddress, "everyone@test.clubs.memba.io");
++    });
++  });
++
++  it("builds the smoke club address from the configured slug and inbound namespace", () => {
++    withSmokeEnv(
++      {
++        MEMBA_SMOKE_CLUB_SLUG: "kmc",
++        MEMBA_SMOKE_INBOUND_DOMAIN: "clubs.example.test"
++      },
++      () => {
++        assert.equal(smokeConfig().inboundAddress, "everyone@kmc.clubs.example.test");
++      }
++    );
++  });
++});
++
++function withSmokeEnv(overrides, run) {
++  const defaultSensitiveKeys = ["MEMBA_SMOKE_CLUB_SLUG", "MEMBA_SMOKE_INBOUND_DOMAIN"];
++  const env = {
++    MEMBA_SMOKE_FASTMAIL_PASSWORD: "fastmail-password",
++    MEMBA_SMOKE_STAFF_EMAIL: "staff@memba.test",
++    MEMBA_SMOKE_UNKNOWN_EMAIL: "unknown@memba.test",
++    ...overrides
++  };
++  const original = {};
++  const keys = [...new Set([...Object.keys(env), ...defaultSensitiveKeys])];
++
++  for (const key of keys) {
++    original[key] = process.env[key];
++    if (Object.prototype.hasOwnProperty.call(env, key)) {
++      process.env[key] = env[key];
++    } else {
++      delete process.env[key];
++    }
++  }
++
++  try {
++    run();
++  } finally {
++    for (const key of keys) {
++      if (original[key] === undefined) {
++        delete process.env[key];
++      } else {
++        process.env[key] = original[key];
++      }
++    }
++  }
++}
