@@ -1,0 +1,901 @@
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+index e2c9739..50d19ba 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+@@ -4,6 +4,6 @@
+ - [x] 002 Add command(s)/event(s) for posting a reply, with authorization that the actor is a current member of the message's club, and non-blank body validation.
+ - [x] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
+ - [x] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
+-- [ ] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
++- [x] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
+ - [ ] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
+ - [ ] 007 Run `dev check`.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 5117bfe..eeb02a6 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -12,6 +12,56 @@ defmodule MembaWeb.PageHTML do
+ 
+   embed_templates "page_html/*"
+ 
++  attr :entry, :map, required: true
++
++  defp conversation_entry_card(assigns) do
++    ~H"""
++    <article
++      id={"member-conversation-entry-#{@entry.message.message_id}"}
++      data-testid="member-conversation-entry"
++      data-conversation-kind={@entry.kind}
++      data-message-id={@entry.message.message_id}
++      data-sender-id={@entry.message.sender_id}
++      class={[
++        "rounded-3xl border bg-base-100 p-5 shadow-sm sm:p-6",
++        if(@entry.kind == :original,
++          do: "border-primary/25 ring-1 ring-primary/10",
++          else: "border-base-300"
++        )
++      ]}
++    >
++      <div class="flex items-start gap-3">
++        <span class={[
++          "grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 ring-inset",
++          if(@entry.kind == :original,
++            do: "bg-sage-100 text-sage-800 ring-primary/20",
++            else: "bg-base-200 text-base-content ring-base-300"
++          )
++        ]}>
++          {conversation_sender_initial(@entry.sender_name)}
++        </span>
++        <div class="min-w-0 flex-1">
++          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
++            <p class="font-semibold text-base-content">{@entry.sender_name}</p>
++            <span
++              data-testid="member-conversation-entry-label"
++              class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
++            >
++              {conversation_entry_label(@entry.kind)}
++            </span>
++          </div>
++          <p
++            id={conversation_entry_body_id(@entry)}
++            class="mt-3 whitespace-pre-wrap text-base leading-8 text-ink-2"
++          >
++            {@entry.message.body}
++          </p>
++        </div>
++      </div>
++    </article>
++    """
++  end
++
+   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
+ 
+   defp first_name(%{name: name}) when is_binary(name) do
+@@ -60,6 +110,30 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp receipt_group_expanded?(_expanded_groups, _status), do: false
+ 
++  defp split_conversation_entries(entries) when is_list(entries) do
++    Enum.split_with(entries, &(&1.kind == :original))
++  end
++
++  defp split_conversation_entries(_entries), do: {[], []}
++
++  defp conversation_sender_initial(name) when is_binary(name) do
++    case String.first(name) do
++      nil -> "?"
++      initial -> String.upcase(initial)
++    end
++  end
++
++  defp conversation_sender_initial(_name), do: "?"
++
++  defp conversation_entry_label(:original), do: "Original message"
++  defp conversation_entry_label(_kind), do: "Reply"
++
++  defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
++
++  defp conversation_entry_body_id(%{message: %{message_id: message_id}}) do
++    "member-conversation-body-#{message_id}"
++  end
++
+   defp member_club_home_path(_selected_club, "host"), do: ~p"/"
+   defp member_club_home_path(selected_club, _source), do: ClubSite.url(selected_club)
+ 
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 4fd3e51..5737f30 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -8,6 +8,7 @@
+     data-live-view="member-message-detail"
+     data-club-id={@selected_club.club_id}
+     data-message-id={@message.message_id}
++    data-reply-state={@reply_state}
+     class="mx-auto max-w-3xl"
+   >
+     <.link
+@@ -20,7 +21,7 @@
+ 
+     <section class="mt-5 border-b border-base-300 pb-8">
+       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
+-        Club message
++        Club conversation
+       </p>
+       <h1 class="mt-2 text-4xl font-semibold leading-tight tracking-tight text-base-content sm:text-5xl">
+         {@message.subject}
+@@ -33,12 +34,100 @@
+         </span>
+         member{if(@member_email_delivery_count == 1, do: "", else: "s")}
+       </p>
+-      <p
+-        id="member-message-body"
+-        class="mt-6 whitespace-pre-wrap text-base leading-8 text-ink-2"
++    </section>
++
++    <section
++      id="member-conversation"
++      data-message-count={Enum.count(@conversation_entries)}
++      class="mt-8 space-y-5"
++    >
++      <% {original_entries, reply_entries} = split_conversation_entries(@conversation_entries) %>
++
++      <div id="member-conversation-original" class="space-y-4">
++        <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
++      </div>
++
++      <section
++        id="member-message-reply-composer"
++        class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
+       >
+-        {@message.body}
+-      </p>
++        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
++          <div>
++            <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
++              <.icon name="hero-chat-bubble-left-right" class="size-5 text-primary" />
++              Reply to this conversation
++            </h2>
++            <p class="mt-1 text-sm leading-6 text-ink-2">
++              Your reply inherits the subject and is emailed to current club members except you.
++            </p>
++          </div>
++          <p
++            :if={@current_member}
++            id="member-message-reply-from"
++            data-sender-id={@current_member.id}
++            class="w-fit rounded-full border border-base-300 bg-base-100 px-3 py-1 text-sm font-semibold text-ink-2"
++          >
++            Replying as <span class="text-base-content">{@current_member.name}</span>
++          </p>
++        </div>
++
++        <p
++          :if={@reply_state == :posted}
++          id="member-message-reply-success"
++          class="mt-4 rounded-2xl border border-success/20 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
++        >
++          Your reply is being sent.
++        </p>
++
++        <p
++          :if={@reply_state == :failed}
++          id="member-message-reply-error"
++          data-reply-error={inspect(@reply_error)}
++          class="mt-4 rounded-2xl border border-error/20 bg-error-soft px-4 py-3 text-sm font-semibold text-error"
++        >
++          Your reply was not sent. Please try again.
++        </p>
++
++        <.form
++          for={@reply_form}
++          id="member-message-reply-form"
++          phx-submit="post_reply"
++          class="mt-5 grid gap-4"
++        >
++          <.input
++            field={@reply_form[:body]}
++            id="member-message-reply-body-input"
++            label="Reply"
++            type="textarea"
++            placeholder="Write your reply to the club."
++            rows="5"
++            class="min-h-32 w-full resize-y rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-base-content placeholder:text-ink-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
++          />
++          <p
++            :if={@reply_body_error}
++            id="member-message-reply-body-error"
++            class="text-sm font-semibold text-error"
++          >
++            {@reply_body_error}
++          </p>
++
++          <div class="flex flex-col gap-3 sm:flex-row">
++            <.button
++              id="member-message-reply-submit-button"
++              type="submit"
++              variant="primary"
++              size="lg"
++              disabled={is_nil(@current_member)}
++            >
++              <.icon name="hero-paper-airplane" class="size-4" /> Post reply
++            </.button>
++          </div>
++        </.form>
++      </section>
++
++      <div id="member-conversation-replies" class="space-y-4">
++        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
++      </div>
+     </section>
+ 
+     <section id="member-receipt-summary" class="mt-8">
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index 33a82a8..68bc06e 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -8,6 +8,9 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   """
+   use MembaWeb, :live_view
+ 
++  require Logger
++
++  alias Memba.Messaging
+   alias Memba.ReadModelChanges
+   alias MembaWeb.MemberMessageDetail
+ 
+@@ -18,7 +21,11 @@ defmodule MembaWeb.MemberMessageLive.Show do
+ 
+     case params do
+       %{"club_id" => _club_id, "message_id" => _message_id} ->
+-        case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
++        case MemberMessageDetail.load(
++               params,
++               socket.assigns.current_identity_clubs,
++               socket.assigns.current_identity
++             ) do
+           {:ok, detail_assigns} ->
+             if connected?(socket) do
+               Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+@@ -28,6 +35,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
+              socket
+              |> assign(:route_params, params)
+              |> assign(detail_assigns)
++             |> assign_initial_reply_state()
+              |> assign(:expanded_receipt_groups, MapSet.new())}
+ 
+           {:error, :forbidden} ->
+@@ -59,6 +67,18 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  def handle_info(
++        {:read_model_changed,
++         %{projector: Memba.Messaging.Projectors.Message, source_event: event}},
++        %{assigns: %{message: message}} = socket
++      ) do
++    if Map.get(event, :conversation_id) == message.conversation_id do
++      {:noreply, refresh_message_detail(socket)}
++    else
++      {:noreply, socket}
++    end
++  end
++
+   def handle_info(_message, socket), do: {:noreply, socket}
+ 
+   @impl Phoenix.LiveView
+@@ -68,6 +88,42 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     {:noreply, assign(socket, :expanded_receipt_groups, expanded_receipt_groups)}
+   end
+ 
++  def handle_event("post_reply", %{"reply" => reply_params}, socket) do
++    if blank_reply_body?(reply_params) do
++      {:noreply,
++       socket
++       |> assign(:reply_state, :composing)
++       |> assign(:reply_body_error, "Reply body can’t be blank.")
++       |> assign(:reply_error, nil)
++       |> assign(:reply_form, reply_form(reply_params))}
++    else
++      case post_current_member_reply(socket, reply_params) do
++        {:ok, _reply_message_id} ->
++          {:noreply,
++           socket
++           |> refresh_message_detail()
++           |> assign(:reply_state, :posted)
++           |> assign(:reply_body_error, nil)
++           |> assign(:reply_error, nil)
++           |> assign(:reply_form, reply_form())}
++
++        {:error, reason} ->
++          log_reply_failure(socket, reason)
++
++          {:noreply,
++           socket
++           |> assign(:reply_state, :failed)
++           |> assign(:reply_body_error, nil)
++           |> assign(:reply_error, reason)
++           |> assign(:reply_form, reply_form(reply_params))}
++      end
++    end
++  end
++
++  def handle_event("post_reply", _params, socket) do
++    handle_event("post_reply", %{"reply" => %{}}, socket)
++  end
++
+   @impl Phoenix.LiveView
+   def render(%{message: _message} = assigns) do
+     MembaWeb.PageHTML.message(assigns)
+@@ -130,7 +186,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   defp refresh_message_detail(socket) do
+     case MemberMessageDetail.load(
+            socket.assigns.route_params,
+-           socket.assigns.current_identity_clubs
++           socket.assigns.current_identity_clubs,
++           socket.assigns.current_identity
+          ) do
+       {:ok, detail_assigns} ->
+         assign(socket, detail_assigns)
+@@ -143,6 +200,67 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  defp assign_initial_reply_state(socket) do
++    socket
++    |> assign(:reply_state, :composing)
++    |> assign(:reply_body_error, nil)
++    |> assign(:reply_error, nil)
++    |> assign(:reply_form, reply_form())
++  end
++
++  defp post_current_member_reply(socket, reply_params) do
++    with %{message: %{conversation_id: conversation_id}, current_member: %{id: sender_id}} <-
++           socket.assigns do
++      reply_message_id = Memba.ID.generate(:message)
++
++      attrs = %{
++        "message_id" => reply_message_id,
++        "conversation_id" => conversation_id,
++        "sender_id" => sender_id,
++        "body" => Map.get(reply_params, "body", "")
++      }
++
++      case Messaging.post_message_reply(attrs, consistency: :strong) do
++        :ok -> {:ok, reply_message_id}
++        {:ok, _result} -> {:ok, reply_message_id}
++        {:error, reason} -> {:error, reason}
++      end
++    else
++      _missing_reply_context -> {:error, :forbidden}
++    end
++  end
++
++  defp blank_reply_body?(reply_params) do
++    reply_params
++    |> Map.get("body", "")
++    |> to_string()
++    |> String.trim()
++    |> Kernel.==("")
++  end
++
++  defp reply_form do
++    reply_form(%{"body" => ""})
++  end
++
++  defp reply_form(reply_params) do
++    reply_params
++    |> Map.take(["body"])
++    |> Map.put_new("body", "")
++    |> to_form(as: :reply)
++  end
++
++  defp log_reply_failure(socket, reason) do
++    Logger.error("Member message reply failed",
++      club_id: socket.assigns.selected_club.club_id,
++      conversation_id: socket.assigns.message.conversation_id,
++      sender_id: current_member_id(socket.assigns.current_member),
++      reason: inspect(reason)
++    )
++  end
++
++  defp current_member_id(nil), do: nil
++  defp current_member_id(current_member), do: current_member.id
++
+   defp ensure_identity_assigns(socket) do
+     socket
+     |> assign_new(:current_identity, fn -> nil end)
+diff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex
+index 9efec87..f168eaa 100644
+--- a/web/lib/memba_web/member_message_detail.ex
++++ b/web/lib/memba_web/member_message_detail.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageDetail do
+   initial controller pipeline.
+   """
+ 
++  alias Memba.Accounts
+   alias Memba.ID
+   alias Memba.Membership
+   alias Memba.Messaging
+@@ -22,16 +23,19 @@ defmodule MembaWeb.MemberMessageDetail do
+     * `{:error, :forbidden}` for missing, invalid, or inactive selected clubs;
+     * `{:error, :not_found}` for missing messages or message/club mismatches.
+   """
+-  def load(params, active_clubs) when is_map(params) and is_list(active_clubs) do
++  def load(params, active_clubs, current_identity \\ nil)
++
++  def load(params, active_clubs, current_identity)
++      when is_map(params) and is_list(active_clubs) do
+     with {:ok, club_id} <- cast_selected_club_id(params),
+          {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+          {:ok, message} <- fetch_message(params),
+          :ok <- require_message_in_club(message, club_id) do
+-      {:ok, detail_assigns(selected_club, message)}
++      {:ok, detail_assigns(selected_club, message, current_identity)}
+     end
+   end
+ 
+-  def load(_params, _active_clubs), do: {:error, :forbidden}
++  def load(_params, _active_clubs, _current_identity), do: {:error, :forbidden}
+ 
+   defp cast_selected_club_id(params) do
+     case ID.cast(:club, Map.get(params, "club_id")) do
+@@ -62,19 +66,23 @@ defmodule MembaWeb.MemberMessageDetail do
+     end
+   end
+ 
+-  defp detail_assigns(selected_club, message) do
++  defp detail_assigns(selected_club, message, current_identity) do
+     receipt_model =
+       message.message_id
+       |> Messaging.list_member_email_deliverys()
+       |> MemberEmailDeliveryPresentation.present_receipts()
+ 
+     sender = Membership.get_person(message.sender_id)
++    active_members = Membership.list_active_members_of_club(selected_club.club_id)
++    conversation_messages = Messaging.list_conversation_messages(message.message_id)
+ 
+     %{
+       page_title: message.subject,
+       selected_club: selected_club,
+       message: message,
+       sender_name: sender_name(sender),
++      current_member: current_member_for_identity(active_members, current_identity),
++      conversation_entries: conversation_entries(conversation_messages),
+       member_email_deliverys: receipt_model.receipts,
+       member_email_delivery_count: receipt_model.total_count,
+       member_email_delivery_summary: receipt_model.summary,
+@@ -82,6 +90,42 @@ defmodule MembaWeb.MemberMessageDetail do
+     }
+   end
+ 
++  defp current_member_for_identity(_active_members, nil), do: nil
++
++  defp current_member_for_identity(active_members, %{email: email}) do
++    identity_email = Accounts.normalize_email(email)
++
++    Enum.find(active_members, fn member ->
++      Accounts.normalize_email(member.email) == identity_email
++    end)
++  end
++
++  defp current_member_for_identity(_active_members, _identity), do: nil
++
++  defp conversation_entries(messages) do
++    sender_summaries =
++      messages
++      |> Enum.map(& &1.sender_id)
++      |> Membership.list_person_contact_summaries()
++
++    Enum.map(messages, fn message ->
++      %{
++        message: message,
++        sender_name: conversation_sender_name(sender_summaries, message.sender_id),
++        kind: conversation_entry_kind(message)
++      }
++    end)
++  end
++
++  defp conversation_sender_name(sender_summaries, sender_id) do
++    sender_summaries
++    |> Map.get(sender_id, %{})
++    |> sender_name()
++  end
++
++  defp conversation_entry_kind(%{reply_to_message_id: nil}), do: :original
++  defp conversation_entry_kind(_message), do: :reply
++
+   defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
+   defp sender_name(_sender), do: "Club member"
+ end
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+new file mode 100644
+index 0000000..3f70854
+--- /dev/null
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -0,0 +1,134 @@
++defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
++  use MembaWeb.FeatureCase, async: false
++
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership
++  alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryProviders.Fake
++  alias MembaWeb.ClubSite
++  alias MembaWeb.IdentityAuth
++
++  setup do
++    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
++
++    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
++    Fake.reset()
++
++    on_exit(fn ->
++      restore_env(:messaging_email_delivery_provider, original_provider)
++      Fake.reset()
++    end)
++
++    :ok
++  end
++
++  test "submit posts a reply as the signed-in member and refreshes the conversation", %{
++    conn: conn
++  } do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: Memba.ID.generate(:message),
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring your maps."
++               },
++               consistency: :strong
++             )
++
++    assert [message] = Messaging.list_messages_for_club(club_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
++      |> live(~p"/messages/#{message.message_id}")
++
++    view
++    |> element("#member-message-reply-form")
++    |> render_submit(%{
++      "reply" => %{"sender_id" => alice.person_id, "body" => "I'll bring snacks."}
++    })
++
++    assert [root, reply] = Messaging.list_conversation_messages(message.message_id)
++    assert root.message_id == message.message_id
++    assert Memba.ID.valid?(:message, reply.message_id)
++    assert reply.sender_id == bob.person_id
++    assert reply.conversation_id == message.message_id
++    assert reply.reply_to_message_id == message.message_id
++    assert reply.subject == "Trip planning night"
++    assert reply.body == "I'll bring snacks."
++
++    assert [receipt] = Messaging.list_member_email_deliverys(reply.message_id)
++    assert receipt.recipient_id == alice.person_id
++    assert receipt.status == "sent"
++
++    assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
++    assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
++
++    assert has_element?(
++             view,
++             "#member-conversation-replies " <>
++               "#member-conversation-entry-#{reply.message_id}" <>
++               "[data-conversation-kind='reply']" <>
++               "[data-sender-id='#{bob.person_id}']",
++             "I'll bring snacks."
++           )
++  end
++
++  defp signed_in_club_host(conn, email, club) do
++    conn
++    |> club_host(club)
++    |> init_test_session(%{IdentityAuth.identity_session_key() => email})
++  end
++
++  defp club_host(conn, club) do
++    club = Memba.Membership.get_club(club.club_id) || club
++    %{host: host} = URI.parse(ClubSite.url(club))
++    Map.put(conn, :host, host)
++  end
++
++  defp create_active_member(club_id, attrs) do
++    person_id = Memba.ID.generate(:person)
++    email = Keyword.fetch!(attrs, :email)
++
++    if is_nil(Membership.get_club(club_id)) do
++      assert :ok =
++               Membership.create_club(
++                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++                 consistency: :strong
++               )
++    end
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: Keyword.fetch!(attrs, :name),
++                 email: email,
++                 email_addresses: [%{email: email, is_primary: true}]
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: Memba.ID.generate(:membership),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    %{club_id: club_id, person_id: person_id}
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 131c34f..11817d9 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -82,6 +82,152 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
+   end
+ 
++  test "routed message detail renders the conversation and inline reply composer", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Clark",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    first_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Trip planning night",
++        body: "I'll bring snacks."
++      )
++
++    second_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: carol.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Trip planning night",
++        body: "I can drive."
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", bob)
++      |> live(~p"/messages/#{message.message_id}")
++
++    assert has_element?(view, "#member-conversation[data-message-count='3']")
++
++    assert has_element?(
++             view,
++             "#member-conversation-original " <>
++               "#member-conversation-entry-#{message.message_id}" <>
++               "[data-conversation-kind='original']" <>
++               "[data-sender-id='#{alice.person_id}']",
++             "Bring your maps."
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-replies " <>
++               "#member-conversation-entry-#{first_reply.message_id}" <>
++               "[data-conversation-kind='reply']" <>
++               "[data-sender-id='#{bob.person_id}']",
++             "I'll bring snacks."
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-replies " <>
++               "#member-conversation-entry-#{second_reply.message_id}" <>
++               "[data-conversation-kind='reply']" <>
++               "[data-sender-id='#{carol.person_id}']",
++             "I can drive."
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-reply-from[data-sender-id='#{bob.person_id}']",
++             "Replying as Bob Builder"
++           )
++
++    assert has_element?(view, "#member-message-reply-form")
++    assert has_element?(view, "#member-message-reply-body-input")
++    refute has_element?(view, "#member-message-reply-subject-input")
++  end
++
++  test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", bob)
++      |> live(~p"/messages/#{message.message_id}")
++
++    view
++    |> element("#member-message-reply-form")
++    |> render_submit(%{"reply" => %{"body" => " \n\t "}})
++
++    assert has_element?(view, "#member-message-detail[data-reply-state='composing']")
++    assert has_element?(view, "#member-message-reply-body-error", "Reply body can’t be blank.")
++    assert has_element?(view, "#member-message-reply-body-input")
++    refute has_element?(view, "#member-message-reply-success")
++    refute has_element?(view, "#member-message-reply-error")
++
++    assert Enum.map(
++             Memba.Messaging.list_conversation_messages(message.message_id),
++             & &1.message_id
++           ) == [
++             message.message_id
++           ]
++  end
++
+   test "routed message detail renders the delivery summary and polished group headers", %{
+     conn: conn
+   } do
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index 4db36b0..022c52e 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -49,6 +49,11 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+     assert assigns.selected_club.club_id == alice.club_id
+     assert assigns.message.message_id == message.message_id
+     assert assigns.sender_name == "Alice Adams"
++    assert assigns.current_member == nil
++
++    assert [%{kind: :original, sender_name: "Alice Adams", message: ^message}] =
++             assigns.conversation_entries
++
+     assert assigns.member_email_delivery_count == 1
+ 
+     assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) ==
+@@ -62,6 +67,78 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+              assigns.member_email_delivery_groups
+   end
+ 
++  test "loads the conversation in order with sender names and the signed-in current member" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Clark",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    first_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Trip planning night",
++        body: "I'll bring snacks."
++      )
++
++    second_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: carol.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Trip planning night",
++        body: "I can drive."
++      )
++
++    assert {:ok, assigns} =
++             MemberMessageDetail.load(
++               %{"club_id" => alice.club_id, "message_id" => message.message_id},
++               [alice],
++               %{email: "bob@example.com"}
++             )
++
++    assert assigns.current_member.id == bob.person_id
++
++    assert Enum.map(
++             assigns.conversation_entries,
++             &{&1.kind, &1.sender_name, &1.message.message_id}
++           ) ==
++             [
++               {:original, "Alice Adams", message.message_id},
++               {:reply, "Bob Builder", first_reply.message_id},
++               {:reply, "Carol Clark", second_reply.message_id}
++             ]
++  end
++
+   test "forbids missing, invalid, or unauthorized selected clubs" do
+     club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+     other_club = create_active_member(email: "pat@example.com", club_name: "Paddling Club")
