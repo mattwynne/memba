@@ -1,0 +1,36 @@
+{
+  "context_updates": {
+    "implementation_accepted": false,
+    "review_fixes_available": true,
+    "review_blockers": [
+      {
+        "id": "fix-inbound-lookup-context-boundary",
+        "title": "Move inbound message-id conversation lookup behind Messaging context",
+        "source": "review_synthesis",
+        "first_seen_stage": "synthesize_review",
+        "status": "open"
+      },
+      {
+        "id": "fix-shared-inbound-header-parser",
+        "title": "Deduplicate inbound RFC message-id parsing across providers",
+        "source": "review_synthesis",
+        "first_seen_stage": "synthesize_review",
+        "status": "open"
+      },
+      {
+        "id": "fix-document-inbound-routing-strategy",
+        "title": "Document inbound email routing strategy and invariants",
+        "source": "review_synthesis",
+        "first_seen_stage": "synthesize_review",
+        "status": "open"
+      },
+      {
+        "id": "fix-clarify-message-id-invariant",
+        "title": "Clarify or enforce persisted Message-ID uniqueness/determinism invariant",
+        "source": "review_synthesis",
+        "first_seen_stage": "synthesize_review",
+        "status": "open"
+      }
+    ]
+  }
+}
