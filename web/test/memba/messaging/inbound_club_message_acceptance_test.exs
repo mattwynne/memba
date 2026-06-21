@@ -175,6 +175,108 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            } = Messaging.get_inbound_email_source("resend", "task-011-email")
   end
 
+  test "recognized same-club reply headers post inbound email into the existing conversation" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+    carol = create_person!(name: "Carol Example", email: "carol@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, carol.person_id)
+
+    root_message_id =
+      send_club_message!(
+        club_id: kmc.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring route ideas."
+      )
+
+    follow_conversation!(kmc.club_id, root_message_id, carol.person_id)
+
+    bob_outbound_message_id = outbound_message_id_for_recipient!(root_message_id, bob.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: _inbound_email_id,
+              message_id: reply_message_id,
+              club_id: kmc_id,
+              sender_id: bob_id,
+              from_address: "bob@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-041-reply-header-match",
+                 provider_event_id: "task-041-reply-header-match-event",
+                 from_address: "bob@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Re: Trip planning night",
+                 text_body: """
+                 I can bring maps.
+
+                 On Tue, Alice Example wrote:
+                 > Bring route ideas.
+                 """,
+                 in_reply_to_message_ids: [bob_outbound_message_id]
+               },
+               consistency: :strong
+             )
+
+    assert kmc_id == kmc.club_id
+    assert bob_id == bob.person_id
+    refute reply_message_id == root_message_id
+
+    assert %{
+             message_id: ^reply_message_id,
+             club_id: ^kmc_id,
+             sender_id: ^bob_id,
+             conversation_id: ^root_message_id,
+             reply_to_message_id: ^root_message_id,
+             subject: "Trip planning night",
+             body: "I can bring maps."
+           } = Messaging.get_message(reply_message_id)
+
+    assert [
+             %{
+               message_id: ^reply_message_id,
+               recipient_id: alice_id,
+               recipient_name: "Alice Example",
+               recipient_address: "alice@example.com",
+               status: "pending"
+             },
+             %{
+               message_id: ^reply_message_id,
+               recipient_id: carol_id,
+               recipient_name: "Carol Example",
+               recipient_address: "carol@example.com",
+               status: "pending"
+             }
+           ] = Messaging.list_recipient_deliveries(reply_message_id)
+
+    assert alice_id == alice.person_id
+    assert carol_id == carol.person_id
+    assert Messaging.following_conversation?(root_message_id, bob.person_id)
+    assert Fake.deliveries() == []
+
+    assert %InboundEmailSourceProjection{
+             provider: "resend",
+             provider_message_id: "task-041-reply-header-match",
+             provider_event_id: "task-041-reply-header-match-event",
+             from_address: "bob@example.com",
+             to_address: "kmc@clubs.memba.io",
+             status: "accepted",
+             club_id: ^kmc_id,
+             sender_id: ^bob_id,
+             message_id: ^reply_message_id,
+             rejection_reason: nil,
+             rejection_email_delivery_reference: nil
+           } = Messaging.get_inbound_email_source("resend", "task-041-reply-header-match")
+  end
+
   test "accepted inbound email is dispatched by the read-model-change dispatcher nudge" do
     name = :"#{__MODULE__}.inbound_dispatch_nudge"
 
@@ -1064,6 +1166,45 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                },
                consistency: :strong
              )
+  end
+
+  defp send_club_message!(attrs) do
+    message_id = Memba.ID.generate(:message)
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: Keyword.fetch!(attrs, :club_id),
+                 sender_id: Keyword.fetch!(attrs, :sender_id),
+                 subject: Keyword.fetch!(attrs, :subject),
+                 body: Keyword.fetch!(attrs, :body)
+               },
+               consistency: :strong
+             )
+
+    message_id
+  end
+
+  defp follow_conversation!(club_id, conversation_id, member_id) do
+    assert :ok =
+             Messaging.follow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               consistency: :strong
+             )
+  end
+
+  defp outbound_message_id_for_recipient!(message_id, recipient_id) do
+    message_id
+    |> Messaging.list_recipient_deliveries()
+    |> Enum.find(&(&1.recipient_id == recipient_id))
+    |> case do
+      %{outbound_message_id: outbound_message_id} when is_binary(outbound_message_id) ->
+        outbound_message_id
+
+      _missing ->
+        flunk("missing outbound Message-ID for recipient #{recipient_id}")
+    end
   end
 
   defp insert_inactive_membership!(club_id, person_id) do
