@@ -8,6 +8,7 @@ defmodule Memba.Messaging do
   alias Memba.Membership
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
@@ -44,6 +45,22 @@ defmodule Memba.Messaging do
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- send_club_message_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Post a reply to an existing club-message conversation.
+
+  The caller supplies the reply `:message_id`, root `:conversation_id`, replying
+  `:sender_id`, and non-blank `:body`. The reply inherits the root message's
+  club and subject, and only a current member of that club may reply.
+  """
+  def post_message_reply(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- post_message_reply_command(attrs),
+         :ok <- authorize_reply_sender(command.club_id, command.sender_id),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -795,6 +812,26 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp post_message_reply_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
+         {:ok, sender_id} <- fetch_required(attrs, :sender_id),
+         {:ok, body} <- fetch_required(attrs, :body),
+         {:ok, root_message} <- fetch_conversation_root(conversation_id) do
+      {:ok,
+       %PostMessageReply{
+         message_id: message_id,
+         club_id: root_message.club_id,
+         sender_id: sender_id,
+         conversation_id: conversation_id,
+         reply_to_message_id: conversation_id,
+         subject: root_message.subject,
+         body: body,
+         recipients: resolve_recipients(root_message.club_id)
+       }}
+    end
+  end
+
   defp report_email_delivery_delivered_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
@@ -848,6 +885,25 @@ defmodule Memba.Messaging do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp fetch_conversation_root(conversation_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
+      case Repo.get(MessageProjection, conversation_id) do
+        %MessageProjection{} = message -> {:ok, message}
+        nil -> {:error, :conversation_not_found}
+      end
+    else
+      :error -> {:error, :invalid_conversation_id}
+    end
+  end
+
+  defp authorize_reply_sender(club_id, sender_id) do
+    if Membership.active_member_of_club?(club_id, sender_id) do
+      :ok
+    else
+      {:error, :not_current_member}
     end
   end
 

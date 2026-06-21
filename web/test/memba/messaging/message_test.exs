@@ -5,6 +5,7 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryBounced
@@ -220,6 +221,80 @@ defmodule Memba.Messaging.MessageTest do
                Message.execute(message, %SendMessage{
                  valid_send_message()
                  | message_id: message_id
+               })
+    end
+  end
+
+  describe "execute/2 PostMessageReply" do
+    test "emits a reply MessageSent in the root conversation" do
+      root_message_id = Memba.ID.generate(:message)
+      reply_message_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      sender_id = Memba.ID.generate(:person)
+      delivery_id = Memba.ID.generate(:delivery)
+
+      command = %PostMessageReply{
+        message_id: reply_message_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        conversation_id: root_message_id,
+        reply_to_message_id: root_message_id,
+        subject: "Trail day",
+        body: " I'll bring maps. ",
+        recipients: [
+          %Recipient{
+            delivery_id: delivery_id,
+            person_id: sender_id,
+            name: " Alice Sender ",
+            email: " Alice@Example.COM "
+          }
+        ]
+      }
+
+      assert [
+               %MessageSent{
+                 message_id: ^reply_message_id,
+                 club_id: ^club_id,
+                 sender_id: ^sender_id,
+                 conversation_id: ^root_message_id,
+                 reply_to_message_id: ^root_message_id,
+                 subject: "Trail day",
+                 body: "I'll bring maps."
+               },
+               %EmailDeliveryCreated{
+                 message_id: ^reply_message_id,
+                 delivery_id: ^delivery_id,
+                 recipient_id: ^sender_id,
+                 recipient_name: "Alice Sender",
+                 recipient_email: "alice@example.com"
+               }
+             ] = Message.execute(%Message{}, command)
+    end
+
+    test "rejects replies without a root conversation, replied-to message, or body" do
+      valid_command = valid_post_message_reply()
+
+      assert {:error, :invalid_conversation_id} =
+               Message.execute(%Message{}, %PostMessageReply{valid_command | conversation_id: nil})
+
+      assert {:error, :invalid_reply_to_message_id} =
+               Message.execute(%Message{}, %PostMessageReply{
+                 valid_command
+                 | reply_to_message_id: nil
+               })
+
+      assert {:error, :invalid_body} =
+               Message.execute(%Message{}, %PostMessageReply{valid_command | body: "  "})
+    end
+
+    test "rejects a reply command whose conversation points at the reply itself" do
+      valid_command = valid_post_message_reply()
+
+      assert {:error, :invalid_conversation_reference} =
+               Message.execute(%Message{}, %PostMessageReply{
+                 valid_command
+                 | conversation_id: valid_command.message_id,
+                   reply_to_message_id: valid_command.conversation_id
                })
     end
   end
@@ -506,6 +581,29 @@ defmodule Memba.Messaging.MessageTest do
       sender_id: sender_id,
       subject: "Trail day",
       body: "Meet at 9am.",
+      recipients: [
+        %Recipient{
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: sender_id,
+          name: "Alice Sender",
+          email: "alice@example.com"
+        }
+      ]
+    }
+  end
+
+  defp valid_post_message_reply do
+    sender_id = Memba.ID.generate(:person)
+    root_message_id = Memba.ID.generate(:message)
+
+    %PostMessageReply{
+      message_id: Memba.ID.generate(:message),
+      club_id: Memba.ID.generate(:club),
+      sender_id: sender_id,
+      conversation_id: root_message_id,
+      reply_to_message_id: root_message_id,
+      subject: "Trail day",
+      body: "I'll bring maps.",
       recipients: [
         %Recipient{
           delivery_id: Memba.ID.generate(:delivery),

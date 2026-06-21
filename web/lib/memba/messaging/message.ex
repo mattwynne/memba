@@ -15,6 +15,7 @@ defmodule Memba.Messaging.Message do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -47,34 +48,31 @@ defmodule Memba.Messaging.Message do
   @impl Aggregate
   def execute(%__MODULE__{message_id: nil}, %SendMessage{} = command) do
     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
-         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
-         :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
          {:ok, conversation_id, reply_to_message_id} <-
            normalize_conversation_reference(
              command.message_id,
              command.conversation_id,
              command.reply_to_message_id
-           ),
-         {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
-         {:ok, body} <- normalize_text(command.body, :invalid_body),
-         {:ok, recipients} <- normalize_recipients(command.recipients),
-         :ok <- validate_sender_recipient(command.sender_id, recipients) do
-      [
-        %MessageSent{
-          message_id: command.message_id,
-          club_id: command.club_id,
-          sender_id: command.sender_id,
-          conversation_id: conversation_id,
-          reply_to_message_id: reply_to_message_id,
-          subject: subject,
-          body: body
-        }
-        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
-      ]
+           ) do
+      message_events(command, conversation_id, reply_to_message_id)
     end
   end
 
   def execute(%__MODULE__{}, %SendMessage{}), do: {:error, :already_sent}
+
+  def execute(%__MODULE__{message_id: nil}, %PostMessageReply{} = command) do
+    with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+         {:ok, conversation_id, reply_to_message_id} <-
+           normalize_required_reply_reference(
+             command.message_id,
+             command.conversation_id,
+             command.reply_to_message_id
+           ) do
+      message_events(command, conversation_id, reply_to_message_id)
+    end
+  end
+
+  def execute(%__MODULE__{}, %PostMessageReply{}), do: {:error, :already_sent}
 
   def execute(%__MODULE__{} = message, %ReportEmailDeliveryDelivered{} = command) do
     report_status(message, command, :delivered, EmailDeliveryDelivered)
@@ -176,11 +174,42 @@ defmodule Memba.Messaging.Message do
   defp validate_message_identity(%__MODULE__{message_id: message_id}, message_id), do: :ok
   defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
 
+  defp message_events(command, conversation_id, reply_to_message_id) do
+    with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+         {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
+         {:ok, body} <- normalize_text(command.body, :invalid_body),
+         {:ok, recipients} <- normalize_recipients(command.recipients),
+         :ok <- validate_sender_recipient(command.sender_id, recipients) do
+      [
+        %MessageSent{
+          message_id: command.message_id,
+          club_id: command.club_id,
+          sender_id: command.sender_id,
+          conversation_id: conversation_id,
+          reply_to_message_id: reply_to_message_id,
+          subject: subject,
+          body: body
+        }
+        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
+      ]
+    end
+  end
+
   defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
     conversation_id = conversation_id || message_id
 
     with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
          :ok <- validate_optional_id(:message, reply_to_message_id, :invalid_reply_to_message_id),
+         :ok <- validate_conversation_shape(message_id, conversation_id, reply_to_message_id) do
+      {:ok, conversation_id, reply_to_message_id}
+    end
+  end
+
+  defp normalize_required_reply_reference(message_id, conversation_id, reply_to_message_id) do
+    with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
+         :ok <- validate_id(:message, reply_to_message_id, :invalid_reply_to_message_id),
          :ok <- validate_conversation_shape(message_id, conversation_id, reply_to_message_id) do
       {:ok, conversation_id, reply_to_message_id}
     end

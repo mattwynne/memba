@@ -5,6 +5,7 @@ defmodule Memba.Messaging.AppTest do
 
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
@@ -53,6 +54,7 @@ defmodule Memba.Messaging.AppTest do
     expected_commands =
       MapSet.new([
         SendMessage,
+        PostMessageReply,
         ReceiveInboundEmail,
         AcceptInboundClubEmail,
         RejectInboundClubEmail,

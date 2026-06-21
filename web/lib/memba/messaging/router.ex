@@ -8,6 +8,7 @@ defmodule Memba.Messaging.Router do
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
@@ -26,6 +27,7 @@ defmodule Memba.Messaging.Router do
   dispatch(
     [
       SendMessage,
+      PostMessageReply,
       ReportEmailDeliveryDelivered,
       ReportEmailDeliveryDelayed,
       ReportEmailDeliveryBounced,
