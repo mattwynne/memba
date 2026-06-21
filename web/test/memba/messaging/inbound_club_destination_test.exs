@@ -58,6 +58,15 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       end)
     end
 
+    test "rejects unsupported local parts at a known club subdomain" do
+      insert_membership_club!(slug: "kmc")
+
+      assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "committee@kmc.clubs.memba.io"
+               ])
+    end
+
     test "rejects recipient addresses outside the inbound club domain" do
       insert_membership_club!(slug: "kmc")
 

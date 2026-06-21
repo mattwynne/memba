@@ -29,10 +29,10 @@ defmodule Memba.Messaging.InboundClubDestination do
   @doc """
   Resolve recipient addresses to the destination club for an inbound email.
 
-  Returns `{:ok, destination}` when any recipient address uses a club subdomain
-  under the configured inbound domain and the subdomain matches an existing club
-  slug. Unrelated copied recipients are ignored once a supported club destination
-  is found.
+  Returns `{:ok, destination}` when any recipient address uses the supported
+  `everyone` local part at a club subdomain under the configured inbound domain
+  and the subdomain matches an existing club slug. Unrelated copied recipients
+  are ignored once a supported club destination is found.
 
   Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is
   present but no matching club exists, or
@@ -83,11 +83,21 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   defp resolve_club_slug(local_part, host) do
     case club_slug_from_subdomain_host(host) do
-      {:ok, slug} -> {:ok, slug}
-      {:error, :not_club_subdomain_host} -> club_slug_from_flat_address(local_part, host)
-      {:error, _reason} = error -> error
+      {:ok, slug} ->
+        with :ok <- ensure_supported_local_part(local_part) do
+          {:ok, slug}
+        end
+
+      {:error, :not_club_subdomain_host} ->
+        club_slug_from_flat_address(local_part, host)
+
+      {:error, _reason} = error ->
+        error
     end
   end
+
+  defp ensure_supported_local_part("everyone"), do: :ok
+  defp ensure_supported_local_part(_local_part), do: {:error, :unsupported_local_part}
 
   defp club_slug_from_subdomain_host(host) do
     inbound_domain = ClubInboundEmailAddress.domain()
