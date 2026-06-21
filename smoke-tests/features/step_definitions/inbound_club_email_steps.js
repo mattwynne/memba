@@ -16,7 +16,7 @@ Given("the production smoke configuration is valid", async function () {
     "Expected the default smoke club name to be Smoke Test Club"
   );
   assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
-  assert.equal(this.config.inboundAddress, "test@clubs.memba.io", "Expected the default inbound address");
+  assert.equal(this.config.inboundAddress, "everyone@test.clubs.memba.io", "Expected the default inbound address");
   assert.notEqual(
     this.config.unknown.email.toLowerCase(),
     this.config.member.email.toLowerCase(),
