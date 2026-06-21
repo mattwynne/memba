@@ -15,6 +15,10 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
       claimed the delivery for a provider handoff, whether that handoff later
       succeeds or fails.
     * `sent_at` and `failed_at` record the latest persisted dispatch outcome.
+
+  `outbound_message_id` is the Memba-controlled RFC Message-ID sent in the
+  outbound email. The database keeps it non-null and unique so inbound reply
+  routing can use it as a deterministic lookup key.
   """
 
   use Ecto.Schema

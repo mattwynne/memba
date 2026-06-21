@@ -55,6 +55,34 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
     end
   end
 
+  test "database constraint keeps outbound Message-ID lookup keys unique" do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    outbound_message_id = "<memba.unique-lookup-key@example.test>"
+
+    assert_raise Postgrex.Error,
+                 ~r/messaging_email_deliveries_outbound_message_id_index|unique/i,
+                 fn ->
+                   Repo.insert_all(EmailDeliveryProjection, [
+                     email_delivery_row(
+                       outbound_message_id: outbound_message_id,
+                       status: "pending",
+                       recipient_name: "First Recipient",
+                       recipient_address: "first-recipient@example.test",
+                       inserted_at: now,
+                       updated_at: now
+                     ),
+                     email_delivery_row(
+                       outbound_message_id: outbound_message_id,
+                       status: "pending",
+                       recipient_name: "Second Recipient",
+                       recipient_address: "second-recipient@example.test",
+                       inserted_at: now,
+                       updated_at: now
+                     )
+                   ])
+                 end
+  end
+
   defp email_delivery_row(attrs) when is_list(attrs) do
     delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
@@ -62,7 +90,10 @@ defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
     %{
       delivery_id: delivery_id,
       message_id: message_id,
-      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
+      outbound_message_id:
+        Keyword.get_lazy(attrs, :outbound_message_id, fn ->
+          OutboundMessageID.for_delivery(delivery_id, message_id)
+        end),
       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       recipient_address: Keyword.fetch!(attrs, :recipient_address),
