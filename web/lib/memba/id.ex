@@ -14,6 +14,7 @@ defmodule Memba.ID do
     membership: "mem",
     message: "msg",
     delivery: "del",
+    conversation_follow: "cfl",
     inbound_email: "inb",
     email_address: "ead",
     onboarding_request: "req",
@@ -30,6 +31,7 @@ defmodule Memba.ID do
           | :membership
           | :message
           | :delivery
+          | :conversation_follow
           | :inbound_email
           | :email_address
           | :onboarding_request

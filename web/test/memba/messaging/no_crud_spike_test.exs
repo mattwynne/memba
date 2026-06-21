@@ -8,9 +8,14 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
 
     assert source =~ "def send_club_message("
     assert source =~ "def post_message_reply("
+    assert source =~ "def follow_conversation("
+    assert source =~ "def unfollow_conversation("
     assert source =~ "def get_message("
     assert source =~ "def list_messages_for_club("
     assert source =~ "def list_conversation_messages("
+    assert source =~ "def get_conversation_follow("
+    assert source =~ "def following_conversation?("
+    assert source =~ "def list_conversation_followers("
     assert source =~ "def list_operator_messages("
     assert source =~ "def get_email_delivery("
     assert source =~ "def get_member_email_delivery("
@@ -31,6 +36,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert list_functions == [
              "list_messages_for_club",
              "list_conversation_messages",
+             "list_conversation_followers",
              "list_operator_messages",
              "list_recipient_deliveries",
              "list_member_email_deliverys",
@@ -77,6 +83,11 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert Enum.any?(
              migration_sources,
              &String.contains?(&1, "create table(:messaging_memba_staff_email_deliveries")
+           )
+
+    assert Enum.any?(
+             migration_sources,
+             &String.contains?(&1, "create table(:messaging_conversation_follows")
            )
 
     refute Enum.any?(migration_sources, fn source ->
