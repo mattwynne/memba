@@ -1,0 +1,92 @@
+diff --git a/docs/iterations/042-club-email-subdomains/todo.md b/docs/iterations/042-club-email-subdomains/todo.md
+index 4597171..f3b4de2 100644
+--- a/docs/iterations/042-club-email-subdomains/todo.md
++++ b/docs/iterations/042-club-email-subdomains/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
+ - [x] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
+ - [x] 007 Update member dashboard and member compose copy/mailto links to display the new address.
+-- [ ] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
++- [x] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.
+ - [ ] 009 Update provider parser or provider-neutral inbound email tests where recipient-address normalization assumes the old flat address.
+ - [ ] 010 Update acceptance step support to generate and submit new-address inbound webhook payloads; remove/narrow `@todo-domain` / `@todo-ui` tags as scenarios become executable.
+ - [ ] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
+diff --git a/web/test/memba/messaging/member_message_email_test.exs b/web/test/memba/messaging/member_message_email_test.exs
+new file mode 100644
+index 0000000..5d170e7
+--- /dev/null
++++ b/web/test/memba/messaging/member_message_email_test.exs
+@@ -0,0 +1,73 @@
++defmodule Memba.Messaging.MemberMessageEmailTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.MemberMessageEmail
++  alias Memba.Messaging.OutboundMessageID
++
++  test "reply notifications use the club email subdomain destination and preserve threading headers" do
++    request =
++      email_delivery_request(
++        club_name: "Kootenay Mountaineering Club",
++        club_slug: "kmc",
++        conversation_id: Memba.ID.generate(:message),
++        reply_to_message_id: Memba.ID.generate(:message),
++        in_reply_to_outbound_message_id: "<memba.parent@example.test>",
++        references_outbound_message_ids: [
++          "<memba.root@example.test>",
++          "<memba.parent@example.test>"
++        ]
++      )
++
++    assert MemberMessageEmail.reply_to(request) ==
++             {"Kootenay Mountaineering Club", "everyone@kmc.clubs.memba.io"}
++
++    refute MemberMessageEmail.reply_to(request) ==
++             {"Kootenay Mountaineering Club", "kmc@clubs.memba.io"}
++
++    assert MemberMessageEmail.message_id(request) == request.outbound_message_id
++
++    assert MemberMessageEmail.threading_headers(request) == [
++             {"In-Reply-To", "<memba.parent@example.test>"},
++             {"References", "<memba.root@example.test> <memba.parent@example.test>"}
++           ]
++  end
++
++  defp email_delivery_request(overrides) do
++    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
++
++    delivery_id =
++      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++
++    %EmailDeliveryRequest{
++      message_id: message_id,
++      club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
++      delivery_id: delivery_id,
++      outbound_message_id:
++        Keyword.get(
++          overrides,
++          :outbound_message_id,
++          OutboundMessageID.for_delivery(delivery_id, message_id)
++        ),
++      recipient_id:
++        Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
++      recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
++      recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
++      club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
++      club_slug: Keyword.get(overrides, :club_slug),
++      sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
++      sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
++      conversation_id: Keyword.get(overrides, :conversation_id),
++      reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
++      in_reply_to_outbound_message_id: Keyword.get(overrides, :in_reply_to_outbound_message_id),
++      references_outbound_message_ids: Keyword.get(overrides, :references_outbound_message_ids),
++      conversation_url: Keyword.get(overrides, :conversation_url),
++      stop_follow_url: Keyword.get(overrides, :stop_follow_url),
++      reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),
++      reply_to_body: Keyword.get(overrides, :reply_to_body),
++      channel: Keyword.get(overrides, :channel, :email),
++      subject: Keyword.get(overrides, :subject, "Trip planning night"),
++      body: Keyword.get(overrides, :body, "Bring route ideas.")
++    }
++  end
++end
