@@ -7,6 +7,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Messaging
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.MessageSent
@@ -14,20 +15,32 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Repo
 
-  test "a current club member can post a reply in the root message conversation and email everyone except themself" do
+  test "a current club member can post a reply and email only current followers except themself" do
     club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
     bob = create_person(name: "Bob", email: "bob@example.com")
     carol = create_person(name: "Carol", email: "carol@example.com")
+    dana = create_person(name: "Dana", email: "dana@example.com")
+    erin = create_person(name: "Erin", email: "erin@example.com")
     pat = create_person(name: "Pat", email: "pat@example.com")
     other_club_id = Memba.ID.generate(:club)
 
     add_member(club_id, alice.person_id)
     add_member(club_id, bob.person_id)
     add_member(club_id, carol.person_id)
+    add_member(club_id, dana.person_id)
+    erin_membership_id = add_member(club_id, erin.person_id)
     add_member(other_club_id, pat.person_id)
 
     root_message_id = send_root_message(club_id, alice.person_id)
+    follow_conversation(club_id, root_message_id, bob.person_id)
+    follow_conversation(club_id, root_message_id, carol.person_id)
+    unfollow_conversation(club_id, root_message_id, carol.person_id)
+    follow_conversation(club_id, root_message_id, dana.person_id)
+    follow_conversation(club_id, root_message_id, erin.person_id)
+    follow_conversation(club_id, root_message_id, pat.person_id)
+    remove_member(erin_membership_id)
+
     reply_message_id = Memba.ID.generate(:message)
 
     assert {:ok,
@@ -68,15 +81,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              },
              %EmailDeliveryCreated{
                message_id: ^reply_message_id,
-               recipient_id: carol_id,
-               recipient_name: "Carol",
-               recipient_email: "carol@example.com"
+               recipient_id: dana_id,
+               recipient_name: "Dana",
+               recipient_email: "dana@example.com"
              }
            ] = delivery_events
 
-    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
-    refute bob.person_id in Enum.map(delivery_events, & &1.recipient_id)
-    refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert [alice_id, dana_id] == [alice.person_id, dana.person_id]
+
+    recipient_ids = Enum.map(delivery_events, & &1.recipient_id)
+
+    refute bob.person_id in recipient_ids
+    refute carol.person_id in recipient_ids
+    refute erin.person_id in recipient_ids
+    refute pat.person_id in recipient_ids
 
     assert %MessageProjection{
              message_id: ^reply_message_id,
@@ -98,9 +116,9 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              },
              %EmailDeliveryProjection{
                message_id: ^reply_message_id,
-               recipient_id: ^carol_id,
-               recipient_name: "Carol",
-               recipient_address: "carol@example.com",
+               recipient_id: ^dana_id,
+               recipient_name: "Dana",
+               recipient_address: "dana@example.com",
                status: "pending"
              }
            ] = pending_deliveries_for_message(reply_message_id)
@@ -203,13 +221,41 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   end
 
   defp add_member(club_id, person_id) do
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              MembershipApp.dispatch(
                %AddMember{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
                },
+               consistency: :strong
+             )
+
+    membership_id
+  end
+
+  defp remove_member(membership_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveMember{membership_id: membership_id},
+               consistency: :strong
+             )
+  end
+
+  defp follow_conversation(club_id, conversation_id, member_id) do
+    assert :ok =
+             Messaging.follow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
+               consistency: :strong
+             )
+  end
+
+  defp unfollow_conversation(club_id, conversation_id, member_id) do
+    assert :ok =
+             Messaging.unfollow_conversation(
+               %{club_id: club_id, conversation_id: conversation_id, member_id: member_id},
                consistency: :strong
              )
   end

@@ -8,6 +8,7 @@ defmodule Memba.Messaging do
   alias Memba.Membership
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
@@ -16,7 +17,10 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationReference
+  alias Memba.Messaging.ConversationFollowers
+  alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
@@ -25,6 +29,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -64,6 +69,94 @@ defmodule Memba.Messaging do
          :ok <- authorize_reply_sender(command.club_id, command.sender_id),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
+    end
+  end
+
+  @doc """
+  Follow a club-message conversation for reply notifications.
+
+  This command records follow state only. Caller-facing authorization, such as
+  ensuring a person is a current club member before opting in from the app, is
+  applied by the surfaces that expose this capability.
+  """
+  def follow_conversation(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- follow_conversation_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Follow a conversation from an in-app current-member surface.
+
+  The raw `follow_conversation/2` command records follow state for system and
+  future email-unsubscribe workflows. Browser surfaces should use this wrapper
+  so only current club members can opt in through the app.
+  """
+  def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- follow_conversation_command(attrs),
+         :ok <- authorize_current_member_conversation_action(command),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Stop following a club-message conversation.
+  """
+  def unfollow_conversation(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- unfollow_conversation_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Stop following a conversation from an in-app current-member surface.
+
+  Email stop-follow links intentionally use the raw unfollow command so former
+  members can reduce notifications without signing in. In-app unfollow remains
+  limited to current club members.
+  """
+  def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- unfollow_conversation_command(attrs),
+         :ok <- authorize_current_member_conversation_action(command),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Stop following a conversation from a signed reply-email link.
+
+  The token scopes the action to the intended club, conversation, and member.
+  This API intentionally does not require current club membership because it only
+  reduces notifications and old emails should remain useful.
+  """
+  def stop_following_conversation_from_email_token(token, dispatch_opts \\ [])
+      when is_list(dispatch_opts) do
+    with {:ok, scope} <- ConversationStopFollowToken.verify(token),
+         {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),
+         :ok <- ensure_stop_follow_scope(root_message, scope),
+         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
+      case unfollow_conversation(
+             %{
+               club_id: scope.club_id,
+               conversation_id: scope.conversation_id,
+               member_id: scope.member_id
+             },
+             dispatch_opts
+           ) do
+        {:error, _reason} = error -> error
+        dispatch_result -> {:ok, Map.put(scope, :dispatch_result, dispatch_result)}
+      end
+    else
+      {:error, _reason} -> {:error, :invalid_stop_follow_token}
+      nil -> {:error, :invalid_stop_follow_token}
     end
   end
 
@@ -245,6 +338,50 @@ defmodule Memba.Messaging do
       |> Repo.all()
     else
       _invalid_or_missing -> []
+    end
+  end
+
+  @doc """
+  Return a projected follow state for a member in a conversation.
+
+  Invalid IDs or missing follow rows return `nil`.
+  """
+  def get_conversation_follow(conversation_id, member_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, member_id} <- ID.cast(:person, member_id) do
+      Repo.get(
+        ConversationFollowProjection,
+        ConversationFollowers.follow_id(conversation_id, member_id)
+      )
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Return whether a member currently follows a conversation.
+  """
+  def following_conversation?(conversation_id, member_id) do
+    case get_conversation_follow(conversation_id, member_id) do
+      %ConversationFollowProjection{following: true} -> true
+      _not_following -> false
+    end
+  end
+
+  @doc """
+  List current projected followers for a conversation.
+
+  This is the raw Messaging follow state. Delivery eligibility that depends on
+  current club membership is applied by reply-delivery code.
+  """
+  def list_conversation_followers(conversation_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
+      ConversationFollowProjection
+      |> where([follow], follow.conversation_id == ^conversation_id and follow.following == true)
+      |> order_by([follow], asc: follow.member_id)
+      |> Repo.all()
+    else
+      :error -> []
     end
   end
 
@@ -875,7 +1012,36 @@ defmodule Memba.Messaging do
          reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
          subject: root_message.subject,
          body: body,
-         recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
+         recipients:
+           resolve_reply_recipients(root_message.club_id, conversation_id,
+             except_person_id: sender_id
+           )
+       }}
+    end
+  end
+
+  defp follow_conversation_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
+         {:ok, member_id} <- fetch_required(attrs, :member_id) do
+      {:ok,
+       %FollowConversation{
+         club_id: club_id,
+         conversation_id: conversation_id,
+         member_id: member_id
+       }}
+    end
+  end
+
+  defp unfollow_conversation_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
+         {:ok, member_id} <- fetch_required(attrs, :member_id) do
+      {:ok,
+       %UnfollowConversation{
+         club_id: club_id,
+         conversation_id: conversation_id,
+         member_id: member_id
        }}
     end
   end
@@ -955,6 +1121,47 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp authorize_current_member_conversation_action(command) do
+    with :ok <- authorize_reply_sender(command.club_id, command.member_id),
+         {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
+      if root_message.club_id == command.club_id do
+        :ok
+      else
+        {:error, :conversation_not_found}
+      end
+    end
+  end
+
+  defp ensure_stop_follow_scope(
+         %MessageProjection{club_id: club_id, message_id: conversation_id},
+         %{
+           club_id: club_id,
+           conversation_id: conversation_id
+         }
+       ) do
+    :ok
+  end
+
+  defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}
+
+  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
+    if following_conversation?(scope.conversation_id, scope.member_id) do
+      case follow_conversation(
+             %{
+               club_id: scope.club_id,
+               conversation_id: scope.conversation_id,
+               member_id: scope.member_id
+             },
+             dispatch_opts
+           ) do
+        {:error, _reason} = error -> error
+        _dispatch_result -> :ok
+      end
+    else
+      :ok
+    end
+  end
+
   defp resolve_recipients(club_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
@@ -962,6 +1169,25 @@ defmodule Memba.Messaging do
     |> Membership.list_active_members_of_club()
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
+  end
+
+  defp resolve_reply_recipients(club_id, conversation_id, opts) do
+    except_person_id = Keyword.get(opts, :except_person_id)
+    follower_ids = current_follower_ids(club_id, conversation_id)
+
+    club_id
+    |> Membership.list_active_members_of_club()
+    |> Enum.filter(&MapSet.member?(follower_ids, &1.id))
+    |> Enum.reject(&(&1.id == except_person_id))
+    |> Enum.map(&resolved_recipient/1)
+  end
+
+  defp current_follower_ids(club_id, conversation_id) do
+    conversation_id
+    |> list_conversation_followers()
+    |> Enum.filter(&(&1.club_id == club_id))
+    |> Enum.map(& &1.member_id)
+    |> MapSet.new()
   end
 
   defp resolved_recipient(%{id: person_id, name: name, email: email}) do

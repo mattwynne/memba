@@ -110,12 +110,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
       title: title,
       preheader: "#{sender_name} replied in the #{conversation_subject(request)} conversation.",
       content: content,
-      footer:
-        EmailTemplates.memba_footer(
-          group_name: group_name,
-          recipient_email: request.recipient_address,
-          reason: membership_reason(request.club_name, group_name)
-        )
+      footer: reply_footer(request, group_name)
     )
   end
 
@@ -125,6 +120,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
       "",
       request.body,
       view_conversation_text(request.conversation_url),
+      stop_follow_text(request.stop_follow_url),
       replied_to_context_text(request)
     ]
     |> Enum.reject(&is_nil/1)
@@ -314,6 +310,15 @@ defmodule Memba.Messaging.MemberMessageEmail do
     end
   end
 
+  defp stop_follow_text(nil), do: nil
+
+  defp stop_follow_text(url) do
+    case String.trim(to_string(url)) do
+      "" -> nil
+      url -> "\nYou're following this conversation.\nStop following this conversation:\n#{url}"
+    end
+  end
+
   defp replied_to_context_text(%EmailDeliveryRequest{} = request) do
     cond do
       blank?(request.reply_to_sender_name) or blank?(request.reply_to_body) ->
@@ -335,6 +340,26 @@ defmodule Memba.Messaging.MemberMessageEmail do
       "" -> "You're getting this because you're an active member of this group."
       _club_name -> "You're getting this because you're an active member of #{display_name}."
     end
+  end
+
+  defp reply_footer(%EmailDeliveryRequest{} = request, group_name) do
+    stop_follow_line =
+      case String.trim(to_string(request.stop_follow_url || "")) do
+        "" ->
+          nil
+
+        stop_follow_url ->
+          """
+          You're following this conversation. <a href="#{EmailTemplates.escaped_text(stop_follow_url)}" style="color:#7d877f; text-decoration:underline;">Stop following this conversation</a>.
+          """
+      end
+
+    EmailTemplates.memba_footer(
+      group_name: group_name,
+      recipient_email: request.recipient_address,
+      reason: membership_reason(request.club_name, group_name),
+      extra_detail_html: stop_follow_line
+    )
   end
 
   defp default_text("", fallback), do: fallback

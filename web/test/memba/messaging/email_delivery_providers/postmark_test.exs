@@ -110,6 +110,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
         conversation_id: conversation_id,
         reply_to_message_id: conversation_id,
         conversation_url: "https://kmc.memba.test/messages/#{conversation_id}",
+        stop_follow_url:
+          "https://kmc.memba.test/messages/conversations/stop-following/signed-token",
         reply_to_sender_name: "Alice Sender",
         reply_to_body: "Bring route ideas.",
         sender_name: "Bob Barker",
@@ -131,6 +133,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert email.text_body =~ "I can bring maps."
     assert email.text_body =~ "View the conversation:"
     assert email.text_body =~ request.conversation_url
+    assert email.text_body =~ "You're following this conversation."
+    assert email.text_body =~ "Stop following this conversation:"
+    assert email.text_body =~ request.stop_follow_url
     assert email.text_body =~ "In reply to Alice Sender:"
     assert email.text_body =~ "Bring route ideas."
 
@@ -142,13 +147,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert email.html_body =~ "I can bring maps."
     assert email.html_body =~ "View the conversation"
     assert email.html_body =~ request.conversation_url
+    assert email.html_body =~ "You're following this conversation."
+    assert email.html_body =~ "Stop following this conversation"
+    assert email.html_body =~ request.stop_follow_url
     assert email.html_body =~ "In reply to Alice Sender:"
     assert email.html_body =~ "Bring route ideas."
     assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
     assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
 
-    refute email.html_body =~ "You're following"
-    refute email.html_body =~ "Stop following"
+    refute email.html_body =~ "<script>"
   end
 
   test "uses the verified Memba sender address even when no provider reply-to is configured" do
@@ -234,6 +241,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
       conversation_id: Keyword.get(overrides, :conversation_id),
       reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
       conversation_url: Keyword.get(overrides, :conversation_url),
+      stop_follow_url: Keyword.get(overrides, :stop_follow_url),
       reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),
       reply_to_body: Keyword.get(overrides, :reply_to_body),
       channel: Keyword.get(overrides, :channel, :email),

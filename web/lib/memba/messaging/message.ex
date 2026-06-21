@@ -22,6 +22,8 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationReference
+  alias Memba.Messaging.Events.ConversationFollowed
+  alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryBounced
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -133,6 +135,9 @@ defmodule Memba.Messaging.Message do
   def apply(%__MODULE__{} = message, %EmailDeliverySpamComplaint{} = event) do
     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
   end
+
+  def apply(%__MODULE__{} = message, %ConversationFollowed{}), do: message
+  def apply(%__MODULE__{} = message, %ConversationUnfollowed{}), do: message
 
   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
   # product status. Keep this no-op so historic events can rehydrate aggregates

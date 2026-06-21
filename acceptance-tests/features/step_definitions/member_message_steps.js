@@ -12,6 +12,7 @@ const {
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
+  assertConversationFollowingState,
   assertConversationReplyOrder,
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
@@ -25,20 +26,27 @@ const {
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReplyEmailDeliveredToMembers,
+  assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,
+  assertStopFollowLinkNotValid,
   emailFor,
   ensureClubSlugMatchesInboundAddress,
   ensureState,
+  followConversation,
+  followStopFollowLinkFromReplyEmail,
+  followTamperedStopFollowLink,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
   nelsonClubName,
   openMemberMessage,
   reportRecipientEmailStatus,
+  removeMemberFromClub,
   postMemberReply,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   trySendBlankMemberMessageToKootenayMembers,
-  trySendMemberMessageToKootenayMembers
+  trySendMemberMessageToKootenayMembers,
+  unfollowConversation
 } = require("../support/member_message");
 const {
   memberBrowserAction,
@@ -177,6 +185,18 @@ When("{word} replies {string} to {string}", async function (senderName, body, su
   await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
 });
 
+Given("{word} follows the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) => followConversation(member, memberName, subject));
+});
+
+When("{word} stops following the conversation for {string}", async function (memberName, subject) {
+  await withMemberHarness(this, memberName, (member) => unfollowConversation(member, memberName, subject));
+});
+
+Given("{word} is no longer a member of Kootenay Mountaineering Club", async function (memberName) {
+  removeMemberFromClub(this, memberName, kootenayClubName);
+});
+
 Then(
   "the conversation for {string} should show {word}'s reply {string}",
   async function (subject, senderName, body) {
@@ -207,7 +227,7 @@ Then(
 );
 
 Then(
-  /^(.+) should each receive (\w+)'s reply by email from (.+) via Memba$/,
+  /^(.+) should(?: each)? receive (\w+)'s reply by email from (.+) via Memba$/,
   async function (recipientNamesText, senderName, clubName) {
     await withMemberHarness(this, "Alice", (member) =>
       assertReplyEmailDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText), clubName)
@@ -215,8 +235,50 @@ Then(
   }
 );
 
+Then(/^(.+) should not receive (\w+)'s reply by email$/, async function (recipientNamesText, senderName) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertReplyEmailNotDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText))
+  );
+});
+
 Then("{word} should not receive his own reply by email", async function (senderName) {
   await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
+});
+
+Then(
+  "{word} should be following the conversation for {string}",
+  async function (memberName, subject) {
+    await withMemberHarness(this, memberName, (member) =>
+      assertConversationFollowingState(member, memberName, subject, true)
+    );
+  }
+);
+
+Then(
+  "{word} should not be following the conversation for {string}",
+  async function (memberName, subject) {
+    await withMemberHarness(this, memberName, (member) =>
+      assertConversationFollowingState(member, memberName, subject, false)
+    );
+  }
+);
+
+When(
+  "{word} follows the stop-follow link from {word}'s reply email",
+  async function (recipientName, senderName) {
+    await followStopFollowLinkFromReplyEmail(this, recipientName, senderName);
+  }
+);
+
+When(
+  "{word} follows a tampered stop-follow link for {string}",
+  async function (recipientName, subject) {
+    await followTamperedStopFollowLink(this, recipientName, subject);
+  }
+);
+
+Then("{word} should be told the stop-follow link is not valid", async function (_recipientName) {
+  await assertStopFollowLinkNotValid(this);
 });
 
 Then("{word} should not be able to reply to {string}", async function (personName, subject) {

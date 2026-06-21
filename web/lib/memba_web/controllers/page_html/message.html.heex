@@ -48,6 +48,85 @@
       </div>
 
       <section
+        id="member-conversation-follow-control"
+        data-following={to_string(@following_conversation)}
+        data-can-follow={to_string(@can_follow_conversation)}
+        class="rounded-3xl border border-sage-200 bg-sage-50/80 p-5 shadow-sm sm:p-6"
+      >
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex min-w-0 items-start gap-3">
+            <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-base-100 text-sage-700 ring-1 ring-inset ring-sage-200">
+              <.icon
+                name={
+                  if(@following_conversation,
+                    do: "hero-bell-alert",
+                    else: "hero-bell"
+                  )
+                }
+                class="size-5"
+              />
+            </span>
+            <div>
+              <%= cond do %>
+                <% !@can_follow_conversation -> %>
+                  <h2 class="text-base font-semibold text-base-content">
+                    Follow this conversation
+                  </h2>
+                  <p
+                    id="member-conversation-follow-copy"
+                    class="mt-1 text-sm leading-6 text-ink-2"
+                  >
+                    Only current club members can follow this conversation in Memba.
+                  </p>
+                <% @following_conversation -> %>
+                  <h2 class="text-base font-semibold text-base-content">
+                    You’re following this conversation
+                  </h2>
+                  <p
+                    id="member-conversation-follow-copy"
+                    class="mt-1 text-sm leading-6 text-ink-2"
+                  >
+                    You’ll receive any new replies by email. You can stop following at any time.
+                  </p>
+                <% true -> %>
+                  <h2 class="text-base font-semibold text-base-content">
+                    Follow this conversation
+                  </h2>
+                  <p
+                    id="member-conversation-follow-copy"
+                    class="mt-1 text-sm leading-6 text-ink-2"
+                  >
+                    Follow this conversation to receive any new replies by email.
+                  </p>
+              <% end %>
+            </div>
+          </div>
+
+          <.button
+            :if={@can_follow_conversation and !@following_conversation}
+            id="member-conversation-follow-button"
+            type="button"
+            phx-click="follow_conversation"
+            variant="primary"
+            class="w-full shrink-0 sm:w-auto"
+          >
+            <.icon name="hero-bell" class="size-4" /> Follow conversation
+          </.button>
+
+          <.button
+            :if={@can_follow_conversation and @following_conversation}
+            id="member-conversation-unfollow-button"
+            type="button"
+            phx-click="unfollow_conversation"
+            variant="secondary"
+            class="w-full shrink-0 sm:w-auto"
+          >
+            <.icon name="hero-bell-slash" class="size-4" /> Stop following
+          </.button>
+        </div>
+      </section>
+
+      <section
         id="member-message-reply-composer"
         class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
       >
@@ -58,7 +137,7 @@
               Reply to this conversation
             </h2>
             <p class="mt-1 text-sm leading-6 text-ink-2">
-              Your reply inherits the subject and is emailed to current club members except you.
+              Your reply inherits the subject and is emailed to current followers except you.
             </p>
           </div>
           <p

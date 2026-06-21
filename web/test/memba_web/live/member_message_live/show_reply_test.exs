@@ -43,6 +43,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              )
 
     assert [message] = Messaging.list_messages_for_club(club_id)
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
 
     {:ok, view, _html} =
       conn
@@ -70,6 +71,13 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
 
     assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
     assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
+    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
+             "You’re following this conversation"
+           )
 
     assert has_element?(
              view,
@@ -79,6 +87,104 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
                "[data-sender-id='#{bob.person_id}']",
              "I'll bring snacks."
            )
+  end
+
+  test "current member can follow and unfollow a conversation from message detail", %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring your maps."
+               },
+               consistency: :strong
+             )
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']",
+             "Follow this conversation to receive any new replies"
+           )
+
+    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
+    refute has_element?(view, "#member-conversation-unfollow-button")
+
+    view
+    |> element("#member-conversation-follow-button")
+    |> render_click()
+
+    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
+             "You’re following this conversation"
+           )
+
+    assert has_element?(view, "#member-conversation-unfollow-button", "Stop following")
+    refute has_element?(view, "#member-conversation-follow-button")
+
+    view
+    |> element("#member-conversation-unfollow-button")
+    |> render_click()
+
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
+           )
+
+    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
+    refute has_element?(view, "#member-conversation-unfollow-button")
+  end
+
+  test "former members cannot reach the in-app follow control", %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: Memba.ID.generate(:message),
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring your maps."
+               },
+               consistency: :strong
+             )
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+
+    assert :ok =
+             Membership.remove_member(
+               %{membership_id: bob.membership_id},
+               consistency: :strong
+             )
+
+    conn =
+      conn
+      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
+      |> get(~p"/messages/#{message.message_id}")
+
+    assert response(conn, 403) == "Forbidden"
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
   end
 
   defp signed_in_club_host(conn, email, club) do
@@ -119,14 +225,14 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id = Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },
                consistency: :strong
              )
 
-    %{club_id: club_id, person_id: person_id}
+    %{club_id: club_id, person_id: person_id, membership_id: membership_id}
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

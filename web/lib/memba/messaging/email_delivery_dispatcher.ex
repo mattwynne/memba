@@ -19,6 +19,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.EmailDeliveryStatus
+  alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -352,7 +353,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
-      reply_context = reply_context(message, club)
+      reply_context = reply_context(message, club, delivery)
 
       {:ok,
        %EmailDeliveryRequest{
@@ -369,6 +370,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          conversation_id: message.conversation_id,
          reply_to_message_id: message.reply_to_message_id,
          conversation_url: Map.get(reply_context, :conversation_url),
+         stop_follow_url: Map.get(reply_context, :stop_follow_url),
          reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
          reply_to_body: Map.get(reply_context, :reply_to_body),
          channel: channel,
@@ -424,18 +426,37 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp club_slug(%{slug: slug}), do: slug
   defp club_slug(_club), do: nil
 
-  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club), do: %{}
+  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}
 
-  defp reply_context(%MessageProjection{} = message, club) do
+  defp reply_context(%MessageProjection{} = message, club, %EmailDeliveryProjection{} = delivery) do
     message
-    |> base_reply_context(club)
+    |> base_reply_context(club, delivery)
     |> Map.merge(replied_to_message_context(message.reply_to_message_id))
   end
 
-  defp base_reply_context(%MessageProjection{conversation_id: conversation_id}, club) do
+  defp base_reply_context(
+         %MessageProjection{club_id: club_id, conversation_id: conversation_id},
+         club,
+         %EmailDeliveryProjection{recipient_id: recipient_id}
+       ) do
     %{
-      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}")
+      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}"),
+      stop_follow_url: stop_follow_url(club, club_id, conversation_id, recipient_id)
     }
+  end
+
+  defp stop_follow_url(club, club_id, conversation_id, member_id) do
+    case ConversationStopFollowToken.sign(%{
+           club_id: club_id,
+           conversation_id: conversation_id,
+           member_id: member_id
+         }) do
+      {:ok, token} ->
+        ClubSite.url(club, "/messages/conversations/stop-following/#{token}")
+
+      {:error, :invalid} ->
+        nil
+    end
   end
 
   defp replied_to_message_context(nil), do: %{}

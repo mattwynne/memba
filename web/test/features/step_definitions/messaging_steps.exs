@@ -16,6 +16,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.Projections.EmailDelivery
+  alias Memba.Messaging.ConversationStopFollowToken
 
   step "{word} sends the message {string} to Kootenay Mountaineering Club members",
        %{args: [sender_name, subject]} = context do
@@ -44,6 +45,21 @@ defmodule Memba.Cucumber.MessagingSteps do
     post_reply_to_message(context, sender_name, subject, body)
   end
 
+  step "{word} follows the conversation for {string}",
+       %{args: [member_name, subject]} = context do
+    follow_conversation(context, member_name, subject)
+  end
+
+  step "{word} stops following the conversation for {string}",
+       %{args: [member_name, subject]} = context do
+    unfollow_conversation(context, member_name, subject)
+  end
+
+  step "{word} is no longer a member of Kootenay Mountaineering Club",
+       %{args: [member_name]} = context do
+    remove_member_from_club(context, member_name, "Kootenay Mountaineering Club")
+  end
+
   step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
        %{args: [subject, sender_name, body]} = context do
     assert_conversation_shows_reply(context, subject, sender_name, body)
@@ -62,19 +78,57 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_conversation_order(context, subject, earlier_body, later_body)
   end
 
-  step "Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba",
-       context do
+  step ~r/^(.+) should(?: each)? receive (\w+)'s reply by email from (.+) via Memba$/,
+       %{args: [recipient_names_text, sender_name, club_name]} = context do
     assert_reply_email_delivered_to_members(
       context,
       "Trip planning night",
-      "Bob",
-      ["Alice", "Carol", "Dana"],
-      "Kootenay Mountaineering Club"
+      sender_name,
+      parse_person_list(recipient_names_text),
+      club_name
+    )
+  end
+
+  step ~r/^(.+) should not receive (\w+)'s reply by email$/,
+       %{args: [recipient_names_text, sender_name]} = context do
+    assert_reply_email_not_delivered_to_members(
+      context,
+      "Trip planning night",
+      sender_name,
+      parse_person_list(recipient_names_text)
     )
   end
 
   step "{word} should not receive his own reply by email", %{args: [sender_name]} = context do
     assert_reply_email_not_delivered_to_author(context, sender_name)
+  end
+
+  step "{word} should be following the conversation for {string}",
+       %{args: [member_name, subject]} = context do
+    assert_conversation_follow_state(context, member_name, subject, true)
+  end
+
+  step "{word} should not be following the conversation for {string}",
+       %{args: [member_name, subject]} = context do
+    assert_conversation_follow_state(context, member_name, subject, false)
+  end
+
+  step ~r/^(\w+) follows the stop-follow link from (\w+)'s reply email$/,
+       %{args: [recipient_name, sender_name]} = context do
+    follow_stop_follow_link_from_reply_email(context, recipient_name, sender_name)
+  end
+
+  step "{word} follows a tampered stop-follow link for {string}",
+       %{args: [recipient_name, subject]} = context do
+    follow_tampered_stop_follow_link(context, recipient_name, subject)
+  end
+
+  step "{word} should be told the stop-follow link is not valid",
+       %{args: [_recipient_name]} = context do
+    assert {:error, :invalid_stop_follow_token} =
+             Map.fetch!(context, :last_stop_follow_link_result)
+
+    context
   end
 
   step "{word} should not be able to reply to {string}",
@@ -474,6 +528,63 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> update_context_map({:replies, subject}, {sender_name, body}, reply_context)
   end
 
+  defp follow_conversation(context, member_name, subject) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    member_id = person_id_from_context!(context, member_name)
+
+    assert :ok =
+             Messaging.follow_conversation_as_current_member(
+               %{
+                 club_id: root_message.club_id,
+                 conversation_id: root_message.message_id,
+                 member_id: member_id
+               },
+               consistency: :strong
+             )
+
+    context
+  end
+
+  defp unfollow_conversation(context, member_name, subject) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    member_id = person_id_from_context!(context, member_name)
+
+    assert :ok =
+             Messaging.unfollow_conversation_as_current_member(
+               %{
+                 club_id: root_message.club_id,
+                 conversation_id: root_message.message_id,
+                 member_id: member_id
+               },
+               consistency: :strong
+             )
+
+    context
+  end
+
+  defp remove_member_from_club(context, member_name, club_name) do
+    membership_id = fetch_from_context!(context, :memberships, {club_name, member_name})
+
+    assert :ok = Membership.remove_member(%{membership_id: membership_id}, consistency: :strong)
+
+    memberships =
+      context
+      |> Map.get(:memberships, %{})
+      |> Map.delete({club_name, member_name})
+
+    Map.put(context, :memberships, memberships)
+  end
+
+  defp assert_conversation_follow_state(context, member_name, subject, expected_following) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    member_id = person_id_from_context!(context, member_name)
+
+    assert Messaging.following_conversation?(root_message.message_id, member_id) ==
+             expected_following
+
+    context
+  end
+
   defp assert_conversation_shows_reply(context, subject, sender_name, body) do
     root_message = fetch_from_context!(context, :messages, subject)
     sender_id = person_id_from_context!(context, sender_name)
@@ -516,7 +627,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
     assert Enum.map(member_deliveries, & &1.recipient_name) == expected_recipient_names
 
-    provider_deliveries = Fake.deliveries()
+    provider_deliveries =
+      Enum.filter(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
+        request.message_id == reply.message_id
+      end)
+
     assert length(provider_deliveries) == length(expected_recipient_names)
 
     Enum.zip(expected_recipient_names, provider_deliveries)
@@ -535,6 +650,33 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  defp assert_reply_email_not_delivered_to_members(
+         context,
+         subject,
+         sender_name,
+         excluded_recipient_names
+       ) do
+    reply = latest_reply_for!(context, subject, sender_name)
+    dispatch_pending_email_deliveries()
+
+    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
+    provider_deliveries = Fake.deliveries()
+
+    Enum.each(excluded_recipient_names, fn recipient_name ->
+      recipient_id = person_id_from_context!(context, recipient_name)
+
+      refute Enum.any?(member_deliveries, fn receipt ->
+               receipt.recipient_id == recipient_id
+             end)
+
+      refute Enum.any?(provider_deliveries, fn %EmailDeliveryRequest{} = request ->
+               request.message_id == reply.message_id and request.recipient_id == recipient_id
+             end)
+    end)
+
+    context
+  end
+
   defp assert_reply_email_not_delivered_to_author(context, sender_name) do
     reply = Map.fetch!(context, :last_reply)
     sender_id = person_id_from_context!(context, sender_name)
@@ -548,6 +690,49 @@ defmodule Memba.Cucumber.MessagingSteps do
            end)
 
     context
+  end
+
+  defp follow_stop_follow_link_from_reply_email(context, recipient_name, _sender_name) do
+    reply = Map.fetch!(context, :last_reply)
+    recipient_id = person_id_from_context!(context, recipient_name)
+
+    dispatch_pending_email_deliveries()
+
+    request =
+      Fake.deliveries()
+      |> Enum.find(fn %EmailDeliveryRequest{} = request ->
+        request.message_id == reply.message_id and request.recipient_id == recipient_id
+      end)
+
+    assert %EmailDeliveryRequest{stop_follow_url: stop_follow_url} = request
+    assert is_binary(stop_follow_url) and stop_follow_url != ""
+
+    token = stop_follow_url |> String.split("/") |> List.last()
+
+    result = Messaging.stop_following_conversation_from_email_token(token, consistency: :strong)
+
+    assert {:ok, _scope} = result
+
+    Map.put(context, :last_stop_follow_link_result, result)
+  end
+
+  defp follow_tampered_stop_follow_link(context, recipient_name, subject) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    recipient_id = person_id_from_context!(context, recipient_name)
+
+    assert {:ok, token} =
+             ConversationStopFollowToken.sign(%{
+               club_id: root_message.club_id,
+               conversation_id: root_message.message_id,
+               member_id: recipient_id
+             })
+
+    result =
+      Messaging.stop_following_conversation_from_email_token(token <> "tampered",
+        consistency: :strong
+      )
+
+    Map.put(context, :last_stop_follow_link_result, result)
   end
 
   defp assert_cannot_reply_to_message(context, sender_name, subject) do
@@ -927,6 +1112,13 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   defp normalize_person_name(name) do
     String.replace_suffix(name, "'s", "")
+  end
+
+  defp parse_person_list(text) do
+    text
+    |> String.replace(~r/,?\s+and\s+/, ", ")
+    |> String.split(~r/\s*,\s*/, trim: true)
+    |> Enum.map(&String.trim/1)
   end
 
   defp assert_unique(values) do
