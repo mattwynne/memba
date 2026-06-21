@@ -6,4 +6,4 @@
 - [x] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
 - [x] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
 - [x] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
-- [ ] 007 Run `dev check`.
+- [x] 007 Run `dev check`.
