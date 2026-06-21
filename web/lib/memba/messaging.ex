@@ -20,6 +20,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
+  alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
@@ -126,6 +127,36 @@ defmodule Memba.Messaging do
          :ok <- authorize_current_member_conversation_action(command),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
+    end
+  end
+
+  @doc """
+  Stop following a conversation from a signed reply-email link.
+
+  The token scopes the action to the intended club, conversation, and member.
+  This API intentionally does not require current club membership because it only
+  reduces notifications and old emails should remain useful.
+  """
+  def stop_following_conversation_from_email_token(token, dispatch_opts \\ [])
+      when is_list(dispatch_opts) do
+    with {:ok, scope} <- ConversationStopFollowToken.verify(token),
+         {:ok, root_message} <- fetch_conversation_root(scope.conversation_id),
+         :ok <- ensure_stop_follow_scope(root_message, scope),
+         :ok <- reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
+      case unfollow_conversation(
+             %{
+               club_id: scope.club_id,
+               conversation_id: scope.conversation_id,
+               member_id: scope.member_id
+             },
+             dispatch_opts
+           ) do
+        {:error, _reason} = error -> error
+        dispatch_result -> {:ok, Map.put(scope, :dispatch_result, dispatch_result)}
+      end
+    else
+      {:error, _reason} -> {:error, :invalid_stop_follow_token}
+      nil -> {:error, :invalid_stop_follow_token}
     end
   end
 
@@ -1098,6 +1129,36 @@ defmodule Memba.Messaging do
       else
         {:error, :conversation_not_found}
       end
+    end
+  end
+
+  defp ensure_stop_follow_scope(
+         %MessageProjection{club_id: club_id, message_id: conversation_id},
+         %{
+           club_id: club_id,
+           conversation_id: conversation_id
+         }
+       ) do
+    :ok
+  end
+
+  defp ensure_stop_follow_scope(%MessageProjection{}, _scope), do: {:error, :wrong_scope}
+
+  defp reconcile_projected_follow_before_unfollow(scope, dispatch_opts) do
+    if following_conversation?(scope.conversation_id, scope.member_id) do
+      case follow_conversation(
+             %{
+               club_id: scope.club_id,
+               conversation_id: scope.conversation_id,
+               member_id: scope.member_id
+             },
+             dispatch_opts
+           ) do
+        {:error, _reason} = error -> error
+        _dispatch_result -> :ok
+      end
+    else
+      :ok
     end
   end
 

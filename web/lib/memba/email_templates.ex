@@ -323,6 +323,7 @@ defmodule Memba.EmailTemplates do
     recipient_email = opts |> Keyword.get(:recipient_email) |> sanitize_header_text()
     reply_to_email = opts |> Keyword.get(:reply_to_email) |> sanitize_header_text()
     reason = opts |> Keyword.get(:reason) |> sanitize_header_text()
+    extra_detail_html = Keyword.get(opts, :extra_detail_html, [])
 
     delivered_line =
       if group_name == "" do
@@ -335,8 +336,10 @@ defmodule Memba.EmailTemplates do
       [
         footer_sentence("Sent to", recipient_email),
         if(reason == "", do: nil, else: escaped_text(reason)),
+        extra_detail_html,
         support_sentence(reply_to_email)
       ]
+      |> List.flatten()
       |> Enum.reject(&is_nil/1)
       |> Enum.join("<br>\n")
 

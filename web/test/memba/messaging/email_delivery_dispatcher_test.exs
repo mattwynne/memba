@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging
+  alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -347,6 +348,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  conversation_id: conversation_id,
                  reply_to_message_id: reply_to_message_id,
                  conversation_url: conversation_url,
+                 stop_follow_url: stop_follow_url,
                  reply_to_sender_name: "Alice Sender",
                  reply_to_body: "Bring route ideas.",
                  subject: "Trip planning night",
@@ -360,6 +362,20 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert conversation_id == root_message.message_id
       assert reply_to_message_id == root_message.message_id
       assert conversation_url =~ "/messages/#{root_message.message_id}"
+      assert stop_follow_url =~ "/messages/conversations/stop-following/"
+
+      token = stop_follow_url |> String.split("/") |> List.last()
+
+      assert {:ok,
+              %{
+                club_id: club_id,
+                conversation_id: conversation_id,
+                member_id: member_id
+              }} = ConversationStopFollowToken.verify(token)
+
+      assert club_id == club.club_id
+      assert conversation_id == root_message.message_id
+      assert member_id == recipient_id
     end
 
     test "does not call the provider when the delivery's message projection is missing" do
