@@ -14,10 +14,11 @@ defmodule Memba.Messaging.EmailDeliveryProvider do
   Hand one email delivery request to the configured provider.
   """
   def deliver(%EmailDeliveryRequest{} = request) do
-    provider().deliver(request)
+    configured_provider().deliver(request)
   end
 
-  defp provider do
+  @doc false
+  def configured_provider do
     Application.get_env(
       :memba,
       :messaging_email_delivery_provider,

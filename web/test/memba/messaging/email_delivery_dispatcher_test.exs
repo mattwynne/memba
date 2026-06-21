@@ -1,8 +1,11 @@
 defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   use Memba.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Raising
   alias Memba.Messaging.EmailDeliveryProviders.SelectiveFailure
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Messaging.EmailDeliveryRequest
@@ -351,6 +354,46 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                sent_at: nil,
                failed_at: ^failed_at
              } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+    end
+
+    test "marks a claimed delivery as failed when the provider raises unexpectedly" do
+      Application.put_env(:memba, :messaging_email_delivery_provider, Raising)
+
+      %{delivery: delivery} = insert_dispatchable_delivery!(status: "pending")
+
+      log =
+        capture_log(fn ->
+          assert [
+                   %EmailDeliveryProjection{
+                     delivery_id: delivery_id,
+                     status: "failed",
+                     attempt_count: 1,
+                     latest_error: "provider_exception",
+                     latest_detail: latest_detail,
+                     sent_at: nil,
+                     failed_at: %DateTime{} = failed_at
+                   }
+                 ] = EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+          assert delivery_id == delivery.delivery_id
+          assert latest_detail =~ "RuntimeError"
+          assert latest_detail =~ "provider exploded"
+          assert DateTime.compare(failed_at, delivery.inserted_at) in [:gt, :eq]
+        end)
+
+      assert log =~ "email_delivery_provider_exception"
+      assert log =~ "provider exploded"
+
+      assert %EmailDeliveryProjection{
+               status: "failed",
+               attempt_count: 1,
+               latest_error: "provider_exception",
+               latest_detail: latest_detail,
+               sent_at: nil,
+               failed_at: %DateTime{}
+             } = Repo.get!(EmailDeliveryProjection, delivery.delivery_id)
+
+      assert latest_detail =~ "provider exploded"
     end
 
     test "continues dispatching other deliveries when one recipient fails" do

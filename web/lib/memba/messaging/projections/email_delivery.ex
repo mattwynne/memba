@@ -2,6 +2,10 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
   @moduledoc """
   Read model projection for one email delivery belonging to a message.
 
+  Valid persisted statuses are defined in `Memba.Messaging.EmailDeliveryStatus`
+  and enforced by the `messaging_email_deliveries_status_check` database
+  constraint.
+
   Dispatch diagnostics are intentionally operational rather than domain facts:
 
     * `attempt_count` remains `0` for first-pass successes, increments when a

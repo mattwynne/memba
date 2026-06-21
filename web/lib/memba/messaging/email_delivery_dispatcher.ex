@@ -13,10 +13,12 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   use GenServer
 
   import Ecto.Query
+  require Logger
 
   alias Memba.Membership
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -25,10 +27,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Repo
 
   @name __MODULE__
-  @pending_status "pending"
-  @dispatching_status "dispatching"
-  @sent_status "sent"
-  @failed_status "failed"
+  @pending_status EmailDeliveryStatus.pending()
+  @dispatching_status EmailDeliveryStatus.dispatching()
+  @sent_status EmailDeliveryStatus.sent()
+  @failed_status EmailDeliveryStatus.failed()
 
   @doc """
   Atomically claim one pending email delivery for provider dispatch.
@@ -51,8 +53,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
              updated_at: now
            ]
          ) do
-      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
-      {0, nil} -> :not_claimed
+      {1, nil} ->
+        delivery = Repo.get!(EmailDeliveryProjection, delivery_id)
+        log_dispatch_claimed(delivery)
+        {:ok, delivery}
+
+      {0, nil} ->
+        log_dispatch_claim_skipped(delivery_id)
+        :not_claimed
     end
   end
 
@@ -98,8 +106,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   """
   def dispatch_claimed_delivery(%EmailDeliveryProjection{} = delivery) do
     case deliver_to_provider(delivery) do
-      :ok -> mark_delivery_sent(delivery)
-      {:error, reason} -> mark_delivery_failed(delivery, reason)
+      :ok ->
+        log_provider_success(delivery)
+        mark_delivery_sent(delivery)
+
+      {:error, reason} ->
+        log_provider_error(delivery, reason)
+        mark_delivery_failed(delivery, reason)
     end
   end
 
@@ -134,7 +147,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   def deliver_to_provider(%EmailDeliveryProjection{} = delivery) do
     with {:ok, request} <- email_delivery_request(delivery) do
-      EmailDeliveryProvider.deliver(request)
+      request
+      |> deliver_request_to_provider(delivery)
+      |> normalize_provider_result()
     end
   end
 
@@ -169,6 +184,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          } = payload},
         state
       ) do
+    Logger.debug("email_delivery_dispatch_nudged",
+      delivery_id: payload_delivery_id(payload),
+      source_event: inspect(EmailDeliveryCreated)
+    )
+
     send(self(), {:dispatch_pending_email_deliveries, payload})
 
     {:noreply, state}
@@ -189,7 +209,10 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp dispatch_pending_email_deliveries(%{dispatch_enabled: true}),
     do: dispatch_pending_email_deliveries()
 
-  defp dispatch_pending_email_deliveries(%{dispatch_enabled: false}), do: []
+  defp dispatch_pending_email_deliveries(%{dispatch_enabled: false}) do
+    Logger.debug("email_delivery_dispatch_disabled")
+    []
+  end
 
   defp notify_dispatch_observer(%{dispatch_observer: nil}, _payload, _claimed_deliveries), do: :ok
 
@@ -220,8 +243,15 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
              updated_at: now
            ]
          ) do
-      {1, nil} -> {:ok, Repo.get!(EmailDeliveryProjection, delivery_id)}
-      {0, nil} -> failed_delivery_retry_error(delivery_id)
+      {1, nil} ->
+        delivery = Repo.get!(EmailDeliveryProjection, delivery_id)
+        log_retry_claimed(delivery)
+        {:ok, delivery}
+
+      {0, nil} ->
+        error = failed_delivery_retry_error(delivery_id)
+        log_retry_skipped(delivery_id, error)
+        error
     end
   end
 
@@ -234,8 +264,13 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp dispatch_claimed_retry_delivery(%EmailDeliveryProjection{} = delivery) do
     case deliver_to_provider(delivery) do
-      :ok -> mark_delivery_sent(delivery, increment_attempt_count?: true)
-      {:error, reason} -> mark_delivery_failed(delivery, reason)
+      :ok ->
+        log_provider_success(delivery)
+        mark_delivery_sent(delivery, increment_attempt_count?: true)
+
+      {:error, reason} ->
+        log_provider_error(delivery, reason)
+        mark_delivery_failed(delivery, reason)
     end
   end
 
@@ -342,6 +377,30 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   defp request_channel("email"), do: {:ok, :email}
   defp request_channel(channel), do: {:error, {:unsupported_delivery_channel, channel}}
 
+  defp deliver_request_to_provider(
+         %EmailDeliveryRequest{} = request,
+         %EmailDeliveryProjection{} = delivery
+       ) do
+    EmailDeliveryProvider.deliver(request)
+  rescue
+    exception ->
+      stacktrace = __STACKTRACE__
+
+      Logger.error(
+        "email_delivery_provider_exception\n" <> Exception.format(:error, exception, stacktrace),
+        delivery_id: delivery.delivery_id,
+        message_id: delivery.message_id,
+        provider: inspect(EmailDeliveryProvider.configured_provider()),
+        event: "email_delivery_provider_exception"
+      )
+
+      {:error, {:provider_exception, exception.__struct__, Exception.message(exception)}}
+  end
+
+  defp normalize_provider_result(:ok), do: :ok
+  defp normalize_provider_result({:error, reason}), do: {:error, reason}
+  defp normalize_provider_result(other), do: {:error, {:unexpected_provider_response, other}}
+
   defp sender_context(sender_id) do
     with %{name: sender_name} <- Membership.get_person(sender_id),
          sender_address when is_binary(sender_address) <-
@@ -357,4 +416,54 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp club_slug(%{slug: slug}), do: slug
   defp club_slug(_club), do: nil
+
+  defp log_dispatch_claimed(%EmailDeliveryProjection{} = delivery) do
+    Logger.info(
+      "email_delivery_dispatch_claimed",
+      delivery_metadata(delivery, @dispatching_status)
+    )
+  end
+
+  defp log_dispatch_claim_skipped(delivery_id) do
+    Logger.debug("email_delivery_dispatch_claim_skipped",
+      delivery_id: delivery_id,
+      expected_status: @pending_status
+    )
+  end
+
+  defp log_retry_claimed(%EmailDeliveryProjection{} = delivery) do
+    Logger.info("email_delivery_retry_claimed", delivery_metadata(delivery, @dispatching_status))
+  end
+
+  defp log_retry_skipped(delivery_id, error) do
+    Logger.debug("email_delivery_retry_skipped",
+      delivery_id: delivery_id,
+      reason: inspect(error)
+    )
+  end
+
+  defp log_provider_success(%EmailDeliveryProjection{} = delivery) do
+    Logger.info("email_delivery_provider_success", delivery_metadata(delivery, @sent_status))
+  end
+
+  defp log_provider_error(%EmailDeliveryProjection{} = delivery, reason) do
+    Logger.warning(
+      "email_delivery_provider_error",
+      Keyword.merge(delivery_metadata(delivery, @failed_status), reason: inspect(reason))
+    )
+  end
+
+  defp delivery_metadata(%EmailDeliveryProjection{} = delivery, status) do
+    [
+      delivery_id: delivery.delivery_id,
+      message_id: delivery.message_id,
+      status: status,
+      provider: inspect(EmailDeliveryProvider.configured_provider())
+    ]
+  end
+
+  defp payload_delivery_id(%{source_event: %EmailDeliveryCreated{delivery_id: delivery_id}}),
+    do: delivery_id
+
+  defp payload_delivery_id(_payload), do: nil
 end
