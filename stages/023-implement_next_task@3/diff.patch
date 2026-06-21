@@ -1,0 +1,1138 @@
+diff --git a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+index 0482ead..bd89c68 100644
+--- a/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
++++ b/docs/iterations/039-club-message-threads-and-in-app-replies/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Model the conversation/reply in `Memba.Messaging`: decide whether the existing message aggregate is extended to hold replies, or a conversation concept references it; keep it event-sourced and consistent with existing commands/events.
+ - [x] 002 Add command(s)/event(s) for posting a reply, with authorization that the actor is a current member of the message's club, and non-blank body validation.
+-- [ ] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
++- [x] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
+ - [ ] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
+ - [ ] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
+ - [ ] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 01b2dfb..b78bc7f 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -827,7 +827,7 @@ defmodule Memba.Messaging do
+          reply_to_message_id: conversation_id,
+          subject: root_message.subject,
+          body: body,
+-         recipients: resolve_recipients(root_message.club_id)
++         recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
+        }}
+     end
+   end
+@@ -907,9 +907,12 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
+-  defp resolve_recipients(club_id) do
++  defp resolve_recipients(club_id, opts \\ []) do
++    except_person_id = Keyword.get(opts, :except_person_id)
++
+     club_id
+     |> Membership.list_active_members_of_club()
++    |> Enum.reject(&(&1.id == except_person_id))
+     |> Enum.map(&resolved_recipient/1)
+   end
+ 
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index 5ecdab3..af411b9 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -25,6 +25,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.ReadModelChanges
+   alias Memba.Repo
++  alias MembaWeb.ClubSite
+ 
+   @name __MODULE__
+   @pending_status EmailDeliveryStatus.pending()
+@@ -351,6 +352,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          {:ok, channel} <- request_channel(delivery.channel),
+          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
+       club = Membership.get_club(message.club_id)
++      reply_context = reply_context(message, club)
+ 
+       {:ok,
+        %EmailDeliveryRequest{
+@@ -364,6 +366,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          club_slug: club_slug(club),
+          sender_name: sender_name,
+          sender_address: sender_address,
++         conversation_id: message.conversation_id,
++         reply_to_message_id: message.reply_to_message_id,
++         conversation_url: Map.get(reply_context, :conversation_url),
++         reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
++         reply_to_body: Map.get(reply_context, :reply_to_body),
+          channel: channel,
+          subject: message.subject,
+          body: message.body
+@@ -417,6 +424,40 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp club_slug(%{slug: slug}), do: slug
+   defp club_slug(_club), do: nil
+ 
++  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club), do: %{}
++
++  defp reply_context(%MessageProjection{} = message, club) do
++    message
++    |> base_reply_context(club)
++    |> Map.merge(replied_to_message_context(message.reply_to_message_id))
++  end
++
++  defp base_reply_context(%MessageProjection{conversation_id: conversation_id}, club) do
++    %{
++      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}")
++    }
++  end
++
++  defp replied_to_message_context(nil), do: %{}
++
++  defp replied_to_message_context(reply_to_message_id) do
++    case Repo.get(MessageProjection, reply_to_message_id) do
++      %MessageProjection{} = message ->
++        sender = Membership.get_person(message.sender_id)
++
++        %{
++          reply_to_sender_name: person_name(sender),
++          reply_to_body: message.body
++        }
++
++      nil ->
++        %{}
++    end
++  end
++
++  defp person_name(%{name: name}), do: name
++  defp person_name(_person), do: nil
++
+   defp log_dispatch_claimed(%EmailDeliveryProjection{} = delivery) do
+     Logger.info(
+       "email_delivery_dispatch_claimed",
+diff --git a/web/lib/memba/messaging/email_delivery_providers/local.ex b/web/lib/memba/messaging/email_delivery_providers/local.ex
+index 39b5390..91651b9 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/local.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/local.ex
+@@ -33,7 +33,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
+     |> subject(MemberMessageEmail.subject(request))
+-    |> text_body(request.body)
++    |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+     |> put_provider_option(:metadata, metadata(request))
+   end
+diff --git a/web/lib/memba/messaging/email_delivery_providers/postmark.ex b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+index 521d4f1..efc409b 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+@@ -38,7 +38,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
+     |> subject(MemberMessageEmail.subject(request))
+-    |> text_body(request.body)
++    |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+     |> put_provider_option(:metadata, metadata(request))
+   end
+diff --git a/web/lib/memba/messaging/email_delivery_providers/resend.ex b/web/lib/memba/messaging/email_delivery_providers/resend.ex
+index 9940a7a..05f76f4 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/resend.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/resend.ex
+@@ -38,7 +38,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
+     |> reply_to(MemberMessageEmail.reply_to(request))
+     |> to(MemberMessageEmail.to(request))
+     |> subject(MemberMessageEmail.subject(request))
+-    |> text_body(request.body)
++    |> text_body(MemberMessageEmail.text_body(request))
+     |> html_body(MemberMessageEmail.html_body(request))
+     |> put_provider_option(:tags, tags(request))
+     |> header("X-Memba-Message-ID", request.message_id)
+diff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex
+index a0ebbfd..05d6634 100644
+--- a/web/lib/memba/messaging/email_delivery_request.ex
++++ b/web/lib/memba/messaging/email_delivery_request.ex
+@@ -32,6 +32,11 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :club_slug,
+     :sender_name,
+     :sender_address,
++    :conversation_id,
++    :reply_to_message_id,
++    :conversation_url,
++    :reply_to_sender_name,
++    :reply_to_body,
+     :channel,
+     :subject,
+     :body
+@@ -48,6 +53,11 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+           club_slug: String.t() | nil,
+           sender_name: String.t(),
+           sender_address: String.t(),
++          conversation_id: String.t() | nil,
++          reply_to_message_id: String.t() | nil,
++          conversation_url: String.t() | nil,
++          reply_to_sender_name: String.t() | nil,
++          reply_to_body: String.t() | nil,
+           channel: :email,
+           subject: String.t(),
+           body: String.t()
+diff --git a/web/lib/memba/messaging/local_delivery_facts.ex b/web/lib/memba/messaging/local_delivery_facts.ex
+index 88aed64..234c317 100644
+--- a/web/lib/memba/messaging/local_delivery_facts.ex
++++ b/web/lib/memba/messaging/local_delivery_facts.ex
+@@ -30,10 +30,10 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
+       recipient_address: request.recipient_address,
+       sender_name: request.sender_name,
+       sender_address: request.sender_address,
+-      from: "#{request.sender_name} via Memba <#{from_address()}>",
++      from: "#{MemberMessageEmail.from_display_name(request)} <#{from_address()}>",
+       to: ["#{request.recipient_name} <#{request.recipient_address}>"],
+       subject: MemberMessageEmail.subject(request),
+-      text_body: request.body,
++      text_body: MemberMessageEmail.text_body(request),
+       metadata: %{
+         "memba_message_id" => request.message_id,
+         "memba_delivery_id" => request.delivery_id,
+diff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex
+index ae91f8f..dde3348 100644
+--- a/web/lib/memba/messaging/member_message_email.ex
++++ b/web/lib/memba/messaging/member_message_email.ex
+@@ -11,7 +11,11 @@ defmodule Memba.Messaging.MemberMessageEmail do
+ 
+   @doc "Return the sanitized From display name for a member-message email."
+   def from_display_name(%EmailDeliveryRequest{} = request) do
+-    "#{sender_name(request)} via Memba"
++    if reply?(request) do
++      "#{group_name(request)} via Memba"
++    else
++      "#{sender_name(request)} via Memba"
++    end
+   end
+ 
+   @doc "Return the sanitized Reply-To tuple for a member-message email."
+@@ -27,8 +31,8 @@ defmodule Memba.Messaging.MemberMessageEmail do
+   @doc "Return the sanitized subject for a member-message email header."
+   def subject(%EmailDeliveryRequest{} = request) do
+     subject =
+-      request.subject
+-      |> EmailTemplates.sanitize_header_text()
++      request
++      |> subject_text()
+       |> default_text("Message from #{group_name(request)}")
+ 
+     case club_slug(request) do
+@@ -37,8 +41,25 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     end
+   end
+ 
++  @doc "Render the plain-text body for a member-message email."
++  def text_body(%EmailDeliveryRequest{} = request) do
++    if reply?(request) do
++      reply_text_body(request)
++    else
++      request.body
++    end
++  end
++
+   @doc "Render the v2-compatible HTML body for a member-message email."
+   def html_body(%EmailDeliveryRequest{} = request) do
++    if reply?(request) do
++      reply_html_body(request)
++    else
++      message_html_body(request)
++    end
++  end
++
++  defp message_html_body(%EmailDeliveryRequest{} = request) do
+     group_name = group_name(request)
+     sender_name = sender_name(request)
+     title = subject(request)
+@@ -67,6 +88,69 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     )
+   end
+ 
++  defp reply_html_body(%EmailDeliveryRequest{} = request) do
++    group_name = group_name(request)
++    sender_name = sender_name(request)
++    title = subject(request)
++
++    content = [
++      EmailTemplates.group_header(group_name,
++        label: "New reply",
++        padding: "18px 28px",
++        border_bottom: true
++      ),
++      conversation_subject_section(request),
++      reply_author_row(sender_name),
++      reply_body_section(request.body),
++      view_conversation_section(request.conversation_url),
++      replied_to_context_section(request)
++    ]
++
++    EmailTemplates.render_shell(
++      title: title,
++      preheader: "#{sender_name} replied in the #{conversation_subject(request)} conversation.",
++      content: content,
++      footer:
++        EmailTemplates.memba_footer(
++          group_name: group_name,
++          recipient_email: request.recipient_address,
++          reason: membership_reason(request.club_name, group_name)
++        )
++    )
++  end
++
++  defp reply_text_body(%EmailDeliveryRequest{} = request) do
++    [
++      "#{sender_name(request)} replied in the #{conversation_subject(request)} conversation:",
++      "",
++      request.body,
++      view_conversation_text(request.conversation_url),
++      replied_to_context_text(request)
++    ]
++    |> Enum.reject(&is_nil/1)
++    |> Enum.join("\n")
++  end
++
++  defp subject_text(%EmailDeliveryRequest{} = request) do
++    request.subject
++    |> EmailTemplates.sanitize_header_text()
++    |> maybe_reply_subject(request)
++  end
++
++  defp maybe_reply_subject(subject, %EmailDeliveryRequest{} = request) do
++    if reply?(request) and not reply_subject?(subject) do
++      "Re: #{subject}"
++    else
++      subject
++    end
++  end
++
++  defp reply_subject?(subject) do
++    subject
++    |> String.downcase()
++    |> String.starts_with?("re:")
++  end
++
+   defp sender_row(sender_name, group_name) do
+     """
+         <tr>
+@@ -99,6 +183,84 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     ]
+   end
+ 
++  defp conversation_subject_section(%EmailDeliveryRequest{} = request) do
++    """
++        <tr>
++          <td class="gutter" style="padding:20px 28px 2px;">
++            <div style="font-size:11px; color:#7d877f; letter-spacing:0.04em; text-transform:uppercase;">In the conversation</div>
++            <h1 class="h1" style="margin:5px 0 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size:22px; font-weight:600; line-height:1.2; letter-spacing:-0.022em; color:#15201c;">#{EmailTemplates.escaped_text(conversation_subject(request))}</h1>
++          </td>
++        </tr>
++    """
++  end
++
++  defp reply_author_row(sender_name) do
++    """
++        <tr>
++          <td class="gutter" style="padding:18px 28px 4px;">
++            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
++              <td style="vertical-align:middle;">
++                <div style="font-size:15px; font-weight:600; color:#15201c; letter-spacing:-0.01em;">#{EmailTemplates.escaped_text(sender_name)} replied</div>
++                <div style="font-size:12.5px; color:#7d877f; margin-top:1px;">just now</div>
++              </td>
++            </tr></table>
++          </td>
++        </tr>
++    """
++  end
++
++  defp reply_body_section(body) do
++    EmailTemplates.card_section(
++      EmailTemplates.plaintext_to_html(body,
++        color: "#2c3a35",
++        font_size: "15.5px"
++      ),
++      padding: "12px 28px 14px"
++    )
++  end
++
++  defp view_conversation_section(nil), do: ""
++
++  defp view_conversation_section(url) do
++    case String.trim(to_string(url)) do
++      "" ->
++        ""
++
++      url ->
++        EmailTemplates.card_section(
++          EmailTemplates.primary_action("View the conversation", url,
++            width: "190px",
++            margin: "0 0 16px"
++          ),
++          padding: "0 28px 6px"
++        )
++    end
++  end
++
++  defp replied_to_context_section(%EmailDeliveryRequest{} = request) do
++    cond do
++      blank?(request.reply_to_sender_name) or blank?(request.reply_to_body) ->
++        ""
++
++      true ->
++        EmailTemplates.card_section(
++          [
++            EmailTemplates.paragraph("In reply to #{request.reply_to_sender_name}:",
++              margin: "0 0 8px",
++              color: "#7d877f",
++              font_size: "13.5px"
++            ),
++            """
++            <blockquote class="gmail_quote" style="margin:0; padding:2px 0 2px 14px; border-left:2px solid #e6e3dc; color:#7d877f;">
++              #{EmailTemplates.plaintext_to_html(request.reply_to_body, color: "#7d877f", font_size: "13.5px", margin: "0 0 12px")}
++            </blockquote>
++            """
++          ],
++          padding: "0 28px 18px"
++        )
++    end
++  end
++
+   defp reply_hint(sender_name) do
+     """
+         <tr>
+@@ -137,6 +299,37 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     |> default_text("")
+   end
+ 
++  defp conversation_subject(%EmailDeliveryRequest{} = request) do
++    request.subject
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text("this message")
++  end
++
++  defp view_conversation_text(nil), do: nil
++
++  defp view_conversation_text(url) do
++    case String.trim(to_string(url)) do
++      "" -> nil
++      url -> "\nView the conversation:\n#{url}"
++    end
++  end
++
++  defp replied_to_context_text(%EmailDeliveryRequest{} = request) do
++    cond do
++      blank?(request.reply_to_sender_name) or blank?(request.reply_to_body) ->
++        nil
++
++      true ->
++        "\nIn reply to #{request.reply_to_sender_name}:\n#{request.reply_to_body}"
++    end
++  end
++
++  defp reply?(%EmailDeliveryRequest{reply_to_message_id: reply_to_message_id}) do
++    is_binary(reply_to_message_id) and String.trim(reply_to_message_id) != ""
++  end
++
++  defp blank?(value), do: value in [nil, ""]
++
+   defp membership_reason(club_name, display_name) do
+     case EmailTemplates.sanitize_header_text(club_name) do
+       "" -> "You're getting this because you're an active member of this group."
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index f306332..ca52841 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -180,8 +180,7 @@ defmodule Memba.Messaging.Message do
+          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
+          {:ok, body} <- normalize_text(command.body, :invalid_body),
+-         {:ok, recipients} <- normalize_recipients(command.recipients),
+-         :ok <- validate_sender_recipient(command.sender_id, recipients) do
++         {:ok, recipients} <- normalize_command_recipients(command) do
+       [
+         %MessageSent{
+           message_id: command.message_id,
+@@ -308,7 +307,38 @@ defmodule Memba.Messaging.Message do
+ 
+   defp normalize_text(_text, error), do: {:error, error}
+ 
+-  defp normalize_recipients(recipients) when is_list(recipients) and recipients != [] do
++  defp normalize_command_recipients(%SendMessage{} = command) do
++    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: false),
++         :ok <- validate_sender_recipient(command.sender_id, recipients) do
++      {:ok, recipients}
++    end
++  end
++
++  defp normalize_command_recipients(%PostMessageReply{} = command) do
++    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: true),
++         :ok <- validate_reply_author_excluded(command.sender_id, recipients) do
++      {:ok, recipients}
++    end
++  end
++
++  defp normalize_recipients(recipients, opts) when is_list(recipients) do
++    allow_empty? = Keyword.fetch!(opts, :allow_empty?)
++
++    cond do
++      recipients == [] and allow_empty? ->
++        {:ok, []}
++
++      recipients == [] ->
++        {:error, :invalid_recipients}
++
++      true ->
++        normalize_non_empty_recipients(recipients)
++    end
++  end
++
++  defp normalize_recipients(_recipients, _opts), do: {:error, :invalid_recipients}
++
++  defp normalize_non_empty_recipients(recipients) do
+     with {:ok, recipients} <- normalize_each_recipient(recipients),
+          :ok <- validate_unique(recipients, & &1.delivery_id, :duplicate_delivery),
+          :ok <- validate_unique(recipients, & &1.person_id, :duplicate_recipient) do
+@@ -316,8 +346,6 @@ defmodule Memba.Messaging.Message do
+     end
+   end
+ 
+-  defp normalize_recipients(_recipients), do: {:error, :invalid_recipients}
+-
+   defp normalize_each_recipient(recipients) do
+     Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
+       case normalize_recipient(recipient) do
+@@ -381,4 +409,12 @@ defmodule Memba.Messaging.Message do
+       {:error, :sender_not_in_recipients}
+     end
+   end
++
++  defp validate_reply_author_excluded(sender_id, recipients) do
++    if Enum.any?(recipients, &(&1.person_id == sender_id)) do
++      {:error, :reply_author_in_recipients}
++    else
++      :ok
++    end
++  end
+ end
+diff --git a/web/lib/memba/messaging/projections/message.ex b/web/lib/memba/messaging/projections/message.ex
+index 5212baa..d08fd6e 100644
+--- a/web/lib/memba/messaging/projections/message.ex
++++ b/web/lib/memba/messaging/projections/message.ex
+@@ -9,6 +9,8 @@ defmodule Memba.Messaging.Projections.Message do
+   schema "messaging_messages" do
+     field :club_id, :string
+     field :sender_id, :string
++    field :conversation_id, :string
++    field :reply_to_message_id, :string
+     field :subject, :string
+     field :body, :string
+ 
+diff --git a/web/lib/memba/messaging/projectors/message.ex b/web/lib/memba/messaging/projectors/message.ex
+index 7ce6733..7f91afa 100644
+--- a/web/lib/memba/messaging/projectors/message.ex
++++ b/web/lib/memba/messaging/projectors/message.ex
+@@ -17,6 +17,8 @@ defmodule Memba.Messaging.Projectors.Message do
+       message_id: event.message_id,
+       club_id: event.club_id,
+       sender_id: event.sender_id,
++      conversation_id: event.conversation_id || event.message_id,
++      reply_to_message_id: event.reply_to_message_id,
+       subject: event.subject,
+       body: event.body
+     })
+diff --git a/web/priv/repo/migrations/20260621091504_add_conversation_fields_to_messaging_messages.exs b/web/priv/repo/migrations/20260621091504_add_conversation_fields_to_messaging_messages.exs
+new file mode 100644
+index 0000000..1e75085
+--- /dev/null
++++ b/web/priv/repo/migrations/20260621091504_add_conversation_fields_to_messaging_messages.exs
+@@ -0,0 +1,31 @@
++defmodule Memba.Repo.Migrations.AddConversationFieldsToMessagingMessages do
++  use Ecto.Migration
++
++  def up do
++    alter table(:messaging_messages) do
++      add :conversation_id, :text
++      add :reply_to_message_id, :text
++    end
++
++    execute("""
++    UPDATE messaging_messages
++    SET conversation_id = message_id
++    WHERE conversation_id IS NULL
++    """)
++
++    alter table(:messaging_messages) do
++      modify :conversation_id, :text, null: false
++    end
++
++    create index(:messaging_messages, [:conversation_id])
++  end
++
++  def down do
++    drop_if_exists index(:messaging_messages, [:conversation_id])
++
++    alter table(:messaging_messages) do
++      remove :reply_to_message_id
++      remove :conversation_id
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/email_delivery_dispatcher_test.exs b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+index 642aefe..6118894 100644
+--- a/web/test/memba/messaging/email_delivery_dispatcher_test.exs
++++ b/web/test/memba/messaging/email_delivery_dispatcher_test.exs
+@@ -282,6 +282,86 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+       assert delivery_id == delivery.delivery_id
+     end
+ 
++    test "builds reply provider requests with conversation context" do
++      club =
++        insert_membership_club!(
++          name: "Kootenay Mountaineering Club",
++          slug: "kootenay-mountaineering-club"
++        )
++
++      alice =
++        insert_membership_person!(
++          name: "Alice Sender",
++          email: "alice.sender@example.com"
++        )
++
++      bob =
++        insert_membership_person!(
++          name: "Bob Replier",
++          email: "bob.replier@example.com"
++        )
++
++      root_message =
++        insert_message_projection!(
++          club_id: club.club_id,
++          sender_id: alice.person_id,
++          subject: "Trip planning night",
++          body: "Bring route ideas."
++        )
++
++      reply_message =
++        insert_message_projection!(
++          club_id: club.club_id,
++          sender_id: bob.person_id,
++          conversation_id: root_message.message_id,
++          reply_to_message_id: root_message.message_id,
++          subject: "Trip planning night",
++          body: "I can bring maps."
++        )
++
++      recipient_id = Memba.ID.generate(:person)
++
++      delivery =
++        insert_email_delivery!(
++          message_id: reply_message.message_id,
++          recipient_id: recipient_id,
++          recipient_name: "Carol Member",
++          recipient_address: "carol.member@example.com",
++          status: "dispatching"
++        )
++
++      assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
++
++      assert [
++               %EmailDeliveryRequest{
++                 message_id: reply_message_id,
++                 club_id: club_id,
++                 delivery_id: delivery_id,
++                 recipient_id: ^recipient_id,
++                 recipient_name: "Carol Member",
++                 recipient_address: "carol.member@example.com",
++                 club_name: "Kootenay Mountaineering Club",
++                 club_slug: "kootenay-mountaineering-club",
++                 sender_name: "Bob Replier",
++                 sender_address: "bob.replier@example.com",
++                 conversation_id: conversation_id,
++                 reply_to_message_id: reply_to_message_id,
++                 conversation_url: conversation_url,
++                 reply_to_sender_name: "Alice Sender",
++                 reply_to_body: "Bring route ideas.",
++                 subject: "Trip planning night",
++                 body: "I can bring maps."
++               }
++             ] = Fake.deliveries()
++
++      assert reply_message_id == reply_message.message_id
++      assert club_id == club.club_id
++      assert delivery_id == delivery.delivery_id
++      assert conversation_id == root_message.message_id
++      assert reply_to_message_id == root_message.message_id
++      assert conversation_url =~ "/messages/#{root_message.message_id}"
++    end
++
+     test "does not call the provider when the delivery's message projection is missing" do
+       message_id = Memba.ID.generate(:message)
+ 
+@@ -642,11 +722,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
+ 
+   defp insert_message_projection!(attrs) when is_list(attrs) do
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+ 
+     Repo.insert!(%MessageProjection{
+-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.fetch!(attrs, :body),
+       inserted_at: Keyword.get(attrs, :inserted_at, now),
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index 028715e..14f2e73 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -98,6 +98,59 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     refute email.text_body =~ "Reply to this email"
+   end
+ 
++  test "renders a reply notification from the club with conversation context" do
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    conversation_id = Memba.ID.generate(:message)
++
++    request =
++      email_delivery_request(
++        club_name: "Kootenay <Mountaineers>",
++        club_slug: "kmc",
++        conversation_id: conversation_id,
++        reply_to_message_id: conversation_id,
++        conversation_url: "https://kmc.memba.test/messages/#{conversation_id}",
++        reply_to_sender_name: "Alice Sender",
++        reply_to_body: "Bring route ideas.",
++        sender_name: "Bob Barker",
++        body: "I can bring maps."
++      )
++
++    assert :ok = Postmark.deliver(request)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
++    assert email.reply_to == {"Bob Barker", "bob@example.com"}
++    assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.subject == "[kmc] Re: Trip planning night"
++
++    assert email.text_body =~
++             "Bob Barker replied in the Trip planning night conversation"
++
++    assert email.text_body =~ "I can bring maps."
++    assert email.text_body =~ "View the conversation:"
++    assert email.text_body =~ request.conversation_url
++    assert email.text_body =~ "In reply to Alice Sender:"
++    assert email.text_body =~ "Bring route ideas."
++
++    assert email.html_body =~ "<!doctype html>"
++    assert email.html_body =~ "New reply"
++    assert email.html_body =~ "In the conversation"
++    assert email.html_body =~ "Trip planning night"
++    assert email.html_body =~ "Bob Barker replied"
++    assert email.html_body =~ "I can bring maps."
++    assert email.html_body =~ "View the conversation"
++    assert email.html_body =~ request.conversation_url
++    assert email.html_body =~ "In reply to Alice Sender:"
++    assert email.html_body =~ "Bring route ideas."
++    assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
++    assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
++
++    refute email.html_body =~ "You're following"
++    refute email.html_body =~ "Stop following"
++  end
++
+   test "uses the verified Memba sender address even when no provider reply-to is configured" do
+     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+ 
+@@ -178,6 +231,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+       club_slug: Keyword.get(overrides, :club_slug),
+       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
+       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
++      conversation_id: Keyword.get(overrides, :conversation_id),
++      reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
++      conversation_url: Keyword.get(overrides, :conversation_url),
++      reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),
++      reply_to_body: Keyword.get(overrides, :reply_to_body),
+       channel: Keyword.get(overrides, :channel, :email),
+       subject: Keyword.get(overrides, :subject, "Trip planning night"),
+       body: Keyword.get(overrides, :body, "Bring route ideas.")
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index ae571da..ab538d4 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -49,6 +49,8 @@ defmodule Memba.Messaging.MessageProjectionTest do
+              message_id: ^message_id,
+              club_id: ^club_id,
+              sender_id: ^sender_id,
++             conversation_id: ^message_id,
++             reply_to_message_id: nil,
+              subject: "Trip planning night",
+              body: "Bring route ideas."
+            } = Messaging.get_message(message_id)
+@@ -190,13 +192,16 @@ defmodule Memba.Messaging.MessageProjectionTest do
+ 
+   defp insert_message_projection!(attrs) when is_list(attrs) do
+     inserted_at = Keyword.fetch!(attrs, :inserted_at)
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+ 
+     Repo.insert!(%MessageProjection{
+-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body."),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       inserted_at: inserted_at,
+       updated_at: Keyword.get(attrs, :updated_at, inserted_at)
+     })
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index 4ca02a7..b2efce5 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -231,6 +231,7 @@ defmodule Memba.Messaging.MessageTest do
+       reply_message_id = Memba.ID.generate(:message)
+       club_id = Memba.ID.generate(:club)
+       sender_id = Memba.ID.generate(:person)
++      recipient_id = Memba.ID.generate(:person)
+       delivery_id = Memba.ID.generate(:delivery)
+ 
+       command = %PostMessageReply{
+@@ -244,8 +245,8 @@ defmodule Memba.Messaging.MessageTest do
+         recipients: [
+           %Recipient{
+             delivery_id: delivery_id,
+-            person_id: sender_id,
+-            name: " Alice Sender ",
++            person_id: recipient_id,
++            name: " Alice Recipient ",
+             email: " Alice@Example.COM "
+           }
+         ]
+@@ -264,13 +265,44 @@ defmodule Memba.Messaging.MessageTest do
+                %EmailDeliveryCreated{
+                  message_id: ^reply_message_id,
+                  delivery_id: ^delivery_id,
+-                 recipient_id: ^sender_id,
+-                 recipient_name: "Alice Sender",
++                 recipient_id: ^recipient_id,
++                 recipient_name: "Alice Recipient",
+                  recipient_email: "alice@example.com"
+                }
+              ] = Message.execute(%Message{}, command)
+     end
+ 
++    test "allows a reply with no email delivery recipients after excluding the author" do
++      valid_command = valid_post_message_reply()
++
++      assert [
++               %MessageSent{
++                 message_id: message_id,
++                 conversation_id: conversation_id,
++                 reply_to_message_id: reply_to_message_id
++               }
++             ] =
++               Message.execute(%Message{}, %PostMessageReply{
++                 valid_command
++                 | recipients: []
++               })
++
++      assert message_id == valid_command.message_id
++      assert conversation_id == valid_command.conversation_id
++      assert reply_to_message_id == valid_command.reply_to_message_id
++    end
++
++    test "rejects reply recipients that include the reply author" do
++      valid_command = valid_post_message_reply()
++      [recipient] = valid_command.recipients
++
++      assert {:error, :reply_author_in_recipients} =
++               Message.execute(%Message{}, %PostMessageReply{
++                 valid_command
++                 | recipients: [%Recipient{recipient | person_id: valid_command.sender_id}]
++               })
++    end
++
+     test "rejects replies without a root conversation, replied-to message, or body" do
+       valid_command = valid_post_message_reply()
+ 
+@@ -595,6 +627,7 @@ defmodule Memba.Messaging.MessageTest do
+   defp valid_post_message_reply do
+     sender_id = Memba.ID.generate(:person)
+     root_message_id = Memba.ID.generate(:message)
++    recipient_id = Memba.ID.generate(:person)
+ 
+     %PostMessageReply{
+       message_id: Memba.ID.generate(:message),
+@@ -607,8 +640,8 @@ defmodule Memba.Messaging.MessageTest do
+       recipients: [
+         %Recipient{
+           delivery_id: Memba.ID.generate(:delivery),
+-          person_id: sender_id,
+-          name: "Alice Sender",
++          person_id: recipient_id,
++          name: "Alice Recipient",
+           email: "alice@example.com"
+         }
+       ]
+diff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs
+index 1cd676e..e58866e 100644
+--- a/web/test/memba/messaging/post_message_reply_test.exs
++++ b/web/test/memba/messaging/post_message_reply_test.exs
+@@ -1,22 +1,31 @@
+ defmodule Memba.Messaging.PostMessageReplyTest do
+   use Memba.EventSourcedCase, async: false
+ 
++  import Ecto.Query
++
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Messaging
++  alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Repo
+ 
+-  test "a current club member can post a reply in the root message conversation" do
++  test "a current club member can post a reply in the root message conversation and email everyone except themself" do
+     club_id = Memba.ID.generate(:club)
+     alice = create_person(name: "Alice", email: "alice@example.com")
+     bob = create_person(name: "Bob", email: "bob@example.com")
++    carol = create_person(name: "Carol", email: "carol@example.com")
++    pat = create_person(name: "Pat", email: "pat@example.com")
++    other_club_id = Memba.ID.generate(:club)
+ 
+     add_member(club_id, alice.person_id)
+     add_member(club_id, bob.person_id)
++    add_member(club_id, carol.person_id)
++    add_member(other_club_id, pat.person_id)
+ 
+     root_message_id = send_root_message(club_id, alice.person_id)
+     reply_message_id = Memba.ID.generate(:message)
+@@ -34,7 +43,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+                   subject: "Trip planning night",
+                   body: "I can bring maps."
+                 }
+-                | _delivery_events
++                | delivery_events
+               ]
+             }} =
+              Messaging.post_message_reply(
+@@ -50,13 +59,51 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+ 
+     assert bob_id == bob.person_id
+ 
++    assert [
++             %EmailDeliveryCreated{
++               message_id: ^reply_message_id,
++               recipient_id: alice_id,
++               recipient_name: "Alice",
++               recipient_email: "alice@example.com"
++             },
++             %EmailDeliveryCreated{
++               message_id: ^reply_message_id,
++               recipient_id: carol_id,
++               recipient_name: "Carol",
++               recipient_email: "carol@example.com"
++             }
++           ] = delivery_events
++
++    assert [alice_id, carol_id] == [alice.person_id, carol.person_id]
++    refute bob.person_id in Enum.map(delivery_events, & &1.recipient_id)
++    refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
++
+     assert %MessageProjection{
+              message_id: ^reply_message_id,
+              club_id: ^club_id,
+              sender_id: ^bob_id,
++             conversation_id: ^root_message_id,
++             reply_to_message_id: ^root_message_id,
+              subject: "Trip planning night",
+              body: "I can bring maps."
+            } = Messaging.get_message(reply_message_id)
++
++    assert [
++             %EmailDeliveryProjection{
++               message_id: ^reply_message_id,
++               recipient_id: ^alice_id,
++               recipient_name: "Alice",
++               recipient_address: "alice@example.com",
++               status: "pending"
++             },
++             %EmailDeliveryProjection{
++               message_id: ^reply_message_id,
++               recipient_id: ^carol_id,
++               recipient_name: "Carol",
++               recipient_address: "carol@example.com",
++               status: "pending"
++             }
++           ] = pending_deliveries_for_message(reply_message_id)
+   end
+ 
+   test "a person who is not a current member of the root message club cannot reply" do
+@@ -128,6 +175,13 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+     message_id
+   end
+ 
++  defp pending_deliveries_for_message(message_id) do
++    EmailDeliveryProjection
++    |> where([delivery], delivery.message_id == ^message_id)
++    |> order_by([delivery], asc: delivery.recipient_name)
++    |> Repo.all()
++  end
++
+   defp create_person(attrs) do
+     person = %{
+       person_id: Memba.ID.generate(:person),
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 4f90634..464859b 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -312,10 +312,14 @@ defmodule MembaWeb.MemberMessageDetailTest do
+   end
+ 
+   defp create_message(attrs) do
++    message_id = Memba.ID.generate(:message)
++
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body")
+     })
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 7d86d6b..8bccba3 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -1265,10 +1265,14 @@ defmodule MembaWeb.PageControllerTest do
+   end
+ 
+   defp create_message(attrs) do
++    message_id = Memba.ID.generate(:message)
++
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body")
+     })
+diff --git a/web/test/memba_web/live/admin_operations_index_live_test.exs b/web/test/memba_web/live/admin_operations_index_live_test.exs
+index cb670bc..7d8217f 100644
+--- a/web/test/memba_web/live/admin_operations_index_live_test.exs
++++ b/web/test/memba_web/live/admin_operations_index_live_test.exs
+@@ -223,11 +223,14 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+ 
+   defp insert_message_projection!(attrs) do
+     inserted_at = Keyword.fetch!(attrs, :inserted_at)
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+ 
+     Repo.insert!(%MessageProjection{
+-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body."),
+       inserted_at: inserted_at,
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 412d59c..205bd80 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -785,11 +785,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
++    message_id = Memba.ID.generate(:message)
+ 
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body"),
+       inserted_at: inserted_at,
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 85fb5cf..131c34f 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -531,10 +531,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   end
+ 
+   defp create_message(attrs) do
++    message_id = Memba.ID.generate(:message)
++
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body")
+     })
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 0f7d466..31b8864 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -212,11 +212,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+ 
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
++    message_id = Memba.ID.generate(:message)
+ 
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body"),
+       inserted_at: inserted_at,
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index b7be372..4db36b0 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -149,10 +149,14 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+   end
+ 
+   defp create_message(attrs) do
++    message_id = Memba.ID.generate(:message)
++
+     Repo.insert!(%Message{
+-      message_id: Memba.ID.generate(:message),
++      message_id: message_id,
+       club_id: Keyword.fetch!(attrs, :club_id),
+       sender_id: Keyword.fetch!(attrs, :sender_id),
++      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+       body: Keyword.get(attrs, :body, "Message body")
+     })
