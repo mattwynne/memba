@@ -1,9 +1,22 @@
 defmodule Memba.Messaging.EmailDeliveryStatusConstraintsTest do
   use Memba.DataCase, async: true
 
+  alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
-  @valid_statuses ~w(pending dispatching sent failed delivered delayed bounced spam_complaint)
+  @valid_statuses EmailDeliveryStatus.valid_statuses()
+
+  test "shared status vocabulary lists dispatch lifecycle and provider webhook statuses" do
+    assert EmailDeliveryStatus.dispatch_lifecycle_statuses() ==
+             ~w(pending dispatching sent failed)
+
+    assert EmailDeliveryStatus.provider_webhook_statuses() ==
+             ~w(delivered delayed bounced spam_complaint)
+
+    assert EmailDeliveryStatus.valid_statuses() == @valid_statuses
+    assert EmailDeliveryStatus.valid?("pending")
+    refute EmailDeliveryStatus.valid?("not-a-delivery-status")
+  end
 
   test "database constraint allows dispatch lifecycle and provider webhook statuses" do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)

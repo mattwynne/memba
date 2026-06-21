@@ -10,6 +10,7 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
     consistency: :strong
 
   alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.EmailDeliveryStatus
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   project(%EmailDeliveryCreated{} = event, fn multi ->
@@ -20,7 +21,7 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
       recipient_name: event.recipient_name,
       recipient_address: event.recipient_email,
       channel: "email",
-      status: "pending",
+      status: EmailDeliveryStatus.pending(),
       attempt_count: 0
     })
   end)
