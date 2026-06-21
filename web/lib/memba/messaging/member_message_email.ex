@@ -6,8 +6,10 @@ defmodule Memba.Messaging.MemberMessageEmail do
   part uses Memba's v2 group-led template, with Memba only as the carrier.
   """
 
+  alias Memba.ClubInboundEmailAddress
   alias Memba.EmailTemplates
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.OutboundMessageID
 
   @doc "Return the sanitized From display name for a member-message email."
   def from_display_name(%EmailDeliveryRequest{} = request) do
@@ -20,7 +22,10 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   @doc "Return the sanitized Reply-To tuple for a member-message email."
   def reply_to(%EmailDeliveryRequest{} = request) do
-    {sender_name(request), request.sender_address}
+    case ClubInboundEmailAddress.address(request.club_slug) do
+      nil -> {sender_name(request), request.sender_address}
+      address -> {group_name(request), address}
+    end
   end
 
   @doc "Return the sanitized To tuple for a member-message email."
@@ -31,6 +36,18 @@ defmodule Memba.Messaging.MemberMessageEmail do
   @doc "Return the persisted RFC Message-ID header value for this outbound email."
   def message_id(%EmailDeliveryRequest{} = request) do
     request.outbound_message_id
+  end
+
+  @doc "Return RFC threading headers for a reply notification email."
+  def threading_headers(%EmailDeliveryRequest{} = request) do
+    if reply?(request) do
+      []
+      |> maybe_header("In-Reply-To", request.in_reply_to_outbound_message_id)
+      |> maybe_header("References", references_header(request.references_outbound_message_ids))
+      |> Enum.reverse()
+    else
+      []
+    end
   end
 
   @doc "Return the sanitized subject for a member-message email header."
@@ -77,7 +94,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
       ),
       sender_row(sender_name, group_name),
       message_section(title, request.body),
-      reply_hint(sender_name)
+      reply_hint(request, sender_name, group_name)
     ]
 
     EmailTemplates.render_shell(
@@ -262,13 +279,34 @@ defmodule Memba.Messaging.MemberMessageEmail do
     end
   end
 
-  defp reply_hint(sender_name) do
+  defp reply_hint(%EmailDeliveryRequest{} = request, sender_name, group_name) do
+    case ClubInboundEmailAddress.address(request.club_slug) do
+      nil -> sender_reply_hint(sender_name)
+      _address -> club_reply_hint(group_name)
+    end
+  end
+
+  defp sender_reply_hint(sender_name) do
     """
         <tr>
           <td class="gutter" style="padding:0 28px 22px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
               <td style="background:#f7f6f3; border:1px solid #e6e3dc; border-radius:10px; padding:13px 16px; font-size:13px; line-height:1.5; color:#4b5a55;">
                 Reply to this email and it goes straight to <b style="color:#15201c; font-weight:600;">#{EmailTemplates.escaped_text(sender_name)}</b> &mdash; not to the whole group.
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+    """
+  end
+
+  defp club_reply_hint(group_name) do
+    """
+        <tr>
+          <td class="gutter" style="padding:0 28px 22px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td style="background:#f7f6f3; border:1px solid #e6e3dc; border-radius:10px; padding:13px 16px; font-size:13px; line-height:1.5; color:#4b5a55;">
+                Reply to this email to post back to <b style="color:#15201c; font-weight:600;">#{EmailTemplates.escaped_text(group_name)}</b>.
               </td>
             </tr></table>
           </td>
@@ -337,6 +375,30 @@ defmodule Memba.Messaging.MemberMessageEmail do
   defp reply?(%EmailDeliveryRequest{reply_to_message_id: reply_to_message_id}) do
     is_binary(reply_to_message_id) and String.trim(reply_to_message_id) != ""
   end
+
+  defp maybe_header(headers, _name, nil), do: headers
+
+  defp maybe_header(headers, name, value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> headers
+      value -> [{name, value} | headers]
+    end
+  end
+
+  defp maybe_header(headers, _name, _value), do: headers
+
+  defp references_header(values) when is_list(values) do
+    values
+    |> Enum.map(&OutboundMessageID.normalize/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> case do
+      [] -> nil
+      message_ids -> Enum.join(message_ids, " ")
+    end
+  end
+
+  defp references_header(_values), do: nil
 
   defp blank?(value), do: value in [nil, ""]
 

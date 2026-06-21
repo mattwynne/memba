@@ -38,10 +38,17 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
     |> reply_to(MemberMessageEmail.reply_to(request))
     |> to(MemberMessageEmail.to(request))
     |> header("Message-ID", MemberMessageEmail.message_id(request))
+    |> threading_headers(request)
     |> subject(MemberMessageEmail.subject(request))
     |> text_body(MemberMessageEmail.text_body(request))
     |> html_body(MemberMessageEmail.html_body(request))
     |> put_provider_option(:metadata, metadata(request))
+  end
+
+  defp threading_headers(email, %EmailDeliveryRequest{} = request) do
+    Enum.reduce(MemberMessageEmail.threading_headers(request), email, fn {name, value}, email ->
+      header(email, name, value)
+    end)
   end
 
   defp metadata(%EmailDeliveryRequest{} = request) do

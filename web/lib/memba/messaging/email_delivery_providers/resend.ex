@@ -38,6 +38,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
     |> reply_to(MemberMessageEmail.reply_to(request))
     |> to(MemberMessageEmail.to(request))
     |> header("Message-ID", MemberMessageEmail.message_id(request))
+    |> threading_headers(request)
     |> subject(MemberMessageEmail.subject(request))
     |> text_body(MemberMessageEmail.text_body(request))
     |> html_body(MemberMessageEmail.html_body(request))
@@ -45,6 +46,12 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
     |> header("X-Memba-Message-ID", request.message_id)
     |> header("X-Memba-Delivery-ID", request.delivery_id)
     |> header("X-Memba-Club-ID", request.club_id)
+  end
+
+  defp threading_headers(email, %EmailDeliveryRequest{} = request) do
+    Enum.reduce(MemberMessageEmail.threading_headers(request), email, fn {name, value}, email ->
+      header(email, name, value)
+    end)
   end
 
   defp tags(%EmailDeliveryRequest{} = request) do

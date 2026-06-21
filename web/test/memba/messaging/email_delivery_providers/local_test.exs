@@ -44,7 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
 
     assert_email_sent(fn email ->
       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
-      assert email.reply_to == {"Bob", "bob@example.test"}
+      assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
       assert email.to == [{"Alice", "alice@example.test"}]
       assert email.headers["Message-ID"] == request.outbound_message_id
       assert email.subject == "[kmc] Trip planning night"
@@ -60,8 +60,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       assert email.html_body =~ "Trip planning night"
       assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
       assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
-      assert email.html_body =~ "Reply to this email and it goes straight to"
-      assert email.html_body =~ "not to the whole group"
+      assert email.html_body =~ "Reply to this email to post back to"
+      assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
       assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
       assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
 
@@ -104,8 +104,35 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       assert email.reply_to == {"Bob Barker", "bob@example.test"}
       assert email.to == [{"Alice Adams", "alice@example.test"}]
       assert email.subject == "Trip planning night"
+      assert email.html_body =~ "not to the whole group"
       refute email.text_body =~ "Reply to this email"
       assert email.text_body == "Hello exactly as written.\nDo not add guidance here."
+    end)
+  end
+
+  test "sets email reply-thread headers for local reply notifications" do
+    request =
+      email_delivery_request(
+        club_name: "Kootenay Mountaineering Club",
+        club_slug: "kmc",
+        conversation_id: Memba.ID.generate(:message),
+        reply_to_message_id: Memba.ID.generate(:message),
+        in_reply_to_outbound_message_id: "<memba.parent@example.test>",
+        references_outbound_message_ids: [
+          "<memba.root@example.test>",
+          "<memba.parent@example.test>"
+        ]
+      )
+
+    assert :ok = Local.deliver(request)
+
+    assert_email_sent(fn email ->
+      assert email.reply_to == {"Kootenay Mountaineering Club", "kmc@clubs.memba.io"}
+      assert email.headers["Message-ID"] == request.outbound_message_id
+      assert email.headers["In-Reply-To"] == "<memba.parent@example.test>"
+
+      assert email.headers["References"] ==
+               "<memba.root@example.test> <memba.parent@example.test>"
     end)
   end
 
@@ -141,6 +168,10 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
+      conversation_id: Keyword.get(overrides, :conversation_id),
+      reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
+      in_reply_to_outbound_message_id: Keyword.get(overrides, :in_reply_to_outbound_message_id),
+      references_outbound_message_ids: Keyword.get(overrides, :references_outbound_message_ids),
       channel: Keyword.get(overrides, :channel, :email),
       subject: Keyword.get(overrides, :subject, "Trip planning night"),
       body: Keyword.get(overrides, :body, "Bring route ideas.")
