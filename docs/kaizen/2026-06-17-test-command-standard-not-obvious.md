@@ -80,3 +80,64 @@ Agents frequently need a fast inner loop before the full `dev check`. If the com
 - Include examples for final gate, quick gate, targeted ExUnit, targeted browser acceptance, and acceptance support tests.
 - Make the root-level test failure more actionable, or provide a root wrapper that routes `web/test/...` paths to `cd web && mix test ...`.
 - Update iteration implementation prompts to distinguish targeted feedback commands from the required final `dev check` evidence.
+
+## Additional observation: 2026-06-21
+
+### Context
+
+After `./bin/dev check` failed in browser acceptance at `features/member_message_deliverability.feature:25`, the operator tried to rerun that one scenario through the project wrapper:
+
+```sh
+./bin/dev acceptance features/member_message_deliverability.feature:25
+```
+
+The workflow step was targeted acceptance rerun after a full quality-gate failure.
+
+### Expected standard
+
+When a Cucumber failure reports a file and line number, a contributor should be able to pass that same file-and-line selector to the project acceptance wrapper and rerun only the failed scenario, or receive a clear error telling them the supported targeted command.
+
+### What happened
+
+The command did not run only the requested scenario. Cucumber printed:
+
+```text
+You have specified paths in both your configuration file and as CLI arguments.
+In a future major version, the CLI argument will override the configuration file instead of being merged.
+Current result:     features/**/*.feature, features/member_message_deliverability.feature:25
+Future result:      features/member_message_deliverability.feature:25
+```
+
+Because `acceptance-tests/cucumber.js` sets `default.paths` to `features/**/*.feature`, the CLI path was merged with the configured default path. The run began executing the broader acceptance suite instead of the single failed scenario.
+
+### Impact
+
+Severity: minor friction with quality-gate risk.
+
+The failed focused rerun wasted time and made the validation state more confusing. It also encouraged stopping or interrupting a long unintended acceptance run, which can obscure whether the original failure reproduced. In future, the same trap could cause an agent to claim targeted rerun evidence that actually came from a broader or different command shape.
+
+### What allowed it to happen
+
+`bin/dev acceptance` passes extra arguments through to `npm test -- "$@"`, and `npm test` runs `cucumber-js` with the default Cucumber profile. That profile already supplies a path glob. Cucumber currently merges CLI paths with configured paths, but this non-obvious behavior is only reported after the long-running acceptance lifecycle has already started.
+
+The project does not document a supported one-scenario browser acceptance command, and the wrapper does not detect file/line arguments and adjust the Cucumber profile/path behavior.
+
+### Observations
+
+- `acceptance-tests/package.json` defines `test` as plain `cucumber-js`.
+- `acceptance-tests/cucumber.js` defines `default.paths: ["features/**/*.feature"]`.
+- `bin/dev acceptance` changes into `acceptance-tests/` and runs `local_test_email_env npm test -- "$@"`.
+- The file-line selector looked like ordinary Cucumber syntax, but the configured default path made it behave unexpectedly.
+- This is command-surface friction, not a product bug.
+
+### Open questions
+
+- What should be the canonical targeted browser acceptance command for one scenario by file and line?
+- Should `bin/dev acceptance <file:line>` support that directly?
+- Should the Cucumber config move the feature glob out of `default.paths` or add a separate profile for targeted runs?
+
+### Possible prevention ideas
+
+- Teach `bin/dev acceptance` to detect feature file/path arguments and invoke Cucumber in a way that avoids merging with `default.paths`.
+- Add an explicit `bin/dev acceptance-scenario <feature:line>` or documented npm script for focused reruns.
+- Add a command-map note showing full acceptance, tagged/name-filtered acceptance, and exact scenario rerun commands.
