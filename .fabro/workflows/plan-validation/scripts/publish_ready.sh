@@ -3,6 +3,9 @@ set -euo pipefail
 
 PLAN_PATH="${1:?plan path required}"
 INDEX_PATH="docs/iterations/README.md"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../../scripts/git_identity.sh
+source "$SCRIPT_DIR/../../scripts/git_identity.sh"
 
 if [ ! -f "$PLAN_PATH" ]; then
   echo "Plan file not found: $PLAN_PATH" >&2
@@ -40,9 +43,7 @@ PY
 
 git add "$PLAN_PATH" "$INDEX_PATH"
 if ! git diff --cached --quiet; then
-  git config user.name "Fabro"
-  git config user.email "fabro@users.noreply.github.com"
-  git commit -m "Mark iteration plan validated"
+  fabro_git_commit -m "Mark iteration plan validated"
 fi
 
 # Publish the validated run branch back to main so any automatic plan repairs and

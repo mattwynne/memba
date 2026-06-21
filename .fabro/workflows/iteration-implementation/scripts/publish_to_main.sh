@@ -2,14 +2,14 @@
 set -euo pipefail
 
 PLAN_PATH="${1:?plan path required}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../../scripts/git_identity.sh
+source "$SCRIPT_DIR/../../scripts/git_identity.sh"
 
 if [ ! -f "$PLAN_PATH" ]; then
   echo "Plan file not found: $PLAN_PATH" >&2
   exit 1
 fi
-
-git config user.name "Fabro"
-git config user.email "fabro@users.noreply.github.com"
 
 git fetch --quiet origin main:refs/remotes/origin/main
 base_sha=$(git merge-base HEAD origin/main)
@@ -71,7 +71,7 @@ commit_msg=$(mktemp)
   printf 'Validation: %s\n' "$validation"
 } > "$commit_msg"
 
-git commit -F "$commit_msg"
+fabro_git_commit -F "$commit_msg"
 rm -f "$commit_msg"
 
 attempted_publish_sha=$(git rev-parse HEAD)

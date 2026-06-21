@@ -17,6 +17,7 @@ VISIBLE_PATHS=(
   ".fabro/workflows/plan-validation/prompts/apply_fixes.md"
   ".fabro/workflows/plan-validation/prompts/recheck.md"
   ".fabro/workflows/plan-validation/scripts/publish_ready.sh"
+  ".fabro/workflows/scripts/git_identity.sh"
   "$PASS_PLAN"
   "$FAIL_PLAN"
 )

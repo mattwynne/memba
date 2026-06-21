@@ -3,6 +3,9 @@ set -euo pipefail
 
 PLAN_PATH="${1:?plan path required}"
 START_SHA_FILE=".fabro/tmp/review-start-sha.txt"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../../scripts/git_identity.sh
+source "$SCRIPT_DIR/../../scripts/git_identity.sh"
 
 if [ ! -f "$PLAN_PATH" ]; then
   echo "Plan file not found: $PLAN_PATH" >&2
@@ -12,9 +15,6 @@ if [ ! -f "$START_SHA_FILE" ]; then
   echo "Missing review start SHA file: $START_SHA_FILE" >&2
   exit 1
 fi
-
-git config user.name "Fabro"
-git config user.email "fabro@users.noreply.github.com"
 
 start_sha=$(cat "$START_SHA_FILE")
 if ! git cat-file -e "$start_sha^{commit}" 2>/dev/null; then
@@ -68,7 +68,7 @@ commit_msg=$(mktemp)
   printf 'Validation: dev check passed after review changes\n'
 } > "$commit_msg"
 
-git commit -F "$commit_msg"
+fabro_git_commit -F "$commit_msg"
 rm -f "$commit_msg"
 
 git pull --rebase origin main

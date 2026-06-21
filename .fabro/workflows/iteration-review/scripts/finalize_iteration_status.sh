@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PLAN_PATH="${1:?plan path required}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../../scripts/git_identity.sh
+source "$SCRIPT_DIR/../../scripts/git_identity.sh"
 
 if [ ! -f "$PLAN_PATH" ]; then
   echo "Plan file not found: $PLAN_PATH" >&2
@@ -19,9 +22,6 @@ case "$PLAN_PATH" in
     exit 0
     ;;
 esac
-
-git config user.name "Fabro"
-git config user.email "fabro@users.noreply.github.com"
 
 git fetch origin main
 git pull --rebase origin main
@@ -59,7 +59,7 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git commit -m "iteration ${iteration_number}: mark merged"
+fabro_git_commit -m "iteration ${iteration_number}: mark merged"
 git push origin HEAD:main
 
 echo "Marked iteration $iteration_number as merged and pushed to main."

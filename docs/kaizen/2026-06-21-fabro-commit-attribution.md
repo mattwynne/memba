@@ -67,3 +67,36 @@ Commit attribution is part of the delivery system's audit trail. If automated co
 - Document the approved Git identities for human, Fabro checkpoint, and Fabro publish commits.
 - Centralize Fabro Git identity setup in one helper instead of hard-coding it in multiple scripts.
 - Add a publish-time or CI guard that fails when commits destined for `main` use an unapproved author or committer email.
+
+## Resolution
+
+Date: 2026-06-21
+
+Root cause: Memba's Fabro publish/finalization scripts persistently wrote `user.name=Fabro` and `user.email=fabro@users.noreply.github.com` into the sandbox repository with `git config`. That address maps commits to the GitHub user `fabro`. Because the config was persistent, it could also leak into later Fabro checkpoint commits in the same sandbox, producing commits with `Fabro <noreply@fabro.sh>` as author but `Fabro <fabro@users.noreply.github.com>` as committer.
+
+Fix applied:
+
+- `.fabro/workflows/scripts/git_identity.sh`: added a scoped `fabro_git_commit` helper that sets author/committer identity only for the single `git commit` command. The default identity is `Fabro <noreply@fabro.sh>` and can be overridden with `FABRO_GIT_AUTHOR_*` / `FABRO_GIT_COMMITTER_*` environment variables.
+- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/plan-validation/scripts/publish_ready.sh`: replaced persistent `git config` with the scoped helper.
+- `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: added assertions that published commits use `Fabro <noreply@fabro.sh>` and that the script does not mutate repo-local Git identity.
+- `.fabro/workflows/scripts/test_git_identity.sh`: added a focused regression test for the helper and a scan that fails if Fabro workflow files reintroduce `fabro@users.noreply.github.com`.
+- `.fabro/workflows/plan-validation/test.sh`: added the shared identity helper to the tracked/pushed input guard for plan-validation runs.
+- `.fabro/workflows/README.md`: documented that Fabro publish/finalization scripts must use the scoped identity helper rather than changing repo-local Git config.
+
+Validation:
+
+- `bash .fabro/workflows/scripts/test_git_identity.sh` — passed.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash -n .fabro/workflows/scripts/git_identity.sh .fabro/workflows/scripts/test_git_identity.sh .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh .fabro/workflows/plan-validation/scripts/publish_ready.sh .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh .fabro/workflows/plan-validation/test.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed.
+- `./bin/dev check` — passed.
+
+Remaining follow-up:
+
+- Existing history still contains commits already attributed to `fabro@users.noreply.github.com`; this fix only prevents future workflow commits from using that GitHub-user-mapped address.

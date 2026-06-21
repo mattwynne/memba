@@ -68,6 +68,17 @@ if ! grep -q 'Fabro-Run-Id: TEST-RUN' <<<"$message"; then
   echo "$message" >&2
   exit 1
 fi
+identity=$(git log -1 --format='%an <%ae>|%cn <%ce>' origin/main)
+if [ "$identity" != 'Fabro <noreply@fabro.sh>|Fabro <noreply@fabro.sh>' ]; then
+  echo "Expected published commit to use the approved Fabro email without GitHub user attribution" >&2
+  echo "$identity" >&2
+  exit 1
+fi
+if [ "$(git config --local user.name)" != "Test" ] || [ "$(git config --local user.email)" != "test@example.com" ]; then
+  echo "Expected publish script not to persistently change repo-local git identity" >&2
+  git config --local --get-regexp '^user\.' >&2
+  exit 1
+fi
 if [ "$(git show "$published:docs/iterations/001-example/plan.md" | sed -n 's/^Status: //p')" != "merged" ]; then
   echo "Expected plan status to be merged on origin/main" >&2
   exit 1
