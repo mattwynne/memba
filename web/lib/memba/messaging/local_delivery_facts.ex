@@ -23,6 +23,7 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
     fact = %{
       id: request.delivery_id,
       message_id: request.message_id,
+      outbound_message_id: request.outbound_message_id,
       club_id: request.club_id,
       delivery_id: request.delivery_id,
       recipient_id: request.recipient_id,

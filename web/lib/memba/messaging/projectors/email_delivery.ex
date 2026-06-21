@@ -11,12 +11,14 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
 
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.EmailDeliveryStatus
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   project(%EmailDeliveryCreated{} = event, fn multi ->
     Ecto.Multi.insert(multi, :messaging_email_delivery, %EmailDeliveryProjection{
       delivery_id: event.delivery_id,
       message_id: event.message_id,
+      outbound_message_id: OutboundMessageID.for_delivery(event.delivery_id, event.message_id),
       recipient_id: event.recipient_id,
       recipient_name: event.recipient_name,
       recipient_address: event.recipient_email,

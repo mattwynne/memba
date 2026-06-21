@@ -6,6 +6,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
   alias Memba.Messaging.EmailDeliveryProviders.Local
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.LocalDeliveryFacts
+  alias Memba.Messaging.OutboundMessageID
 
   setup do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
@@ -45,6 +46,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
       assert email.reply_to == {"Bob", "bob@example.test"}
       assert email.to == [{"Alice", "alice@example.test"}]
+      assert email.headers["Message-ID"] == request.outbound_message_id
       assert email.subject == "[kmc] Trip planning night"
 
       assert email.text_body ==
@@ -76,6 +78,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert [fact] = LocalDeliveryFacts.list()
     assert fact.delivery_id == request.delivery_id
     assert fact.message_id == request.message_id
+    assert fact.outbound_message_id == request.outbound_message_id
     assert fact.recipient_address == "alice@example.test"
     assert fact.to == ["Alice <alice@example.test>"]
     assert fact.from == "Bob via Memba <messages@mail.memba.io>"
@@ -115,11 +118,21 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
   end
 
   defp email_delivery_request(overrides) do
+    message_id = Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end)
+
+    delivery_id =
+      Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+
     %EmailDeliveryRequest{
-      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
+      message_id: message_id,
       club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
-      delivery_id:
-        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
+      delivery_id: delivery_id,
+      outbound_message_id:
+        Keyword.get(
+          overrides,
+          :outbound_message_id,
+          OutboundMessageID.for_delivery(delivery_id, message_id)
+        ),
       recipient_id:
         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),

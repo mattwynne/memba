@@ -29,6 +29,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -436,6 +437,32 @@ defmodule Memba.Messaging do
       Repo.get(EmailDeliveryProjection, delivery_id)
     else
       :error -> nil
+    end
+  end
+
+  @doc """
+  Resolve a persisted outbound RFC Message-ID to its Memba message context.
+
+  Returns `nil` when the Message-ID is blank, malformed for this lookup, unknown,
+  or belongs to a delivery whose message projection is absent.
+  """
+  def get_outbound_message_reference(rfc_message_id) do
+    with message_id when is_binary(message_id) <- OutboundMessageID.normalize(rfc_message_id) do
+      EmailDeliveryProjection
+      |> join(:inner, [delivery], message in MessageProjection,
+        on: message.message_id == delivery.message_id
+      )
+      |> where([delivery, _message], delivery.outbound_message_id == ^message_id)
+      |> select([delivery, message], %{
+        outbound_message_id: delivery.outbound_message_id,
+        delivery_id: delivery.delivery_id,
+        message_id: message.message_id,
+        conversation_id: message.conversation_id,
+        club_id: message.club_id
+      })
+      |> Repo.one()
+    else
+      nil -> nil
     end
   end
 

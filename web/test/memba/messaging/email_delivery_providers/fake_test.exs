@@ -4,6 +4,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.OutboundMessageID
 
   setup do
     Fake.reset()
@@ -21,10 +22,14 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do
   end
 
   defp email_delivery_request(name) do
+    message_id = Memba.ID.generate(:message)
+    delivery_id = Memba.ID.generate(:delivery)
+
     %EmailDeliveryRequest{
-      message_id: Memba.ID.generate(:message),
+      message_id: message_id,
       club_id: Memba.ID.generate(:club),
-      delivery_id: Memba.ID.generate(:delivery),
+      delivery_id: delivery_id,
+      outbound_message_id: OutboundMessageID.for_delivery(delivery_id, message_id),
       recipient_id: Memba.ID.generate(:person),
       recipient_name: name,
       recipient_address: String.downcase(name) <> "@example.com",

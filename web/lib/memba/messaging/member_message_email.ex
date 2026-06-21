@@ -28,6 +28,11 @@ defmodule Memba.Messaging.MemberMessageEmail do
     {recipient_name(request), request.recipient_address}
   end
 
+  @doc "Return the persisted RFC Message-ID header value for this outbound email."
+  def message_id(%EmailDeliveryRequest{} = request) do
+    request.outbound_message_id
+  end
+
   @doc "Return the sanitized subject for a member-message email header."
   def subject(%EmailDeliveryRequest{} = request) do
     subject =

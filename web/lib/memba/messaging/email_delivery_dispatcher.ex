@@ -360,6 +360,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          message_id: message.message_id,
          club_id: message.club_id,
          delivery_id: delivery.delivery_id,
+         outbound_message_id: delivery.outbound_message_id,
          recipient_id: delivery.recipient_id,
          recipient_name: delivery.recipient_name,
          recipient_address: delivery.recipient_address,

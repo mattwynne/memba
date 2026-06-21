@@ -13,6 +13,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
   alias Memba.Messaging.Events.EmailDeliveryDelivered
   alias Memba.Messaging
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
   alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -265,6 +266,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  message_id: message_id,
                  club_id: club_id,
                  delivery_id: delivery_id,
+                 outbound_message_id: outbound_message_id,
                  recipient_id: ^recipient_id,
                  recipient_name: "Bob Member",
                  recipient_address: "bob.member@example.com",
@@ -281,6 +283,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert message_id == message.message_id
       assert club_id == club.club_id
       assert delivery_id == delivery.delivery_id
+      assert outbound_message_id == delivery.outbound_message_id
     end
 
     test "builds reply provider requests with conversation context" do
@@ -338,6 +341,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
                  message_id: reply_message_id,
                  club_id: club_id,
                  delivery_id: delivery_id,
+                 outbound_message_id: outbound_message_id,
                  recipient_id: ^recipient_id,
                  recipient_name: "Carol Member",
                  recipient_address: "carol.member@example.com",
@@ -359,6 +363,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert reply_message_id == reply_message.message_id
       assert club_id == club.club_id
       assert delivery_id == delivery.delivery_id
+      assert outbound_message_id == delivery.outbound_message_id
       assert conversation_id == root_message.message_id
       assert reply_to_message_id == root_message.message_id
       assert conversation_url =~ "/messages/#{root_message.message_id}"
@@ -676,10 +681,18 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   defp insert_email_delivery!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
     Repo.insert!(%EmailDeliveryProjection{
-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      delivery_id: delivery_id,
+      message_id: message_id,
+      outbound_message_id:
+        Keyword.get(
+          attrs,
+          :outbound_message_id,
+          OutboundMessageID.for_delivery(delivery_id, message_id)
+        ),
       recipient_id: Keyword.get_lazy(attrs, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(attrs, :recipient_name, "Ada Member"),
       recipient_address: Keyword.get(attrs, :recipient_address, "ada@example.test"),
