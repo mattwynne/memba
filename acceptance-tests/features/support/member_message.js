@@ -157,6 +157,7 @@ function ensureState(world) {
   world.inboundEmailSenders = world.inboundEmailSenders || {};
   world.inboundRejectionEmails = world.inboundRejectionEmails || {};
   world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
+  world.replies = world.replies || {};
 
   return world;
 }
@@ -523,6 +524,64 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
     `member message heading for ${JSON.stringify(subject)}`,
     { expect, timeoutMs }
   );
+}
+
+async function postMemberReply(
+  world,
+  replierName,
+  subject,
+  body,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent before replying`);
+
+  const replier = world.people[replierName];
+  assert.ok(replier, `Expected ${replierName} to have been created before replying`);
+
+  const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await browserInteraction(`${replierName} posts a reply to ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Reply").fill(body);
+    await world.page.getByRole("button", { name: "Post reply" }).click();
+  });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-message-reply-success", { hasText: "Your reply is being sent." }),
+    `reply success message for ${replierName}`,
+    { expect, timeoutMs }
+  );
+
+  const replyRow = conversationReplyRow(world, replierName, body);
+  await waitForProjectedVisible(
+    world,
+    replyRow,
+    `${replierName}'s reply in ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  const replyMessageId = await replyRow.getAttribute("data-message-id");
+  assert.ok(replyMessageId, `Expected ${replierName}'s reply row to expose data-message-id`);
+
+  const reply = {
+    body,
+    clubId: message.clubId,
+    conversationId: message.messageId,
+    messageId: replyMessageId,
+    senderName: replierName,
+    subject
+  };
+
+  world.replies[replyKey(subject, replierName, body)] = reply;
+  world.lastReply = reply;
+  world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
+
+  return world;
 }
 
 async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -1262,6 +1321,182 @@ async function assertMemberMessageBody(world, expectedBody, { expect = playwrigh
   return world;
 }
 
+async function assertConversationShowsReply(
+  world,
+  subject,
+  senderName,
+  body,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    conversationReplyRow(world, senderName, body),
+    `${senderName}'s reply ${JSON.stringify(body)} in conversation ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertConversationReplyOrder(
+  world,
+  subject,
+  earlierBody,
+  laterBody,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-conversation-replies [id^=\"member-conversation-body-\"]", {
+      hasText: earlierBody
+    }),
+    `earlier reply ${JSON.stringify(earlierBody)}`,
+    { expect, timeoutMs }
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-conversation-replies [id^=\"member-conversation-body-\"]", {
+      hasText: laterBody
+    }),
+    `later reply ${JSON.stringify(laterBody)}`,
+    { expect, timeoutMs }
+  );
+
+  const replyBodies = (await world.page
+    .locator("#member-conversation-replies [id^=\"member-conversation-body-\"]")
+    .allTextContents()).map((text) => text.trim());
+
+  const earlierIndex = replyBodies.indexOf(earlierBody);
+  const laterIndex = replyBodies.indexOf(laterBody);
+
+  assertFinalBrowserState(`conversation reply order for ${JSON.stringify(subject)}`, () => {
+    assert.notEqual(
+      earlierIndex,
+      -1,
+      `Expected conversation replies to include ${JSON.stringify(earlierBody)}; saw ${JSON.stringify(replyBodies)}`
+    );
+    assert.notEqual(
+      laterIndex,
+      -1,
+      `Expected conversation replies to include ${JSON.stringify(laterBody)}; saw ${JSON.stringify(replyBodies)}`
+    );
+    assert.ok(
+      earlierIndex < laterIndex,
+      `Expected ${JSON.stringify(earlierBody)} before ${JSON.stringify(laterBody)}; saw ${JSON.stringify(
+        replyBodies
+      )}`
+    );
+  });
+
+  return world;
+}
+
+async function assertReplyEmailDeliveredToMembers(
+  world,
+  senderName,
+  recipientNames,
+  clubName,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const reply = latestReplyFor(world, senderName);
+  const message = world.messages[reply.subject];
+  assert.ok(message, `Expected root message ${JSON.stringify(reply.subject)} for reply email assertion`);
+
+  const previousEmails = world.replyDeliveryFactsBeforeSend || [];
+  const emails = await waitForLocalDeliveryFacts(
+    world,
+    previousEmails.length + recipientNames.length,
+    `local provider delivery facts for ${senderName}'s reply to ${JSON.stringify(reply.subject)}`
+  );
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+  const expectedSubject = replyEmailSubjectFor(world, reply.subject);
+
+  for (const recipientName of recipientNames) {
+    const person = world.people[recipientName];
+    assert.ok(person, `Expected ${recipientName} to have been created`);
+
+    const matchingEmail = newEmails.find(
+      (email) =>
+        email.subject === expectedSubject &&
+        mailboxEmailTo(email).includes(person.email) &&
+        mailboxEmailFrom(email).includes(`${clubName} via Memba`) &&
+        mailboxEmailText(email).includes(reply.body)
+    );
+
+    assertFinalBrowserState(`reply email for ${recipientName}`, () =>
+      assert.ok(
+        matchingEmail,
+        `Expected a reply email for ${recipientName} <${person.email}> from ${clubName} via Memba ` +
+          `with subject ${JSON.stringify(expectedSubject)} and body containing ${JSON.stringify(reply.body)}; ` +
+          `saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+      )
+    );
+  }
+
+  world.replyDeliveryFactsAfterSend = newEmails;
+
+  return world;
+}
+
+async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
+  ensureState(world);
+
+  const reply = latestReplyFor(world, senderName);
+  const sender = world.people[senderName];
+  assert.ok(sender, `Expected ${senderName} to have been created`);
+
+  const emails = world.replyDeliveryFactsAfterSend || [];
+  const matchingEmail = emails.find(
+    (email) => email.subject === replyEmailSubjectFor(world, reply.subject) && mailboxEmailTo(email).includes(sender.email)
+  );
+
+  assertFinalBrowserState(`${senderName} should not receive their own reply`, () =>
+    assert.equal(
+      matchingEmail,
+      undefined,
+      `Expected no reply email to ${senderName} <${sender.email}>; saw ${JSON.stringify(emails.map(mailboxEmailSummary))}`
+    )
+  );
+
+  return world;
+}
+
+async function assertMemberCannotReplyToMessage(
+  world,
+  personName,
+  subject,
+  clubName = kootenayClubName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to be known before checking reply authorization`);
+
+  const response = await browserInteraction(
+    `${personName} attempts to open ${JSON.stringify(subject)} to reply`,
+    () => world.page.goto(clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}`))
+  );
+
+  assertFinalBrowserState(`${personName} cannot open reply form for ${JSON.stringify(subject)}`, () =>
+    assert.equal(response && response.status(), 403)
+  );
+
+  await expect(world.page.locator("#member-message-reply-form")).toHaveCount(0, { timeout: timeoutMs || 1000 });
+
+  return world;
+}
+
 async function assertMemberMessageAddressedTo(
   world,
   expectedNames,
@@ -1453,6 +1688,16 @@ function memberMessageEmailSubjectFor(world, subject) {
   const club = clubById(world, message.clubId);
   const slug = message.clubSlug || (club && club.slug);
   return slug ? `[${slug}] ${subject}` : subject;
+}
+
+function replyEmailSubjectFor(world, subject) {
+  const message = world.messages[subject];
+  assert.ok(message, "Expected a message to have been sent before checking reply email subject");
+  const club = clubById(world, message.clubId);
+  const slug = message.clubSlug || (club && club.slug);
+  const replySubject = `Re: ${subject}`;
+
+  return slug ? `[${slug}] ${replySubject}` : replySubject;
 }
 
 async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { senderName } = {}) {
@@ -2232,6 +2477,38 @@ function mailboxEmailSummary(email) {
   };
 }
 
+function conversationReplyRow(world, senderName, body) {
+  const sender = world.people[senderName];
+  assert.ok(sender, `Expected ${senderName} to have been created`);
+
+  return world.page.locator(
+    `#member-conversation-replies [data-testid=${cssString(
+      "member-conversation-entry"
+    )}][data-conversation-kind="reply"][data-sender-id=${cssString(sender.personId)}]`,
+    { hasText: body }
+  );
+}
+
+function replyKey(subject, senderName, body) {
+  return `${subject}\u0000${senderName}\u0000${body}`;
+}
+
+function latestReplyFor(world, senderName) {
+  ensureState(world);
+
+  if (world.lastReply && world.lastReply.senderName === senderName) {
+    return world.lastReply;
+  }
+
+  const reply = Object.values(world.replies)
+    .filter((candidate) => candidate.senderName === senderName)
+    .at(-1);
+
+  assert.ok(reply, `Expected ${senderName} to have replied before checking reply email`);
+
+  return reply;
+}
+
 async function capturedInboundRejectionEmail(world, senderName) {
   ensureState(world);
 
@@ -2538,7 +2815,10 @@ module.exports = {
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
+  assertConversationReplyOrder,
+  assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
+  assertMemberCannotReplyToMessage,
   assertMemberReceiptStatus: assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageBodyCannotBeBlank,
@@ -2548,6 +2828,8 @@ module.exports = {
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
+  assertReplyEmailDeliveredToMembers,
+  assertReplyEmailNotDeliveredToAuthor,
   assertReceiptStatus,
   createClub,
   createPeople,
@@ -2580,6 +2862,7 @@ module.exports = {
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
+  postMemberReply,
   testLocalDeliveryFacts,
   testMailboxEmails,
   trySendBlankMemberMessageToKootenayMembers,

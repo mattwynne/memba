@@ -12,7 +12,10 @@ const {
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
+  assertConversationReplyOrder,
+  assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
+  assertMemberCannotReplyToMessage,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
@@ -21,6 +24,8 @@ const {
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
+  assertReplyEmailDeliveredToMembers,
+  assertReplyEmailNotDeliveredToAuthor,
   emailFor,
   ensureClubSlugMatchesInboundAddress,
   ensureState,
@@ -29,6 +34,7 @@ const {
   nelsonClubName,
   openMemberMessage,
   reportRecipientEmailStatus,
+  postMemberReply,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   trySendBlankMemberMessageToKootenayMembers,
@@ -159,6 +165,65 @@ Given(
     await sendMessageToKootenayMembersDirectly(this, senderName, subject);
   }
 );
+
+Given(
+  "{word} sent the message {string} to Kootenay Mountaineering Club members",
+  async function (senderName, subject) {
+    await sendMessageToKootenayMembersDirectly(this, senderName, subject);
+  }
+);
+
+When("{word} replies {string} to {string}", async function (senderName, body, subject) {
+  await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
+});
+
+Then(
+  "the conversation for {string} should show {word}'s reply {string}",
+  async function (subject, senderName, body) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertConversationShowsReply(member, subject, senderName, body)
+    );
+  }
+);
+
+Then(
+  "{word} should see {word}'s reply in the conversation for {string}",
+  async function (viewerName, senderName, subject) {
+    const reply = latestReplyFor(this, subject, senderName);
+
+    await withMemberHarness(this, viewerName, (member) =>
+      assertConversationShowsReply(member, subject, senderName, reply.body)
+    );
+  }
+);
+
+Then(
+  "the conversation for {string} should show {string} before {string}",
+  async function (subject, earlierBody, laterBody) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertConversationReplyOrder(member, subject, earlierBody, laterBody)
+    );
+  }
+);
+
+Then(
+  /^(.+) should each receive (\w+)'s reply by email from (.+) via Memba$/,
+  async function (recipientNamesText, senderName, clubName) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertReplyEmailDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText), clubName)
+    );
+  }
+);
+
+Then("{word} should not receive his own reply by email", async function (senderName) {
+  await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
+});
+
+Then("{word} should not be able to reply to {string}", async function (personName, subject) {
+  await withMemberHarness(this, personName, (member) =>
+    assertMemberCannotReplyToMessage(member, personName, subject, kootenayClubName)
+  );
+});
 
 Then("{word} should be told the message body cannot be blank", async function (viewerName) {
   await memberBrowserAction(this, `blank-body validation notice for ${viewerName}`, () =>
@@ -381,6 +446,20 @@ function parsePersonList(text) {
     .split(/\s*,\s*/)
     .map((name) => name.trim())
     .filter(Boolean);
+}
+
+function latestReplyFor(world, subject, senderName) {
+  ensureState(world);
+
+  const reply = Object.values(world.replies || {})
+    .filter((candidate) => candidate.subject === subject && candidate.senderName === senderName)
+    .at(-1);
+
+  if (!reply) {
+    throw new Error(`Expected ${senderName} to have replied to ${JSON.stringify(subject)}`);
+  }
+
+  return reply;
 }
 
 function ensureClubState(world, clubName, { slug = clubSlugFor(clubName) } = {}) {

@@ -31,6 +31,57 @@ defmodule Memba.Cucumber.MessagingSteps do
     send_message_to_kootenay_members(context, sender_name, subject)
   end
 
+  step "{word} sent the message {string} to Kootenay Mountaineering Club members",
+       %{args: [sender_name, subject]} = context do
+    Fake.reset()
+
+    context
+    |> send_message_to_kootenay_members(sender_name, subject)
+    |> dispatch_and_clear_background_message_deliveries()
+  end
+
+  step "{word} replies {string} to {string}", %{args: [sender_name, body, subject]} = context do
+    post_reply_to_message(context, sender_name, subject, body)
+  end
+
+  step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
+       %{args: [subject, sender_name, body]} = context do
+    assert_conversation_shows_reply(context, subject, sender_name, body)
+  end
+
+  step ~r/^(\w+) should see (\w+)'s reply in the conversation for "([^"]+)"$/,
+       %{args: [viewer_name, sender_name, subject]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    %{body: body} = latest_reply_for!(context, subject, sender_name)
+    assert_conversation_shows_reply(context, subject, sender_name, body)
+  end
+
+  step "the conversation for {string} should show {string} before {string}",
+       %{args: [subject, earlier_body, later_body]} = context do
+    assert_conversation_order(context, subject, earlier_body, later_body)
+  end
+
+  step "Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba",
+       context do
+    assert_reply_email_delivered_to_members(
+      context,
+      "Trip planning night",
+      "Bob",
+      ["Alice", "Carol", "Dana"],
+      "Kootenay Mountaineering Club"
+    )
+  end
+
+  step "{word} should not receive his own reply by email", %{args: [sender_name]} = context do
+    assert_reply_email_not_delivered_to_author(context, sender_name)
+  end
+
+  step "{word} should not be able to reply to {string}",
+       %{args: [sender_name, subject]} = context do
+    assert_cannot_reply_to_message(context, sender_name, subject)
+  end
+
   step "club message sending is unavailable", context do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
@@ -382,6 +433,157 @@ defmodule Memba.Cucumber.MessagingSteps do
       subject: subject,
       body: body
     })
+  end
+
+  defp dispatch_and_clear_background_message_deliveries(context) do
+    dispatch_pending_email_deliveries()
+    Fake.reset()
+    context
+  end
+
+  defp post_reply_to_message(context, sender_name, subject, body) do
+    reply_message_id = Memba.ID.generate(:message)
+    root_message = fetch_from_context!(context, :messages, subject)
+    sender_id = person_id_from_context!(context, sender_name)
+
+    assert :ok =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: root_message.message_id,
+                 sender_id: sender_id,
+                 body: body
+               },
+               consistency: :strong
+             )
+
+    assert reply = Messaging.get_message(reply_message_id)
+
+    reply_context = %{
+      body: reply.body,
+      club_id: reply.club_id,
+      conversation_id: reply.conversation_id,
+      message_id: reply.message_id,
+      sender_id: reply.sender_id,
+      sender_name: sender_name,
+      subject: subject
+    }
+
+    context
+    |> Map.put(:last_reply, reply_context)
+    |> update_context_map({:replies, subject}, {sender_name, body}, reply_context)
+  end
+
+  defp assert_conversation_shows_reply(context, subject, sender_name, body) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    sender_id = person_id_from_context!(context, sender_name)
+
+    assert Enum.any?(Messaging.list_conversation_messages(root_message.message_id), fn message ->
+             message.sender_id == sender_id and message.body == body
+           end)
+
+    context
+  end
+
+  defp assert_conversation_order(context, subject, earlier_body, later_body) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    bodies = Enum.map(Messaging.list_conversation_messages(root_message.message_id), & &1.body)
+
+    earlier_index = Enum.find_index(bodies, &(&1 == earlier_body))
+    later_index = Enum.find_index(bodies, &(&1 == later_body))
+
+    assert is_integer(earlier_index),
+           "Expected conversation for #{inspect(subject)} to include #{inspect(earlier_body)}"
+
+    assert is_integer(later_index),
+           "Expected conversation for #{inspect(subject)} to include #{inspect(later_body)}"
+
+    assert earlier_index < later_index
+
+    context
+  end
+
+  defp assert_reply_email_delivered_to_members(
+         context,
+         subject,
+         sender_name,
+         expected_recipient_names,
+         expected_from_group_name
+       ) do
+    reply = latest_reply_for!(context, subject, sender_name)
+    dispatch_pending_email_deliveries()
+
+    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
+    assert Enum.map(member_deliveries, & &1.recipient_name) == expected_recipient_names
+
+    provider_deliveries = Fake.deliveries()
+    assert length(provider_deliveries) == length(expected_recipient_names)
+
+    Enum.zip(expected_recipient_names, provider_deliveries)
+    |> Enum.each(fn {recipient_name, %EmailDeliveryRequest{} = request} ->
+      assert request.message_id == reply.message_id
+      assert request.conversation_id == reply.conversation_id
+      assert request.subject == subject
+      assert request.body == reply.body
+      assert request.sender_name == sender_name
+      assert request.recipient_name == recipient_name
+
+      assert MemberMessageEmail.from_display_name(request) ==
+               "#{expected_from_group_name} via Memba"
+    end)
+
+    context
+  end
+
+  defp assert_reply_email_not_delivered_to_author(context, sender_name) do
+    reply = Map.fetch!(context, :last_reply)
+    sender_id = person_id_from_context!(context, sender_name)
+
+    refute Enum.any?(Messaging.list_member_email_deliverys(reply.message_id), fn receipt ->
+             receipt.recipient_id == sender_id
+           end)
+
+    refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
+             request.message_id == reply.message_id and request.recipient_id == sender_id
+           end)
+
+    context
+  end
+
+  defp assert_cannot_reply_to_message(context, sender_name, subject) do
+    reply_message_id = Memba.ID.generate(:message)
+    root_message = fetch_from_context!(context, :messages, subject)
+    sender_id = person_id_from_context!(context, sender_name)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: reply_message_id,
+                 conversation_id: root_message.message_id,
+                 sender_id: sender_id,
+                 body: "I should not be able to post this."
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.get_message(reply_message_id)
+
+    context
+  end
+
+  defp latest_reply_for!(context, subject, sender_name) do
+    context
+    |> Map.get({:replies, subject}, %{})
+    |> Enum.map(fn {{reply_sender_name, _body}, reply} -> {reply_sender_name, reply} end)
+    |> Enum.filter(fn {reply_sender_name, _reply} -> reply_sender_name == sender_name end)
+    |> List.last()
+    |> case do
+      {_reply_sender_name, reply} ->
+        reply
+
+      nil ->
+        flunk("Expected #{sender_name} to have replied to #{inspect(subject)}")
+    end
   end
 
   defp try_send_message_to_kootenay_members(context, sender_name, subject, body \\ nil) do

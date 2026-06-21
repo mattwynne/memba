@@ -5,5 +5,5 @@
 - [x] 003 Deliver the reply by email to every current member (excluding the author) by reusing the `send_club_message` delivery + receipt path; build the reply email on the shared transactional layout/footer with `<club> via Memba` sender and conversation context.
 - [x] 004 Add/extend projector(s) and read APIs to load a conversation (root + ordered replies).
 - [x] 005 Update the member message-detail LiveView/template: render the conversation and an inline reply composer (body only, inheriting the subject); keep delivery receipts available (demoting them per the sketch is acceptable but optional).
-- [ ] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
+- [x] 006 Make the `@iteration-039` scenarios executable (domain steps first, then browser), removing/narrowing `@todo-*` as each runner can run them.
 - [ ] 007 Run `dev check`.
