@@ -1,7 +1,7 @@
 # Follow a conversation, and send replies only to followers
 
 Date: 2026-06-19
-Status: validated
+Status: implementing
 
 ## Goal
 
