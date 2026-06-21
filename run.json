@@ -562,14 +562,148 @@
     }
   },
   "web_url": "https://fabro.home.wynne.family/runs/01KVNBE4TG154YV6NP4GDH20ZT",
-  "start": null,
-  "status": {
-    "kind": "starting"
+  "start": {
+    "start_time": "2026-06-21T15:05:31.404075201Z",
+    "run_branch": "fabro/run/01KVNBE4TG154YV6NP4GDH20ZT",
+    "base_sha": "8e7d40031f2c562085f9bcfb4ca68816fc9395ad"
   },
-  "status_updated_at": "2026-06-21T15:05:27.276634790Z",
-  "last_event_at": "2026-06-21T15:05:31.099417660Z",
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-06-21T15:05:31.404100744Z",
+  "last_event_at": "2026-06-21T15:05:41.575020575Z",
   "pending_control": null,
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "seq": 20,
+      "checkpoint": {
+        "timestamp": "2026-06-21T15:05:33.239898747Z",
+        "current_node": "start",
+        "completed_nodes": [
+          "start"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "internal.thread_id": null,
+          "internal.work_dir": "/workspace/memba",
+          "outcome": "succeeded",
+          "internal.run_id": "01KVNBE4TG154YV6NP4GDH20ZT",
+          "current_node": "start",
+          "failure_class": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.fidelity": "summary:high",
+          "graph.default_fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "gemini_review",
+        "node_visits": {
+          "start": 1
+        }
+      },
+      "diff": {}
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-21T15:06:35.739482430Z",
+        "current_node": "gemini_review",
+        "completed_nodes": [
+          "start",
+          "gemini_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.node_visit_count": 1,
+          "internal.thread_id": "start",
+          "last_stage": "gemini_review",
+          "graph.default_fidelity": "summary:high",
+          "internal.run_id": "01KVNBE4TG154YV6NP4GDH20ZT",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garb",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garbled addresses reuse existing fallback and do not create stray replies, but `## Open Business Decisions` still asks whether to reject with feedback or silently drop and says to confirm copy during implementation. That is a product/workflow/copy decision and should be resolved before implementation.\n\n2. **Core token strategy and persistence are unresolved.**  \n   The iteration depends on a conversation-addressed reply token, but `## Open Technical Decisions` leaves token format/derivation and where the token↔conversation mapping lives undecided. That affects schema, migration shape, lookup semantics, security, and test design.\n\n3. **Inbound sender authenticity / spoofing policy is still unresolved.**  \n   The plan says to require current membership, but also leaves open how far to trust `From` under the existing inbound pipeline. Because this affects authorization and abuse handling for posting into conversations, the plan should explicitly state the trust model for this iteration and what hardening is deferred.\n\n## Non-blocking improvements\n\n1. **Name likely implementation modules/files.**  \n   The implementation plan is understandable, but would be easier to execute if it named the existing inbound mail handler, reply notification mailer/template, conversation/reply context modules, and expected migration/test files.\n\n2. **Clarify header behavior.**  \n   The plan says email headers are secondary confirmation and also says `Message-ID`/`References` should be set, but it should clarify whether an address-token match succeeds when headers are absent or malformed.\n\n3. **Define “basic quoted-history stripping” more concretely.**  \n   The plan can keep this lightweight, but should define the minimum acceptable behavior, e.g. remove common quoted blocks while preserving the sender’s new text, and never reject solely because quote stripping fails.\n\n4. **Clarify ambiguous-address handling.**  \n   “Ambiguous addresses” are mentioned, but tokenized conversation routing should usually be unambiguous. The plan could define examples: multiple matching recipients, multiple club addresses, malformed typed segments, or token/club mismatch.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist an opaque conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Parse inbound mail sent to that address.\n- If the sender is a current club member, post the inbound body as a reply in the matched conversation, attribute it to the sender, auto-follow them, and fan out to followers.\n- If the sender is not a member or the address/token cannot be resolved, create no reply and follow one explicitly defined fallback/rejection behavior.\n- Preserve existing bare `<club-slug>@clubs.memba.io` behavior.\n\nDefer advanced quote parsing, attachments, groups/channels, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve `## Open Business Decisions` by choosing the exact unmatched-reply behavior: reject with existing rejection email, silently drop, or another defined action. Include whether copy changes are in or out of scope.\n\n2. Resolve token design: specify random opaque vs signed token, whether it is stored on conversations or in a separate mapping table, uniqueness constraints, when it is generated, and whether it rotates.\n\n3. Resolve inbound authenticity policy for this iteration: explicitly state how the sender email is matched to a member, what existing Postmark/inbound trust assumptions are reused, and what spoofing protections are deferred.\n\n4. Update acceptance criteria to reflect those decisions, especially unmatched-address behavior and sender-authentication behavior.\n\n5. Optionally add likely implementation touchpoints: migration/schema, inbound parser/handler, reply mailer/template/header code, conversation reply context, and tests.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` tagged `@iteration-041`.\n2. Test that reply notification emails use `Reply-To: <club-slug>+c.<token>@clubs.memba.io`.\n3. Test that the conversation token resolves only to the correct conversation and club.\n4. Test that a current member’s inbound email reply creates a conversation reply, attributes it correctly, auto-follows the sender, and fans out to followers.\n5. Test that a non-member inbound reply creates no reply and follows the decided rejection/drop behavior.\n6. Test that unknown, malformed, token/club-mismatched, or otherwise unmatchable inbound addresses create no stray reply and follow the decided fallback behavior.\n7. Test that bare `<club-slug>@clubs.memba.io` still follows the existing club-wide inbound message path.\n8. Test the minimum quote-stripping behavior.\n9. Run the `@iteration-041` acceptance scenarios with temporary todo tags removed or narrowed.\n10. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved\",\"gemini_review_required_edits\":\"Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions\"}}",
+          "current_node": "gemini_review",
+          "gemini_review_decision": "NOT READY",
+          "thread.start.current_node": "gemini_review",
+          "failure_class": "",
+          "failure_signature": "",
+          "gemini_review_blocking_gaps": "Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.start": 0,
+          "gemini_review_confidence": "High",
+          "internal.fidelity": "truncate",
+          "internal.retry_count.gemini_review": 0,
+          "gemini_review_blocking_gap_count": 3,
+          "gemini_review_required_edits": "Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions",
+          "internal.work_dir": "/workspace/memba",
+          "graph.rankdir": "LR"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garbled addresses reuse existing fallback and do not create stray replies, but `## Open Business Decisions` still asks whether to reject with feedback or silently drop and says to confirm copy during implementation. That is a product/workflow/copy decision and should be resolved before implementation.\n\n2. **Core token strategy and persistence are unresolved.**  \n   The iteration depends on a conversation-addressed reply token, but `## Open Technical Decisions` leaves token format/derivation and where the token↔conversation mapping lives undecided. That affects schema, migration shape, lookup semantics, security, and test design.\n\n3. **Inbound sender authenticity / spoofing policy is still unresolved.**  \n   The plan says to require current membership, but also leaves open how far to trust `From` under the existing inbound pipeline. Because this affects authorization and abuse handling for posting into conversations, the plan should explicitly state the trust model for this iteration and what hardening is deferred.\n\n## Non-blocking improvements\n\n1. **Name likely implementation modules/files.**  \n   The implementation plan is understandable, but would be easier to execute if it named the existing inbound mail handler, reply notification mailer/template, conversation/reply context modules, and expected migration/test files.\n\n2. **Clarify header behavior.**  \n   The plan says email headers are secondary confirmation and also says `Message-ID`/`References` should be set, but it should clarify whether an address-token match succeeds when headers are absent or malformed.\n\n3. **Define “basic quoted-history stripping” more concretely.**  \n   The plan can keep this lightweight, but should define the minimum acceptable behavior, e.g. remove common quoted blocks while preserving the sender’s new text, and never reject solely because quote stripping fails.\n\n4. **Clarify ambiguous-address handling.**  \n   “Ambiguous addresses” are mentioned, but tokenized conversation routing should usually be unambiguous. The plan could define examples: multiple matching recipients, multiple club addresses, malformed typed segments, or token/club mismatch.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Generate and persist an opaque conversation reply token.\n- Set reply notification `Reply-To` to `<club-slug>+c.<token>@clubs.memba.io`.\n- Parse inbound mail sent to that address.\n- If the sender is a current club member, post the inbound body as a reply in the matched conversation, attribute it to the sender, auto-follow them, and fan out to followers.\n- If the sender is not a member or the address/token cannot be resolved, create no reply and follow one explicitly defined fallback/rejection behavior.\n- Preserve existing bare `<club-slug>@clubs.memba.io` behavior.\n\nDefer advanced quote parsing, attachments, groups/channels, and deeper anti-spoofing hardening beyond the existing inbound trust model.\n\n## Required plan edits\n\n1. Resolve `## Open Business Decisions` by choosing the exact unmatched-reply behavior: reject with existing rejection email, silently drop, or another defined action. Include whether copy changes are in or out of scope.\n\n2. Resolve token design: specify random opaque vs signed token, whether it is stored on conversations or in a separate mapping table, uniqueness constraints, when it is generated, and whether it rotates.\n\n3. Resolve inbound authenticity policy for this iteration: explicitly state how the sender email is matched to a member, what existing Postmark/inbound trust assumptions are reused, and what spoofing protections are deferred.\n\n4. Update acceptance criteria to reflect those decisions, especially unmatched-address behavior and sender-authentication behavior.\n\n5. Optionally add likely implementation touchpoints: migration/schema, inbound parser/handler, reply mailer/template/header code, conversation reply context, and tests.\n\n## Validation plan\n\nTo prove the iteration succeeded:\n\n1. Add/update acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` tagged `@iteration-041`.\n2. Test that reply notification emails use `Reply-To: <club-slug>+c.<token>@clubs.memba.io`.\n3. Test that the conversation token resolves only to the correct conversation and club.\n4. Test that a current member’s inbound email reply creates a conversation reply, attributes it correctly, auto-follows the sender, and fans out to followers.\n5. Test that a non-member inbound reply creates no reply and follows the decided rejection/drop behavior.\n6. Test that unknown, malformed, token/club-mismatched, or otherwise unmatchable inbound addresses create no stray reply and follow the decided fallback behavior.\n7. Test that bare `<club-slug>@clubs.memba.io` still follows the existing club-wide inbound message path.\n8. Test the minimum quote-stripping behavior.\n9. Run the `@iteration-041` acceptance scenarios with temporary todo tags removed or narrowed.\n10. Run `dev check`.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved\",\"gemini_review_required_edits\":\"Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions\"}}",
+              "gemini_review_required_edits": "Choose exact unmatched-reply fallback behavior and copy scope; Specify token design and storage/constraints/generation; State sender membership/authenticity trust model and deferred hardening; Update acceptance criteria to match those decisions",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **An open business decision remains about unmatched inbound reply handling.**  \n   The plan’s acceptance criteria say unmatched/garb",
+              "gemini_review_blocking_gaps": "Unmatched inbound reply fallback/copy decision remains open; Token format and persistence/mapping strategy are unresolved; Inbound sender authenticity/spoofing trust model is unresolved",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 3
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17567,
+                    "output_tokens": 1245,
+                    "reasoning_tokens": 645,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 144535
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 61999,
+              "tool_time_ms": 87,
+              "active_time_ms": 62086
+            }
+          }
+        },
+        "next_node_id": "claude_review",
+        "node_visits": {
+          "start": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {}
+    }
+  ],
   "conclusion": null,
   "sandbox": {
     "provider": "docker",
@@ -589,5 +723,240 @@
   "pull_request": null,
   "superseded_by": null,
   "pending_interviews": {},
-  "stages": {}
+  "stages": {
+    "start@1": {
+      "first_event_seq": 17,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-21T15:05:33.239673726Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T15:05:33.239510396Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "gemini_review@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-21T15:05:33.239979202Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 10645,
+        "output_tokens": 93,
+        "total_tokens": 10867,
+        "reasoning_tokens": 129,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 6799,
+        "usage_percent": 2.4996323529411764,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-21T15:05:41.531552512Z",
+        "event_seq": 32,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1053,
+            "usage_percent": 0.3871323529411765
+          },
+          {
+            "category": "tools",
+            "tokens": 1523,
+            "usage_percent": 0.5599264705882353
+          },
+          {
+            "category": "memory",
+            "tokens": 409,
+            "usage_percent": 0.15036764705882352
+          },
+          {
+            "category": "conversation",
+            "tokens": 3807,
+            "usage_percent": 1.3996323529411765
+          },
+          {
+            "category": "other",
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
+    }
+  }
 }
