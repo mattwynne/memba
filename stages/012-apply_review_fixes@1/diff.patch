@@ -1,0 +1,110 @@
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index b69494a..79193bf 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -16,6 +16,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.ConversationReference
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.InboundClubAuthorization
+   alias Memba.Messaging.InboundClubDestination
+@@ -871,7 +872,7 @@ defmodule Memba.Messaging do
+          club_id: root_message.club_id,
+          sender_id: sender_id,
+          conversation_id: conversation_id,
+-         reply_to_message_id: conversation_id,
++         reply_to_message_id: ConversationReference.reply_to_message_id(conversation_id),
+          subject: root_message.subject,
+          body: body,
+          recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
+diff --git a/web/lib/memba/messaging/conversation_reference.ex b/web/lib/memba/messaging/conversation_reference.ex
+new file mode 100644
+index 0000000..607a5ba
+--- /dev/null
++++ b/web/lib/memba/messaging/conversation_reference.ex
+@@ -0,0 +1,17 @@
++defmodule Memba.Messaging.ConversationReference do
++  @moduledoc """
++  Encapsulates the Messaging conversation identity convention.
++
++  Iteration 039 models a conversation as the root message plus replies. The root
++  message ID is therefore the conversation ID, and direct replies reference that
++  same root message.
++  """
++
++  @type message_id :: String.t()
++
++  @spec root_conversation_id(message_id()) :: message_id()
++  def root_conversation_id(message_id), do: message_id
++
++  @spec reply_to_message_id(message_id()) :: message_id()
++  def reply_to_message_id(conversation_id), do: conversation_id
++end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index ca52841..69f3d53 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -21,6 +21,7 @@ defmodule Memba.Messaging.Message do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.ConversationReference
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryBounced
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+@@ -197,7 +198,7 @@ defmodule Memba.Messaging.Message do
+   end
+ 
+   defp normalize_conversation_reference(message_id, conversation_id, reply_to_message_id) do
+-    conversation_id = conversation_id || message_id
++    conversation_id = conversation_id || ConversationReference.root_conversation_id(message_id)
+ 
+     with :ok <- validate_id(:message, conversation_id, :invalid_conversation_id),
+          :ok <- validate_optional_id(:message, reply_to_message_id, :invalid_reply_to_message_id),
+diff --git a/web/lib/memba/messaging/projectors/message.ex b/web/lib/memba/messaging/projectors/message.ex
+index 7f91afa..46e8c56 100644
+--- a/web/lib/memba/messaging/projectors/message.ex
++++ b/web/lib/memba/messaging/projectors/message.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Messaging.Projectors.Message do
+     name: "Memba.Messaging.Projectors.Message",
+     consistency: :strong
+ 
++  alias Memba.Messaging.ConversationReference
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+ 
+@@ -17,7 +18,8 @@ defmodule Memba.Messaging.Projectors.Message do
+       message_id: event.message_id,
+       club_id: event.club_id,
+       sender_id: event.sender_id,
+-      conversation_id: event.conversation_id || event.message_id,
++      conversation_id:
++        event.conversation_id || ConversationReference.root_conversation_id(event.message_id),
+       reply_to_message_id: event.reply_to_message_id,
+       subject: event.subject,
+       body: event.body
+diff --git a/web/test/memba/messaging/conversation_reference_test.exs b/web/test/memba/messaging/conversation_reference_test.exs
+new file mode 100644
+index 0000000..14f74fc
+--- /dev/null
++++ b/web/test/memba/messaging/conversation_reference_test.exs
+@@ -0,0 +1,17 @@
++defmodule Memba.Messaging.ConversationReferenceTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.ConversationReference
++
++  test "root messages use their message id as the conversation id" do
++    message_id = Memba.ID.generate(:message)
++
++    assert ConversationReference.root_conversation_id(message_id) == message_id
++  end
++
++  test "direct replies point at the root conversation message" do
++    conversation_id = Memba.ID.generate(:message)
++
++    assert ConversationReference.reply_to_message_id(conversation_id) == conversation_id
++  end
++end
