@@ -4,7 +4,7 @@
 - [x] 002 Update the inbound address helper so a club slug renders as `everyone@<slug>.<configured inbound domain>`, where the production/default inbound namespace remains `clubs.memba.io`.
 - [x] 003 Update destination resolution to parse `local_part@host` where `host` is `<club-slug>.<configured inbound domain>`.
 - [x] 004 Accept only `local_part == "everyone"` for now.
-- [ ] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
+- [x] 005 Resolve `<club-slug>` through the existing Membership slug lookup.
 - [ ] 006 Reject unsupported local parts, unknown club subdomains, unsupported domains, and the old flat address using the existing inbound rejection pathway where possible.
 - [ ] 007 Update member dashboard and member compose copy/mailto links to display the new address.
 - [ ] 008 After integrating with 041's result, update reply notification email `Reply-To` / reply destination generation to use the new address while preserving 041's `Message-ID` / `In-Reply-To` / `References` header behaviour.

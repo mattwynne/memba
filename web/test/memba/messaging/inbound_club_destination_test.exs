@@ -21,6 +21,30 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                ])
     end
 
+    test "uses the extracted club subdomain as the Membership slug lookup value" do
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kmc-alpine"
+        )
+
+      assert {:ok,
+              %InboundClubDestination{
+                club_id: club.club_id,
+                club_slug: "kmc-alpine",
+                club_name: "Kootenay Mountaineering Club",
+                to_address: "everyone@kmc-alpine.clubs.memba.io"
+              }} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@kmc-alpine.clubs.memba.io"
+               ])
+
+      assert {:error, :unknown_club_slug, "everyone@kmc.clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@kmc.clubs.memba.io"
+               ])
+    end
+
     test "normalizes recipient subdomain address casing and accepts unrelated copied recipients" do
       club = insert_membership_club!(slug: "kmc")
 
