@@ -1,0 +1,873 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index 1fff0f0..36e95df 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -2,8 +2,8 @@
+ Feature: Club message replies (conversations)
+   Club members want to reply to a club message and keep the conversation in Memba,
+   instead of replies scattering to private inboxes and never being tracked.
+-  A reply belongs to the original message's conversation, and is emailed to the club.
+-  (A later iteration lets members follow a conversation so only followers are emailed.)
++  A reply belongs to the original message's conversation, and is emailed to the
++  current club-member followers of that conversation.
+ 
+   Background:
+     Given Kootenay Mountaineering Club is a club
+@@ -26,13 +26,52 @@ Feature: Club message replies (conversations)
+       And Carol replies "I'll bring the maps" to "Trip planning night"
+       Then the conversation for "Trip planning night" should show "I can drive, three seats spare" before "I'll bring the maps"
+ 
+-  Rule: A reply is emailed to every current member of the club
++  @iteration-040
++  Rule: A reply is emailed to current club-member followers
+ 
+-    Scenario: Every other member receives Bob's reply
++    Scenario: The sender and repliers automatically follow the conversation
++      Then Alice should be following the conversation for "Trip planning night"
++      And Carol should not be following the conversation for "Trip planning night"
+       When Bob replies "I can drive, three seats spare" to "Trip planning night"
+-      Then Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
++      Then Bob should be following the conversation for "Trip planning night"
++      And Carol should not be following the conversation for "Trip planning night"
++
++    Scenario: A member can follow and stop following the conversation
++      When Carol follows the conversation for "Trip planning night"
++      Then Carol should be following the conversation for "Trip planning night"
++      When Carol stops following the conversation for "Trip planning night"
++      Then Carol should not be following the conversation for "Trip planning night"
++
++    Scenario: Followers receive Bob's reply, but non-followers and the author do not
++      Given Carol follows the conversation for "Trip planning night"
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Alice and Carol should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
++      And Dana should not receive Bob's reply by email
+       And Bob should not receive his own reply by email
+ 
++    Scenario: Former members do not receive replies even if they followed before leaving
++      Given Dana follows the conversation for "Trip planning night"
++      And Dana is no longer a member of Kootenay Mountaineering Club
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
++      And Dana should not receive Bob's reply by email
++
++    Scenario: A reply-email stop-follow link unfollows only that recipient
++      Given Carol follows the conversation for "Trip planning night"
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Alice and Carol should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba
++      When Carol follows the stop-follow link from Bob's reply email
++      Then Carol should not be following the conversation for "Trip planning night"
++      When Alice replies "Leaving at seven from the trailhead" to "Trip planning night"
++      Then Bob should receive Alice's reply by email from Kootenay Mountaineering Club via Memba
++      And Carol should not receive Alice's reply by email
++
++    Scenario: A tampered stop-follow link changes nothing
++      Given Carol follows the conversation for "Trip planning night"
++      When Carol follows a tampered stop-follow link for "Trip planning night"
++      Then Carol should be told the stop-follow link is not valid
++      And Carol should be following the conversation for "Trip planning night"
++
+   Rule: Only a current member of the club can reply to its messages
+ 
+     Scenario: A member of another club cannot reply
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index e67908c..bdf2760 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -12,6 +12,7 @@ const {
+   assertMemberMessageAddressedTo,
+   assertMemberMessageBody,
+   assertMemberMessageNotAddressedTo,
++  assertConversationFollowingState,
+   assertConversationReplyOrder,
+   assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
+@@ -25,20 +26,27 @@ const {
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReplyEmailDeliveredToMembers,
++  assertReplyEmailNotDeliveredToMembers,
+   assertReplyEmailNotDeliveredToAuthor,
++  assertStopFollowLinkNotValid,
+   emailFor,
+   ensureClubSlugMatchesInboundAddress,
+   ensureState,
++  followConversation,
++  followStopFollowLinkFromReplyEmail,
++  followTamperedStopFollowLink,
+   kootenayClubName,
+   makeClubMessageSendingUnavailable,
+   nelsonClubName,
+   openMemberMessage,
+   reportRecipientEmailStatus,
++  removeMemberFromClub,
+   postMemberReply,
+   sendInboundClubEmail,
+   sendMemberMessageToKootenayMembers,
+   trySendBlankMemberMessageToKootenayMembers,
+-  trySendMemberMessageToKootenayMembers
++  trySendMemberMessageToKootenayMembers,
++  unfollowConversation
+ } = require("../support/member_message");
+ const {
+   memberBrowserAction,
+@@ -177,6 +185,18 @@ When("{word} replies {string} to {string}", async function (senderName, body, su
+   await withMemberHarness(this, senderName, (member) => postMemberReply(member, senderName, subject, body));
+ });
+ 
++Given("{word} follows the conversation for {string}", async function (memberName, subject) {
++  await withMemberHarness(this, memberName, (member) => followConversation(member, memberName, subject));
++});
++
++When("{word} stops following the conversation for {string}", async function (memberName, subject) {
++  await withMemberHarness(this, memberName, (member) => unfollowConversation(member, memberName, subject));
++});
++
++Given("{word} is no longer a member of Kootenay Mountaineering Club", async function (memberName) {
++  removeMemberFromClub(this, memberName, kootenayClubName);
++});
++
+ Then(
+   "the conversation for {string} should show {word}'s reply {string}",
+   async function (subject, senderName, body) {
+@@ -207,7 +227,7 @@ Then(
+ );
+ 
+ Then(
+-  /^(.+) should each receive (\w+)'s reply by email from (.+) via Memba$/,
++  /^(.+) should(?: each)? receive (\w+)'s reply by email from (.+) via Memba$/,
+   async function (recipientNamesText, senderName, clubName) {
+     await withMemberHarness(this, "Alice", (member) =>
+       assertReplyEmailDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText), clubName)
+@@ -215,10 +235,52 @@ Then(
+   }
+ );
+ 
++Then(/^(.+) should not receive (\w+)'s reply by email$/, async function (recipientNamesText, senderName) {
++  await withMemberHarness(this, "Alice", (member) =>
++    assertReplyEmailNotDeliveredToMembers(member, senderName, parsePersonList(recipientNamesText))
++  );
++});
++
+ Then("{word} should not receive his own reply by email", async function (senderName) {
+   await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
+ });
+ 
++Then(
++  "{word} should be following the conversation for {string}",
++  async function (memberName, subject) {
++    await withMemberHarness(this, memberName, (member) =>
++      assertConversationFollowingState(member, memberName, subject, true)
++    );
++  }
++);
++
++Then(
++  "{word} should not be following the conversation for {string}",
++  async function (memberName, subject) {
++    await withMemberHarness(this, memberName, (member) =>
++      assertConversationFollowingState(member, memberName, subject, false)
++    );
++  }
++);
++
++When(
++  "{word} follows the stop-follow link from {word}'s reply email",
++  async function (recipientName, senderName) {
++    await followStopFollowLinkFromReplyEmail(this, recipientName, senderName);
++  }
++);
++
++When(
++  "{word} follows a tampered stop-follow link for {string}",
++  async function (recipientName, subject) {
++    await followTamperedStopFollowLink(this, recipientName, subject);
++  }
++);
++
++Then("{word} should be told the stop-follow link is not valid", async function (_recipientName) {
++  await assertStopFollowLinkNotValid(this);
++});
++
+ Then("{word} should not be able to reply to {string}", async function (personName, subject) {
+   await withMemberHarness(this, personName, (member) =>
+     assertMemberCannotReplyToMessage(member, personName, subject, kootenayClubName)
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 482100c..0f78e0d 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -366,6 +366,34 @@ async function waitForProjectedText(
+   );
+ }
+ 
++async function waitForProjectedAttribute(
++  world,
++  locator,
++  attributeName,
++  expectedValue,
++  description,
++  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
++) {
++  await withProjectionWait(description, () =>
++    expect(locator, description).toHaveAttribute(attributeName, expectedValue, { timeout: timeoutMs })
++  );
++}
++
++function conversationFollowControl(world) {
++  return world.page.locator("#member-conversation-follow-control");
++}
++
++async function waitForProjectedFollowState(world, expectedFollowing, description, options = {}) {
++  await waitForProjectedAttribute(
++    world,
++    conversationFollowControl(world),
++    "data-following",
++    String(expectedFollowing),
++    description,
++    options
++  );
++}
++
+ async function waitForProjectedVisible(
+   world,
+   locator,
+@@ -584,6 +612,80 @@ async function postMemberReply(
+   return world;
+ }
+ 
++async function followConversation(world, memberName, subject, { expect = playwrightExpect, timeoutMs } = {}) {
++  ensureState(world);
++
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  const control = conversationFollowControl(world);
++  await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
++    expect,
++    timeoutMs
++  });
++
++  if ((await control.getAttribute("data-following")) === "true") {
++    return world;
++  }
++
++  await browserInteraction(`${memberName} follows ${JSON.stringify(subject)}`, () =>
++    world.page.locator("#member-conversation-follow-button").click()
++  );
++
++  await waitForProjectedFollowState(world, true, `${memberName} follows ${JSON.stringify(subject)}`, {
++    expect,
++    timeoutMs
++  });
++
++  return world;
++}
++
++async function unfollowConversation(world, memberName, subject, { expect = playwrightExpect, timeoutMs } = {}) {
++  ensureState(world);
++
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  const control = conversationFollowControl(world);
++  await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
++    expect,
++    timeoutMs
++  });
++
++  if ((await control.getAttribute("data-following")) === "false") {
++    return world;
++  }
++
++  await browserInteraction(`${memberName} stops following ${JSON.stringify(subject)}`, () =>
++    world.page.locator("#member-conversation-unfollow-button").click()
++  );
++
++  await waitForProjectedFollowState(world, false, `${memberName} stops following ${JSON.stringify(subject)}`, {
++    expect,
++    timeoutMs
++  });
++
++  return world;
++}
++
++async function assertConversationFollowingState(
++  world,
++  memberName,
++  subject,
++  expectedFollowing,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++  await waitForProjectedFollowState(
++    world,
++    expectedFollowing,
++    `${memberName} ${expectedFollowing ? "following" : "not following"} ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
+ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
+   await gotoUnlessCurrent(world, appUrl(world.baseUrl, "/admin/deliveries"), "visit /admin/deliveries");
+   await waitForProjectedVisible(
+@@ -1445,6 +1547,34 @@ async function assertReplyEmailDeliveredToMembers(
+   return world;
+ }
+ 
++async function assertReplyEmailNotDeliveredToMembers(world, senderName, recipientNames) {
++  ensureState(world);
++
++  const reply = latestReplyFor(world, senderName);
++  const emails = await replyDeliveryFactsForLatestReply(world, reply);
++
++  for (const recipientName of recipientNames) {
++    const person = world.people[recipientName];
++    assert.ok(person, `Expected ${recipientName} to have been created`);
++
++    const matchingEmail = emails.find(
++      (email) => email.subject === replyEmailSubjectFor(world, reply.subject) && mailboxEmailTo(email).includes(person.email)
++    );
++
++    assertFinalBrowserState(`${recipientName} should not receive ${senderName}'s reply`, () =>
++      assert.equal(
++        matchingEmail,
++        undefined,
++        `Expected no reply email to ${recipientName} <${person.email}>; saw ${JSON.stringify(
++          emails.map(mailboxEmailSummary)
++        )}`
++      )
++    );
++  }
++
++  return world;
++}
++
+ async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
+   ensureState(world);
+ 
+@@ -1468,6 +1598,81 @@ async function assertReplyEmailNotDeliveredToAuthor(world, senderName) {
+   return world;
+ }
+ 
++async function followStopFollowLinkFromReplyEmail(
++  world,
++  recipientName,
++  senderName,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  const reply = latestReplyFor(world, senderName);
++  const person = world.people[recipientName];
++  assert.ok(person, `Expected ${recipientName} to have been created`);
++
++  const emails = await replyDeliveryFactsForLatestReply(world, reply);
++  const email = emails.find(
++    (candidate) =>
++      candidate.subject === replyEmailSubjectFor(world, reply.subject) &&
++      mailboxEmailTo(candidate).includes(person.email) &&
++      mailboxEmailText(candidate).includes(reply.body)
++  );
++
++  assert.ok(
++    email,
++    `Expected ${recipientName}'s reply email from ${senderName} before following its stop-follow link; saw ${JSON.stringify(
++      emails.map(mailboxEmailSummary)
++    )}`
++  );
++
++  const stopFollowUrl = stopFollowUrlFromEmail(email);
++
++  await browserInteraction(`${recipientName} follows stop-follow link for ${JSON.stringify(reply.subject)}`, () =>
++    world.page.goto(stopFollowUrl)
++  );
++
++  await waitForProjectedVisible(
++    world,
++    world.page.locator('#conversation-stop-follow-result[data-status="success"]'),
++    "stop-follow success page",
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function followTamperedStopFollowLink(
++  world,
++  recipientName,
++  subject,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  const stopFollowUrl = tamperedStopFollowUrl(world, recipientName, subject);
++
++  await browserInteraction(`${recipientName} follows a tampered stop-follow link for ${JSON.stringify(subject)}`, () =>
++    world.page.goto(stopFollowUrl)
++  );
++
++  await assertStopFollowLinkNotValid(world, { expect, timeoutMs });
++
++  return world;
++}
++
++async function assertStopFollowLinkNotValid(world, { expect = playwrightExpect, timeoutMs } = {}) {
++  await waitForProjectedVisible(
++    world,
++    world.page.locator('#conversation-stop-follow-result[data-status="failure"]', {
++      hasText: "This stop-follow link isn’t valid"
++    }),
++    "stop-follow failure page",
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
+ async function assertMemberCannotReplyToMessage(
+   world,
+   personName,
+@@ -1497,6 +1702,31 @@ async function assertMemberCannotReplyToMessage(
+   return world;
+ }
+ 
++function removeMemberFromClub(world, personName, clubName) {
++  ensureState(world);
++
++  const membershipKey = `${clubName}:${personName}`;
++  const membership = world.memberships[membershipKey];
++  assert.ok(membership, `Expected ${personName} to be a member of ${clubName} before removing them`);
++
++  serverCommands.runCommand(
++    `
++membership_id = Map.fetch!(payload, "membershipId")
++
++case Memba.Membership.remove_member(%{membership_id: membership_id}, consistency: :strong) do
++  :ok -> %{status: "removed", membershipId: membership_id}
++  {:ok, _result} -> %{status: "removed", membershipId: membership_id}
++  {:error, reason} -> raise "Could not remove member #{membership_id}: #{inspect(reason)}"
++end
++`,
++    { membershipId: membership.membershipId }
++  );
++
++  delete world.memberships[membershipKey];
++
++  return world;
++}
++
+ async function assertMemberMessageAddressedTo(
+   world,
+   expectedNames,
+@@ -2370,6 +2600,28 @@ async function waitForLocalDeliveryFacts(world, expectedCount, description) {
+   );
+ }
+ 
++async function replyDeliveryFactsForLatestReply(world, reply) {
++  const cachedEmails = world.replyDeliveryFactsAfterSend || [];
++  const cachedForReply = cachedEmails.filter((email) => email.message_id === reply.messageId);
++
++  if (cachedForReply.length > 0) {
++    return cachedForReply;
++  }
++
++  const previousEmails = world.replyDeliveryFactsBeforeSend || [];
++  const emails = await waitForLocalDeliveryFacts(
++    world,
++    previousEmails.length,
++    `local provider delivery facts for ${reply.senderName}'s reply to ${JSON.stringify(reply.subject)}`
++  );
++  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
++  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
++
++  world.replyDeliveryFactsAfterSend = newEmails;
++
++  return newEmails.filter((email) => email.message_id === reply.messageId);
++}
++
+ async function testMailboxEmails(world) {
+   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+   if (!request || typeof request.get !== "function") {
+@@ -2477,6 +2729,14 @@ function mailboxEmailSummary(email) {
+   };
+ }
+ 
++function stopFollowUrlFromEmail(email) {
++  const text = mailboxEmailText(email);
++  const match = text.match(/https?:\/\/\S+\/messages\/conversations\/stop-following\/\S+/);
++  assert.ok(match, `Expected reply email to contain a stop-follow URL; saw ${JSON.stringify(text)}`);
++
++  return match[0].replace(/[),.;]+$/u, "");
++}
++
+ function conversationReplyRow(world, senderName, body) {
+   const sender = world.people[senderName];
+   assert.ok(sender, `Expected ${senderName} to have been created`);
+@@ -2509,6 +2769,37 @@ function latestReplyFor(world, senderName) {
+   return reply;
+ }
+ 
++function tamperedStopFollowUrl(world, recipientName, subject) {
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} before making a stop-follow link`);
++
++  const club = clubById(world, message.clubId);
++  assert.ok(club, `Expected club ${message.clubId} before making a stop-follow link`);
++
++  const person = world.people[recipientName];
++  assert.ok(person, `Expected ${recipientName} to have been created`);
++
++  const token = serverCommands.runCommand(
++    `
++{:ok, token} =
++  Memba.Messaging.ConversationStopFollowToken.sign(%{
++    club_id: Map.fetch!(payload, "clubId"),
++    conversation_id: Map.fetch!(payload, "conversationId"),
++    member_id: Map.fetch!(payload, "memberId")
++  })
++
++%{token: token}
++`,
++    {
++      clubId: message.clubId,
++      conversationId: message.messageId,
++      memberId: person.personId
++    }
++  ).token;
++
++  return clubSiteUrl(world.baseUrl, club, `/messages/conversations/stop-following/${token}tampered`);
++}
++
+ async function capturedInboundRejectionEmail(world, senderName) {
+   ensureState(world);
+ 
+@@ -2815,6 +3106,7 @@ module.exports = {
+   assertMemberMessageAddressedTo,
+   assertMemberMessageBody,
+   assertMemberMessageNotAddressedTo,
++  assertConversationFollowingState,
+   assertConversationReplyOrder,
+   assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
+@@ -2829,7 +3121,9 @@ module.exports = {
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReplyEmailDeliveredToMembers,
++  assertReplyEmailNotDeliveredToMembers,
+   assertReplyEmailNotDeliveredToAuthor,
++  assertStopFollowLinkNotValid,
+   assertReceiptStatus,
+   createClub,
+   createPeople,
+@@ -2839,6 +3133,9 @@ module.exports = {
+   emailFor,
+   ensureClubSlugMatchesInboundAddress,
+   ensureState,
++  followConversation,
++  followStopFollowLinkFromReplyEmail,
++  followTamperedStopFollowLink,
+   kootenayClubName,
+   makeClubMessageSendingUnavailable,
+   memberReceiptIconForLabel,
+@@ -2858,6 +3155,7 @@ module.exports = {
+   openDeliveriesOverview,
+   openClub,
+   openMessage,
++  removeMemberFromClub,
+   restoreClubMessageSending,
+   sendInboundClubEmail,
+   sendMemberMessageToKootenayMembers,
+@@ -2869,6 +3167,7 @@ module.exports = {
+   trySendMemberMessageToKootenayMembers,
+   updateClubSlug,
+   updatePersonEmailAddresses,
++  unfollowConversation,
+   visitClubsIndex,
+   waitForLocalDeliveryFacts,
+   waitForMailboxEmails
+diff --git a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+index 5badaee..7fda40a 100644
+--- a/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
++++ b/docs/iterations/040-thread-follow-and-reply-notification-emails/todo.md
+@@ -4,5 +4,5 @@
+ - [x] 002 Rewire the reply delivery introduced in 039 from "all current members" to "current club-member followers of the conversation," excluding the author and excluding former/non-current members even when a historical follow record exists.
+ - [x] 003 Add the in-app follow/unfollow control + copy on the message-detail surface, reflecting the viewer's state and preventing non-current members from newly following.
+ - [x] 004 Add a one-click signed stop-following (unsubscribe) link to the reply email, consistent with in-app unfollow; ensure unfollow halts future reply emails.
+-- [ ] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
++- [x] 005 Revise `club_message_replies.feature` per Allowed acceptance feature changes; make the `@iteration-040` scenarios executable (domain then browser/email), removing/narrowing `@todo-*`.
+ - [ ] 006 Run `dev check`.
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index dfdf23a..9b157c2 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -16,6 +16,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.MemberMessageEmail
+   alias Memba.Messaging.Projections.EmailDelivery
++  alias Memba.Messaging.ConversationStopFollowToken
+ 
+   step "{word} sends the message {string} to Kootenay Mountaineering Club members",
+        %{args: [sender_name, subject]} = context do
+@@ -44,6 +45,21 @@ defmodule Memba.Cucumber.MessagingSteps do
+     post_reply_to_message(context, sender_name, subject, body)
+   end
+ 
++  step "{word} follows the conversation for {string}",
++       %{args: [member_name, subject]} = context do
++    follow_conversation(context, member_name, subject)
++  end
++
++  step "{word} stops following the conversation for {string}",
++       %{args: [member_name, subject]} = context do
++    unfollow_conversation(context, member_name, subject)
++  end
++
++  step "{word} is no longer a member of Kootenay Mountaineering Club",
++       %{args: [member_name]} = context do
++    remove_member_from_club(context, member_name, "Kootenay Mountaineering Club")
++  end
++
+   step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
+        %{args: [subject, sender_name, body]} = context do
+     assert_conversation_shows_reply(context, subject, sender_name, body)
+@@ -62,14 +78,24 @@ defmodule Memba.Cucumber.MessagingSteps do
+     assert_conversation_order(context, subject, earlier_body, later_body)
+   end
+ 
+-  step "Alice, Carol, and Dana should each receive Bob's reply by email from Kootenay Mountaineering Club via Memba",
+-       context do
++  step ~r/^(.+) should(?: each)? receive (\w+)'s reply by email from (.+) via Memba$/,
++       %{args: [recipient_names_text, sender_name, club_name]} = context do
+     assert_reply_email_delivered_to_members(
+       context,
+       "Trip planning night",
+-      "Bob",
+-      ["Alice", "Carol", "Dana"],
+-      "Kootenay Mountaineering Club"
++      sender_name,
++      parse_person_list(recipient_names_text),
++      club_name
++    )
++  end
++
++  step ~r/^(.+) should not receive (\w+)'s reply by email$/,
++       %{args: [recipient_names_text, sender_name]} = context do
++    assert_reply_email_not_delivered_to_members(
++      context,
++      "Trip planning night",
++      sender_name,
++      parse_person_list(recipient_names_text)
+     )
+   end
+ 
+@@ -77,6 +103,34 @@ defmodule Memba.Cucumber.MessagingSteps do
+     assert_reply_email_not_delivered_to_author(context, sender_name)
+   end
+ 
++  step "{word} should be following the conversation for {string}",
++       %{args: [member_name, subject]} = context do
++    assert_conversation_follow_state(context, member_name, subject, true)
++  end
++
++  step "{word} should not be following the conversation for {string}",
++       %{args: [member_name, subject]} = context do
++    assert_conversation_follow_state(context, member_name, subject, false)
++  end
++
++  step ~r/^(\w+) follows the stop-follow link from (\w+)'s reply email$/,
++       %{args: [recipient_name, sender_name]} = context do
++    follow_stop_follow_link_from_reply_email(context, recipient_name, sender_name)
++  end
++
++  step "{word} follows a tampered stop-follow link for {string}",
++       %{args: [recipient_name, subject]} = context do
++    follow_tampered_stop_follow_link(context, recipient_name, subject)
++  end
++
++  step "{word} should be told the stop-follow link is not valid",
++       %{args: [_recipient_name]} = context do
++    assert {:error, :invalid_stop_follow_token} =
++             Map.fetch!(context, :last_stop_follow_link_result)
++
++    context
++  end
++
+   step "{word} should not be able to reply to {string}",
+        %{args: [sender_name, subject]} = context do
+     assert_cannot_reply_to_message(context, sender_name, subject)
+@@ -474,6 +528,63 @@ defmodule Memba.Cucumber.MessagingSteps do
+     |> update_context_map({:replies, subject}, {sender_name, body}, reply_context)
+   end
+ 
++  defp follow_conversation(context, member_name, subject) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    member_id = person_id_from_context!(context, member_name)
++
++    assert :ok =
++             Messaging.follow_conversation_as_current_member(
++               %{
++                 club_id: root_message.club_id,
++                 conversation_id: root_message.message_id,
++                 member_id: member_id
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp unfollow_conversation(context, member_name, subject) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    member_id = person_id_from_context!(context, member_name)
++
++    assert :ok =
++             Messaging.unfollow_conversation_as_current_member(
++               %{
++                 club_id: root_message.club_id,
++                 conversation_id: root_message.message_id,
++                 member_id: member_id
++               },
++               consistency: :strong
++             )
++
++    context
++  end
++
++  defp remove_member_from_club(context, member_name, club_name) do
++    membership_id = fetch_from_context!(context, :memberships, {club_name, member_name})
++
++    assert :ok = Membership.remove_member(%{membership_id: membership_id}, consistency: :strong)
++
++    memberships =
++      context
++      |> Map.get(:memberships, %{})
++      |> Map.delete({club_name, member_name})
++
++    Map.put(context, :memberships, memberships)
++  end
++
++  defp assert_conversation_follow_state(context, member_name, subject, expected_following) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    member_id = person_id_from_context!(context, member_name)
++
++    assert Messaging.following_conversation?(root_message.message_id, member_id) ==
++             expected_following
++
++    context
++  end
++
+   defp assert_conversation_shows_reply(context, subject, sender_name, body) do
+     root_message = fetch_from_context!(context, :messages, subject)
+     sender_id = person_id_from_context!(context, sender_name)
+@@ -516,7 +627,11 @@ defmodule Memba.Cucumber.MessagingSteps do
+     member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
+     assert Enum.map(member_deliveries, & &1.recipient_name) == expected_recipient_names
+ 
+-    provider_deliveries = Fake.deliveries()
++    provider_deliveries =
++      Enum.filter(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
++        request.message_id == reply.message_id
++      end)
++
+     assert length(provider_deliveries) == length(expected_recipient_names)
+ 
+     Enum.zip(expected_recipient_names, provider_deliveries)
+@@ -535,6 +650,33 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp assert_reply_email_not_delivered_to_members(
++         context,
++         subject,
++         sender_name,
++         excluded_recipient_names
++       ) do
++    reply = latest_reply_for!(context, subject, sender_name)
++    dispatch_pending_email_deliveries()
++
++    member_deliveries = Messaging.list_member_email_deliverys(reply.message_id)
++    provider_deliveries = Fake.deliveries()
++
++    Enum.each(excluded_recipient_names, fn recipient_name ->
++      recipient_id = person_id_from_context!(context, recipient_name)
++
++      refute Enum.any?(member_deliveries, fn receipt ->
++               receipt.recipient_id == recipient_id
++             end)
++
++      refute Enum.any?(provider_deliveries, fn %EmailDeliveryRequest{} = request ->
++               request.message_id == reply.message_id and request.recipient_id == recipient_id
++             end)
++    end)
++
++    context
++  end
++
+   defp assert_reply_email_not_delivered_to_author(context, sender_name) do
+     reply = Map.fetch!(context, :last_reply)
+     sender_id = person_id_from_context!(context, sender_name)
+@@ -550,6 +692,49 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp follow_stop_follow_link_from_reply_email(context, recipient_name, _sender_name) do
++    reply = Map.fetch!(context, :last_reply)
++    recipient_id = person_id_from_context!(context, recipient_name)
++
++    dispatch_pending_email_deliveries()
++
++    request =
++      Fake.deliveries()
++      |> Enum.find(fn %EmailDeliveryRequest{} = request ->
++        request.message_id == reply.message_id and request.recipient_id == recipient_id
++      end)
++
++    assert %EmailDeliveryRequest{stop_follow_url: stop_follow_url} = request
++    assert is_binary(stop_follow_url) and stop_follow_url != ""
++
++    token = stop_follow_url |> String.split("/") |> List.last()
++
++    result = Messaging.stop_following_conversation_from_email_token(token, consistency: :strong)
++
++    assert {:ok, _scope} = result
++
++    Map.put(context, :last_stop_follow_link_result, result)
++  end
++
++  defp follow_tampered_stop_follow_link(context, recipient_name, subject) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    recipient_id = person_id_from_context!(context, recipient_name)
++
++    assert {:ok, token} =
++             ConversationStopFollowToken.sign(%{
++               club_id: root_message.club_id,
++               conversation_id: root_message.message_id,
++               member_id: recipient_id
++             })
++
++    result =
++      Messaging.stop_following_conversation_from_email_token(token <> "tampered",
++        consistency: :strong
++      )
++
++    Map.put(context, :last_stop_follow_link_result, result)
++  end
++
+   defp assert_cannot_reply_to_message(context, sender_name, subject) do
+     reply_message_id = Memba.ID.generate(:message)
+     root_message = fetch_from_context!(context, :messages, subject)
+@@ -929,6 +1114,13 @@ defmodule Memba.Cucumber.MessagingSteps do
+     String.replace_suffix(name, "'s", "")
+   end
+ 
++  defp parse_person_list(text) do
++    text
++    |> String.replace(~r/,?\s+and\s+/, ", ")
++    |> String.split(~r/\s*,\s*/, trim: true)
++    |> Enum.map(&String.trim/1)
++  end
++
+   defp assert_unique(values) do
+     assert Enum.uniq(values) == values
+   end
