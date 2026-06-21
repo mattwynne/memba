@@ -212,11 +212,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
   defp create_message(attrs) do
     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+    message_id = Memba.ID.generate(:message)
 
     Repo.insert!(%Message{
-      message_id: Memba.ID.generate(:message),
+      message_id: message_id,
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
+      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body"),
       inserted_at: inserted_at,

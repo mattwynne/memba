@@ -223,11 +223,14 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
 
   defp insert_message_projection!(attrs) do
     inserted_at = Keyword.fetch!(attrs, :inserted_at)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
     Repo.insert!(%MessageProjection{
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      message_id: message_id,
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
+      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body."),
       inserted_at: inserted_at,

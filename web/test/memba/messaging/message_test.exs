@@ -231,6 +231,7 @@ defmodule Memba.Messaging.MessageTest do
       reply_message_id = Memba.ID.generate(:message)
       club_id = Memba.ID.generate(:club)
       sender_id = Memba.ID.generate(:person)
+      recipient_id = Memba.ID.generate(:person)
       delivery_id = Memba.ID.generate(:delivery)
 
       command = %PostMessageReply{
@@ -244,8 +245,8 @@ defmodule Memba.Messaging.MessageTest do
         recipients: [
           %Recipient{
             delivery_id: delivery_id,
-            person_id: sender_id,
-            name: " Alice Sender ",
+            person_id: recipient_id,
+            name: " Alice Recipient ",
             email: " Alice@Example.COM "
           }
         ]
@@ -264,11 +265,42 @@ defmodule Memba.Messaging.MessageTest do
                %EmailDeliveryCreated{
                  message_id: ^reply_message_id,
                  delivery_id: ^delivery_id,
-                 recipient_id: ^sender_id,
-                 recipient_name: "Alice Sender",
+                 recipient_id: ^recipient_id,
+                 recipient_name: "Alice Recipient",
                  recipient_email: "alice@example.com"
                }
              ] = Message.execute(%Message{}, command)
+    end
+
+    test "allows a reply with no email delivery recipients after excluding the author" do
+      valid_command = valid_post_message_reply()
+
+      assert [
+               %MessageSent{
+                 message_id: message_id,
+                 conversation_id: conversation_id,
+                 reply_to_message_id: reply_to_message_id
+               }
+             ] =
+               Message.execute(%Message{}, %PostMessageReply{
+                 valid_command
+                 | recipients: []
+               })
+
+      assert message_id == valid_command.message_id
+      assert conversation_id == valid_command.conversation_id
+      assert reply_to_message_id == valid_command.reply_to_message_id
+    end
+
+    test "rejects reply recipients that include the reply author" do
+      valid_command = valid_post_message_reply()
+      [recipient] = valid_command.recipients
+
+      assert {:error, :reply_author_in_recipients} =
+               Message.execute(%Message{}, %PostMessageReply{
+                 valid_command
+                 | recipients: [%Recipient{recipient | person_id: valid_command.sender_id}]
+               })
     end
 
     test "rejects replies without a root conversation, replied-to message, or body" do
@@ -595,6 +627,7 @@ defmodule Memba.Messaging.MessageTest do
   defp valid_post_message_reply do
     sender_id = Memba.ID.generate(:person)
     root_message_id = Memba.ID.generate(:message)
+    recipient_id = Memba.ID.generate(:person)
 
     %PostMessageReply{
       message_id: Memba.ID.generate(:message),
@@ -607,8 +640,8 @@ defmodule Memba.Messaging.MessageTest do
       recipients: [
         %Recipient{
           delivery_id: Memba.ID.generate(:delivery),
-          person_id: sender_id,
-          name: "Alice Sender",
+          person_id: recipient_id,
+          name: "Alice Recipient",
           email: "alice@example.com"
         }
       ]

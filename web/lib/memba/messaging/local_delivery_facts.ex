@@ -30,10 +30,10 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
       recipient_address: request.recipient_address,
       sender_name: request.sender_name,
       sender_address: request.sender_address,
-      from: "#{request.sender_name} via Memba <#{from_address()}>",
+      from: "#{MemberMessageEmail.from_display_name(request)} <#{from_address()}>",
       to: ["#{request.recipient_name} <#{request.recipient_address}>"],
       subject: MemberMessageEmail.subject(request),
-      text_body: request.body,
+      text_body: MemberMessageEmail.text_body(request),
       metadata: %{
         "memba_message_id" => request.message_id,
         "memba_delivery_id" => request.delivery_id,

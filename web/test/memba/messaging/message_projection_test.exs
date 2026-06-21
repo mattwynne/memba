@@ -49,6 +49,8 @@ defmodule Memba.Messaging.MessageProjectionTest do
              message_id: ^message_id,
              club_id: ^club_id,
              sender_id: ^sender_id,
+             conversation_id: ^message_id,
+             reply_to_message_id: nil,
              subject: "Trip planning night",
              body: "Bring route ideas."
            } = Messaging.get_message(message_id)
@@ -190,13 +192,16 @@ defmodule Memba.Messaging.MessageProjectionTest do
 
   defp insert_message_projection!(attrs) when is_list(attrs) do
     inserted_at = Keyword.fetch!(attrs, :inserted_at)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
     Repo.insert!(%MessageProjection{
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      message_id: message_id,
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body."),
+      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       inserted_at: inserted_at,
       updated_at: Keyword.get(attrs, :updated_at, inserted_at)
     })

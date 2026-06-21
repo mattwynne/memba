@@ -25,6 +25,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.ReadModelChanges
   alias Memba.Repo
+  alias MembaWeb.ClubSite
 
   @name __MODULE__
   @pending_status EmailDeliveryStatus.pending()
@@ -351,6 +352,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
+      reply_context = reply_context(message, club)
 
       {:ok,
        %EmailDeliveryRequest{
@@ -364,6 +366,11 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          club_slug: club_slug(club),
          sender_name: sender_name,
          sender_address: sender_address,
+         conversation_id: message.conversation_id,
+         reply_to_message_id: message.reply_to_message_id,
+         conversation_url: Map.get(reply_context, :conversation_url),
+         reply_to_sender_name: Map.get(reply_context, :reply_to_sender_name),
+         reply_to_body: Map.get(reply_context, :reply_to_body),
          channel: channel,
          subject: message.subject,
          body: message.body
@@ -416,6 +423,40 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp club_slug(%{slug: slug}), do: slug
   defp club_slug(_club), do: nil
+
+  defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club), do: %{}
+
+  defp reply_context(%MessageProjection{} = message, club) do
+    message
+    |> base_reply_context(club)
+    |> Map.merge(replied_to_message_context(message.reply_to_message_id))
+  end
+
+  defp base_reply_context(%MessageProjection{conversation_id: conversation_id}, club) do
+    %{
+      conversation_url: ClubSite.url(club, "/messages/#{conversation_id}")
+    }
+  end
+
+  defp replied_to_message_context(nil), do: %{}
+
+  defp replied_to_message_context(reply_to_message_id) do
+    case Repo.get(MessageProjection, reply_to_message_id) do
+      %MessageProjection{} = message ->
+        sender = Membership.get_person(message.sender_id)
+
+        %{
+          reply_to_sender_name: person_name(sender),
+          reply_to_body: message.body
+        }
+
+      nil ->
+        %{}
+    end
+  end
+
+  defp person_name(%{name: name}), do: name
+  defp person_name(_person), do: nil
 
   defp log_dispatch_claimed(%EmailDeliveryProjection{} = delivery) do
     Logger.info(

@@ -98,6 +98,59 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     refute email.text_body =~ "Reply to this email"
   end
 
+  test "renders a reply notification from the club with conversation context" do
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    conversation_id = Memba.ID.generate(:message)
+
+    request =
+      email_delivery_request(
+        club_name: "Kootenay <Mountaineers>",
+        club_slug: "kmc",
+        conversation_id: conversation_id,
+        reply_to_message_id: conversation_id,
+        conversation_url: "https://kmc.memba.test/messages/#{conversation_id}",
+        reply_to_sender_name: "Alice Sender",
+        reply_to_body: "Bring route ideas.",
+        sender_name: "Bob Barker",
+        body: "I can bring maps."
+      )
+
+    assert :ok = Postmark.deliver(request)
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from == {"Kootenay <Mountaineers> via Memba", "messages@mail.memba.io"}
+    assert email.reply_to == {"Bob Barker", "bob@example.com"}
+    assert email.to == [{"Alice Adams", "alice@example.com"}]
+    assert email.subject == "[kmc] Re: Trip planning night"
+
+    assert email.text_body =~
+             "Bob Barker replied in the Trip planning night conversation"
+
+    assert email.text_body =~ "I can bring maps."
+    assert email.text_body =~ "View the conversation:"
+    assert email.text_body =~ request.conversation_url
+    assert email.text_body =~ "In reply to Alice Sender:"
+    assert email.text_body =~ "Bring route ideas."
+
+    assert email.html_body =~ "<!doctype html>"
+    assert email.html_body =~ "New reply"
+    assert email.html_body =~ "In the conversation"
+    assert email.html_body =~ "Trip planning night"
+    assert email.html_body =~ "Bob Barker replied"
+    assert email.html_body =~ "I can bring maps."
+    assert email.html_body =~ "View the conversation"
+    assert email.html_body =~ request.conversation_url
+    assert email.html_body =~ "In reply to Alice Sender:"
+    assert email.html_body =~ "Bring route ideas."
+    assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
+    assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
+
+    refute email.html_body =~ "You're following"
+    refute email.html_body =~ "Stop following"
+  end
+
   test "uses the verified Memba sender address even when no provider reply-to is configured" do
     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
 
@@ -178,6 +231,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
       club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
+      conversation_id: Keyword.get(overrides, :conversation_id),
+      reply_to_message_id: Keyword.get(overrides, :reply_to_message_id),
+      conversation_url: Keyword.get(overrides, :conversation_url),
+      reply_to_sender_name: Keyword.get(overrides, :reply_to_sender_name),
+      reply_to_body: Keyword.get(overrides, :reply_to_body),
       channel: Keyword.get(overrides, :channel, :email),
       subject: Keyword.get(overrides, :subject, "Trip planning night"),
       body: Keyword.get(overrides, :body, "Bring route ideas.")

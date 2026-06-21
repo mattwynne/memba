@@ -32,6 +32,11 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
     :club_slug,
     :sender_name,
     :sender_address,
+    :conversation_id,
+    :reply_to_message_id,
+    :conversation_url,
+    :reply_to_sender_name,
+    :reply_to_body,
     :channel,
     :subject,
     :body
@@ -48,6 +53,11 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
           club_slug: String.t() | nil,
           sender_name: String.t(),
           sender_address: String.t(),
+          conversation_id: String.t() | nil,
+          reply_to_message_id: String.t() | nil,
+          conversation_url: String.t() | nil,
+          reply_to_sender_name: String.t() | nil,
+          reply_to_body: String.t() | nil,
           channel: :email,
           subject: String.t(),
           body: String.t()

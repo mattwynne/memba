@@ -1265,10 +1265,14 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   defp create_message(attrs) do
+    message_id = Memba.ID.generate(:message)
+
     Repo.insert!(%Message{
-      message_id: Memba.ID.generate(:message),
+      message_id: message_id,
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
+      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body")
     })

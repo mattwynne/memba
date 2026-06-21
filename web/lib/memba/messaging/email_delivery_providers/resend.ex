@@ -38,7 +38,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
     |> reply_to(MemberMessageEmail.reply_to(request))
     |> to(MemberMessageEmail.to(request))
     |> subject(MemberMessageEmail.subject(request))
-    |> text_body(request.body)
+    |> text_body(MemberMessageEmail.text_body(request))
     |> html_body(MemberMessageEmail.html_body(request))
     |> put_provider_option(:tags, tags(request))
     |> header("X-Memba-Message-ID", request.message_id)

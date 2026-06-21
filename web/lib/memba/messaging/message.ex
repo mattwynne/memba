@@ -180,8 +180,7 @@ defmodule Memba.Messaging.Message do
          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
-         {:ok, recipients} <- normalize_recipients(command.recipients),
-         :ok <- validate_sender_recipient(command.sender_id, recipients) do
+         {:ok, recipients} <- normalize_command_recipients(command) do
       [
         %MessageSent{
           message_id: command.message_id,
@@ -308,15 +307,44 @@ defmodule Memba.Messaging.Message do
 
   defp normalize_text(_text, error), do: {:error, error}
 
-  defp normalize_recipients(recipients) when is_list(recipients) and recipients != [] do
+  defp normalize_command_recipients(%SendMessage{} = command) do
+    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: false),
+         :ok <- validate_sender_recipient(command.sender_id, recipients) do
+      {:ok, recipients}
+    end
+  end
+
+  defp normalize_command_recipients(%PostMessageReply{} = command) do
+    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: true),
+         :ok <- validate_reply_author_excluded(command.sender_id, recipients) do
+      {:ok, recipients}
+    end
+  end
+
+  defp normalize_recipients(recipients, opts) when is_list(recipients) do
+    allow_empty? = Keyword.fetch!(opts, :allow_empty?)
+
+    cond do
+      recipients == [] and allow_empty? ->
+        {:ok, []}
+
+      recipients == [] ->
+        {:error, :invalid_recipients}
+
+      true ->
+        normalize_non_empty_recipients(recipients)
+    end
+  end
+
+  defp normalize_recipients(_recipients, _opts), do: {:error, :invalid_recipients}
+
+  defp normalize_non_empty_recipients(recipients) do
     with {:ok, recipients} <- normalize_each_recipient(recipients),
          :ok <- validate_unique(recipients, & &1.delivery_id, :duplicate_delivery),
          :ok <- validate_unique(recipients, & &1.person_id, :duplicate_recipient) do
       {:ok, recipients}
     end
   end
-
-  defp normalize_recipients(_recipients), do: {:error, :invalid_recipients}
 
   defp normalize_each_recipient(recipients) do
     Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
@@ -379,6 +407,14 @@ defmodule Memba.Messaging.Message do
       :ok
     else
       {:error, :sender_not_in_recipients}
+    end
+  end
+
+  defp validate_reply_author_excluded(sender_id, recipients) do
+    if Enum.any?(recipients, &(&1.person_id == sender_id)) do
+      {:error, :reply_author_in_recipients}
+    else
+      :ok
     end
   end
 end

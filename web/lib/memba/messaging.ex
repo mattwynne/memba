@@ -827,7 +827,7 @@ defmodule Memba.Messaging do
          reply_to_message_id: conversation_id,
          subject: root_message.subject,
          body: body,
-         recipients: resolve_recipients(root_message.club_id)
+         recipients: resolve_recipients(root_message.club_id, except_person_id: sender_id)
        }}
     end
   end
@@ -907,9 +907,12 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_recipients(club_id) do
+  defp resolve_recipients(club_id, opts \\ []) do
+    except_person_id = Keyword.get(opts, :except_person_id)
+
     club_id
     |> Membership.list_active_members_of_club()
+    |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
   end
 

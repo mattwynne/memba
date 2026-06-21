@@ -9,6 +9,8 @@ defmodule Memba.Messaging.Projections.Message do
   schema "messaging_messages" do
     field :club_id, :string
     field :sender_id, :string
+    field :conversation_id, :string
+    field :reply_to_message_id, :string
     field :subject, :string
     field :body, :string
 

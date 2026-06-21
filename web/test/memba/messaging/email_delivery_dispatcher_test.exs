@@ -282,6 +282,86 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
       assert delivery_id == delivery.delivery_id
     end
 
+    test "builds reply provider requests with conversation context" do
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kootenay-mountaineering-club"
+        )
+
+      alice =
+        insert_membership_person!(
+          name: "Alice Sender",
+          email: "alice.sender@example.com"
+        )
+
+      bob =
+        insert_membership_person!(
+          name: "Bob Replier",
+          email: "bob.replier@example.com"
+        )
+
+      root_message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: alice.person_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas."
+        )
+
+      reply_message =
+        insert_message_projection!(
+          club_id: club.club_id,
+          sender_id: bob.person_id,
+          conversation_id: root_message.message_id,
+          reply_to_message_id: root_message.message_id,
+          subject: "Trip planning night",
+          body: "I can bring maps."
+        )
+
+      recipient_id = Memba.ID.generate(:person)
+
+      delivery =
+        insert_email_delivery!(
+          message_id: reply_message.message_id,
+          recipient_id: recipient_id,
+          recipient_name: "Carol Member",
+          recipient_address: "carol.member@example.com",
+          status: "dispatching"
+        )
+
+      assert :ok = EmailDeliveryDispatcher.deliver_to_provider(delivery)
+
+      assert [
+               %EmailDeliveryRequest{
+                 message_id: reply_message_id,
+                 club_id: club_id,
+                 delivery_id: delivery_id,
+                 recipient_id: ^recipient_id,
+                 recipient_name: "Carol Member",
+                 recipient_address: "carol.member@example.com",
+                 club_name: "Kootenay Mountaineering Club",
+                 club_slug: "kootenay-mountaineering-club",
+                 sender_name: "Bob Replier",
+                 sender_address: "bob.replier@example.com",
+                 conversation_id: conversation_id,
+                 reply_to_message_id: reply_to_message_id,
+                 conversation_url: conversation_url,
+                 reply_to_sender_name: "Alice Sender",
+                 reply_to_body: "Bring route ideas.",
+                 subject: "Trip planning night",
+                 body: "I can bring maps."
+               }
+             ] = Fake.deliveries()
+
+      assert reply_message_id == reply_message.message_id
+      assert club_id == club.club_id
+      assert delivery_id == delivery.delivery_id
+      assert conversation_id == root_message.message_id
+      assert reply_to_message_id == root_message.message_id
+      assert conversation_url =~ "/messages/#{root_message.message_id}"
+    end
+
     test "does not call the provider when the delivery's message projection is missing" do
       message_id = Memba.ID.generate(:message)
 
@@ -642,11 +722,14 @@ defmodule Memba.Messaging.EmailDeliveryDispatcherTest do
 
   defp insert_message_projection!(attrs) when is_list(attrs) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
 
     Repo.insert!(%MessageProjection{
-      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
+      message_id: message_id,
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
+      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.fetch!(attrs, :body),
       inserted_at: Keyword.get(attrs, :inserted_at, now),
