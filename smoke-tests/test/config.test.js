@@ -21,10 +21,16 @@ describe("smokeConfig", () => {
       }
     );
   });
+
+  it("allows the production smoke club name to be configured", () => {
+    withSmokeEnv({ MEMBA_SMOKE_CLUB_NAME: "Test" }, () => {
+      assert.equal(smokeConfig().clubName, "Test");
+    });
+  });
 });
 
 function withSmokeEnv(overrides, run) {
-  const defaultSensitiveKeys = ["MEMBA_SMOKE_CLUB_SLUG", "MEMBA_SMOKE_INBOUND_DOMAIN"];
+  const defaultSensitiveKeys = ["MEMBA_SMOKE_CLUB_NAME", "MEMBA_SMOKE_CLUB_SLUG", "MEMBA_SMOKE_INBOUND_DOMAIN"];
   const env = {
     MEMBA_SMOKE_FASTMAIL_PASSWORD: "fastmail-password",
     MEMBA_SMOKE_STAFF_EMAIL: "staff@memba.test",

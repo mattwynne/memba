@@ -10,13 +10,13 @@ const {
 const { sendEmail } = require("../../lib/smtp");
 
 Given("the production smoke configuration is valid", async function () {
-  assert.equal(
-    this.config.clubName,
-    "Smoke Test Club",
-    "Expected the default smoke club name to be Smoke Test Club"
+  assert.match(this.config.clubName, /\S/, "Expected a configured smoke club name");
+  assert.match(this.config.clubSlug, /^[a-z0-9-]+$/, "Expected an address-safe smoke club slug");
+  assert.match(
+    this.config.inboundAddress,
+    new RegExp(`^everyone@${escapeRegExp(this.config.clubSlug)}\\.`),
+    "Expected the inbound address to target the configured smoke club slug"
   );
-  assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
-  assert.equal(this.config.inboundAddress, "everyone@test.clubs.memba.io", "Expected the default inbound address");
   assert.notEqual(
     this.config.unknown.email.toLowerCase(),
     this.config.member.email.toLowerCase(),
@@ -149,6 +149,10 @@ Then("the smoke member should not see that club message", async function () {
   const message = currentMessage(this);
   await assertMemberDoesNotSeeMessage(this, message.subject);
 });
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function rejectionSubject(message) {
   return `Re: ${message.subject}`;
