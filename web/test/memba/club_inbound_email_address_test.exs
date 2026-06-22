@@ -4,25 +4,29 @@ defmodule Memba.ClubInboundEmailAddressTest do
   alias Memba.ClubInboundEmailAddress
 
   test "builds the default whole-club inbound address from a club slug" do
-    assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
-    assert ClubInboundEmailAddress.address("nelson-paddling") == "nelson-paddling@clubs.memba.io"
+    assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "everyone@kmc.clubs.memba.io"
+
+    assert ClubInboundEmailAddress.address("nelson-paddling") ==
+             "everyone@nelson-paddling.clubs.memba.io"
   end
 
   test "normalizes lookup-style slug casing and whitespace" do
-    assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "kmc@clubs.memba.io"
+    assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "everyone@kmc.clubs.memba.io"
   end
 
   test "uses the configured inbound email domain" do
     with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
       assert ClubInboundEmailAddress.domain() == "example.clubs.memba.io"
-      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@example.clubs.memba.io"
+
+      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) ==
+               "everyone@kmc.example.clubs.memba.io"
     end)
   end
 
   test "falls back to the iteration default domain when no domain is configured" do
     with_club_inbound_email_config([], fn ->
       assert ClubInboundEmailAddress.domain() == "clubs.memba.io"
-      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
+      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "everyone@kmc.clubs.memba.io"
     end)
   end
 

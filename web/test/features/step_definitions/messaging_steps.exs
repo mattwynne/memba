@@ -18,6 +18,8 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.Projections.EmailDelivery
   alias Memba.Messaging.ConversationStopFollowToken
 
+  @kmc_everyone_address "everyone@kmc.clubs.memba.io"
+
   step "{word} sends the message {string} to Kootenay Mountaineering Club members",
        %{args: [sender_name, subject]} = context do
     Fake.reset()
@@ -59,12 +61,19 @@ defmodule Memba.Cucumber.MessagingSteps do
     receive_inbound_reply_email(context, sender_name, subject, Map.fetch!(context, :docstring))
   end
 
-  step ~r/^(\w+) emails "([^"]+)" to kmc@clubs\.memba\.io with reply headers from "([^"]+)"$/,
-       %{args: [sender_name, subject, referenced_subject]} = context do
+  step ~r/^(\w+) replies by email to "([^"]+)" through ([^\s]+)$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_reply_email(context, sender_name, subject, "#{subject} details.",
+      to_address: to_address
+    )
+  end
+
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with reply headers from "([^"]+)"$/,
+       %{args: [sender_name, subject, to_address, referenced_subject]} = context do
     referenced_outbound_message_id =
       outbound_message_id_for_subject!(context, referenced_subject, sender_name)
 
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+    receive_inbound_club_email(context, sender_name, subject, to_address,
       in_reply_to_message_ids: [referenced_outbound_message_id]
     )
   end
@@ -86,6 +95,12 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
        %{args: [subject, sender_name, body]} = context do
+    assert_conversation_shows_reply(context, subject, sender_name, body)
+  end
+
+  step ~r/^the conversation for "([^"]+)" should show (\w+)'s reply$/,
+       %{args: [subject, sender_name]} = context do
+    %{body: body} = latest_reply_for!(context, subject, sender_name)
     assert_conversation_shows_reply(context, subject, sender_name, body)
   end
 
@@ -236,38 +251,38 @@ defmodule Memba.Cucumber.MessagingSteps do
     report_email_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
   end
 
-  step "{word} emails {string} to kmc@clubs.memba.io",
-       %{args: [sender_name, subject]} = context do
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io")
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+)$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address)
   end
 
-  step "{word} emails {string} to kmc@clubs.memba.io from {string}",
-       %{args: [sender_name, subject, from_address]} = context do
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) from "([^"]+)"$/,
+       %{args: [sender_name, subject, to_address, from_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address,
       from_address: from_address
     )
   end
 
-  step "{word} emails {string} to kmc@clubs.memba.io with an attachment",
-       %{args: [sender_name, subject]} = context do
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with an attachment$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address,
       attachments: [
         %{filename: "route.gpx", content_type: "application/gpx+xml", size: 1234}
       ]
     )
   end
 
-  step "{word} emails {string} to kmc@clubs.memba.io with only an HTML body",
-       %{args: [sender_name, subject]} = context do
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with only an HTML body$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address,
       text_body: nil,
       html_body: "<p>#{subject} details.</p>"
     )
   end
 
-  step "{word} emails {string} to kmc@clubs.memba.io with the body:",
-       %{args: [sender_name, subject]} = context do
-    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+  step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with the body:$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address,
       text_body: Map.fetch!(context, :docstring)
     )
   end
@@ -471,6 +486,34 @@ defmodule Memba.Cucumber.MessagingSteps do
   step "{word} should be told how to contact support", %{args: [sender_name]} = context do
     email = fetch_from_context!(context, :rejection_emails, sender_name)
     assert email.text_body =~ ~r/contact Memba support|reply to this email/i
+    context
+  end
+
+  step "{word} should receive a rejection email from {string}",
+       %{args: [sender_name, expected_from_name]} = context do
+    context = assert_rejection_email(context, sender_name, "wasn't posted")
+    email = fetch_from_context!(context, :rejection_emails, sender_name)
+
+    assert email_from(email) =~ expected_from_name
+
+    context
+  end
+
+  step "the rejection email should use the standard Memba footer", context do
+    {_sender_name, email} =
+      context
+      |> Map.fetch!(:rejection_emails)
+      |> Enum.at(-1)
+
+    html_body = email.html_body || ""
+
+    assert html_body =~ ~r/Delivered (?:by|for) /
+    assert html_body =~ ~s(href="https://memba.io")
+    assert html_body =~ "This is an automatic delivery notice."
+
+    assert html_body =~
+             ~r/Need a hand\? (?:Contact Memba support|Reply to this email or write to)/
+
     context
   end
 
@@ -919,10 +962,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     end
   end
 
-  defp receive_inbound_reply_email(context, sender_name, subject, body) do
+  defp receive_inbound_reply_email(context, sender_name, subject, body, opts \\ []) do
     outbound_message_id = outbound_message_id_for_subject!(context, subject, sender_name)
+    to_address = Keyword.get(opts, :to_address, @kmc_everyone_address)
 
-    receive_inbound_club_email(context, sender_name, "Re: #{subject}", "kmc@clubs.memba.io",
+    receive_inbound_club_email(context, sender_name, "Re: #{subject}", to_address,
       text_body: body,
       in_reply_to_message_ids: [outbound_message_id]
     )
@@ -996,6 +1040,10 @@ defmodule Memba.Cucumber.MessagingSteps do
 
     update_context_map(context, :rejection_emails, sender_name, email)
   end
+
+  defp email_from(%Swoosh.Email{from: {name, address}}), do: "#{name} <#{address}>"
+  defp email_from(%Swoosh.Email{from: from}) when is_binary(from), do: from
+  defp email_from(%Swoosh.Email{from: from}), do: inspect(from)
 
   defp assert_each_delivery_sent_through_provider(context, opts \\ []) do
     deliveries = deliveries_for_last_message!(context)

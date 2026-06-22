@@ -56,7 +56,7 @@ function smokeConfig() {
     clubName,
     clubSlug,
     clubSiteBaseDomain,
-    inboundAddress: `${clubSlug}@${inboundDomain}`,
+    inboundAddress: `everyone@${clubSlug}.${inboundDomain}`,
     member: {
       email: memberEmail,
       name: memberName,

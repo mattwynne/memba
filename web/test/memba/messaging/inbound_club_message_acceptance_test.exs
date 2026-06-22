@@ -62,7 +62,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               club_id: kmc_id,
               sender_id: alice_id,
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -70,7 +70,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-011-email",
                  provider_event_id: "task-011-event",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Bring route ideas."
                },
@@ -165,7 +165,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider_message_id: "task-011-email",
              provider_event_id: "task-011-event",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "accepted",
              club_id: ^kmc_id,
              sender_id: ^alice_id,
@@ -205,7 +205,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               club_id: kmc_id,
               sender_id: bob_id,
               from_address: "bob@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -213,7 +213,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-041-reply-header-match",
                  provider_event_id: "task-041-reply-header-match-event",
                  from_address: "bob@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Re: Trip planning night",
                  text_body: """
                  I can bring maps.
@@ -267,7 +267,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider_message_id: "task-041-reply-header-match",
              provider_event_id: "task-041-reply-header-match-event",
              from_address: "bob@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "accepted",
              club_id: ^kmc_id,
              sender_id: ^bob_id,
@@ -300,7 +300,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               club_id: kmc_id,
               sender_id: bob_id,
               from_address: "bob@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -308,7 +308,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-041-unknown-reply-header-fallback",
                  provider_event_id: "task-041-unknown-reply-header-fallback-event",
                  from_address: "bob@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Re: Trip planning night",
                  text_body: "This should start a separate club-wide thread.",
                  in_reply_to_message_ids: ["<unknown-message@example.test>"],
@@ -383,7 +383,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-041-other-club-reply-header-fallback",
                  provider_event_id: "task-041-other-club-reply-header-fallback-event",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Re: Paddle planning",
                  text_body: "This belongs to KMC, not the paddling club.",
                  in_reply_to_message_ids: [npc_outbound_message_id]
@@ -451,7 +451,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "sender_not_active_member",
               from_address: "pat@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -459,7 +459,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-041-reply-header-non-member",
                  provider_event_id: "task-041-reply-header-non-member-event",
                  from_address: "pat@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Re: Trip planning night",
                  text_body: "I should not be able to reply to this conversation.",
                  in_reply_to_message_ids: [bob_outbound_message_id]
@@ -515,7 +515,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "attachments_not_supported",
               from_address: "bob@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -523,7 +523,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-041-reply-header-attachment",
                  provider_event_id: "task-041-reply-header-attachment-event",
                  from_address: "bob@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Re: Trip planning night",
                  text_body: "The GPX is attached.",
                  in_reply_to_message_ids: [bob_outbound_message_id],
@@ -581,7 +581,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-011-async-dispatch",
                  provider_event_id: "task-011-async-dispatch-event",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Dispatch me asynchronously",
                  text_body: "This should be handed off by the dispatcher nudge."
                },
@@ -643,7 +643,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       provider_message_id: "task-012-duplicate-email",
       provider_event_id: "task-012-event-first",
       from_address: "alice@example.com",
-      recipient_addresses: ["kmc@clubs.memba.io"],
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
       subject: "Trip planning night",
       text_body: "Bring route ideas."
     }
@@ -711,7 +711,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider: "resend",
                  provider_message_id: "task-013-normalized-body",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: """
                  Bring route ideas.
@@ -764,7 +764,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               club_id: kmc_id,
               sender_id: alice_id,
               from_address: "alice.work@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
@@ -772,7 +772,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider_message_id: "task-020-alternate-sender",
                  provider_event_id: "task-020-alternate-sender-event",
                  from_address: " Alice.Work@Example.COM ",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Alternate sender address",
                  text_body: "Posting from my work address."
                },
@@ -814,7 +814,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider_message_id: "task-020-alternate-sender",
              provider_event_id: "task-020-alternate-sender-event",
              from_address: "alice.work@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              club_id: ^kmc_id,
              sender_id: ^alice_id,
              message_id: ^message_id
@@ -833,14 +833,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-013-html-only",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "  \n> quoted prior content only\n",
                  html_body: "<p>This HTML must not be converted.</p>"
@@ -859,7 +859,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider: "resend",
              provider_message_id: "task-013-html-only",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "plain_text_required",
@@ -886,14 +886,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-blank-plain-text",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: " \n\t "
                },
@@ -933,14 +933,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-html-only",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  html_body: "<p>This HTML must not be converted to a posted message.</p>"
                },
@@ -980,14 +980,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "attachments_not_supported",
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-014-attachments",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Bring route ideas.",
                  attachments: [
@@ -1012,7 +1012,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider: "resend",
              provider_message_id: "task-014-attachments",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "attachments_not_supported",
@@ -1036,14 +1036,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "unknown_sender",
               from_address: "unknown@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-015-unknown-sender",
                  from_address: "unknown@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Bring route ideas.",
                  original_message_id: "<original-trip-planning@example.com>"
@@ -1062,7 +1062,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              provider: "resend",
              provider_message_id: "task-015-unknown-sender",
              from_address: "unknown@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "unknown_sender",
@@ -1103,14 +1103,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "unknown_sender",
               from_address: "unknown@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "postmark",
                  provider_message_id: "task-020-postmark-selected-rejection",
                  from_address: "unknown@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Can I post through Postmark?"
                },
@@ -1147,7 +1147,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              "memba_inbound_id" => inbound_email_id,
              "memba_in_provider" => "postmark",
              "memba_in_msg_id" => "task-020-postmark-selected-rejection",
-             "memba_in_to" => "kmc@clubs.memba.io",
+             "memba_in_to" => "everyone@kmc.clubs.memba.io",
              "memba_reject_reason" => "unknown_sender",
              "memba_reject_ref" => rejection_email_delivery_reference
            }
@@ -1174,7 +1174,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  provider: "resend",
                  provider_message_id: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2",
                  from_address: "unknown@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Can I post through Resend?"
                },
@@ -1226,14 +1226,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "sender_not_active_member",
               from_address: "pat@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-non-member",
                  from_address: "pat@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Can I post to KMC?"
                },
@@ -1274,14 +1274,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "sender_not_active_member",
               from_address: "alice@example.com",
-              to_address: "kmc@clubs.memba.io"
+              to_address: "everyone@kmc.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-inactive-member",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Can I post while inactive?"
                },
@@ -1309,7 +1309,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
-  test "unknown club slug is rejected without creating a club message" do
+  test "unknown club subdomain is rejected without creating a club message" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
 
@@ -1321,14 +1321,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
               status: :rejected,
               rejection_reason: "unknown_club_slug",
               from_address: "alice@example.com",
-              to_address: "unknown@clubs.memba.io"
+              to_address: "everyone@unknown.clubs.memba.io"
             }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
                  provider_message_id: "task-020-unknown-club",
                  from_address: "alice@example.com",
-                 recipient_addresses: ["unknown@clubs.memba.io"],
+                 recipient_addresses: ["everyone@unknown.clubs.memba.io"],
                  subject: "Trip planning night",
                  text_body: "Where did this go?"
                },
@@ -1344,7 +1344,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert %InboundEmailSourceProjection{
              status: "rejected",
              from_address: "alice@example.com",
-             to_address: "unknown@clubs.memba.io",
+             to_address: "everyone@unknown.clubs.memba.io",
              message_id: nil,
              rejection_reason: "unknown_club_slug",
              rejection_email_delivery_reference: rejection_email_delivery_reference
@@ -1358,6 +1358,83 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
+  test "unsupported recipient routes are rejected through the inbound rejection pathway" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    cases = [
+      %{
+        provider_message_id: "task-042-unsupported-local-part",
+        recipient_address: "committee@kmc.clubs.memba.io",
+        rejection_reason: "unsupported_recipient_address"
+      },
+      %{
+        provider_message_id: "task-042-unsupported-domain",
+        recipient_address: "everyone@example.org",
+        rejection_reason: "unsupported_recipient_address"
+      },
+      %{
+        provider_message_id: "task-042-old-flat-address",
+        recipient_address: "kmc@clubs.memba.io",
+        rejection_reason: "unsupported_recipient_address"
+      },
+      %{
+        provider_message_id: "task-042-unknown-club-subdomain",
+        recipient_address: "everyone@unknown.clubs.memba.io",
+        rejection_reason: "unknown_club_slug"
+      }
+    ]
+
+    for %{provider_message_id: provider_message_id} = rejection_case <- cases do
+      assert {:ok,
+              %{
+                inbound_email_id: _inbound_email_id,
+                status: :rejected,
+                rejection_reason: rejection_reason,
+                from_address: "alice@example.com",
+                to_address: recipient_address,
+                rejection_email_delivery_reference: rejection_email_delivery_reference
+              }} =
+               Messaging.receive_inbound_club_email(
+                 %{
+                   provider: "resend",
+                   provider_message_id: provider_message_id,
+                   from_address: "alice@example.com",
+                   recipient_addresses: [rejection_case.recipient_address],
+                   subject: "Unsupported recipient #{provider_message_id}",
+                   text_body: "This should not post."
+                 },
+                 consistency: :strong
+               )
+
+      assert recipient_address == rejection_case.recipient_address
+      assert rejection_reason == rejection_case.rejection_reason
+      assert is_binary(rejection_email_delivery_reference)
+
+      assert %InboundEmailSourceProjection{
+               status: "rejected",
+               from_address: "alice@example.com",
+               to_address: ^recipient_address,
+               message_id: nil,
+               rejection_reason: ^rejection_reason,
+               rejection_email_delivery_reference: ^rejection_email_delivery_reference
+             } = Messaging.get_inbound_email_source("resend", provider_message_id)
+
+      assert_rejection_email_received(
+        to: "alice@example.com",
+        reason: expected_rejection_copy(rejection_reason)
+      )
+    end
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert length(cases) == count_events(InboundClubEmailRejected)
+  end
+
   test "duplicate rejected inbound email does not send another rejection email" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
@@ -1369,7 +1446,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       provider_message_id: "task-015-duplicate-rejected",
       provider_event_id: "task-015-event-first",
       from_address: "alice@example.com",
-      recipient_addresses: ["kmc@clubs.memba.io"],
+      recipient_addresses: ["everyone@kmc.clubs.memba.io"],
       subject: "Trip planning night",
       text_body: "Bring route ideas.",
       attachments: [%{filename: "route.gpx", content_type: "application/gpx+xml"}]
@@ -1553,6 +1630,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     email
   end
+
+  defp expected_rejection_copy("unknown_club_slug"),
+    do: "We couldn't match the address you used to a Memba group"
+
+  defp expected_rejection_copy("unsupported_recipient_address"),
+    do: "That recipient address isn't set up for member messages"
 
   defp support_copy_for(_reason), do: "Just reply to this email and a person will help."
 

@@ -1196,7 +1196,7 @@ test("Resend inbound email payloads express the browser acceptance webhook shape
     providerMessageId: "email-inbound-1",
     subject: "Trip planning night",
     textBody: "Trip planning night details.",
-    toAddress: "kmc@clubs.memba.io"
+    toAddress: "everyone@kmc.clubs.memba.io"
   });
 
   assert.deepEqual(payload, {
@@ -1209,7 +1209,7 @@ test("Resend inbound email payloads express the browser acceptance webhook shape
       html: "<p>Trip planning night details.</p>",
       subject: "Trip planning night",
       text: "Trip planning night details.",
-      to: ["kmc@clubs.memba.io"]
+      to: ["everyone@kmc.clubs.memba.io"]
     }
   });
 });
@@ -1245,7 +1245,7 @@ test("sending an inbound club email posts to the Resend inbound webhook and reco
     [`${kootenayClubName}:Bob`]: { clubName: kootenayClubName, personName: "Bob" }
   };
 
-  await sendInboundClubEmail(world, "Alice", "Trip planning night", "kmc@clubs.memba.io", {
+  await sendInboundClubEmail(world, "Alice", "Trip planning night", "everyone@kmc.clubs.memba.io", {
     expect: fakeExpect(expectations),
     providerMessageId: "email-inbound-1"
   });
@@ -1259,7 +1259,7 @@ test("sending an inbound club email posts to the Resend inbound webhook and reco
   assert.deepEqual(request.posts[0].options.data.data, {
     email_id: "email-inbound-1",
     from: "alice@example.test",
-    to: ["kmc@clubs.memba.io"],
+    to: ["everyone@kmc.clubs.memba.io"],
     subject: "Trip planning night",
     text: "Trip planning night details."
   });
@@ -1309,7 +1309,7 @@ test("inbound rejection assertions inspect mailbox copy and support guidance", a
   };
   world.people = { Alice: { email: "alice@example.test", personId: "person-alice-1" } };
 
-  await sendInboundClubEmail(world, "Alice", "Trip planning night", "kmc@clubs.memba.io", {
+  await sendInboundClubEmail(world, "Alice", "Trip planning night", "everyone@kmc.clubs.memba.io", {
     attachments: [{ filename: "route.gpx", size: 1234 }],
     expect: false,
     providerMessageId: "email-inbound-rejected"

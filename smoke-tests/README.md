@@ -6,7 +6,7 @@ This directory contains Cucumber smoke tests for real production inbound club em
 
 - Club name: `Smoke Test Club`
 - Club slug: `test`
-- Inbound address: `test@clubs.memba.io`
+- Inbound address: `everyone@test.clubs.memba.io`
 - Known active member email: `test@memba.io`
 - Unknown-sender address: an unregistered Fastmail alias such as `test+unknown@memba.io`
 - The smoke-test club should not appear as a public club page or in ordinary public discovery surfaces.
@@ -56,7 +56,7 @@ The smoke runner intentionally does not support Hotmail, Yahoo, or arbitrary SMT
 
 ## Run
 
-When `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` is set, each scenario checks Postmark inbound message history immediately after SMTP acceptance. That narrows failures before the mailbox/UI waits: no Postmark inbound message means the problem is still at DNS/provider receiving; a Postmark inbound message with no Memba-visible outcome points to webhook delivery or application processing.
+When `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` is set, each scenario checks Postmark inbound message history immediately after SMTP acceptance for the configured smoke recipient, which defaults to `everyone@test.clubs.memba.io`. That narrows failures before the mailbox/UI waits: no Postmark inbound message means the problem is still at DNS/provider receiving; a Postmark inbound message with no Memba-visible outcome points to webhook delivery or application processing.
 
 The script reuses the Cucumber and Playwright dependencies already installed for `acceptance-tests`:
 

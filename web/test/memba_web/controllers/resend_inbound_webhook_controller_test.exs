@@ -67,7 +67,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_controller_accepted",
           "from" => "Alice Example <Alice@Example.COM>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night",
           "text" => "Bring route ideas."
         }
@@ -132,7 +132,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_controller_duplicate",
           "from" => "Alice Example <alice@example.com>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night",
           "text" => "Bring route ideas."
         }
@@ -155,7 +155,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_controller_duplicate",
           "from" => "Alice Example <alice@example.com>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night retry",
           "text" => "This retry must not create another message."
         }
@@ -205,7 +205,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_controller_attachment_rejected",
           "from" => "Alice Example <alice@example.com>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night",
           "text" => "See the attached route.",
           "attachments" => [
@@ -229,7 +229,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              provider_message_id: "email_controller_attachment_rejected",
              provider_event_id: "evt_controller_attachment_rejected",
              from_address: "alice@example.com",
-             to_address: "kmc@clubs.memba.io",
+             to_address: "everyone@kmc.clubs.memba.io",
              status: "rejected",
              message_id: nil,
              rejection_reason: "attachments_not_supported",
@@ -259,7 +259,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_controller_attachment_rejected",
           "from" => "Alice Example <alice@example.com>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Retry without attachment",
           "text" => "This retry must not send another rejection."
         }
@@ -332,7 +332,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_fetched_content",
           "from" => "Alice Example <Alice@Example.COM>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night"
         }
       })
@@ -362,7 +362,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_no_body",
           "from" => "Alice Example <Alice@Example.COM>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night"
         }
       })
@@ -445,7 +445,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
         "data" => %{
           "email_id" => "email_123",
           "from" => "Alice Example <alice@example.com>",
-          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "to" => ["KMC <everyone@kmc.clubs.memba.io>"],
           "subject" => "Trip planning night",
           "text" => "Bring route ideas."
         }

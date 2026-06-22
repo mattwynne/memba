@@ -547,7 +547,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+             "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
            )
 
     assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
@@ -560,8 +560,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
-             "kmc@clubs.memba.io"
+             "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+             "everyone@kmc.clubs.memba.io"
+           )
+
+    refute has_element?(
+             view,
+             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
            )
   end
 

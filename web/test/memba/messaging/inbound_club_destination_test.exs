@@ -6,7 +6,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
   alias Memba.Messaging.InboundEmail
 
   describe "resolve_inbound_club_email_destination/1" do
-    test "resolves a whole-club inbound address to a club by slug" do
+    test "resolves a whole-club inbound subdomain address to a club by slug" do
       club = insert_membership_club!(slug: "kmc")
 
       assert {:ok,
@@ -14,18 +14,45 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 club_id: club.club_id,
                 club_slug: "kmc",
                 club_name: club.name,
-                to_address: "kmc@clubs.memba.io"
-              }} == Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
+                to_address: "everyone@kmc.clubs.memba.io"
+              }} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@kmc.clubs.memba.io"
+               ])
     end
 
-    test "normalizes recipient address casing and accepts unrelated copied recipients" do
+    test "uses the extracted club subdomain as the Membership slug lookup value" do
+      club =
+        insert_membership_club!(
+          name: "Kootenay Mountaineering Club",
+          slug: "kmc-alpine"
+        )
+
+      assert {:ok,
+              %InboundClubDestination{
+                club_id: club.club_id,
+                club_slug: "kmc-alpine",
+                club_name: "Kootenay Mountaineering Club",
+                to_address: "everyone@kmc-alpine.clubs.memba.io"
+              }} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@kmc-alpine.clubs.memba.io"
+               ])
+
+      assert {:error, :unknown_club_slug, "everyone@kmc.clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@kmc.clubs.memba.io"
+               ])
+    end
+
+    test "normalizes recipient subdomain address casing and accepts unrelated copied recipients" do
       club = insert_membership_club!(slug: "kmc")
 
       inbound_email = %InboundEmail{
         provider: "resend",
         provider_message_id: "email-123",
         from_address: "alice@example.com",
-        recipient_addresses: [" friend@example.org ", " KMC@Clubs.Memba.IO "],
+        recipient_addresses: [" friend@example.org ", " EVERYONE@KMC.Clubs.Memba.IO "],
         subject: "Trip planning night"
       }
 
@@ -34,7 +61,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 club_id: club.club_id,
                 club_slug: "kmc",
                 club_name: club.name,
-                to_address: "kmc@clubs.memba.io"
+                to_address: "everyone@kmc.clubs.memba.io"
               }} == Messaging.resolve_inbound_club_email_destination(inbound_email)
     end
 
@@ -47,12 +74,21 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                   club_id: club.club_id,
                   club_slug: "kmc",
                   club_name: club.name,
-                  to_address: "kmc@example.clubs.memba.io"
+                  to_address: "everyone@kmc.example.clubs.memba.io"
                 }} ==
                  Messaging.resolve_inbound_club_email_destination([
-                   "kmc@example.clubs.memba.io"
+                   "everyone@kmc.example.clubs.memba.io"
                  ])
       end)
+    end
+
+    test "rejects unsupported local parts at a known club subdomain" do
+      insert_membership_club!(slug: "kmc")
+
+      assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "committee@kmc.clubs.memba.io"
+               ])
     end
 
     test "rejects recipient addresses outside the inbound club domain" do
@@ -62,9 +98,18 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                Messaging.resolve_inbound_club_email_destination(["everyone@example.org"])
     end
 
-    test "rejects unknown club slugs at the inbound club domain" do
-      assert {:error, :unknown_club_slug, "unknown@clubs.memba.io"} ==
-               Messaging.resolve_inbound_club_email_destination(["unknown@clubs.memba.io"])
+    test "rejects unknown club subdomains at the inbound club domain" do
+      assert {:error, :unknown_club_slug, "everyone@unknown.clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination([
+                 "everyone@unknown.clubs.memba.io"
+               ])
+    end
+
+    test "rejects the old flat club address shape even when the club exists" do
+      insert_membership_club!(slug: "kmc")
+
+      assert {:error, :unsupported_recipient_address, "kmc@clubs.memba.io"} ==
+               Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
     end
 
     test "rejects malformed or missing recipient input as unsupported" do

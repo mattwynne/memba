@@ -44,7 +44,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
 
     assert_email_sent(fn email ->
       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
-      assert email.reply_to == {"Kootenay <Mountaineers>", "kmc@clubs.memba.io"}
+      assert email.reply_to == {"Kootenay <Mountaineers>", "everyone@kmc.clubs.memba.io"}
       assert email.to == [{"Alice", "alice@example.test"}]
       assert email.headers["Message-ID"] == request.outbound_message_id
       assert email.subject == "[kmc] Trip planning night"
@@ -127,7 +127,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert :ok = Local.deliver(request)
 
     assert_email_sent(fn email ->
-      assert email.reply_to == {"Kootenay Mountaineering Club", "kmc@clubs.memba.io"}
+      assert email.reply_to == {"Kootenay Mountaineering Club", "everyone@kmc.clubs.memba.io"}
       assert email.headers["Message-ID"] == request.outbound_message_id
       assert email.headers["In-Reply-To"] == "<memba.parent@example.test>"
 

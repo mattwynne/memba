@@ -16,7 +16,7 @@ Given("the production smoke configuration is valid", async function () {
     "Expected the default smoke club name to be Smoke Test Club"
   );
   assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
-  assert.equal(this.config.inboundAddress, "test@clubs.memba.io", "Expected the default inbound address");
+  assert.equal(this.config.inboundAddress, "everyone@test.clubs.memba.io", "Expected the default inbound address");
   assert.notEqual(
     this.config.unknown.email.toLowerCase(),
     this.config.member.email.toLowerCase(),
@@ -93,7 +93,7 @@ Then("the unknown sender receives an unknown-sender rejection email", async func
   const message = currentMessage(this);
   await this.mailboxes.unknown.waitForEmail(
     (email) =>
-      email.subject === "Your email was not posted" &&
+      email.subject === rejectionSubject(message) &&
       email.toEmails.includes(this.config.unknown.email.toLowerCase()) &&
       /could not find a member account|unknown sender/i.test(`${email.text}\n${email.html}`),
     {
@@ -101,7 +101,7 @@ Then("the unknown sender receives an unknown-sender rejection email", async func
       description: `unknown-sender rejection for ${message.subject}`,
       intervalMs: this.config.poll.intervalMs,
       timeoutMs: this.config.poll.timeoutMs,
-      text: "Your email was not posted"
+      text: message.subject
     }
   );
 });
@@ -110,15 +110,15 @@ Then("the smoke member receives an attachment-not-supported rejection email", as
   const message = currentMessage(this);
   await this.mailboxes.member.waitForEmail(
     (email) =>
-      email.subject === "Your email was not posted" &&
+      email.subject === rejectionSubject(message) &&
       email.toEmails.includes(this.config.member.email.toLowerCase()) &&
-      /attachments are not supported/i.test(`${email.text}\n${email.html}`),
+      /attachments (are not supported|can't be posted)/i.test(`${email.text}\n${email.html}`),
     {
       after: subjectTimestamp(message.subject),
       description: `attachment rejection for ${message.subject}`,
       intervalMs: this.config.poll.intervalMs,
       timeoutMs: this.config.poll.timeoutMs,
-      text: "Your email was not posted"
+      text: message.subject
     }
   );
 });
@@ -132,7 +132,7 @@ Then("the smoke member receives a distributed copy of that club message", async 
   const message = currentMessage(this);
   await this.mailboxes.member.waitForEmail(
     (email) =>
-      email.subject === message.subject &&
+      email.subject === distributedCopySubject(this.config, message) &&
       email.toEmails.includes(this.config.member.email.toLowerCase()) &&
       `${email.text}\n${email.html}`.includes(message.body),
     {
@@ -149,6 +149,14 @@ Then("the smoke member should not see that club message", async function () {
   const message = currentMessage(this);
   await assertMemberDoesNotSeeMessage(this, message.subject);
 });
+
+function rejectionSubject(message) {
+  return `Re: ${message.subject}`;
+}
+
+function distributedCopySubject(config, message) {
+  return `[${config.clubSlug}] ${message.subject}`;
+}
 
 function uniqueSubject(prefix) {
   const now = new Date();

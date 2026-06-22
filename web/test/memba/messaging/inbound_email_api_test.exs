@@ -13,7 +13,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
         provider_message_id: " provider-message-123 ",
         provider_event_id: " provider-event-456 ",
         from_address: " Alice@Example.COM ",
-        recipient_addresses: [" KMC@Clubs.Memba.IO ", " everyone@example.org "],
+        recipient_addresses: [" Everyone@KMC.Clubs.Memba.IO ", " everyone@example.org "],
         subject: "Trip planning night",
         text_body: "Bring route ideas.",
         html_body: "<p>Bring route ideas.</p>",
@@ -40,7 +40,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                   provider_message_id: "provider-message-123",
                   provider_event_id: "provider-event-456",
                   from_address: "alice@example.com",
-                  recipient_addresses: ["kmc@clubs.memba.io", "everyone@example.org"],
+                  recipient_addresses: ["everyone@kmc.clubs.memba.io", "everyone@example.org"],
                   subject: "Trip planning night",
                   text_body: "Bring route ideas.",
                   html_body: "<p>Bring route ideas.</p>",
@@ -68,7 +68,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
         "provider" => "postmark",
         "provider_message_id" => "inbound-123",
         "from_address" => "alice@example.com",
-        "recipient_addresses" => ["kmc@clubs.memba.io"],
+        "recipient_addresses" => ["everyone@kmc.clubs.memba.io"],
         "subject" => "Trail conditions"
       }
 
@@ -80,7 +80,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
                   provider_message_id: "inbound-123",
                   provider_event_id: nil,
                   from_address: "alice@example.com",
-                  recipient_addresses: ["kmc@clubs.memba.io"],
+                  recipient_addresses: ["everyone@kmc.clubs.memba.io"],
                   subject: "Trail conditions",
                   text_body: nil,
                   html_body: nil,
@@ -96,7 +96,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
         provider: "example-mail",
         provider_message_id: "provider-message-123",
         from_address: "alice@example.com",
-        recipient_addresses: ["kmc@clubs.memba.io"],
+        recipient_addresses: ["everyone@kmc.clubs.memba.io"],
         subject: "Trip planning night"
       }
 

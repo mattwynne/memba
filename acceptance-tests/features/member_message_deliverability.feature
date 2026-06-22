@@ -64,7 +64,7 @@ Rule: Members are told when a club message is not sent
 
 Rule: Active members can send new club messages by email
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails the KMC everyone address
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
@@ -72,7 +72,7 @@ Rule: Active members can send new club messages by email
       And Alice should not see Pat in the addressed members
       And each addressed member should receive an email from Alice via Memba
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails from an alternate address
       Given Alice's alternate email address is "alice.outdoors@example.test"
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io from "alice.outdoors@example.test"
@@ -81,21 +81,21 @@ Rule: Active members can send new club messages by email
 
 Rule: Only the everyone route on a known club email subdomain is accepted
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails an unsupported route on KMC's club email subdomain
       When Alice emails "Trip planning night" to committee@kmc.clubs.memba.io
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Alice should receive a rejection email explaining the message was not posted
       And Alice should be told how to contact support
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails an unknown club subdomain
       When Alice emails "Trip planning night" to everyone@unknown.clubs.memba.io
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Alice should receive a rejection email explaining the message was not posted
       And Alice should be told how to contact support
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails the old flat club address after the cutover
       When Alice emails "Trip planning night" to kmc@clubs.memba.io
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
@@ -104,28 +104,28 @@ Rule: Only the everyone route on a known club email subdomain is accepted
 
 Rule: Inbound club email is rejected when it cannot be posted safely
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: An unknown sender emails the KMC everyone address
       When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Robin should receive a rejection email explaining the message was not posted
       And Robin should be told how to contact support
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: A member of another club emails the KMC everyone address
       When Pat emails "Trip planning night" to everyone@kmc.clubs.memba.io
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Pat should receive a rejection email explaining the message was not posted
       And Pat should be told how to contact support
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails an attachment to the KMC everyone address
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with an attachment
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Alice should receive a rejection email explaining attachments are not supported
       And Alice should be told how to contact support
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails without a plain-text message body
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with only an HTML body
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
@@ -134,7 +134,7 @@ Rule: Inbound club email is rejected when it cannot be posted safely
 
 Rule: Inbound club email body keeps only the sender's new plain-text message
 
-    @iteration-042 @todo-domain @todo-ui
+    @iteration-042
     Scenario: Alice emails new text above a signature and quoted message
       When Alice emails "Trip planning night" to everyone@kmc.clubs.memba.io with the body:
         """

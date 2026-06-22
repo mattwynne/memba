@@ -12,7 +12,7 @@ Rule: Memba transactional emails use consistent Memba branding
 
 Rule: Club-message rejection emails identify the club
 
-    @iteration-031 @iteration-042 @todo-domain @todo-ui
+    @iteration-031 @iteration-042
     Scenario: Robin receives a KMC rejection email
       Given Kootenay Mountaineering Club has the slug "kmc"
       When Robin emails "Trip planning night" to everyone@kmc.clubs.memba.io from "robin@example.test"
