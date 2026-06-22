@@ -1,0 +1,124 @@
+<!-- @dsCard group="Member App" viewport="900x620" name="Stop following (confirmation)" subtitle="Post-unsubscribe page reached from a reply-email link — success and invalid-link states" -->
+<!-- @startingPoint section="Member App" subtitle="One-click stop-following confirmation page" viewport="900x620" -->
+<!--
+  NEW (2026-06-22). Wireframe for the previously-undesigned conversation
+  stop-following page (GET /messages/conversations/stop-following/:token), reached
+  from the "Stop following this conversation" link in a reply-notification email.
+  Change from today's app (see docs/problems/2026-06-22-replies-feature-design-gaps.md):
+  use a MINIMAL Memba-mark header, not the public marketing nav (Sign in / Request
+  access) — the recipient arrived from an email unsubscribe link, so marketing CTAs
+  are out of place.
+-->
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>Stopped following · Memba</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
+  <style>
+    :root {
+      --color-sage-500:#5a7050; --color-sage-700:#36462f; --color-apricot:#d2925a;
+      --color-cream:#f6f5ea; --color-paper:#fffef9; --color-line:#e8e6d4; --color-line-strong:#d9d6bf;
+      --color-ink:#25291d; --color-ink-2:#555a47; --color-ink-3:#878b76;
+      --color-primary:#5a7050; --color-primary-content:#f6f5ea;
+      --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;
+      --color-error:#a8503a; --color-error-soft:#f1ddd3;
+      --radius-box:0.75rem;
+      --font-sans:'Figtree',ui-sans-serif,system-ui,sans-serif;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--color-base-200); font-family:var(--font-sans); color:var(--color-ink); -webkit-font-smoothing:antialiased; }
+    h1,h2,h3,p { margin:0; }
+
+    .preview-shell { display:grid; gap:24px; padding:28px; max-width:900px; margin:0 auto; }
+    .preview-title__eyebrow { color:var(--color-ink-3); font-size:12px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; }
+    .preview-title h1 { color:var(--color-ink); font-size:30px; font-weight:700; letter-spacing:-0.03em; margin-top:5px; }
+    .preview-title p { color:var(--color-ink-2); font-size:14px; line-height:1.5; margin-top:8px; }
+    .variant-label { border:1px solid var(--color-line-strong); border-radius:999px; color:var(--color-ink-2); font-family:ui-monospace,Menlo,monospace; font-size:11px; padding:6px 10px; display:inline-block; }
+
+    .frame { background:var(--color-base-100); border:1px solid var(--color-line-strong); border-radius:20px; overflow:hidden; box-shadow:0 16px 40px rgba(37,41,29,0.08); }
+    .state-tag { background:var(--color-base-200); border-bottom:1px solid var(--color-line); color:var(--color-ink-2); font-family:ui-monospace,Menlo,monospace; font-size:11px; padding:8px 16px; }
+
+    /* minimal Memba-mark header (NOT the marketing nav) */
+    .site-head { display:flex; align-items:center; gap:9px; padding:16px 28px; border-bottom:1px solid var(--color-base-300); }
+    .site-head__mark { width:24px; height:24px; }
+    .site-head__name { font-size:16px; font-weight:700; letter-spacing:-0.018em; color:var(--color-ink); }
+
+    .stage { background:var(--color-base-200); padding:44px 28px; }
+    .card { max-width:560px; margin:0 auto; background:var(--color-base-100); border:1px solid var(--color-line); border-radius:18px; box-shadow:0 10px 28px rgba(37,41,29,0.06); padding:30px 32px; }
+    .card__eyebrow { font-size:11px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:var(--color-sage-500); }
+    .card__title { font-size:30px; font-weight:700; letter-spacing:-0.028em; line-height:1.12; color:var(--color-ink); margin:10px 0 0; }
+    .card__copy { font-size:15px; line-height:1.6; color:var(--color-ink-2); margin:14px 0 0; }
+    .card__actions { margin-top:22px; display:flex; gap:12px; flex-wrap:wrap; }
+
+    .icon-badge { width:44px; height:44px; border-radius:999px; display:grid; place-items:center; margin-bottom:4px; }
+    .icon-badge svg { width:22px; height:22px; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .icon-badge--mute { background:#e3e9ec; } .icon-badge--mute svg { stroke:#4f6b78; }
+    .icon-badge--warn { background:var(--color-error-soft); } .icon-badge--warn svg { stroke:var(--color-error); }
+
+    .notes-strip { background:var(--color-paper); border:1px solid var(--color-line); border-radius:16px; display:grid; gap:12px; grid-template-columns:repeat(2, minmax(0,1fr)); padding:16px; }
+    .note { border-left:3px solid var(--color-sage-500); padding:3px 10px; }
+    .note strong { color:var(--color-ink); display:block; font-size:13px; font-weight:700; }
+    .note span { color:var(--color-ink-2); display:block; font-size:12px; line-height:1.45; margin-top:3px; }
+    @media (max-width:640px){ .notes-strip{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <header>
+      <p class="preview-title__eyebrow">Member App</p>
+      <h1>Stop following (confirmation)</h1>
+      <p>The page a recipient lands on after clicking "Stop following this conversation" in a
+        reply-notification email. Minimal Memba-mark header — no marketing nav.</p>
+      <p style="margin-top:10px"><span class="variant-label">wireframes/conversation-stop-following.html</span></p>
+    </header>
+
+    <!-- success -->
+    <section class="frame">
+      <div class="state-tag">state: success — valid stop-follow token</div>
+      <header class="site-head">
+        <svg class="site-head__mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#5a7050"></rect><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"></path><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="#fff"></path><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="#fff"></path><circle cx="32" cy="15" r="3.7" fill="#d2925a"></circle></svg>
+        <span class="site-head__name">Memba</span>
+      </header>
+      <div class="stage">
+        <div class="card">
+          <div class="icon-badge icon-badge--mute"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/><path d="m3 3 18 18"/></svg></div>
+          <p class="card__eyebrow">Conversation notifications</p>
+          <h2 class="card__title">You've stopped following this conversation</h2>
+          <p class="card__copy">We won't email you new replies to this conversation. If you sign in and visit the conversation later, you can follow it again from Memba.</p>
+          <div class="card__actions">
+            <a class="btn btn-primary" href="#">View the conversation</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- invalid / expired token -->
+    <section class="frame">
+      <div class="state-tag">state: invalid — link not recognised</div>
+      <header class="site-head">
+        <svg class="site-head__mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#5a7050"></rect><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"></path><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="#fff"></path><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="#fff"></path><circle cx="32" cy="15" r="3.7" fill="#d2925a"></circle></svg>
+        <span class="site-head__name">Memba</span>
+      </header>
+      <div class="stage">
+        <div class="card">
+          <div class="icon-badge icon-badge--warn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5"/><path d="M12 16h.01"/></svg></div>
+          <p class="card__eyebrow">Conversation notifications</p>
+          <h2 class="card__title">This stop-following link isn't valid</h2>
+          <p class="card__copy">The link may have already been used, or it isn't recognised. If you still want to stop email replies, open the conversation in Memba and turn off following there.</p>
+          <div class="card__actions">
+            <a class="btn btn-primary" href="#">Go to Memba</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="notes-strip" aria-label="Implementation notes">
+      <div class="note"><strong>Minimal header</strong><span>Memba mark + wordmark only; drop the marketing nav (Sign in / Request access).</span></div>
+      <div class="note"><strong>One-click, signed token</strong><span>Reached without signing in; the signed token scopes the unfollow to one club, conversation, and member.</span></div>
+    </aside>
+  </div>
+</body>
+</html>
