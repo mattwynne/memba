@@ -54,6 +54,20 @@ defmodule MembaWeb.DevTestSupportControllerTest do
     assert Application.get_env(:memba, :messaging_email_delivery_provider) == original_provider
   end
 
+  describe "GET /dev/test-support/stop-follow-url" do
+    test "returns a path with a token scoped to the seeded Drew follow", %{conn: conn} do
+      conn = get(conn, "/dev/test-support/stop-follow-url")
+
+      assert %{"path" => path} = json_response(conn, 200)
+      assert "/messages/conversations/stop-following/" <> token = path
+
+      assert {:ok, scope} = Memba.Messaging.ConversationStopFollowToken.verify(token)
+      assert scope.club_id == "clb_11111111-1111-1111-1111-111111111111"
+      assert scope.conversation_id == "msg_30000000-0000-0000-0000-000000000001"
+      assert scope.member_id == "per_dddddddd-dddd-dddd-dddd-dddddddddddd"
+    end
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

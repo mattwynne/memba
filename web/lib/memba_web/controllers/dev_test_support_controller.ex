@@ -7,6 +7,7 @@ defmodule MembaWeb.DevTestSupportController do
 
   alias Memba.Accounts
   alias Memba.Accounts.SignInToken
+  alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Repo
 
   @projection_versions_table :projection_versions
@@ -71,6 +72,17 @@ defmodule MembaWeb.DevTestSupportController do
     Memba.DevSeeds.deliver_representative_emails()
 
     send_resp(conn, :no_content, "")
+  end
+
+  def stop_follow_url(conn, _params) do
+    {:ok, token} =
+      ConversationStopFollowToken.sign(%{
+        club_id: "clb_11111111-1111-1111-1111-111111111111",
+        conversation_id: "msg_30000000-0000-0000-0000-000000000001",
+        member_id: "per_dddddddd-dddd-dddd-dddd-dddddddddddd"
+      })
+
+    json(conn, %{path: "/messages/conversations/stop-following/#{token}"})
   end
 
   def configure_messaging_email_delivery_provider(conn, %{"provider" => provider_name}) do

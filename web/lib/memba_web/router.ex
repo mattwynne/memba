@@ -156,6 +156,7 @@ defmodule MembaWeb.Router do
 
       post "/reset", DevTestSupportController, :reset_acceptance_state
       post "/seed", DevTestSupportController, :seed
+      get "/stop-follow-url", DevTestSupportController, :stop_follow_url
 
       post "/messaging-delivery-provider",
            DevTestSupportController,

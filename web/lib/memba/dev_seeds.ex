@@ -191,6 +191,7 @@ defmodule Memba.DevSeeds do
       seed_pending_invitation(clubs)
       seed_pending_account_request()
       seed_messages(clubs)
+      seed_conversation_replies(clubs)
 
       IO.puts("Seeded representative Memba data.")
       IO.puts("Reset and seed path: cd web && mix ecto.reset")
@@ -396,6 +397,13 @@ defmodule Memba.DevSeeds do
     end
   end
 
+  @kac_conversation_id "msg_30000000-0000-0000-0000-000000000001"
+  @kac_reply_one_id "msg_30000000-0000-0000-0000-000000000101"
+  @kac_reply_two_id "msg_30000000-0000-0000-0000-000000000102"
+  @benji_person_id "per_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+  @carmen_person_id "per_cccccccc-cccc-cccc-cccc-cccccccccccc"
+  @drew_person_id "per_dddddddd-dddd-dddd-dddd-dddddddddddd"
+
   defp seed_messages(clubs) do
     Enum.each(clubs, fn club ->
       Enum.each(club.messages, fn message ->
@@ -420,6 +428,84 @@ defmodule Memba.DevSeeds do
     end)
 
     await_seeded_messages!(clubs)
+  end
+
+  defp seed_conversation_replies(clubs) do
+    club = Enum.find(clubs, &(&1.key == "kac"))
+
+    post_seed_reply(
+      @kac_reply_one_id,
+      @benji_person_id,
+      "Thanks Alice — I'll bring the spare thermos and a first-aid kit."
+    )
+
+    post_seed_reply(
+      @kac_reply_two_id,
+      @carmen_person_id,
+      "Count me in. I can drive two people from the north end if that helps."
+    )
+
+    # Drew follows after the replies so Drew receives no notification email,
+    # keeping the seeded mailbox deterministic. Drew's follow backs the
+    # stop-following page scene (see the stop-follow-url dev endpoint).
+    follow_seed_conversation(club.club_id, @drew_person_id)
+
+    await_reply_notification_deliveries!([@kac_reply_one_id, @kac_reply_two_id])
+  end
+
+  defp post_seed_reply(reply_message_id, sender_id, body) do
+    if Messaging.get_message(reply_message_id) do
+      :ok
+    else
+      assert_ok!(
+        Messaging.post_message_reply(
+          %{
+            "message_id" => reply_message_id,
+            "conversation_id" => @kac_conversation_id,
+            "sender_id" => sender_id,
+            "body" => body
+          },
+          consistency: :strong
+        ),
+        "post seed reply #{reply_message_id}"
+      )
+    end
+
+    await_read_model!(
+      "seed reply #{reply_message_id} to be queryable via Messaging.get_message/1",
+      fn -> Messaging.get_message(reply_message_id) end
+    )
+  end
+
+  defp follow_seed_conversation(club_id, member_id) do
+    assert_ok!(
+      Messaging.follow_conversation(
+        %{club_id: club_id, conversation_id: @kac_conversation_id, member_id: member_id},
+        consistency: :strong
+      ),
+      "follow seed conversation as #{member_id}"
+    )
+  end
+
+  defp await_reply_notification_deliveries!(reply_message_ids) do
+    Enum.each(reply_message_ids, fn message_id ->
+      await_read_model!(
+        "reply notification deliveries for #{message_id} to reach the local mailbox",
+        fn ->
+          expected = message_id |> Messaging.list_recipient_deliveries() |> length()
+
+          if expected > 0 do
+            Memba.Messaging.EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+          end
+
+          delivered =
+            LocalDeliveryFacts.list()
+            |> Enum.count(&(&1.message_id == message_id))
+
+          expected > 0 and delivered >= expected
+        end
+      )
+    end)
   end
 
   defp report_delivery_statuses!(message) do
