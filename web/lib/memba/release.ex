@@ -17,6 +17,8 @@ defmodule Memba.Release do
           migrated
         end)
     end
+
+    ensure_production_smoke_fixtures!()
   end
 
   def verify_schema! do
@@ -173,6 +175,12 @@ defmodule Memba.Release do
 
     true = Process.unlink(conn)
     true = Process.exit(conn, :shutdown)
+  end
+
+  defp ensure_production_smoke_fixtures! do
+    {:ok, _started} = Application.ensure_all_started(@app)
+    Memba.ProductionSmokeFixtures.ensure!()
+    :ok
   end
 
   defp load_app do
