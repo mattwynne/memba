@@ -46,11 +46,24 @@ case "${1:-}" in
     ;;
 esac
 
+wrapper_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
+
 while IFS= read -r candidate; do
-  if [ "$candidate" != "$repo_root/bin/mix" ]; then
-    real_mix="$candidate"
-    break
+  candidate_path="$(cd "$(dirname "$candidate")" && pwd -P)/$(basename "$candidate")"
+
+  if [ "$candidate_path" = "$wrapper_path" ]; then
+    continue
   fi
+
+  # Agent shells may already have another Memba checkout's ./bin early in PATH.
+  # Do not bounce between two wrapper scripts; keep walking until we find the
+  # real Elixir mix executable from the devenv/asdf toolchain.
+  if grep -q 'cd "$repo_root/web"' "$candidate_path" 2>/dev/null; then
+    continue
+  fi
+
+  real_mix="$candidate"
+  break
 done < <(which -a mix)
 
 if [ -z "$real_mix" ]; then

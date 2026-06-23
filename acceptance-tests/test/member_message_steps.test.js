@@ -645,6 +645,7 @@ test("member send flow opens compose from club home and stores the new message",
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
+  world.projectionBarriers = [];
   world.clubs = {
     [kootenayClubName]: {
       clubId: "club-1",
@@ -665,6 +666,12 @@ test("member send flow opens compose from club home and stores the new message",
     senderName: "Alice",
     subject: "Trip planning night"
   });
+  assert.deepEqual(world.projectionBarriers, [
+    {
+      projectors: ["Memba.Membership.Projectors.Membership"],
+      timeoutMs: 10000
+    }
+  ]);
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
     ["click", "locator", "#member-send-message-link"],
