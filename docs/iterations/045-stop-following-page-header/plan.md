@@ -1,7 +1,7 @@
 # 045 — Stop-following page: minimal header
 
 Date: 2026-06-23
-Status: draft
+Status: validated
 
 ## Goal
 
