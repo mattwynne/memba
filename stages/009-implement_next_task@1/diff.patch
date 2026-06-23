@@ -1,0 +1,807 @@
+diff --git a/docs/iterations/044-conversation-page-alignment/todo.md b/docs/iterations/044-conversation-page-alignment/todo.md
+index 1c59cde..e2868a4 100644
+--- a/docs/iterations/044-conversation-page-alignment/todo.md
++++ b/docs/iterations/044-conversation-page-alignment/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 `PageHTML.message` (`message.html.heex`):
++- [x] 001 `PageHTML.message` (`message.html.heex`):
+ - [ ] 002 `MemberMessageLive.Show` / `MemberMessageDetail`: supply a reply count, per-reply
+ - [ ] 003 When the reply count is zero, render neither the "Replies · N" header nor the reply
+ - [ ] 004 No changes to commands, projections, or follow/reply behaviour.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 9862776..aeff7c3 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -43,12 +43,22 @@ defmodule MembaWeb.PageHTML do
+         <div class="min-w-0 flex-1">
+           <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+             <p class="font-semibold text-base-content">{@entry.sender_name}</p>
+-            <span
+-              data-testid="member-conversation-entry-label"
+-              class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+-            >
+-              {conversation_entry_label(@entry.kind)}
+-            </span>
++            <div class="flex flex-wrap items-center gap-2">
++              <time
++                :if={@entry.kind == :reply and conversation_entry_time_label(@entry)}
++                id={"member-conversation-entry-timestamp-#{@entry.message.message_id}"}
++                datetime={conversation_entry_datetime(@entry)}
++                class="text-xs font-semibold text-ink-2"
++              >
++                {conversation_entry_time_label(@entry)}
++              </time>
++              <span
++                data-testid="member-conversation-entry-label"
++                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
++              >
++                {conversation_entry_label(@entry.kind)}
++              </span>
++            </div>
+           </div>
+           <p
+             id={conversation_entry_body_id(@entry)}
+@@ -104,6 +114,28 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp receipt_group_expanded?(_expanded_groups, _status), do: false
+ 
++  defp delivery_expanded?(assigns) when is_map(assigns) do
++    Map.get(assigns, :delivery_expanded?, false)
++  end
++
++  defp delivery_expanded?(_assigns), do: false
++
++  defp delivery_summary_line(summary) when is_list(summary) do
++    summary
++    |> Enum.map(fn status ->
++      "#{status.count} #{delivery_summary_status_label(status.status)}"
++    end)
++    |> Enum.join(" · ")
++  end
++
++  defp delivery_summary_line(_summary), do: "Delivery details"
++
++  defp delivery_summary_status_label("delivered"), do: "delivered"
++  defp delivery_summary_status_label("sent"), do: "sending"
++  defp delivery_summary_status_label("delivery problem"), do: "problems"
++  defp delivery_summary_status_label(status) when is_binary(status), do: status
++  defp delivery_summary_status_label(_status), do: "unknown"
++
+   defp split_conversation_entries(entries) when is_list(entries) do
+     Enum.split_with(entries, &(&1.kind == :original))
+   end
+@@ -122,6 +154,18 @@ defmodule MembaWeb.PageHTML do
+   defp conversation_entry_label(:original), do: "Original message"
+   defp conversation_entry_label(_kind), do: "Reply"
+ 
++  defp conversation_entry_time_label(%{message: %{inserted_at: %DateTime{} = inserted_at}}) do
++    Calendar.strftime(inserted_at, "%b %d, %I:%M %p UTC")
++  end
++
++  defp conversation_entry_time_label(_entry), do: nil
++
++  defp conversation_entry_datetime(%{message: %{inserted_at: %DateTime{} = inserted_at}}) do
++    DateTime.to_iso8601(inserted_at)
++  end
++
++  defp conversation_entry_datetime(_entry), do: nil
++
+   defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
+ 
+   defp conversation_entry_body_id(%{message: %{message_id: message_id}}) do
+@@ -146,6 +190,18 @@ defmodule MembaWeb.PageHTML do
+   defp member_message_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+ 
++  defp message_sent_date_label(%{inserted_at: %DateTime{} = inserted_at}) do
++    Calendar.strftime(inserted_at, "%b %d, %Y")
++  end
++
++  defp message_sent_date_label(_message), do: nil
++
++  defp message_sent_datetime(%{inserted_at: %DateTime{} = inserted_at}) do
++    DateTime.to_iso8601(inserted_at)
++  end
++
++  defp message_sent_datetime(_message), do: nil
++
+   defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
+   defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
+   defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index b47c4e2..c98dbc0 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -28,6 +28,12 @@
+       </h1>
+       <p id="member-message-meta" class="mt-4 text-sm leading-6 text-ink-2">
+         From <span class="font-semibold text-base-content">{@sender_name}</span>
++        <%= if message_sent_date_label(@message) do %>
++          · sent
++          <time datetime={message_sent_datetime(@message)} class="font-semibold text-base-content">
++            {message_sent_date_label(@message)}
++          </time>
++        <% end %>
+         · sent to
+         <span class="font-semibold text-base-content">
+           {@member_email_delivery_count}
+@@ -42,6 +48,7 @@
+       class="mt-8 space-y-5"
+     >
+       <% {original_entries, reply_entries} = split_conversation_entries(@conversation_entries) %>
++      <% reply_count = length(reply_entries) %>
+ 
+       <div id="member-conversation-original" class="space-y-4">
+         <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
+@@ -102,30 +109,42 @@
+             </div>
+           </div>
+ 
+-          <.button
+-            :if={@can_follow_conversation and !@following_conversation}
+-            id="member-conversation-follow-button"
+-            type="button"
+-            phx-click="follow_conversation"
+-            variant="primary"
+-            class="w-full shrink-0 sm:w-auto"
++          <label
++            for="member-conversation-follow-toggle"
++            class="flex shrink-0 cursor-pointer items-center gap-3 rounded-2xl border border-sage-200 bg-base-100 px-4 py-3 shadow-sm"
+           >
+-            <.icon name="hero-bell" class="size-4" /> Follow conversation
+-          </.button>
+-
+-          <.button
+-            :if={@can_follow_conversation and @following_conversation}
+-            id="member-conversation-unfollow-button"
+-            type="button"
+-            phx-click="unfollow_conversation"
+-            variant="secondary"
+-            class="w-full shrink-0 sm:w-auto"
+-          >
+-            <.icon name="hero-bell-slash" class="size-4" /> Stop following
+-          </.button>
++            <span class="text-sm font-semibold text-base-content">
++              {if(@following_conversation, do: "Following", else: "Follow")}
++            </span>
++            <input
++              id="member-conversation-follow-toggle"
++              type="checkbox"
++              class="toggle toggle-primary"
++              checked={@following_conversation}
++              disabled={!@can_follow_conversation}
++              phx-click={
++                if(@following_conversation,
++                  do: "unfollow_conversation",
++                  else: "follow_conversation"
++                )
++              }
++              aria-label="Follow this conversation"
++            />
++          </label>
+         </div>
+       </section>
+ 
++      <h2
++        id="member-conversation-replies-heading"
++        class="pt-3 text-base font-semibold text-base-content"
++      >
++        Replies · {reply_count}
++      </h2>
++
++      <div id="member-conversation-replies" class="space-y-4">
++        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
++      </div>
++
+       <section
+         id="member-message-reply-composer"
+         class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
+@@ -136,9 +155,6 @@
+               <.icon name="hero-chat-bubble-left-right" class="size-5 text-primary" />
+               Reply to this conversation
+             </h2>
+-            <p class="mt-1 text-sm leading-6 text-ink-2">
+-              Your reply inherits the subject and is emailed to current followers except you.
+-            </p>
+           </div>
+           <p
+             :if={@current_member}
+@@ -203,191 +219,236 @@
+           </div>
+         </.form>
+       </section>
+-
+-      <div id="member-conversation-replies" class="space-y-4">
+-        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
+-      </div>
+     </section>
+ 
+-    <section id="member-receipt-summary" class="mt-8">
+-      <div class="rounded-3xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
+-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+-          <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
+-            <.icon name="hero-users" class="size-5 text-primary" /> Message delivery
+-          </h2>
+-          <p
+-            id="member-receipts-summary"
+-            data-receipt-count={@member_email_delivery_count}
+-            class="w-fit rounded-full border border-base-300 bg-base-200 px-3 py-1 text-sm font-semibold text-ink-2"
+-          >
+-            {@member_email_delivery_count} member{if(@member_email_delivery_count == 1,
+-              do: "",
+-              else: "s"
+-            )}
+-          </p>
+-        </div>
++    <% delivery_expanded = delivery_expanded?(assigns) %>
+ 
+-        <div
+-          id="member-receipt-summary-bar"
+-          class="mt-5 flex h-3.5 overflow-hidden rounded-full bg-base-200 ring-1 ring-inset ring-base-300"
+-          aria-hidden="true"
+-        >
+-          <span
+-            :for={status <- @member_email_delivery_summary}
+-            data-testid="member-receipt-summary-bar-segment"
+-            data-receipt-status={status.status}
+-            data-receipt-count={status.count}
+-            data-receipt-percentage={status.percentage}
+-            class={["block h-full", status_bg_class(status.status)]}
+-            style={receipt_bar_width(status)}
+-          />
+-        </div>
+-
+-        <div id="member-receipt-summary-legend" class="mt-5 grid gap-3 sm:grid-cols-2">
+-          <div
+-            :for={status <- @member_email_delivery_summary}
+-            data-testid="member-receipt-summary-status"
+-            data-receipt-status={status.status}
+-            data-receipt-count={status.count}
+-            data-receipt-percentage={status.percentage}
+-            class="flex items-center gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3"
+-          >
+-            <span class={["size-2.5 rounded-[0.2rem]", status_bg_class(status.status)]} />
+-            <span class="min-w-0 flex-1 text-sm text-ink-2">
+-              <span class="block font-semibold text-base-content">
+-                {status.status_label}
+-              </span>
+-              <span class="block text-xs">{status.description}</span>
+-            </span>
+-            <span class="font-mono text-sm font-semibold text-base-content">
+-              {status.count}
++    <section
++      id="member-delivery-disclosure"
++      data-expanded={to_string(delivery_expanded)}
++      class="mt-8 rounded-3xl border border-base-300 bg-base-100 shadow-sm"
++    >
++      <button
++        id="member-delivery-toggle"
++        type="button"
++        phx-click="toggle_delivery"
++        aria-expanded={to_string(delivery_expanded)}
++        aria-controls="member-delivery-detail"
++        class="flex w-full flex-col gap-4 p-5 text-left transition duration-200 hover:bg-base-200 sm:flex-row sm:items-center sm:justify-between sm:p-6"
++      >
++        <span class="flex min-w-0 items-center gap-3">
++          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
++            <.icon name="hero-users" class="size-5" />
++          </span>
++          <span class="min-w-0">
++            <span class="block text-base font-semibold text-base-content">
++              Message delivery
+             </span>
+-            <span class="font-mono text-xs font-semibold text-ink-2">
+-              {status.percentage}%
++            <span
++              id="member-delivery-collapsed-summary"
++              class="mt-1 block text-sm leading-6 text-ink-2"
++            >
++              {delivery_summary_line(@member_email_delivery_summary)}
+             </span>
+-          </div>
+-        </div>
+-      </div>
+-    </section>
+-
+-    <section id="member-receipts-section" class="mt-8">
+-      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+-        <div>
+-          <h2 class="text-base font-semibold text-base-content">
+-            Members by delivery status
+-          </h2>
+-          <p class="mt-1 text-sm text-ink-2">
+-            Delivered messages are shown first. Messages still sending or not delivered are grouped below.
+-          </p>
+-        </div>
+-      </div>
++          </span>
++        </span>
++        <span class="flex items-center gap-3 text-sm font-semibold text-ink-2">
++          <span>
++            {if(delivery_expanded, do: "Hide delivery detail", else: "Show delivery detail")}
++          </span>
++          <.icon
++            name={if(delivery_expanded, do: "hero-chevron-up", else: "hero-chevron-down")}
++            class="size-4"
++          />
++        </span>
++      </button>
+ 
+-      <div id="member-receipts" class="mt-5 space-y-3">
+-        <p
+-          :if={@member_email_delivery_groups == []}
+-          id="member-receipts-empty"
+-          class="rounded-2xl border border-dashed border-base-300 bg-base-100 p-5 text-sm text-ink-2"
+-        >
+-          Memba has not prepared the delivery list for this message yet. Check again in a moment.
+-        </p>
++      <div
++        id="member-delivery-detail"
++        aria-hidden={to_string(!delivery_expanded)}
++        class="border-t border-base-300"
++      >
++        <section id="member-receipt-summary" class="p-5 sm:p-6">
++          <div class="rounded-3xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
++            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
++              <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
++                <.icon name="hero-users" class="size-5 text-primary" /> Message delivery
++              </h2>
++              <p
++                id="member-receipts-summary"
++                data-receipt-count={@member_email_delivery_count}
++                class="w-fit rounded-full border border-base-300 bg-base-200 px-3 py-1 text-sm font-semibold text-ink-2"
++              >
++                {@member_email_delivery_count} member{if(@member_email_delivery_count == 1,
++                  do: "",
++                  else: "s"
++                )}
++              </p>
++            </div>
+ 
+-        <section
+-          :for={group <- @member_email_delivery_groups}
+-          id={"member-receipt-group-#{status_slug(group.status)}"}
+-          data-testid="member-receipt-group"
+-          data-receipt-status={group.status}
+-          class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+-        >
+-          <header>
+-            <.button
+-              type="button"
+-              id={"member-receipt-group-toggle-#{status_slug(group.status)}"}
+-              phx-click="toggle_receipt_group"
+-              phx-value-status={group.status}
+-              aria-expanded={
+-                to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
+-              }
+-              aria-controls={"member-receipts-#{status_slug(group.status)}"}
+-              variant="ghost"
+-              class="h-auto min-h-0 w-full justify-start gap-3 rounded-none px-5 py-4 text-left font-normal normal-case hover:bg-base-200"
++            <div
++              id="member-receipt-summary-bar"
++              class="mt-5 flex h-3.5 overflow-hidden rounded-full bg-base-200 ring-1 ring-inset ring-base-300"
++              aria-hidden="true"
+             >
+-              <span class={[
+-                "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
+-                status_tint_class(group.status)
+-              ]}>
+-                <.icon name={group.status_icon} class="size-5" />
+-              </span>
+-              <div class="min-w-0 flex-1">
+-                <h3 class="font-semibold text-base-content">{group.status_label}</h3>
+-                <p class="mt-0.5 text-sm text-ink-2">{group.description}</p>
+-              </div>
+-              <div class="flex items-center gap-3">
+-                <span
+-                  data-testid="receipt-group-count"
+-                  class="font-mono text-sm font-semibold text-base-content"
+-                >
+-                  {group.count}
++              <span
++                :for={status <- @member_email_delivery_summary}
++                data-testid="member-receipt-summary-bar-segment"
++                data-receipt-status={status.status}
++                data-receipt-count={status.count}
++                data-receipt-percentage={status.percentage}
++                class={["block h-full", status_bg_class(status.status)]}
++                style={receipt_bar_width(status)}
++              />
++            </div>
++
++            <div id="member-receipt-summary-legend" class="mt-5 grid gap-3 sm:grid-cols-2">
++              <div
++                :for={status <- @member_email_delivery_summary}
++                data-testid="member-receipt-summary-status"
++                data-receipt-status={status.status}
++                data-receipt-count={status.count}
++                data-receipt-percentage={status.percentage}
++                class="flex items-center gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3"
++              >
++                <span class={["size-2.5 rounded-[0.2rem]", status_bg_class(status.status)]} />
++                <span class="min-w-0 flex-1 text-sm text-ink-2">
++                  <span class="block font-semibold text-base-content">
++                    {status.status_label}
++                  </span>
++                  <span class="block text-xs">{status.description}</span>
+                 </span>
+-                <span
+-                  data-testid="receipt-group-percentage"
+-                  class="font-mono text-xs font-semibold text-ink-2"
+-                >
+-                  {group.percentage}%
++                <span class="font-mono text-sm font-semibold text-base-content">
++                  {status.count}
++                </span>
++                <span class="font-mono text-xs font-semibold text-ink-2">
++                  {status.percentage}%
+                 </span>
+-                <.icon
+-                  name={
+-                    if(receipt_group_expanded?(@expanded_receipt_groups, group.status),
+-                      do: "hero-chevron-up",
+-                      else: "hero-chevron-down"
+-                    )
+-                  }
+-                  class="size-4 text-ink-2"
+-                />
+               </div>
+-            </.button>
+-          </header>
++            </div>
++          </div>
++        </section>
+ 
+-          <div
+-            :if={receipt_group_expanded?(@expanded_receipt_groups, group.status)}
+-            id={"member-receipts-#{status_slug(group.status)}"}
+-            class="divide-y divide-base-300 border-t border-base-300 px-5 py-1"
+-          >
+-            <div
+-              :for={receipt <- group.receipts}
+-              id={"member-receipt-#{receipt.recipient_id}"}
+-              data-testid="member-receipt"
+-              data-recipient-id={receipt.recipient_id}
+-              data-recipient-name={receipt.recipient_name}
+-              data-receipt-status={receipt.status}
+-              class="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
++        <section id="member-receipts-section" class="px-5 pb-5 sm:px-6 sm:pb-6">
++          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
++            <div>
++              <h2 class="text-base font-semibold text-base-content">
++                Members by delivery status
++              </h2>
++              <p class="mt-1 text-sm text-ink-2">
++                Delivered messages are shown first. Messages still sending or not delivered are grouped below.
++              </p>
++            </div>
++          </div>
++
++          <div id="member-receipts" class="mt-5 space-y-3">
++            <p
++              :if={@member_email_delivery_groups == []}
++              id="member-receipts-empty"
++              class="rounded-2xl border border-dashed border-base-300 bg-base-100 p-5 text-sm text-ink-2"
+             >
+-              <div class="flex min-w-0 items-center gap-3">
+-                <span class={[
+-                  "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1 ring-inset",
+-                  status_tint_class(receipt.status)
+-                ]}>
+-                  {receipt_recipient_initial(receipt.recipient_name)}
+-                </span>
+-                <p class="truncate font-medium text-base-content">
+-                  {receipt.recipient_name}
+-                </p>
+-              </div>
+-              <span class="inline-flex w-fit items-center gap-2">
+-                <.icon
+-                  name={receipt.status_icon}
+-                  data-testid="receipt-status-icon"
+-                  data-icon-name={receipt.status_icon}
+-                  class={["size-4", status_text_class(receipt.status)]}
+-                />
+-                <.status_badge
+-                  data-testid="receipt-status"
++              Memba has not prepared the delivery list for this message yet. Check again in a moment.
++            </p>
++
++            <section
++              :for={group <- @member_email_delivery_groups}
++              id={"member-receipt-group-#{status_slug(group.status)}"}
++              data-testid="member-receipt-group"
++              data-receipt-status={group.status}
++              class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
++            >
++              <header>
++                <.button
++                  type="button"
++                  id={"member-receipt-group-toggle-#{status_slug(group.status)}"}
++                  phx-click="toggle_receipt_group"
++                  phx-value-status={group.status}
++                  aria-expanded={
++                    to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
++                  }
++                  aria-controls={"member-receipts-#{status_slug(group.status)}"}
++                  variant="ghost"
++                  class="h-auto min-h-0 w-full justify-start gap-3 rounded-none px-5 py-4 text-left font-normal normal-case hover:bg-base-200"
++                >
++                  <span class={[
++                    "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
++                    status_tint_class(group.status)
++                  ]}>
++                    <.icon name={group.status_icon} class="size-5" />
++                  </span>
++                  <div class="min-w-0 flex-1">
++                    <h3 class="font-semibold text-base-content">{group.status_label}</h3>
++                    <p class="mt-0.5 text-sm text-ink-2">{group.description}</p>
++                  </div>
++                  <div class="flex items-center gap-3">
++                    <span
++                      data-testid="receipt-group-count"
++                      class="font-mono text-sm font-semibold text-base-content"
++                    >
++                      {group.count}
++                    </span>
++                    <span
++                      data-testid="receipt-group-percentage"
++                      class="font-mono text-xs font-semibold text-ink-2"
++                    >
++                      {group.percentage}%
++                    </span>
++                    <.icon
++                      name={
++                        if(receipt_group_expanded?(@expanded_receipt_groups, group.status),
++                          do: "hero-chevron-up",
++                          else: "hero-chevron-down"
++                        )
++                      }
++                      class="size-4 text-ink-2"
++                    />
++                  </div>
++                </.button>
++              </header>
++
++              <div
++                :if={receipt_group_expanded?(@expanded_receipt_groups, group.status)}
++                id={"member-receipts-#{status_slug(group.status)}"}
++                class="divide-y divide-base-300 border-t border-base-300 px-5 py-1"
++              >
++                <div
++                  :for={receipt <- group.receipts}
++                  id={"member-receipt-#{receipt.recipient_id}"}
++                  data-testid="member-receipt"
++                  data-recipient-id={receipt.recipient_id}
++                  data-recipient-name={receipt.recipient_name}
+                   data-receipt-status={receipt.status}
+-                  aria-label={"Delivery status for #{receipt.recipient_name}: #{receipt.status_label}"}
+-                  label={receipt.status_label}
+-                  tone={receipt.status_tone}
+-                />
+-              </span>
+-            </div>
++                  class="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
++                >
++                  <div class="flex min-w-0 items-center gap-3">
++                    <span class={[
++                      "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1 ring-inset",
++                      status_tint_class(receipt.status)
++                    ]}>
++                      {receipt_recipient_initial(receipt.recipient_name)}
++                    </span>
++                    <p class="truncate font-medium text-base-content">
++                      {receipt.recipient_name}
++                    </p>
++                  </div>
++                  <span class="inline-flex w-fit items-center gap-2">
++                    <.icon
++                      name={receipt.status_icon}
++                      data-testid="receipt-status-icon"
++                      data-icon-name={receipt.status_icon}
++                      class={["size-4", status_text_class(receipt.status)]}
++                    />
++                    <.status_badge
++                      data-testid="receipt-status"
++                      data-receipt-status={receipt.status}
++                      aria-label={"Delivery status for #{receipt.recipient_name}: #{receipt.status_label}"}
++                      label={receipt.status_label}
++                      tone={receipt.status_tone}
++                    />
++                  </span>
++                </div>
++              </div>
++            </section>
+           </div>
+         </section>
+       </div>
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+index 45b3723..661f1b7 100644
+--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -120,11 +120,13 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              "Follow this conversation to receive any new replies"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
+-    refute has_element?(view, "#member-conversation-unfollow-button")
++    assert has_element?(
++             view,
++             "#member-conversation-follow-toggle.toggle.toggle-primary:not([checked])"
++           )
+ 
+     view
+-    |> element("#member-conversation-follow-button")
++    |> element("#member-conversation-follow-toggle")
+     |> render_click()
+ 
+     assert Messaging.following_conversation?(message.message_id, bob.person_id)
+@@ -135,11 +137,10 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              "You’re following this conversation"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-unfollow-button", "Stop following")
+-    refute has_element?(view, "#member-conversation-follow-button")
++    assert has_element?(view, "#member-conversation-follow-toggle.toggle.toggle-primary[checked]")
+ 
+     view
+-    |> element("#member-conversation-unfollow-button")
++    |> element("#member-conversation-follow-toggle")
+     |> render_click()
+ 
+     refute Messaging.following_conversation?(message.message_id, bob.person_id)
+@@ -149,8 +150,10 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
+-    refute has_element?(view, "#member-conversation-unfollow-button")
++    assert has_element?(
++             view,
++             "#member-conversation-follow-toggle.toggle.toggle-primary:not([checked])"
++           )
+   end
+ 
+   test "former members cannot reach the in-app follow control", %{conn: conn} do
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 11817d9..3760dcc 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -108,12 +108,17 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+         club_id: alice.club_id
+       )
+ 
++    sent_at = ~U[2026-06-03 08:00:00.000000Z]
++    first_reply_at = ~U[2026-06-03 09:14:00.000000Z]
++    second_reply_at = ~U[2026-06-03 09:40:00.000000Z]
++
+     message =
+       create_message(
+         club_id: alice.club_id,
+         sender_id: alice.person_id,
+         subject: "Trip planning night",
+-        body: "Bring your maps."
++        body: "Bring your maps.",
++        inserted_at: sent_at
+       )
+ 
+     first_reply =
+@@ -123,7 +128,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+         conversation_id: message.message_id,
+         reply_to_message_id: message.message_id,
+         subject: "Trip planning night",
+-        body: "I'll bring snacks."
++        body: "I'll bring snacks.",
++        inserted_at: first_reply_at
+       )
+ 
+     second_reply =
+@@ -133,7 +139,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+         conversation_id: message.message_id,
+         reply_to_message_id: message.message_id,
+         subject: "Trip planning night",
+-        body: "I can drive."
++        body: "I can drive.",
++        inserted_at: second_reply_at
+       )
+ 
+     {:ok, view, _html} =
+@@ -143,6 +150,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+     assert has_element?(view, "#member-conversation[data-message-count='3']")
+ 
++    assert has_element?(
++             view,
++             "#member-message-meta time[datetime='#{DateTime.to_iso8601(sent_at)}']",
++             "Jun 03, 2026"
++           )
++
++    assert has_element?(view, "#member-conversation-replies-heading", "Replies · 2")
++
+     assert has_element?(
+              view,
+              "#member-conversation-original " <>
+@@ -161,6 +176,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "I'll bring snacks."
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-conversation-entry-timestamp-#{first_reply.message_id}" <>
++               "[datetime='#{DateTime.to_iso8601(first_reply_at)}']",
++             "Jun 03, 09:14 AM UTC"
++           )
++
+     assert has_element?(
+              view,
+              "#member-conversation-replies " <>
+@@ -170,6 +192,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "I can drive."
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-conversation-entry-timestamp-#{second_reply.message_id}" <>
++               "[datetime='#{DateTime.to_iso8601(second_reply_at)}']",
++             "Jun 03, 09:40 AM UTC"
++           )
++
+     assert has_element?(
+              view,
+              "#member-message-reply-from[data-sender-id='#{bob.person_id}']",
+@@ -179,6 +208,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(view, "#member-message-reply-form")
+     assert has_element?(view, "#member-message-reply-body-input")
+     refute has_element?(view, "#member-message-reply-subject-input")
++
++    refute has_element?(
++             view,
++             "#member-message-reply-composer",
++             "Your reply inherits the subject"
++           )
++
++    html = render(view)
++    replies_position = html_position!(html, ~s(id="member-conversation-replies"))
++    composer_position = html_position!(html, ~s(id="member-message-reply-composer"))
++
++    assert replies_position < composer_position
+   end
+ 
+   test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
+@@ -289,6 +330,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       |> live(~p"/messages/#{message.message_id}")
+ 
+     assert has_element?(view, "#member-receipt-summary", "Message delivery")
++    assert has_element?(view, "#member-delivery-disclosure[data-expanded='false']")
++    assert has_element?(view, "#member-delivery-toggle[aria-expanded='false']")
++    assert has_element?(view, "#member-delivery-detail[aria-hidden='true']")
++    assert has_element?(view, "#member-delivery-collapsed-summary", "2 delivered")
++    assert has_element?(view, "#member-delivery-collapsed-summary", "1 sending")
++    assert has_element?(view, "#member-delivery-collapsed-summary", "0 problems")
+     assert has_element?(view, "#member-receipt-summary-bar")
+ 
+     assert has_element?(
+@@ -686,7 +733,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+       reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+       subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
++      body: Keyword.get(attrs, :body, "Message body"),
++      inserted_at: Keyword.get(attrs, :inserted_at),
++      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
+     })
+   end
+ 
+@@ -712,4 +761,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       reason: Keyword.fetch!(attrs, :reason)
+     })
+   end
++
++  defp html_position!(html, needle) do
++    case :binary.match(html, needle) do
++      {position, _length} -> position
++      :nomatch -> flunk("Expected rendered HTML to include #{needle}")
++    end
++  end
+ end
