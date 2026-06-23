@@ -8,6 +8,7 @@ const nelsonClubName = "Nelson Paddling Club";
 const maxClubSlugLength = 32;
 const defaultProjectionPollIntervalMs = 250;
 const defaultProjectionTimeoutMs = 10000;
+const memberMessageSetupProjectors = ["Memba.Membership.Projectors.Membership"];
 
 function appUrl(baseUrl, path) {
   return new URL(path, `${baseUrl}/`).toString();
@@ -1054,6 +1055,8 @@ async function sendMemberMessageToKootenayMembers(
   ensureState(world);
 
   const body = `${subject} details.`;
+
+  await waitForProjectionBarrier(world, memberMessageSetupProjectors);
 
   const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
