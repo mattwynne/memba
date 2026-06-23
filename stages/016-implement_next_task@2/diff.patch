@@ -1,0 +1,413 @@
+diff --git a/docs/iterations/043-conversations-overview-grouping/todo.md b/docs/iterations/043-conversations-overview-grouping/todo.md
+index 00a3174..7c68856 100644
+--- a/docs/iterations/043-conversations-overview-grouping/todo.md
++++ b/docs/iterations/043-conversations-overview-grouping/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add `Messaging.list_conversations_for_club/1`: a read-model query over
+-- [ ] 002 Update `MemberDashboardPresentation` to build its message rows from
++- [x] 002 Update `MemberDashboardPresentation` to build its message rows from
+ - [ ] 003 Update `PageHTML.club` (`club.html.heex`) `#member-message-list` markup to the
+ - [ ] 004 Keep the row link target unchanged (the conversation/message-detail route).
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 1c98cd0..492701a 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -7,16 +7,11 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   stays readable and the dashboard data model can be unit-tested directly.
+   """
+ 
+-  import Ecto.Query
+-
+   alias Memba.Accounts
+   alias Memba.ID
+   alias Memba.Membership
+   alias Memba.Membership.Authorization
+   alias Memba.Messaging
+-  alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Repo
+-  alias MembaWeb.MemberEmailDeliveryPresentation
+ 
+   @doc """
+   Load dashboard assigns for a signed-in active member of the selected club.
+@@ -98,71 +93,51 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp can_manage_members?(_club_id, _current_member), do: false
+ 
+   defp load_messages(club_id) do
+-    club_id
+-    |> Messaging.list_messages_for_club()
+-    |> Enum.reverse()
++    Messaging.list_conversations_for_club(club_id)
+   end
+ 
+   @doc """
+-  Shapes recent-message projection rows for dashboard rendering.
++  Shapes recent conversation rows for dashboard rendering.
+ 
+-  The row data keeps member-facing status vocabulary from
+-  `MemberEmailDeliveryPresentation`, adds compact mini-bar segment data, and uses the
+-  message projection `inserted_at` value for dashboard "when" metadata. Rows
+-  without `inserted_at` intentionally leave the label empty instead of inventing
+-  placeholder copy.
++  The row data uses the root message's originator and `inserted_at` value, folds
++  replies into a count/latest-replier summary, and intentionally omits delivery
++  glance fields from the club home. Rows without `inserted_at` leave the label
++  empty instead of inventing placeholder copy.
+   """
+-  def present_message_rows(messages, member_names_by_id)
+-      when is_list(messages) and is_map(member_names_by_id) do
+-    receipts_by_message_id = receipts_by_message_id(messages)
+-
+-    Enum.map(messages, fn message ->
+-      receipt_model =
+-        message.message_id
+-        |> then(&Map.get(receipts_by_message_id, &1, []))
+-        |> MemberEmailDeliveryPresentation.present_receipts()
+-
+-      sender_name = Map.get(member_names_by_id, message.sender_id, "Club member")
+-      receipt_count = receipt_model.total_count
++  def present_message_rows(conversations, member_names_by_id)
++      when is_list(conversations) and is_map(member_names_by_id) do
++    Enum.map(conversations, fn conversation ->
++      message_id = conversation.message_id
++      conversation_id = Map.get(conversation, :conversation_id, message_id) || message_id
++      reply_count = Map.get(conversation, :reply_count, 0) || 0
++      latest_replier_id = Map.get(conversation, :latest_replier_id)
++      originator_name = Map.get(member_names_by_id, conversation.sender_id, "Club member")
++      originator_initials = initials(originator_name)
++      latest_replier_name = latest_replier_name(conversation)
+ 
+       %{
+-        message: message,
+-        message_id: message.message_id,
+-        sender_id: message.sender_id,
+-        sender_name: sender_name,
+-        sender_initials: initials(sender_name),
+-        subject: message.subject,
+-        body: message.body,
+-        sent_at: message.inserted_at,
+-        sent_at_label: sent_at_label(message.inserted_at),
+-        receipt_count: receipt_count,
+-        receipt_summary: receipt_model.summary,
+-        status_counts: status_counts(receipt_model.summary),
+-        receipt_segments: receipt_segments(receipt_model.summary),
+-        receipt_glance_copy: receipt_glance_copy(receipt_model.summary, receipt_count),
+-        has_receipt_glance?: receipt_count > 0,
+-        receipt_groups: receipt_model.groups
++        message: Map.get(conversation, :message),
++        message_id: message_id,
++        conversation_id: conversation_id,
++        sender_id: conversation.sender_id,
++        sender_name: originator_name,
++        sender_initials: originator_initials,
++        originator_id: conversation.sender_id,
++        originator_name: originator_name,
++        originator_initials: originator_initials,
++        subject: conversation.subject,
++        body: conversation.body,
++        sent_at: conversation.inserted_at,
++        sent_at_label: sent_at_label(conversation.inserted_at),
++        reply_count: reply_count,
++        latest_replier_id: latest_replier_id,
++        latest_replier_name: latest_replier_name,
++        reply_activity_label: reply_activity_label(reply_count, latest_replier_name)
+       }
+     end)
+   end
+ 
+-  def present_message_rows(_messages, _member_names_by_id), do: []
+-
+-  defp receipts_by_message_id([]), do: %{}
+-
+-  defp receipts_by_message_id(messages) do
+-    message_ids = Enum.map(messages, & &1.message_id)
+-
+-    MemberEmailDelivery
+-    |> where([receipt], receipt.message_id in ^message_ids)
+-    |> order_by([receipt],
+-      asc: receipt.message_id,
+-      asc: receipt.recipient_name,
+-      asc: receipt.recipient_id
+-    )
+-    |> Repo.all()
+-    |> Enum.group_by(& &1.message_id)
+-  end
++  def present_message_rows(_conversations, _member_names_by_id), do: []
+ 
+   defp present_member(member) do
+     initials = initials(member.name)
+@@ -185,36 +160,20 @@ defmodule MembaWeb.MemberDashboardPresentation do
+ 
+   defp initials(_name), do: "?"
+ 
+-  defp status_counts(summary) do
+-    Map.new(summary, fn status -> {status.status, status.count} end)
+-  end
++  defp latest_replier_name(%{latest_replier_name: name}) when is_binary(name), do: name
++  defp latest_replier_name(_conversation), do: nil
+ 
+-  defp receipt_segments(summary) do
+-    summary
+-    |> Enum.filter(&(&1.count > 0))
+-    |> Enum.map(fn status ->
+-      %{
+-        status: status.status,
+-        status_label: status.status_label,
+-        count: status.count,
+-        width_percentage: status.percentage
+-      }
+-    end)
+-  end
+-
+-  defp receipt_glance_copy(_summary, 0), do: nil
++  defp reply_activity_label(0, _latest_replier_name), do: "No replies yet"
+ 
+-  defp receipt_glance_copy(summary, total_count) do
+-    delivered_count =
+-      summary
+-      |> Enum.find_value(0, fn
+-        %{status: "delivered", count: count} -> count
+-        _status -> false
+-      end)
++  defp reply_activity_label(reply_count, latest_replier_name) when is_integer(reply_count) do
++    reply_word = if reply_count == 1, do: "reply", else: "replies"
++    latest_replier_name = latest_replier_name || "Club member"
+ 
+-    "#{delivered_count} of #{total_count} delivered"
++    "#{reply_count} #{reply_word} · latest from #{latest_replier_name}"
+   end
+ 
++  defp reply_activity_label(_reply_count, _latest_replier_name), do: "No replies yet"
++
+   defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")
+   defp sent_at_label(_sent_at), do: nil
+ end
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 31b8864..6505a3d 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -7,7 +7,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+   alias Memba.Messaging.Projections.Message
+   alias MembaWeb.MemberDashboardPresentation
+ 
+-  test "loads selected-club dashboard assigns with member, message, sender, and receipt row data" do
++  test "loads selected-club dashboard assigns with grouped conversation row data" do
+     alice =
+       create_active_member(
+         email: "Alice@Example.com",
+@@ -23,6 +23,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         club_id: alice.club_id
+       )
+ 
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Canoe",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
+     _other_club_member =
+       create_active_member(
+         email: "cora@example.com",
+@@ -32,15 +40,15 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+ 
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+ 
+-    older_message =
++    older_root =
+       create_message(
+         club_id: alice.club_id,
+         sender_id: alice.person_id,
+-        subject: "Earlier update",
++        subject: "Saturday ridge walk",
+         inserted_at: DateTime.add(now, -60, :second)
+       )
+ 
+-    newer_message =
++    newer_root =
+       create_message(
+         club_id: alice.club_id,
+         sender_id: bob.person_id,
+@@ -48,15 +56,35 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         inserted_at: now
+       )
+ 
++    _first_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: older_root.message_id,
++        reply_to_message_id: older_root.message_id,
++        subject: older_root.subject,
++        inserted_at: DateTime.add(now, 30, :second)
++      )
++
++    latest_reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: carol.person_id,
++        conversation_id: older_root.message_id,
++        reply_to_message_id: older_root.message_id,
++        subject: older_root.subject,
++        inserted_at: DateTime.add(now, 60, :second)
++      )
++
+     create_member_email_delivery(
+-      message_id: newer_message.message_id,
++      message_id: older_root.message_id,
+       recipient_id: alice.person_id,
+       recipient_name: "Alice Adams",
+       status: "delivered"
+     )
+ 
+     create_member_email_delivery(
+-      message_id: newer_message.message_id,
++      message_id: older_root.message_id,
+       recipient_id: bob.person_id,
+       recipient_name: "Bob Builder",
+       status: "sent"
+@@ -74,70 +102,70 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.current_member.id == alice.person_id
+     assert assigns.current_member.name == "Alice Adams"
+     assert assigns.current_member.initials == "AA"
+-    assert assigns.active_member_count == 2
++    assert assigns.active_member_count == 3
+ 
+     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
+              {alice.person_id, "Alice Adams", "AA"},
+-             {bob.person_id, "Bob Builder", "BB"}
++             {bob.person_id, "Bob Builder", "BB"},
++             {carol.person_id, "Carol Canoe", "CC"}
+            ]
+ 
+     assert assigns.member_names_by_id == %{
+              alice.person_id => "Alice Adams",
+-             bob.person_id => "Bob Builder"
++             bob.person_id => "Bob Builder",
++             carol.person_id => "Carol Canoe"
+            }
+ 
+     assert Enum.map(assigns.messages, & &1.message_id) == [
+-             newer_message.message_id,
+-             older_message.message_id
++             newer_root.message_id,
++             older_root.message_id
+            ]
+ 
+     assert [newer_row, older_row] = assigns.message_rows
+-    assert newer_row.message_id == newer_message.message_id
++    assert newer_row.message_id == newer_root.message_id
++    assert newer_row.conversation_id == newer_root.message_id
+     assert newer_row.sender_id == bob.person_id
+-    assert newer_row.sender_name == "Bob Builder"
+-    assert newer_row.sender_initials == "BB"
+-    assert newer_row.sent_at == newer_message.inserted_at
+-    assert newer_row.sent_at_label == Calendar.strftime(newer_message.inserted_at, "%b %d, %Y")
+-    assert newer_row.receipt_count == 2
+-
+-    assert newer_row.status_counts == %{
+-             "delivered" => 1,
+-             "sent" => 1,
+-             "delivery problem" => 0
+-           }
+-
+-    assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
+-             {"delivered", 1, 50},
+-             {"sent", 1, 50},
+-             {"delivery problem", 0, 0}
+-           ]
+-
+-    assert Enum.map(
+-             newer_row.receipt_segments,
+-             &{&1.status, &1.status_label, &1.count, &1.width_percentage}
+-           ) == [
+-             {"delivered", "Delivered", 1, 50},
+-             {"sent", "Sending", 1, 50}
+-           ]
+-
+-    assert newer_row.receipt_glance_copy == "1 of 2 delivered"
+-    assert newer_row.has_receipt_glance?
+-
+-    assert older_row.message_id == older_message.message_id
+-    assert older_row.sender_name == "Alice Adams"
+-    assert older_row.sender_initials == "AA"
+-    assert older_row.sent_at == older_message.inserted_at
+-    assert older_row.sent_at_label == Calendar.strftime(older_message.inserted_at, "%b %d, %Y")
+-    assert older_row.receipt_count == 0
+-    assert older_row.receipt_segments == []
+-    assert older_row.receipt_glance_copy == nil
+-    refute older_row.has_receipt_glance?
++    assert newer_row.originator_id == bob.person_id
++    assert newer_row.originator_name == "Bob Builder"
++    assert newer_row.originator_initials == "BB"
++    assert newer_row.subject == "Trip planning night"
++    assert newer_row.sent_at == newer_root.inserted_at
++    assert newer_row.sent_at_label == Calendar.strftime(newer_root.inserted_at, "%b %d, %Y")
++    assert newer_row.reply_count == 0
++    assert newer_row.latest_replier_id == nil
++    assert newer_row.latest_replier_name == nil
++    assert newer_row.reply_activity_label == "No replies yet"
++
++    assert older_row.message_id == older_root.message_id
++    assert older_row.conversation_id == older_root.message_id
++    assert older_row.sender_id == alice.person_id
++    assert older_row.originator_id == alice.person_id
++    assert older_row.originator_name == "Alice Adams"
++    assert older_row.originator_initials == "AA"
++    assert older_row.subject == "Saturday ridge walk"
++    assert older_row.sent_at == older_root.inserted_at
++    assert older_row.sent_at_label == Calendar.strftime(older_root.inserted_at, "%b %d, %Y")
++    assert older_row.reply_count == 2
++    assert older_row.latest_replier_id == latest_reply.sender_id
++    assert older_row.latest_replier_name == "Carol Canoe"
++    assert older_row.reply_activity_label == "2 replies · latest from Carol Canoe"
++
++    for row <- assigns.message_rows do
++      refute Map.has_key?(row, :receipt_count)
++      refute Map.has_key?(row, :receipt_summary)
++      refute Map.has_key?(row, :status_counts)
++      refute Map.has_key?(row, :receipt_segments)
++      refute Map.has_key?(row, :receipt_glance_copy)
++      refute Map.has_key?(row, :has_receipt_glance?)
++      refute Map.has_key?(row, :receipt_groups)
++    end
+   end
+ 
+-  test "omits timestamp labels for message rows without an inserted_at timestamp" do
+-    message = %Message{
++  test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
++    root = %Message{
+       message_id: Memba.ID.generate(:message),
+       sender_id: Memba.ID.generate(:person),
++      conversation_id: Memba.ID.generate(:message),
+       subject: "Projection without timestamp",
+       body: "Body",
+       inserted_at: nil
+@@ -148,7 +176,24 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+                sent_at: nil,
+                sent_at_label: nil
+              }
+-           ] = MemberDashboardPresentation.present_message_rows([message], %{})
++           ] =
++             MemberDashboardPresentation.present_message_rows(
++               [
++                 %{
++                   message: root,
++                   message_id: root.message_id,
++                   conversation_id: root.message_id,
++                   sender_id: root.sender_id,
++                   subject: root.subject,
++                   body: root.body,
++                   inserted_at: nil,
++                   reply_count: 0,
++                   latest_replier_id: nil,
++                   latest_replier_name: nil
++                 }
++               ],
++               %{}
++             )
+   end
+ 
+   test "forbids missing, invalid, unauthorized, or identity-mismatched selected clubs" do
