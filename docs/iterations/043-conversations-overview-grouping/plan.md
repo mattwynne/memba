@@ -1,7 +1,7 @@
 # 043 — Conversations overview: group replies with a reply count
 
 Date: 2026-06-22
-Status: implementing
+Status: merged
 
 ## Goal
 
@@ -72,11 +72,12 @@ Scenarios (domain language):
 - Conversations are ordered by original send time, newest first — a newer reply to an
   older conversation does not move it above a newer original.
 
-### Allowed acceptance feature changes
+## Allowed acceptance feature changes
 
 - `acceptance-tests/features/club_message_replies.feature` — **add** one Rule and its
-  scenarios, tagged `@iteration-043 @todo-domain`. No existing scenarios change. Coverage
-  is strictly added; `@todo-domain` keeps them out of the domain Cucumber run until implemented.
+  scenarios, initially tagged `@iteration-043 @todo-domain`. No existing scenarios change.
+  Coverage is strictly added. During implementation, remove `@todo-domain` from the
+  iteration-043 Rule once the scenarios are executable and green in the domain runner.
 
 ## Designs
 

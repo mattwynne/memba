@@ -89,12 +89,6 @@ defmodule MembaWeb.PageHTML do
 
   defp receipt_bar_width(_status), do: "width: 0%;"
 
-  defp receipt_segment_width(%{width_percentage: percentage}) when is_integer(percentage) do
-    "width: #{percentage |> max(0) |> min(100)}%;"
-  end
-
-  defp receipt_segment_width(_segment), do: "width: 0%;"
-
   defp receipt_recipient_initial(name) when is_binary(name) do
     case String.first(name) do
       nil -> "?"

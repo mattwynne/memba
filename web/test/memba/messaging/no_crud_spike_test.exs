@@ -12,6 +12,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "def unfollow_conversation("
     assert source =~ "def get_message("
     assert source =~ "def list_messages_for_club("
+    assert source =~ "def list_conversations_for_club("
     assert source =~ "def list_conversation_messages("
     assert source =~ "def get_conversation_follow("
     assert source =~ "def following_conversation?("
@@ -35,6 +36,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
 
     assert list_functions == [
              "list_messages_for_club",
+             "list_conversations_for_club",
              "list_conversation_messages",
              "list_conversation_followers",
              "list_operator_messages",

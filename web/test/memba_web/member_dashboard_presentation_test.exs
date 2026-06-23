@@ -7,7 +7,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   alias Memba.Messaging.Projections.Message
   alias MembaWeb.MemberDashboardPresentation
 
-  test "loads selected-club dashboard assigns with member, message, sender, and receipt row data" do
+  test "loads selected-club dashboard assigns with grouped conversation row data" do
     alice =
       create_active_member(
         email: "Alice@Example.com",
@@ -23,6 +23,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         club_id: alice.club_id
       )
 
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
     _other_club_member =
       create_active_member(
         email: "cora@example.com",
@@ -32,15 +40,15 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    older_message =
+    older_root =
       create_message(
         club_id: alice.club_id,
         sender_id: alice.person_id,
-        subject: "Earlier update",
+        subject: "Saturday ridge walk",
         inserted_at: DateTime.add(now, -60, :second)
       )
 
-    newer_message =
+    newer_root =
       create_message(
         club_id: alice.club_id,
         sender_id: bob.person_id,
@@ -48,15 +56,35 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         inserted_at: now
       )
 
+    _first_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: older_root.message_id,
+        reply_to_message_id: older_root.message_id,
+        subject: older_root.subject,
+        inserted_at: DateTime.add(now, 30, :second)
+      )
+
+    latest_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        conversation_id: older_root.message_id,
+        reply_to_message_id: older_root.message_id,
+        subject: older_root.subject,
+        inserted_at: DateTime.add(now, 60, :second)
+      )
+
     create_member_email_delivery(
-      message_id: newer_message.message_id,
+      message_id: older_root.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
       status: "delivered"
     )
 
     create_member_email_delivery(
-      message_id: newer_message.message_id,
+      message_id: older_root.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
       status: "sent"
@@ -74,70 +102,70 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.current_member.id == alice.person_id
     assert assigns.current_member.name == "Alice Adams"
     assert assigns.current_member.initials == "AA"
-    assert assigns.active_member_count == 2
+    assert assigns.active_member_count == 3
 
     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
              {alice.person_id, "Alice Adams", "AA"},
-             {bob.person_id, "Bob Builder", "BB"}
+             {bob.person_id, "Bob Builder", "BB"},
+             {carol.person_id, "Carol Canoe", "CC"}
            ]
 
     assert assigns.member_names_by_id == %{
              alice.person_id => "Alice Adams",
-             bob.person_id => "Bob Builder"
+             bob.person_id => "Bob Builder",
+             carol.person_id => "Carol Canoe"
            }
 
     assert Enum.map(assigns.messages, & &1.message_id) == [
-             newer_message.message_id,
-             older_message.message_id
+             newer_root.message_id,
+             older_root.message_id
            ]
 
     assert [newer_row, older_row] = assigns.message_rows
-    assert newer_row.message_id == newer_message.message_id
+    assert newer_row.message_id == newer_root.message_id
+    assert newer_row.conversation_id == newer_root.message_id
     assert newer_row.sender_id == bob.person_id
-    assert newer_row.sender_name == "Bob Builder"
-    assert newer_row.sender_initials == "BB"
-    assert newer_row.sent_at == newer_message.inserted_at
-    assert newer_row.sent_at_label == Calendar.strftime(newer_message.inserted_at, "%b %d, %Y")
-    assert newer_row.receipt_count == 2
+    assert newer_row.originator_id == bob.person_id
+    assert newer_row.originator_name == "Bob Builder"
+    assert newer_row.originator_initials == "BB"
+    assert newer_row.subject == "Trip planning night"
+    assert newer_row.sent_at == newer_root.inserted_at
+    assert newer_row.sent_at_label == Calendar.strftime(newer_root.inserted_at, "%b %d, %Y")
+    assert newer_row.reply_count == 0
+    assert newer_row.latest_replier_id == nil
+    assert newer_row.latest_replier_name == nil
+    assert newer_row.reply_activity_label == "No replies yet"
 
-    assert newer_row.status_counts == %{
-             "delivered" => 1,
-             "sent" => 1,
-             "delivery problem" => 0
-           }
+    assert older_row.message_id == older_root.message_id
+    assert older_row.conversation_id == older_root.message_id
+    assert older_row.sender_id == alice.person_id
+    assert older_row.originator_id == alice.person_id
+    assert older_row.originator_name == "Alice Adams"
+    assert older_row.originator_initials == "AA"
+    assert older_row.subject == "Saturday ridge walk"
+    assert older_row.sent_at == older_root.inserted_at
+    assert older_row.sent_at_label == Calendar.strftime(older_root.inserted_at, "%b %d, %Y")
+    assert older_row.reply_count == 2
+    assert older_row.latest_replier_id == latest_reply.sender_id
+    assert older_row.latest_replier_name == "Carol Canoe"
+    assert older_row.reply_activity_label == "2 replies · latest from Carol Canoe"
 
-    assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
-             {"delivered", 1, 50},
-             {"sent", 1, 50},
-             {"delivery problem", 0, 0}
-           ]
-
-    assert Enum.map(
-             newer_row.receipt_segments,
-             &{&1.status, &1.status_label, &1.count, &1.width_percentage}
-           ) == [
-             {"delivered", "Delivered", 1, 50},
-             {"sent", "Sending", 1, 50}
-           ]
-
-    assert newer_row.receipt_glance_copy == "1 of 2 delivered"
-    assert newer_row.has_receipt_glance?
-
-    assert older_row.message_id == older_message.message_id
-    assert older_row.sender_name == "Alice Adams"
-    assert older_row.sender_initials == "AA"
-    assert older_row.sent_at == older_message.inserted_at
-    assert older_row.sent_at_label == Calendar.strftime(older_message.inserted_at, "%b %d, %Y")
-    assert older_row.receipt_count == 0
-    assert older_row.receipt_segments == []
-    assert older_row.receipt_glance_copy == nil
-    refute older_row.has_receipt_glance?
+    for row <- assigns.message_rows do
+      refute Map.has_key?(row, :receipt_count)
+      refute Map.has_key?(row, :receipt_summary)
+      refute Map.has_key?(row, :status_counts)
+      refute Map.has_key?(row, :receipt_segments)
+      refute Map.has_key?(row, :receipt_glance_copy)
+      refute Map.has_key?(row, :has_receipt_glance?)
+      refute Map.has_key?(row, :receipt_groups)
+    end
   end
 
-  test "omits timestamp labels for message rows without an inserted_at timestamp" do
-    message = %Message{
+  test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
+    root = %Message{
       message_id: Memba.ID.generate(:message),
       sender_id: Memba.ID.generate(:person),
+      conversation_id: Memba.ID.generate(:message),
       subject: "Projection without timestamp",
       body: "Body",
       inserted_at: nil
@@ -148,7 +176,24 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
                sent_at: nil,
                sent_at_label: nil
              }
-           ] = MemberDashboardPresentation.present_message_rows([message], %{})
+           ] =
+             MemberDashboardPresentation.present_message_rows(
+               [
+                 %{
+                   message: root,
+                   message_id: root.message_id,
+                   conversation_id: root.message_id,
+                   sender_id: root.sender_id,
+                   subject: root.subject,
+                   body: root.body,
+                   inserted_at: nil,
+                   reply_count: 0,
+                   latest_replier_id: nil,
+                   latest_replier_name: nil
+                 }
+               ],
+               %{}
+             )
   end
 
   test "forbids missing, invalid, unauthorized, or identity-mismatched selected clubs" do

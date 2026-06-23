@@ -52,7 +52,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
-  test "dashboard renders polished CTA, message rows, receipt glance, and active-member card",
+  test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -115,14 +115,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-sender-initials'].avatar.avatar-placeholder",
+             "#member-message-#{message.message_id} [data-testid='message-originator-initials'].avatar.avatar-placeholder",
              "BB"
            )
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-sender-name']",
-             "Bob Builder"
+             "#member-message-#{message.message_id} [data-testid='message-started-by'][data-originator-id='#{bob.person_id}'][data-originator-name='Bob Builder']",
+             "Started by Bob Builder"
            )
 
     assert has_element?(
@@ -133,13 +133,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-receipt-glance']",
-             "1 of 2 delivered"
+             "#member-message-#{message.message_id} [data-testid='message-reply-activity'][data-reply-count='0']",
+             "No replies yet"
            )
 
-    assert has_element?(
+    refute has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-percentage='50']"
+             "#member-message-#{message.message_id} [data-testid='message-receipt-glance']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-receipt-segment']"
            )
 
     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
@@ -274,7 +279,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-members a[href*='/members/invitations/new']")
   end
 
-  test "dashboard receipt glance uses member vocabulary and does not leak Memba-staff-only fields",
+  test "dashboard conversation row shows reply activity and omits delivery glance",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -312,6 +317,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_id: alice.club_id,
         sender_id: bob.person_id,
         subject: "Weekend conditions"
+      )
+
+    reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Weekend conditions",
+        body: "Trail is clear."
       )
 
     create_member_email_delivery(
@@ -363,43 +378,34 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#{message_selector} [data-testid='message-receipt-glance']",
-             "2 of 4 delivered"
+             "#{message_selector} [data-testid='club-message-link'][href='/messages/#{message.message_id}']"
+           )
+
+    refute has_element?(
+             view,
+             "#{message_selector} [data-testid='club-message-link'][href='/messages/#{reply.message_id}']"
            )
 
     assert has_element?(
              view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
+             "#{message_selector} [data-testid='message-started-by'][data-originator-id='#{bob.person_id}']",
+             "Started by Bob Builder"
            )
 
     assert has_element?(
              view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'].bg-sage-600"
+             "#{message_selector} [data-testid='message-reply-activity'][data-reply-count='1'][data-latest-replier-id='#{carol.person_id}'][data-latest-replier-name='Carol Canoe']",
+             "1 reply · latest from Carol Canoe"
            )
 
-    assert has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'][data-receipt-label='Sending'][data-receipt-count='1']"
-           )
-
-    assert has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'].bg-warning"
-           )
-
-    assert has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'][data-receipt-label='Delivery problem'][data-receipt-count='1']"
-           )
-
-    assert has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'].bg-error"
-           )
+    refute has_element?(view, "#member-message-#{reply.message_id}")
+    refute has_element?(view, "#{message_selector} [data-testid='message-receipt-glance']")
+    refute has_element?(view, "#{message_selector} [data-testid='message-receipt-segment']")
 
     html = render(view)
 
     refute html =~ dana_delivery_id
+    refute html =~ "2 of 4 delivered"
     refute html =~ "dana.operator@example.net"
     refute html =~ "postmark-webhook"
     refute html =~ "bounced"

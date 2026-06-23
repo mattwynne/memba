@@ -307,6 +307,76 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  step ~r/^(\w+)'s club home should list one conversation for "([^"]+)"$/,
+       %{args: [viewer_name, subject]} = context do
+    conversations =
+      club_home_conversations_for!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    message = fetch_from_context!(context, :messages, subject)
+
+    matching_conversations = Enum.filter(conversations, &(&1.subject == subject))
+    message_id = message.message_id
+
+    assert length(matching_conversations) == 1
+
+    assert [%{message_id: ^message_id, conversation_id: ^message_id}] = matching_conversations
+
+    Map.put(context, :current_club_home_conversations, conversations)
+  end
+
+  step ~r/^the "([^"]+)" conversation should show (\d+) replies$/,
+       %{args: [subject, expected_reply_count]} = context do
+    conversation = club_home_conversation_for!(context, subject)
+
+    assert conversation.reply_count == String.to_integer(expected_reply_count)
+
+    context
+  end
+
+  step "the {string} conversation should show the latest reply is from {word}",
+       %{args: [subject, replier_name]} = context do
+    conversation = club_home_conversation_for!(context, subject)
+    replier_id = person_id_from_context!(context, replier_name)
+
+    assert conversation.latest_replier_id == replier_id
+    assert conversation.latest_replier_name == replier_name
+
+    context
+  end
+
+  step "the {string} conversation should show no replies yet",
+       %{args: [subject]} = context do
+    conversation = club_home_conversation_for!(context, subject)
+
+    assert conversation.reply_count == 0
+    assert conversation.latest_replier_id == nil
+    assert conversation.latest_replier_name == nil
+
+    context
+  end
+
+  step ~r/^(\w+)'s club home should list "([^"]+)" before "([^"]+)"$/,
+       %{args: [viewer_name, earlier_subject, later_subject]} = context do
+    conversations =
+      club_home_conversations_for!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    subjects = Enum.map(conversations, & &1.subject)
+
+    earlier_index = Enum.find_index(subjects, &(&1 == earlier_subject))
+    later_index = Enum.find_index(subjects, &(&1 == later_subject))
+
+    assert is_integer(earlier_index),
+           "Expected club home conversations to include #{inspect(earlier_subject)}; saw #{inspect(subjects)}"
+
+    assert is_integer(later_index),
+           "Expected club home conversations to include #{inspect(later_subject)}; saw #{inspect(subjects)}"
+
+    assert earlier_index < later_index
+
+    context
+    |> Map.put(:current_club_home_conversations, conversations)
+  end
+
   step "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
        %{args: [viewer_name]} = context do
     assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
@@ -700,6 +770,25 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert earlier_index < later_index
 
     context
+  end
+
+  defp club_home_conversations_for!(context, viewer_name, club_name) do
+    assert_active_member!(context, viewer_name, club_name)
+
+    club_name
+    |> then(&fetch_from_context!(context, :clubs, &1))
+    |> Messaging.list_conversations_for_club()
+  end
+
+  defp club_home_conversation_for!(context, subject) do
+    conversations =
+      Map.get_lazy(context, :current_club_home_conversations, fn ->
+        club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+        Messaging.list_conversations_for_club(club_id)
+      end)
+
+    Enum.find(conversations, &(&1.subject == subject)) ||
+      flunk("Expected club home conversations to include #{inspect(subject)}")
   end
 
   defp assert_reply_email_delivered_to_members(
