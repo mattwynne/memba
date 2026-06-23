@@ -90,3 +90,25 @@ Focused validation should reduce cycle time. If focused commands are unreliable 
 - Add a first-class `bin/dev test [args...]` command that starts Postgres through the same sanitized environment path as `dev check` and then runs `mix test` with supplied args.
 - Update `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md` to prefer `PATH="$PWD/bin:$PATH" dev test ...` for focused tests in Fabro sandboxes.
 - Harden `bin/mix` to detect stale Fabro `PGHOST`/`DEVENV_*` and fail with an explicit “use `dev test`” message instead of attempting readiness against a stale socket.
+
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: The documented focused-test contract for Fabro sandboxes allowed direct `bin/mix test ...`. Unlike `bin/dev`, `bin/mix` trusts caller-provided `PGHOST`/`PGPORT`, so stale sandbox/devenv values could point focused tests at an old Postgres socket even after the managed Postgres process was ready elsewhere.
+
+Fix applied:
+
+- `bin/dev`: added `dev test [args...]`, a focused Elixir test wrapper that enters the sanitized `bin/dev`/devenv environment, starts Postgres through the same helper path as `dev check`, runs setup, and delegates to `mix test` with the supplied arguments.
+- `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md`: changed the Fabro sandbox focused-test guidance to prefer `PATH="$PWD/bin:$PATH" dev test ...` and explicitly avoid direct `bin/mix test ...` because of stale `PGHOST`/`PGPORT` risk.
+- `docs/kaizen/2026-06-23-fabro-focused-tests-stale-pghost.md`: recorded this resolution.
+
+Validation:
+
+- `bash -n bin/dev bin/mix` — shell syntax is valid.
+- `rg -n 'dev test|direct `bin/mix test|dev_test' bin/dev .fabro/workflows/iteration-implementation/prompts/implement_next_task.md` — confirmed the wrapper and prompt contract are present.
+
+Remaining follow-up:
+
+- Consider hardening `bin/mix` with a specific stale-`PGHOST` diagnostic if agents continue to call it directly despite the prompt.
