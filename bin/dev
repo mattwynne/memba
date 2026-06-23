@@ -693,6 +693,16 @@ _check() {
   fi
 }
 
+dev_test() {
+  with_quality_gate_lock _dev_test "$@"
+}
+
+_dev_test() {
+  start_postgres
+  _setup
+  (cd "$repo_root/web" && local_test_email_env mix test "$@")
+}
+
 # @cmd Verify the Fabro sandbox runtime contract
 sandbox_check() {
   export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
@@ -1682,5 +1692,13 @@ _fabro_clean_branches() {
 
   echo "Temporary review branch cleanup candidates: $cleaned; skipped: $skipped."
 }
+
+case "${1:-}" in
+  test)
+    shift
+    dev_test "$@"
+    exit
+    ;;
+esac
 
 eval "$(argc --argc-eval "$0" "$@")"
