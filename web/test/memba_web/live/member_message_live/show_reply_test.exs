@@ -120,11 +120,13 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "Follow this conversation to receive any new replies"
            )
 
-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
-    refute has_element?(view, "#member-conversation-unfollow-button")
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle.toggle.toggle-primary:not([checked])"
+           )
 
     view
-    |> element("#member-conversation-follow-button")
+    |> element("#member-conversation-follow-toggle")
     |> render_click()
 
     assert Messaging.following_conversation?(message.message_id, bob.person_id)
@@ -135,11 +137,10 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "You’re following this conversation"
            )
 
-    assert has_element?(view, "#member-conversation-unfollow-button", "Stop following")
-    refute has_element?(view, "#member-conversation-follow-button")
+    assert has_element?(view, "#member-conversation-follow-toggle.toggle.toggle-primary[checked]")
 
     view
-    |> element("#member-conversation-unfollow-button")
+    |> element("#member-conversation-follow-toggle")
     |> render_click()
 
     refute Messaging.following_conversation?(message.message_id, bob.person_id)
@@ -149,8 +150,10 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
            )
 
-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
-    refute has_element?(view, "#member-conversation-unfollow-button")
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle.toggle.toggle-primary:not([checked])"
+           )
   end
 
   test "former members cannot reach the in-app follow control", %{conn: conn} do

@@ -108,12 +108,17 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         club_id: alice.club_id
       )
 
+    sent_at = ~U[2026-06-03 08:00:00.000000Z]
+    first_reply_at = ~U[2026-06-03 09:14:00.000000Z]
+    second_reply_at = ~U[2026-06-03 09:40:00.000000Z]
+
     message =
       create_message(
         club_id: alice.club_id,
         sender_id: alice.person_id,
         subject: "Trip planning night",
-        body: "Bring your maps."
+        body: "Bring your maps.",
+        inserted_at: sent_at
       )
 
     first_reply =
@@ -123,7 +128,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I'll bring snacks."
+        body: "I'll bring snacks.",
+        inserted_at: first_reply_at
       )
 
     second_reply =
@@ -133,7 +139,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I can drive."
+        body: "I can drive.",
+        inserted_at: second_reply_at
       )
 
     {:ok, view, _html} =
@@ -142,6 +149,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(view, "#member-conversation[data-message-count='3']")
+
+    assert has_element?(
+             view,
+             "#member-message-meta time[datetime='#{DateTime.to_iso8601(sent_at)}']",
+             "Jun 03, 2026"
+           )
+
+    assert has_element?(view, "#member-conversation-replies-heading", "Replies · 2")
 
     assert has_element?(
              view,
@@ -163,11 +178,25 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
+             "#member-conversation-entry-timestamp-#{first_reply.message_id}" <>
+               "[datetime='#{DateTime.to_iso8601(first_reply_at)}']",
+             "Jun 03, 09:14 AM UTC"
+           )
+
+    assert has_element?(
+             view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{second_reply.message_id}" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{carol.person_id}']",
              "I can drive."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-timestamp-#{second_reply.message_id}" <>
+               "[datetime='#{DateTime.to_iso8601(second_reply_at)}']",
+             "Jun 03, 09:40 AM UTC"
            )
 
     assert has_element?(
@@ -179,6 +208,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(view, "#member-message-reply-form")
     assert has_element?(view, "#member-message-reply-body-input")
     refute has_element?(view, "#member-message-reply-subject-input")
+
+    refute has_element?(
+             view,
+             "#member-message-reply-composer",
+             "Your reply inherits the subject"
+           )
+
+    html = render(view)
+    replies_position = html_position!(html, ~s(id="member-conversation-replies"))
+    composer_position = html_position!(html, ~s(id="member-message-reply-composer"))
+
+    assert replies_position < composer_position
   end
 
   test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
@@ -289,6 +330,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(view, "#member-receipt-summary", "Message delivery")
+    assert has_element?(view, "#member-delivery-disclosure[data-expanded='false']")
+    assert has_element?(view, "#member-delivery-toggle[aria-expanded='false']")
+    assert has_element?(view, "#member-delivery-detail[aria-hidden='true']")
+    assert has_element?(view, "#member-delivery-collapsed-summary", "2 delivered")
+    assert has_element?(view, "#member-delivery-collapsed-summary", "1 sending")
+    assert has_element?(view, "#member-delivery-collapsed-summary", "0 problems")
     assert has_element?(view, "#member-receipt-summary-bar")
 
     assert has_element?(
@@ -686,7 +733,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       conversation_id: Keyword.get(attrs, :conversation_id, message_id),
       reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body")
+      body: Keyword.get(attrs, :body, "Message body"),
+      inserted_at: Keyword.get(attrs, :inserted_at),
+      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
     })
   end
 
@@ -711,5 +760,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       status: Keyword.fetch!(attrs, :status),
       reason: Keyword.fetch!(attrs, :reason)
     })
+  end
+
+  defp html_position!(html, needle) do
+    case :binary.match(html, needle) do
+      {position, _length} -> position
+      :nomatch -> flunk("Expected rendered HTML to include #{needle}")
+    end
   end
 end

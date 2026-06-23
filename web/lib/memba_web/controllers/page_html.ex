@@ -43,12 +43,22 @@ defmodule MembaWeb.PageHTML do
         <div class="min-w-0 flex-1">
           <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p class="font-semibold text-base-content">{@entry.sender_name}</p>
-            <span
-              data-testid="member-conversation-entry-label"
-              class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
-            >
-              {conversation_entry_label(@entry.kind)}
-            </span>
+            <div class="flex flex-wrap items-center gap-2">
+              <time
+                :if={@entry.kind == :reply and conversation_entry_time_label(@entry)}
+                id={"member-conversation-entry-timestamp-#{@entry.message.message_id}"}
+                datetime={conversation_entry_datetime(@entry)}
+                class="text-xs font-semibold text-ink-2"
+              >
+                {conversation_entry_time_label(@entry)}
+              </time>
+              <span
+                data-testid="member-conversation-entry-label"
+                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+              >
+                {conversation_entry_label(@entry.kind)}
+              </span>
+            </div>
           </div>
           <p
             id={conversation_entry_body_id(@entry)}
@@ -104,6 +114,28 @@ defmodule MembaWeb.PageHTML do
 
   defp receipt_group_expanded?(_expanded_groups, _status), do: false
 
+  defp delivery_expanded?(assigns) when is_map(assigns) do
+    Map.get(assigns, :delivery_expanded?, false)
+  end
+
+  defp delivery_expanded?(_assigns), do: false
+
+  defp delivery_summary_line(summary) when is_list(summary) do
+    summary
+    |> Enum.map(fn status ->
+      "#{status.count} #{delivery_summary_status_label(status.status)}"
+    end)
+    |> Enum.join(" · ")
+  end
+
+  defp delivery_summary_line(_summary), do: "Delivery details"
+
+  defp delivery_summary_status_label("delivered"), do: "delivered"
+  defp delivery_summary_status_label("sent"), do: "sending"
+  defp delivery_summary_status_label("delivery problem"), do: "problems"
+  defp delivery_summary_status_label(status) when is_binary(status), do: status
+  defp delivery_summary_status_label(_status), do: "unknown"
+
   defp split_conversation_entries(entries) when is_list(entries) do
     Enum.split_with(entries, &(&1.kind == :original))
   end
@@ -121,6 +153,18 @@ defmodule MembaWeb.PageHTML do
 
   defp conversation_entry_label(:original), do: "Original message"
   defp conversation_entry_label(_kind), do: "Reply"
+
+  defp conversation_entry_time_label(%{message: %{inserted_at: %DateTime{} = inserted_at}}) do
+    Calendar.strftime(inserted_at, "%b %d, %I:%M %p UTC")
+  end
+
+  defp conversation_entry_time_label(_entry), do: nil
+
+  defp conversation_entry_datetime(%{message: %{inserted_at: %DateTime{} = inserted_at}}) do
+    DateTime.to_iso8601(inserted_at)
+  end
+
+  defp conversation_entry_datetime(_entry), do: nil
 
   defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
 
@@ -145,6 +189,18 @@ defmodule MembaWeb.PageHTML do
 
   defp member_message_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+
+  defp message_sent_date_label(%{inserted_at: %DateTime{} = inserted_at}) do
+    Calendar.strftime(inserted_at, "%b %d, %Y")
+  end
+
+  defp message_sent_date_label(_message), do: nil
+
+  defp message_sent_datetime(%{inserted_at: %DateTime{} = inserted_at}) do
+    DateTime.to_iso8601(inserted_at)
+  end
+
+  defp message_sent_datetime(_message), do: nil
 
   defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
   defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
