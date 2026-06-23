@@ -220,3 +220,106 @@ Validation:
 Remaining follow-up:
 
 - The LLM `plan_conformance_gate` can still make a poor judgement if the evidence does not clearly show parsed feature-file permissions. Consider adding deterministic permission/diff-classification output to the conformance evidence script if this recurs.
+
+## Additional observation: 2026-06-23
+
+### Context
+
+Matt asked Pi to run:
+
+```bash
+bin/dev fabro deliver docs/iterations/043-conversations-overview-grouping/plan.md
+```
+
+After clearing stale predecessor metadata for iteration 042, delivery launched Fabro implementation run `01KVSADV33NPQZCN8VDWYSQRM1` for `docs/iterations/043-conversations-overview-grouping/plan.md`.
+
+The iteration plan expected one shared acceptance feature change in `acceptance-tests/features/club_message_replies.feature`: the implementation should make the new `@iteration-043 @todo-domain` scenarios pass and remove the todo tag once implemented.
+
+### Expected standard
+
+A behaviour-facing plan that expects implementation to edit a shared `.feature` file should express the permission in the workflow-supported format before delivery starts.
+
+The implementation workflow and guard expect a top-level section named exactly:
+
+```text
+## Allowed acceptance feature changes
+```
+
+When that section names the exact feature file and allowed change, Fabro should be able to remove/narrow `@todo-domain` for passing planned scenarios, run `dev check`, and publish without human rescue.
+
+### What happened
+
+The plan contained an allowed feature-change section, but it was nested as:
+
+```text
+### Allowed acceptance feature changes
+```
+
+Fabro implemented all four TODO tasks in the sandbox, removed `@todo-domain` from the iteration-043 rule in `acceptance-tests/features/club_message_replies.feature`, added domain step support, and ran `dev check` successfully.
+
+The run then failed in `verify_plan_repair` / `plan_not_ready` with:
+
+```text
+Refusing to publish implementation: locked acceptance feature policy failed.
+Acceptance .feature files changed without explicit plan permission under '## Allowed acceptance feature changes':
+- acceptance-tests/features/club_message_replies.feature
+
+To permit a feature edit, add a '## Allowed acceptance feature changes' section to the plan naming each .feature file and the allowed kind of change.
+```
+
+The run status ended as:
+
+```json
+{"kind":"failed","reason":"workflow_error"}
+```
+
+with failure detail:
+
+```text
+goal gate unsatisfied for node plan_not_ready and no retry target
+```
+
+### Impact
+
+A green implementation was blocked after substantial sandbox work and validation. The work was present in Fabro's final diff and the TODO list was fully checked, but it did not publish to `main` because the plan permission heading was one Markdown level too deep.
+
+This forced manual diagnosis of the run, plan, guard expectations, and sandbox diff before the implementation could be rescued or resumed.
+
+### What allowed it to happen
+
+The acceptance-feature permission contract is brittle and duplicated across planning, validation, and implementation:
+
+- The deterministic guard requires `## Allowed acceptance feature changes` exactly.
+- The plan used `### Allowed acceptance feature changes`, which looks semantically clear to a human but is invisible to the guard.
+- Plan validation did not reject or repair the near-miss heading before delivery.
+- The implementation workflow discovered the mismatch only after implementation, plan repair, and `dev check` had already consumed time.
+- The failure message correctly named the expected heading, but by then the run had failed at a late gate rather than at plan validation.
+
+### Observations
+
+- Run: `01KVSADV33NPQZCN8VDWYSQRM1`.
+- Run URL: `https://fabro.home.wynne.family/runs/01KVSADV33NPQZCN8VDWYSQRM1`.
+- Plan path: `docs/iterations/043-conversations-overview-grouping/plan.md`.
+- Feature file changed in the sandbox: `acceptance-tests/features/club_message_replies.feature`.
+- The sandbox TODO showed all implementation tasks checked.
+- Fabro's final diff summary showed 11 changed files, 495 additions, and 201 deletions.
+- `dev_check` succeeded in the run; the failure was delivery-machinery policy, not product-code validation.
+- The plan text elsewhere explicitly said the new `@todo-domain` scenarios should go green and the tag should be removed once implemented.
+
+### Why this matters
+
+The project depends on shared acceptance feature files as executable product contracts. If a plan can contain an almost-correct permission section that passes validation but fails only after implementation, the workflow preserves the feature-file lock but wastes a full implementation cycle and creates avoidable manual rescue work.
+
+### Open questions
+
+- Should plan validation reject `### Allowed acceptance feature changes` when a `.feature` edit is expected, or normalize it before validation passes?
+- Should the guard accept the section at any heading level when the heading text is exact, or is top-level `##` intentionally part of the contract?
+- Should the planning skill/template always place `## Allowed acceptance feature changes` as a top-level section rather than under acceptance scenarios?
+- Can `bin/dev fabro deliver` or the validation workflow run the same deterministic parser before marking a plan validated?
+
+### Possible prevention ideas
+
+- Add a plan-validation fixture that fails a behaviour-facing plan with `### Allowed acceptance feature changes` and expected `.feature` edits.
+- Make `.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py` available as a pre-delivery/validation check so permission parsing fails before implementation work starts.
+- Update iteration-planning guidance or templates to require `## Allowed acceptance feature changes` exactly, with examples for tag-removal-only changes.
+- Include parsed feature-change permissions in plan validation output so near-miss headings are visible before delivery.
