@@ -53,6 +53,7 @@ green than before.
 | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
 | 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
 | 043 | 2026-06-22 | implementing | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
+| 044 | 2026-06-22 | draft | Conversation page: align to the conversation wireframe | [plan](044-conversation-page-alignment/plan.md) |
 
 Status notes:
 
