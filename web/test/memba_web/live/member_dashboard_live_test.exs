@@ -378,6 +378,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
+             "#{message_selector} [data-testid='club-message-link'][href='/messages/#{message.message_id}']"
+           )
+
+    refute has_element?(
+             view,
+             "#{message_selector} [data-testid='club-message-link'][href='/messages/#{reply.message_id}']"
+           )
+
+    assert has_element?(
+             view,
              "#{message_selector} [data-testid='message-started-by'][data-originator-id='#{bob.person_id}']",
              "Started by Bob Builder"
            )
