@@ -87,8 +87,9 @@ added or changed. Validation is by LiveView/component tests and a gallery-walk s
 - The delivery section is collapsed to a one-line summary by default and can be expanded
   to the existing members-by-delivery-status detail.
 - The reply composer appears **after** the reply list and shows "Replying as \<name\>".
-- A "Replies · N" header appears above the replies (N = reply count; hidden or "no replies
-  yet" treatment when there are none).
+- When there is at least one reply, a "Replies · N" header appears above the reply list
+  (N = reply count). When there are no replies, the header **and** the reply list are
+  omitted entirely — only the original message, follow control, and composer show.
 - Each reply shows its posted timestamp.
 - The original-message meta shows the sent date.
 - The original message and replies remain boxed cards.
@@ -112,15 +113,18 @@ None known.
    - Add a timestamp to each `conversation_entry_card` reply.
    - Add the sent date to `#member-message-meta`.
 2. `MemberMessageLive.Show` / `MemberMessageDetail`: supply a reply count, per-reply
-   timestamps, and the original sent date to the template if not already available; add a
-   `delivery_expanded?` assign (default false) + a toggle event for the disclosure.
-3. No changes to commands, projections, or follow/reply behaviour.
+   timestamps, and the original sent date to the template if not already available. The
+   delivery disclosure is **server-driven**: add a `delivery_expanded?` assign (default
+   `false`) and a `toggle_delivery` `phx-click` event, consistent with the existing
+   `toggle_receipt_group` pattern. The collapsed summary reuses the existing member
+   delivery summary copy; timestamps/date use the app's existing formatting helpers.
+3. When the reply count is zero, render neither the "Replies · N" header nor the reply
+   list — only the original message, follow control, and composer.
+4. No changes to commands, projections, or follow/reply behaviour.
 
 ## Open Technical Decisions
 
-- Whether the delivery disclosure is server-driven (a `phx-click` assign toggle, matching
-  the existing receipt-group expand pattern) or client-only. Prefer server-driven for
-  consistency with `toggle_receipt_group`.
+None known. (The delivery disclosure is server-driven, per Implementation Plan step 2.)
 
 ## New Capability
 
@@ -132,8 +136,10 @@ asked for — instead of delivery receipts dominating the page.
 
 - LiveView/component tests for `MemberMessageLive.Show` asserting: the follow toggle is
   present and reflects/toggles state; the delivery detail is collapsed by default and
-  expandable; the composer renders after the replies and shows "Replying as"; a "Replies · N"
-  header; per-reply timestamps; the sent date on the original.
+  expands (and collapses again) via the server-driven toggle; the composer renders after
+  the replies and shows "Replying as"; a "Replies · N" header with the right count when
+  replies exist; the header and list are omitted when there are none; per-reply timestamps;
+  the sent date on the original.
 - Existing `club_message_replies.feature` scenarios stay green (behaviour unchanged).
 - A `bin/dev gallery-walk` screenshot of the member message-detail confirming the new layout.
 
