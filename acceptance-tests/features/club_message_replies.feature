@@ -125,7 +125,7 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply
       And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
 
-  @iteration-043 @todo-domain
+  @iteration-043
   Rule: On the club home, each conversation is one entry with its reply count
 
     Scenario: A replied-to message appears once, with its reply count
