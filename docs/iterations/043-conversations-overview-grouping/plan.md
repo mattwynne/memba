@@ -1,7 +1,7 @@
 # 043 — Conversations overview: group replies with a reply count
 
 Date: 2026-06-22
-Status: draft
+Status: validated
 
 ## Goal
 
