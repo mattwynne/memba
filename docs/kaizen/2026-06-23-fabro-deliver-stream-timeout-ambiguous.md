@@ -77,3 +77,28 @@ Delivery launch is a control point for WIP lifecycle state. If the local command
   ```
 
 - Record the implementation run ID in `.fabro/tmp/` when delivery starts so a later shell/session can recover it easily.
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: `_fabro_deliver` attached directly to `fabro run` and treated any non-zero local client exit as an implementation workflow failure. It did not preserve a structured run ID before waiting, so a local stream/body-read timeout could be conflated with a remote workflow failure while the remote run was still active.
+
+Fix applied:
+
+- `bin/dev`: changed implementation delivery to start Fabro in supported detached mode (`fabro run -d`), capture and persist the implementation run ID in `.fabro/tmp/iteration-implementation-run-id`, print exact inspect/events/logs/progress recovery commands, and wait using `fabro wait`.
+- `bin/dev`: added run-status helpers that inspect the remote run after launch/wait failures. Failed remote runs still trigger the existing rollback guard; active or unknown remote runs preserve implementation WIP state and print recovery commands instead of rolling back prematurely.
+- `docs/kaizen/2026-06-23-fabro-deliver-stream-timeout-ambiguous.md`: recorded this resolution.
+
+Validation:
+
+- `fabro run --help` — confirmed `-d, --detach` is supported and prints the run ID.
+- `fabro wait --help` — confirmed `fabro wait <RUN>` is supported for detached runs.
+- `fabro inspect --help` — confirmed JSON inspect is available for status checks.
+- `bash -n bin/dev` — passed.
+- Sourced `bin/dev` without its final `argc` dispatch and exercised `_fabro_implementation_status_class` plus `_fabro_extract_run_id` with sample statuses/output — passed.
+- Sourced `bin/dev` helper `_fabro_inspect_status_kind` against observed run `01KVSMA9D18M6V47C2ZPQ9S83N` and confirmed it reads `failed` from Fabro inspect JSON — passed.
+
+Remaining follow-up:
+
+- Full `dev check` was intentionally not run for this wrapper-only change; the orchestrator will run the final full check after merging kaizen branches.

@@ -1316,6 +1316,53 @@ _fabro_wait_for_wip_slot() {
   done
 }
 
+_fabro_extract_run_id() {
+  grep -Eo '[0-9A-Z]{26}' | head -1 || true
+}
+
+_fabro_inspect_status_kind() {
+  local run_id="$1"
+
+  command fabro inspect "$run_id" --json --no-upgrade-check \
+    | jq -r 'if type == "array" then .[0] else . end | .status.kind // .status // .state // .outcome // empty'
+}
+
+_fabro_implementation_status_class() {
+  local status_kind="$1"
+
+  case "$(printf '%s' "$status_kind" | tr '[:upper:]' '[:lower:]')" in
+    succeeded|success|completed|complete)
+      printf '%s\n' succeeded
+      ;;
+    failed|failure|cancelled|canceled|timed_out|timeout)
+      printf '%s\n' failed
+      ;;
+    running|queued|pending|created|starting|in_progress|active)
+      printf '%s\n' active
+      ;;
+    *)
+      printf '%s\n' unknown
+      ;;
+  esac
+}
+
+_fabro_print_implementation_recovery_commands() {
+  local run_id="$1"
+  local plan_path="$2"
+  local poll_interval="$3"
+  local quoted_run_id quoted_plan_path
+
+  printf -v quoted_run_id '%q' "$run_id"
+  printf -v quoted_plan_path '%q' "$plan_path"
+
+  echo "Implementation run ID: $run_id" >&2
+  echo "Monitor or recover with:" >&2
+  echo "  fabro inspect $quoted_run_id --no-upgrade-check" >&2
+  echo "  fabro events $quoted_run_id --no-upgrade-check" >&2
+  echo "  fabro logs $quoted_run_id --no-upgrade-check" >&2
+  echo "  $0 fabro progress $quoted_run_id $quoted_plan_path --watch --interval $poll_interval" >&2
+}
+
 _fabro_restore_status_after_failed_implementation() {
   local plan_path="$1"
   local previous_status="$2"
@@ -1389,6 +1436,7 @@ _fabro_deliver() {
   esac
 
   _fabro_require_tool fabro
+  _fabro_require_tool jq
 
   if [ ! -f "$repo_root/$plan_path" ]; then
     echo "Plan not found: $plan_path" >&2
@@ -1470,12 +1518,77 @@ _fabro_deliver() {
   base_sha=$(git -C "$repo_root" rev-parse origin/main^{commit})
   echo "Review base SHA: $base_sha"
 
-  echo "== Running implementation workflow =="
-  if ! (cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
-    -I plan_path="$plan_path" \
-    --auto-approve); then
+  echo "== Starting implementation workflow =="
+  local implementation_output implementation_create_status implementation_run_id implementation_status_kind implementation_status_class
+  implementation_output="$({
+    cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
+      -I plan_path="$plan_path" \
+      --auto-approve \
+      --no-upgrade-check \
+      -d
+  } 2>&1)" || implementation_create_status=$?
+  implementation_create_status=${implementation_create_status:-0}
+  printf '%s\n' "$implementation_output"
+
+  implementation_run_id=$(printf '%s\n' "$implementation_output" | _fabro_extract_run_id)
+  if [ -n "$implementation_run_id" ]; then
+    mkdir -p "$repo_root/.fabro/tmp"
+    printf '%s\n' "$implementation_run_id" > "$repo_root/.fabro/tmp/iteration-implementation-run-id"
+    _fabro_print_implementation_recovery_commands "$implementation_run_id" "$plan_path" "$poll_interval"
+  fi
+
+  if [ "$implementation_create_status" -ne 0 ]; then
+    if [ -n "$implementation_run_id" ]; then
+      implementation_status_kind=$(_fabro_inspect_status_kind "$implementation_run_id" 2>/dev/null || true)
+      implementation_status_class=$(_fabro_implementation_status_class "$implementation_status_kind")
+      case "$implementation_status_class" in
+        succeeded)
+          echo "Fabro launch failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to review." >&2
+          implementation_create_status=0
+          ;;
+        failed)
+          _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+          exit 1
+          ;;
+        active|unknown)
+          echo "Not rolling back iteration status because Fabro returned run ID $implementation_run_id and its remote status is '${implementation_status_kind:-unknown}'." >&2
+          _fabro_print_implementation_recovery_commands "$implementation_run_id" "$plan_path" "$poll_interval"
+          exit 1
+          ;;
+      esac
+    else
+      _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+    fi
+    if [ "$implementation_create_status" -ne 0 ]; then
+      exit 1
+    fi
+  fi
+
+  if [ -z "$implementation_run_id" ]; then
+    echo "Could not determine the detached implementation run ID; refusing to continue." >&2
     _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
     exit 1
+  fi
+
+  echo "== Waiting for implementation workflow =="
+  if ! command fabro wait "$implementation_run_id" --no-upgrade-check; then
+    implementation_status_kind=$(_fabro_inspect_status_kind "$implementation_run_id" 2>/dev/null || true)
+    implementation_status_class=$(_fabro_implementation_status_class "$implementation_status_kind")
+    case "$implementation_status_class" in
+      succeeded)
+        echo "Fabro wait failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to review." >&2
+        ;;
+      failed)
+        _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+        exit 1
+        ;;
+      active|unknown)
+        echo "Fabro wait failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind:-unknown}'." >&2
+        echo "Preserving implementation WIP state; inspect or monitor the remote run before changing lifecycle status." >&2
+        _fabro_print_implementation_recovery_commands "$implementation_run_id" "$plan_path" "$poll_interval"
+        exit 1
+        ;;
+    esac
   fi
 
   echo "== Running review workflow =="
