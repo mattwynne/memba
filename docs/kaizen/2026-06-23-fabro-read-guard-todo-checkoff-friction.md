@@ -57,3 +57,22 @@ The end of an implementation node is the worst time to discover a process requir
 - Update `implement_next_task.md` so the check-off instruction says: immediately before editing `todo.md`, read the exact todo path with the agent read tool, then patch only the selected line.
 - Mention explicitly that shell `cat`, workflow pre-read nodes, and prior script output do not satisfy the active agent read-guard.
 - Consider a small deterministic script/helper for todo check-off if prompt guidance does not prevent recurrence.
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: the `implement_next_task` prompt required reading `todo.md` before editing and checking off the implemented task, but it did not teach the timing-sensitive Fabro read-guard rule: the active agent must read the exact todo path with the agent read tool immediately before the final check-off edit. Earlier script output and shell reads can look sufficient while not satisfying the guard.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md`: added an ownership-rule instruction to read the exact active `todo.md` path with the agent read tool immediately before check-off, then patch only the selected line, and explicitly noted that shell `cat`, earlier workflow/script output, and reads of other paths do not satisfy the active-agent read guard.
+
+Validation:
+
+- `rg -n 'Immediately before editing|agent read tool|active-agent read guard|Shell' .fabro/workflows/iteration-implementation/prompts/implement_next_task.md` — confirmed the prompt contains the read-guard-safe check-off instruction.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed (`Validation: OK`); existing goal-gate retry warnings were unchanged.
+
+Remaining follow-up:
+
+- None for this prompt-level fix. If this recurs despite the prompt, reconsider a deterministic todo check-off helper.
