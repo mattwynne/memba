@@ -77,3 +77,27 @@ Delivery launch is a control point for WIP lifecycle state. If the local command
   ```
 
 - Record the implementation run ID in `.fabro/tmp/` when delivery starts so a later shell/session can recover it easily.
+
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: `_fabro_deliver` attached directly to `fabro run` and treated any non-zero client exit as an implementation workflow failure. It did not preserve a structured run ID before waiting, so a local stream/body-read timeout could be conflated with a remote workflow failure while the remote run was still active.
+
+Fix applied:
+
+- `bin/dev`: changed implementation delivery to start Fabro in supported detached mode (`fabro run -d`), capture and persist the implementation run ID in `.fabro/tmp/iteration-implementation-run-id`, print exact inspect/events/logs/progress recovery commands, and wait using `fabro wait`.
+- `bin/dev`: added run-status helpers that inspect the remote run after create/wait failures. Failed remote runs still trigger the existing rollback path; active or unknown remote runs preserve implementation WIP state and print recovery commands instead of rolling back prematurely.
+- `docs/kaizen/2026-06-23-fabro-deliver-stream-timeout-ambiguous.md`: recorded this resolution.
+
+Validation:
+
+- `fabro run --help` — confirmed `-d, --detach` is supported and prints the run ID.
+- `fabro wait --help` — confirmed `fabro wait <RUN>` is supported for detached runs.
+- `fabro inspect --help`, `fabro events --help`, and `fabro logs --help` — confirmed `--no-upgrade-check` is supported for printed recovery commands.
+- `bash -n bin/dev` — shell syntax is valid.
+
+Remaining follow-up:
+
+- None for the wrapper. If Fabro wait itself later shows transport instability, the wrapper now has a run-ID-aware status check and preserves WIP state for active/unknown remote runs.
