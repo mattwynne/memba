@@ -83,3 +83,24 @@ Formatting is part of the standard implementation loop. If formatting can be blo
 - Fix the Fabro Docker provider or sandbox image so repo files are cloned/restored as the shell-command user.
 - Add a `bin/dev sandbox-check` tracked-file writability check with owner diagnostics and clear remediation text.
 - If Fabro supports a safe root prepare step, add a narrow ownership repair before agent nodes; treat this as a fallback because it may mask the provider-level bug.
+
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: `bin/dev sandbox-check` verified runtime/cache directories but did not verify that tracked repository files in the Fabro sandbox checkout were writable by the same UID running agent shell commands. A checkout or checkpoint restore could therefore leave tracked files `root:root 0644`, and the implementation agent would only discover the problem later when a formatter tried to rewrite a touched file.
+
+Fix applied:
+
+- `bin/dev`: extended `sandbox_check` with an early tracked-file writability scan over `git ls-files`. It now fails before setup/Postgres/test compile if any tracked file is not writable, prints numeric owner/group diagnostics for the first affected files, explains the likely Fabro sandbox/provider UID mismatch, and tells the operator to repair ownership instead of spending implementation time on formatter workarounds.
+- `docs/kaizen/2026-06-23-fabro-sandbox-root-owned-files-block-format.md`: recorded this resolution.
+
+Validation:
+
+- `bash -n bin/dev` — shell syntax is valid.
+- `rg -n "check_tracked_repo_file_writability|Current user:|Tracked repository file writability OK" bin/dev` — confirmed the early ownership guard and diagnostics are present.
+
+Remaining follow-up:
+
+- The repository-side guard fails early and clearly, but the provider-level cause still needs to be fixed in Fabro if root-owned checkout/checkpoint files recur.
