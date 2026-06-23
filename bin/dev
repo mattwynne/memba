@@ -693,6 +693,98 @@ _check() {
   fi
 }
 
+check_tracked_repo_file_writability() {
+  python3 - "$repo_root" <<'PY'
+import grp
+import os
+import pwd
+import stat
+import subprocess
+import sys
+
+repo_root = sys.argv[1]
+
+result = subprocess.run(
+    ["git", "-C", repo_root, "ls-files", "-z"],
+    check=True,
+    stdout=subprocess.PIPE,
+)
+
+checked = 0
+unwritable = []
+
+for raw_path in result.stdout.split(b"\0"):
+    if not raw_path:
+        continue
+
+    relative_path = os.fsdecode(raw_path)
+    absolute_path = os.path.join(repo_root, relative_path)
+
+    try:
+        file_stat = os.lstat(absolute_path)
+    except FileNotFoundError:
+        continue
+
+    if not stat.S_ISREG(file_stat.st_mode):
+        continue
+
+    checked += 1
+
+    if not os.access(absolute_path, os.W_OK):
+        mode = stat.filemode(file_stat.st_mode)
+        try:
+            owner = pwd.getpwuid(file_stat.st_uid).pw_name
+        except KeyError:
+            owner = str(file_stat.st_uid)
+        try:
+            group = grp.getgrgid(file_stat.st_gid).gr_name
+        except KeyError:
+            group = str(file_stat.st_gid)
+        unwritable.append((mode, owner, group, relative_path))
+
+if checked == 0:
+    print(
+        "No tracked regular repository files were available for sandbox writability checks.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if unwritable:
+    current_uid = os.geteuid()
+    current_gid = os.getegid()
+    try:
+        current_user = pwd.getpwuid(current_uid).pw_name
+    except KeyError:
+        current_user = str(current_uid)
+    try:
+        current_group = grp.getgrgid(current_gid).gr_name
+    except KeyError:
+        current_group = str(current_gid)
+
+    print(
+        "Tracked repository files are not writable by the sandbox shell user.",
+        file=sys.stderr,
+    )
+    print(
+        f"Current user: {current_user}:{current_group} ({current_uid}:{current_gid})",
+        file=sys.stderr,
+    )
+    print("Unwritable tracked files (showing first 20):", file=sys.stderr)
+    for mode, owner, group, relative_path in unwritable[:20]:
+        print(f"  {mode} {owner}:{group} {relative_path}", file=sys.stderr)
+    if len(unwritable) > 20:
+        print(f"  ... and {len(unwritable) - 20} more", file=sys.stderr)
+    print(
+        "Fix the Fabro sandbox/provider so cloned or restored checkout files are owned "
+        "by the same user that runs agent commands, then retry before product work starts.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+print(f"Tracked repository file writability OK ({checked} regular files checked).")
+PY
+}
+
 # @cmd Verify the Fabro sandbox runtime contract
 sandbox_check() {
   export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
@@ -709,6 +801,8 @@ sandbox_check() {
       exit 1
     fi
   done
+
+  check_tracked_repo_file_writability
 
   for name in HOME MIX_HOME HEX_HOME XDG_CACHE_HOME; do
     eval "dir=\${$name-}"
