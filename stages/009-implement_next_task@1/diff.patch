@@ -1,0 +1,272 @@
+diff --git a/docs/iterations/043-conversations-overview-grouping/todo.md b/docs/iterations/043-conversations-overview-grouping/todo.md
+index 2074457..00a3174 100644
+--- a/docs/iterations/043-conversations-overview-grouping/todo.md
++++ b/docs/iterations/043-conversations-overview-grouping/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add `Messaging.list_conversations_for_club/1`: a read-model query over
++- [x] 001 Add `Messaging.list_conversations_for_club/1`: a read-model query over
+ - [ ] 002 Update `MemberDashboardPresentation` to build its message rows from
+ - [ ] 003 Update `PageHTML.club` (`club.html.heex`) `#member-message-list` markup to the
+ - [ ] 004 Keep the row link target unchanged (the conversation/message-detail route).
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index d568378..69be22c 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -319,6 +319,26 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List projected root conversations sent to a club.
++
++  Invalid or missing club IDs return an empty list. Results include one row per
++  conversation root, a count of projected replies in that conversation, and the
++  latest projected replier when replies exist. Conversations are ordered by the
++  original root message insertion time, newest first, so newer replies do not
++  reorder the overview.
++  """
++  def list_conversations_for_club(club_id) do
++    with {:ok, club_id} <- ID.cast(:club, club_id) do
++      club_id
++      |> conversations_for_club_query()
++      |> Repo.all()
++      |> add_latest_replier_names()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   List the projected conversation containing a message.
+ 
+@@ -674,6 +694,65 @@ defmodule Memba.Messaging do
+     delivery
+   end
+ 
++  defp conversations_for_club_query(club_id) do
++    reply_counts_query =
++      from reply in MessageProjection,
++        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
++        group_by: reply.conversation_id,
++        select: %{
++          conversation_id: reply.conversation_id,
++          reply_count: count(reply.message_id)
++        }
++
++    latest_replies_query =
++      from reply in MessageProjection,
++        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
++        distinct: [asc: reply.conversation_id],
++        order_by: [asc: reply.conversation_id, desc: reply.inserted_at, desc: reply.message_id],
++        select: %{
++          conversation_id: reply.conversation_id,
++          latest_replier_id: reply.sender_id
++        }
++
++    from root in MessageProjection,
++      left_join: reply_counts in subquery(reply_counts_query),
++      on: reply_counts.conversation_id == root.message_id,
++      left_join: latest_reply in subquery(latest_replies_query),
++      on: latest_reply.conversation_id == root.message_id,
++      where: root.club_id == ^club_id and root.message_id == root.conversation_id,
++      order_by: [desc: root.inserted_at, desc: root.message_id],
++      select: %{
++        message: root,
++        message_id: root.message_id,
++        conversation_id: root.conversation_id,
++        club_id: root.club_id,
++        sender_id: root.sender_id,
++        subject: root.subject,
++        body: root.body,
++        inserted_at: root.inserted_at,
++        updated_at: root.updated_at,
++        reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
++        latest_replier_id: latest_reply.latest_replier_id
++      }
++  end
++
++  defp add_latest_replier_names(conversation_rows) do
++    replier_summaries =
++      conversation_rows
++      |> Enum.map(& &1.latest_replier_id)
++      |> Enum.reject(&is_nil/1)
++      |> Membership.list_person_contact_summaries()
++
++    Enum.map(conversation_rows, fn row ->
++      latest_replier_name =
++        row.latest_replier_id
++        |> then(&Map.get(replier_summaries, &1, %{}))
++        |> Map.get(:name)
++
++      Map.put(row, :latest_replier_name, latest_replier_name)
++    end)
++  end
++
+   defp conversation_id_for_message(%MessageProjection{conversation_id: conversation_id}) do
+     case ID.cast(:message, conversation_id) do
+       {:ok, conversation_id} -> {:ok, conversation_id}
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index 8aa6dd1..b84a528 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -131,6 +131,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert Messaging.list_conversation_messages(nil) == []
+     assert Messaging.list_conversation_messages("not-a-uuid") == []
+ 
++    assert Messaging.list_conversations_for_club(Memba.ID.generate(:club)) == []
++    assert Messaging.list_conversations_for_club(nil) == []
++    assert Messaging.list_conversations_for_club("not-a-uuid") == []
++
+     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
+     assert is_nil(Messaging.get_email_delivery(nil))
+     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
+@@ -140,6 +144,127 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+   end
+ 
++  describe "list_conversations_for_club/1" do
++    test "returns root conversations with reply counts and latest replier names" do
++      club_id = Memba.ID.generate(:club)
++      other_club_id = Memba.ID.generate(:club)
++
++      alice =
++        insert_membership_person!(
++          person_id: Memba.ID.generate(:person),
++          name: "Alice Ridge",
++          email: "alice-ridge@example.com"
++        )
++
++      bob =
++        insert_membership_person!(
++          person_id: Memba.ID.generate(:person),
++          name: "Bob Maps",
++          email: "bob-maps@example.com"
++        )
++
++      carol =
++        insert_membership_person!(
++          person_id: Memba.ID.generate(:person),
++          name: "Carol Snacks",
++          email: "carol-snacks@example.com"
++        )
++
++      newer_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice.person_id,
++          subject: "Sunday weather window",
++          body: "Looks good for a short hike.",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      older_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice.person_id,
++          subject: "Saturday ridge walk",
++          body: "Meet at the trailhead.",
++          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
++        )
++
++      older_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: bob.person_id,
++          conversation_id: older_root.message_id,
++          reply_to_message_id: older_root.message_id,
++          subject: "Saturday ridge walk",
++          body: "I can bring maps.",
++          inserted_at: ~U[2026-06-05 10:10:00.000000Z]
++        )
++
++      newer_reply_to_older_conversation =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: carol.person_id,
++          conversation_id: older_root.message_id,
++          reply_to_message_id: older_reply.message_id,
++          subject: "Saturday ridge walk",
++          body: "I can bring snacks.",
++          inserted_at: ~U[2026-06-05 13:00:00.000000Z]
++        )
++
++      unrelated_root =
++        insert_message_projection!(
++          club_id: other_club_id,
++          sender_id: bob.person_id,
++          subject: "Other club thread",
++          inserted_at: ~U[2026-06-05 14:00:00.000000Z]
++        )
++
++      _unrelated_reply =
++        insert_message_projection!(
++          club_id: other_club_id,
++          sender_id: carol.person_id,
++          conversation_id: unrelated_root.message_id,
++          reply_to_message_id: unrelated_root.message_id,
++          subject: "Other club thread",
++          inserted_at: ~U[2026-06-05 14:05:00.000000Z]
++        )
++
++      assert [
++               %{
++                 message: %MessageProjection{message_id: newer_root_id},
++                 message_id: newer_root_id,
++                 conversation_id: newer_root_id,
++                 sender_id: newer_sender_id,
++                 subject: "Sunday weather window",
++                 body: "Looks good for a short hike.",
++                 inserted_at: ~U[2026-06-05 12:00:00.000000Z],
++                 reply_count: 0,
++                 latest_replier_id: nil,
++                 latest_replier_name: nil
++               },
++               %{
++                 message: %MessageProjection{message_id: older_root_id},
++                 message_id: older_root_id,
++                 conversation_id: older_root_id,
++                 sender_id: older_sender_id,
++                 subject: "Saturday ridge walk",
++                 body: "Meet at the trailhead.",
++                 inserted_at: ~U[2026-06-05 10:00:00.000000Z],
++                 reply_count: 2,
++                 latest_replier_id: latest_replier_id,
++                 latest_replier_name: "Carol Snacks"
++               }
++             ] = Messaging.list_conversations_for_club(club_id)
++
++      assert newer_root_id == newer_root.message_id
++      assert older_root_id == older_root.message_id
++      assert newer_sender_id == alice.person_id
++      assert older_sender_id == alice.person_id
++      assert latest_replier_id == carol.person_id
++      refute newer_reply_to_older_conversation.message_id in [newer_root_id, older_root_id]
++      refute unrelated_root.message_id in [newer_root_id, older_root_id]
++    end
++  end
++
+   describe "list_conversation_messages/1" do
+     test "returns the root message followed by replies in posted order" do
+       club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 356ba76..b699822 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def unfollow_conversation("
+     assert source =~ "def get_message("
+     assert source =~ "def list_messages_for_club("
++    assert source =~ "def list_conversations_for_club("
+     assert source =~ "def list_conversation_messages("
+     assert source =~ "def get_conversation_follow("
+     assert source =~ "def following_conversation?("
+@@ -35,6 +36,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+ 
+     assert list_functions == [
+              "list_messages_for_club",
++             "list_conversations_for_club",
+              "list_conversation_messages",
+              "list_conversation_followers",
+              "list_operator_messages",
