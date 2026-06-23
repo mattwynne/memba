@@ -13,6 +13,7 @@ Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
 - Never silently overwrite, discard, or duplicate uncommitted work for an unchecked task.
 - Implement exactly the selected task only. Do not opportunistically implement later tasks unless the selected task cannot be completed without splitting/reordering the todo list first.
 - When the implementation and focused validation are complete, check off the same task line you implemented by changing that one line from `- [ ]` to `- [x]`.
+- Immediately before editing `todo.md` for that check-off, read the exact active todo path with the agent read tool, then patch only the selected line. Shell `cat`, earlier workflow/script output, and prior reads of other paths do not satisfy Fabro's active-agent read guard.
 - Do not check off any other ordinary todo line.
 - Do not commit manually. Fabro will checkpoint your changes automatically after this node; independent validation will inspect that checkpoint evidence.
 
