@@ -7,16 +7,11 @@ defmodule MembaWeb.MemberDashboardPresentation do
   stays readable and the dashboard data model can be unit-tested directly.
   """
 
-  import Ecto.Query
-
   alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
   alias Memba.Membership.Authorization
   alias Memba.Messaging
-  alias Memba.Messaging.Projections.MemberEmailDelivery
-  alias Memba.Repo
-  alias MembaWeb.MemberEmailDeliveryPresentation
 
   @doc """
   Load dashboard assigns for a signed-in active member of the selected club.
@@ -98,71 +93,51 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp can_manage_members?(_club_id, _current_member), do: false
 
   defp load_messages(club_id) do
-    club_id
-    |> Messaging.list_messages_for_club()
-    |> Enum.reverse()
+    Messaging.list_conversations_for_club(club_id)
   end
 
   @doc """
-  Shapes recent-message projection rows for dashboard rendering.
+  Shapes recent conversation rows for dashboard rendering.
 
-  The row data keeps member-facing status vocabulary from
-  `MemberEmailDeliveryPresentation`, adds compact mini-bar segment data, and uses the
-  message projection `inserted_at` value for dashboard "when" metadata. Rows
-  without `inserted_at` intentionally leave the label empty instead of inventing
-  placeholder copy.
+  The row data uses the root message's originator and `inserted_at` value, folds
+  replies into a count/latest-replier summary, and intentionally omits delivery
+  glance fields from the club home. Rows without `inserted_at` leave the label
+  empty instead of inventing placeholder copy.
   """
-  def present_message_rows(messages, member_names_by_id)
-      when is_list(messages) and is_map(member_names_by_id) do
-    receipts_by_message_id = receipts_by_message_id(messages)
-
-    Enum.map(messages, fn message ->
-      receipt_model =
-        message.message_id
-        |> then(&Map.get(receipts_by_message_id, &1, []))
-        |> MemberEmailDeliveryPresentation.present_receipts()
-
-      sender_name = Map.get(member_names_by_id, message.sender_id, "Club member")
-      receipt_count = receipt_model.total_count
+  def present_message_rows(conversations, member_names_by_id)
+      when is_list(conversations) and is_map(member_names_by_id) do
+    Enum.map(conversations, fn conversation ->
+      message_id = conversation.message_id
+      conversation_id = Map.get(conversation, :conversation_id, message_id) || message_id
+      reply_count = Map.get(conversation, :reply_count, 0) || 0
+      latest_replier_id = Map.get(conversation, :latest_replier_id)
+      originator_name = Map.get(member_names_by_id, conversation.sender_id, "Club member")
+      originator_initials = initials(originator_name)
+      latest_replier_name = latest_replier_name(conversation)
 
       %{
-        message: message,
-        message_id: message.message_id,
-        sender_id: message.sender_id,
-        sender_name: sender_name,
-        sender_initials: initials(sender_name),
-        subject: message.subject,
-        body: message.body,
-        sent_at: message.inserted_at,
-        sent_at_label: sent_at_label(message.inserted_at),
-        receipt_count: receipt_count,
-        receipt_summary: receipt_model.summary,
-        status_counts: status_counts(receipt_model.summary),
-        receipt_segments: receipt_segments(receipt_model.summary),
-        receipt_glance_copy: receipt_glance_copy(receipt_model.summary, receipt_count),
-        has_receipt_glance?: receipt_count > 0,
-        receipt_groups: receipt_model.groups
+        message: Map.get(conversation, :message),
+        message_id: message_id,
+        conversation_id: conversation_id,
+        sender_id: conversation.sender_id,
+        sender_name: originator_name,
+        sender_initials: originator_initials,
+        originator_id: conversation.sender_id,
+        originator_name: originator_name,
+        originator_initials: originator_initials,
+        subject: conversation.subject,
+        body: conversation.body,
+        sent_at: conversation.inserted_at,
+        sent_at_label: sent_at_label(conversation.inserted_at),
+        reply_count: reply_count,
+        latest_replier_id: latest_replier_id,
+        latest_replier_name: latest_replier_name,
+        reply_activity_label: reply_activity_label(reply_count, latest_replier_name)
       }
     end)
   end
 
-  def present_message_rows(_messages, _member_names_by_id), do: []
-
-  defp receipts_by_message_id([]), do: %{}
-
-  defp receipts_by_message_id(messages) do
-    message_ids = Enum.map(messages, & &1.message_id)
-
-    MemberEmailDelivery
-    |> where([receipt], receipt.message_id in ^message_ids)
-    |> order_by([receipt],
-      asc: receipt.message_id,
-      asc: receipt.recipient_name,
-      asc: receipt.recipient_id
-    )
-    |> Repo.all()
-    |> Enum.group_by(& &1.message_id)
-  end
+  def present_message_rows(_conversations, _member_names_by_id), do: []
 
   defp present_member(member) do
     initials = initials(member.name)
@@ -185,35 +160,19 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp initials(_name), do: "?"
 
-  defp status_counts(summary) do
-    Map.new(summary, fn status -> {status.status, status.count} end)
+  defp latest_replier_name(%{latest_replier_name: name}) when is_binary(name), do: name
+  defp latest_replier_name(_conversation), do: nil
+
+  defp reply_activity_label(0, _latest_replier_name), do: "No replies yet"
+
+  defp reply_activity_label(reply_count, latest_replier_name) when is_integer(reply_count) do
+    reply_word = if reply_count == 1, do: "reply", else: "replies"
+    latest_replier_name = latest_replier_name || "Club member"
+
+    "#{reply_count} #{reply_word} · latest from #{latest_replier_name}"
   end
 
-  defp receipt_segments(summary) do
-    summary
-    |> Enum.filter(&(&1.count > 0))
-    |> Enum.map(fn status ->
-      %{
-        status: status.status,
-        status_label: status.status_label,
-        count: status.count,
-        width_percentage: status.percentage
-      }
-    end)
-  end
-
-  defp receipt_glance_copy(_summary, 0), do: nil
-
-  defp receipt_glance_copy(summary, total_count) do
-    delivered_count =
-      summary
-      |> Enum.find_value(0, fn
-        %{status: "delivered", count: count} -> count
-        _status -> false
-      end)
-
-    "#{delivered_count} of #{total_count} delivered"
-  end
+  defp reply_activity_label(_reply_count, _latest_replier_name), do: "No replies yet"
 
   defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")
   defp sent_at_label(_sent_at), do: nil
