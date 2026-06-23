@@ -1,12 +1,13 @@
-<!-- @dsCard group="Member App" viewport="1280x1200" name="Conversations overview (club home)" subtitle="Recent messages reworked as one row per conversation, with a reply count and last-activity" -->
-<!-- @startingPoint section="Member App" subtitle="Replies-aware club home: conversations grouped, not one row per reply" viewport="1280x1200" -->
+<!-- @dsCard group="Member App" viewport="1280x1100" name="Conversations overview (club home)" subtitle="Recent messages reworked as one row per conversation, with a reply count" -->
+<!-- @startingPoint section="Member App" subtitle="Replies-aware club home: conversations grouped, not one row per reply" viewport="1280x1100" -->
 <!--
-  NEW (2026-06-22). Fixes the gap where each reply surfaced as its own top-level
-  row in "Recent club messages" (duplicate subjects, one delivery bar per reply).
-  Here the club home lists CONVERSATIONS: one row per root message, activity-led —
-  avatar of the latest participant, subject, "Started by <originator>", a reply
-  count + who replied last, and the root message's delivery glance. Sorted by last
-  activity. See docs/problems/2026-06-22-replies-feature-design-gaps.md.
+  NEW (2026-06-22), origin-led (iteration 043). Fixes the gap where each reply surfaced as
+  its own top-level row in "Recent club messages" (duplicate subjects, one delivery bar per
+  reply). Here the club home lists CONVERSATIONS: one row per root message, ordered by the
+  original send time (newest first). Each row shows the ORIGINATOR's avatar, the subject,
+  "Started by <originator>", and a reply count with who replied last. The date is the
+  original send date. The delivery glance is intentionally NOT shown here — delivery detail
+  lives on the conversation page. See docs/problems/2026-06-22-replies-feature-design-gaps.md.
 -->
 <!doctype html>
 <html lang="en" data-theme="light">
@@ -17,7 +18,6 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
   <style>
-    /* Memba raw tokens (mirror of web/assets/css/app.css @theme). */
     :root {
       --color-sage-50:#eef1e6; --color-sage-100:#dde3cf; --color-sage-200:#bccaa6;
       --color-sage-300:#98ab80; --color-sage-400:#6f8760; --color-sage-500:#5a7050;
@@ -25,7 +25,6 @@
       --color-cream:#f6f5ea; --color-paper:#fffef9; --color-apricot:#d2925a;
       --color-ink:#25291d; --color-ink-2:#555a47; --color-ink-3:#878b76;
       --color-line:#e8e6d4; --color-line-strong:#d9d6bf;
-      --color-success:#5f7a4f; --color-warning:#a8772e; --color-error:#a8503a; --color-info:#4f6b78;
       --font-sans:"Figtree",ui-sans-serif,system-ui,sans-serif;
       --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
     }
@@ -33,9 +32,6 @@
       color-scheme:light;
       --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;
       --color-primary:#5a7050; --color-primary-content:#f6f5ea;
-      --color-secondary:#555a47; --color-secondary-content:#f6f5ea;
-      --color-accent:#d2925a; --color-accent-content:#25291d;
-      --color-success:#5f7a4f; --color-warning:#a8772e; --color-error:#a8503a; --color-info:#4f6b78;
       --radius-selector:0.375rem; --radius-field:0.375rem; --radius-box:0.75rem;
       --size-selector:0.25rem; --size-field:0.25rem; --border:1px; --depth:0; --noise:0;
     }
@@ -58,7 +54,7 @@
     .window-dot--sage { background:var(--color-sage-300); } .window-dot--cream { background:var(--color-line-strong); } .window-dot--apricot { background:var(--color-apricot); }
     .browser-frame__path { color:var(--color-ink-3); font-family:var(--font-mono); font-size:11px; margin-left:8px; }
 
-    .club-site-layout { background:var(--color-base-200); color:var(--color-base-content); min-height:930px; }
+    .club-site-layout { background:var(--color-base-200); color:var(--color-base-content); min-height:840px; }
     .club-site-header { background:var(--color-base-100); border-bottom:1px solid var(--color-base-300); padding:0 28px; }
     .club-site-header__inner { align-items:center; display:flex; gap:20px; justify-content:space-between; margin:0 auto; max-width:1120px; padding:18px 0; }
     .club-site-name { color:var(--color-base-content); font-size:18px; font-weight:700; letter-spacing:-0.02em; }
@@ -89,7 +85,7 @@
     .message-row { background:var(--color-base-100); border:1px solid var(--color-base-300); border-radius:18px; box-shadow:0 8px 18px rgba(37,41,29,0.05); transition:transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
     .message-row:hover { border-color:rgba(135,139,118,0.45); box-shadow:0 12px 24px rgba(37,41,29,0.08); transform:translateY(-2px); }
 
-    /* conversation row: avatar of latest participant | body | last-activity meta */
+    /* conversation row: originator avatar | body | original-send-date meta */
     .conversation-row__link { display:grid; gap:16px; grid-template-columns:40px minmax(0, 1fr) auto; padding:16px; align-items:start; }
     .avatar-circle { align-items:center; background:var(--color-sage-200); border-radius:999px; color:var(--color-sage-800); display:flex; font-size:13px; font-weight:700; height:40px; justify-content:center; width:40px; }
     .avatar-circle--alt { background:var(--color-sage-300); } .avatar-circle--soft { background:var(--color-sage-100); } .avatar-circle--deep { background:var(--color-sage-400); }
@@ -99,10 +95,6 @@
     .conversation-activity__icon { color:var(--color-primary); flex:none; height:15px; width:15px; }
     .conversation-activity strong { color:var(--color-ink); font-weight:700; }
     .conversation-activity--empty { color:var(--color-ink-3); font-weight:500; }
-    .receipt-glance { align-items:center; color:var(--color-ink-3); display:flex; flex-wrap:wrap; font-size:12px; font-weight:600; gap:8px; margin-top:8px; }
-    .mini-bar { background:var(--color-base-200); border:1px solid var(--color-base-300); border-radius:999px; display:flex; height:7px; overflow:hidden; width:72px; }
-    .mini-segment { display:block; height:100%; }
-    .status-fill--delivered { background:var(--color-sage-600); } .status-fill--sent { background:var(--color-warning); } .status-fill--problem { background:var(--color-error); }
     .conversation-row__meta { align-items:flex-start; color:var(--color-ink-2); display:flex; font-size:12px; font-weight:600; gap:12px; justify-content:flex-end; white-space:nowrap; }
     .chevron { color:var(--color-ink-2); font-size:20px; line-height:1; }
 
@@ -129,9 +121,10 @@
         <h1>Conversations overview</h1>
         <p>
           The club home lists conversations, not individual messages. Each row is one
-          conversation — the latest participant's avatar, the subject, who started it,
-          a reply count with who replied last, and the original message's delivery
-          glance. Rows are ordered by most recent activity.
+          conversation — the originator's avatar, the subject, who started it, and a reply
+          count with who replied last. Rows are ordered by the original send time, newest
+          first; the date is the original send date. Delivery detail lives on the
+          conversation page, not here.
         </p>
       </div>
       <span class="variant-label">wireframes/member-conversation-overview.html</span>
@@ -185,11 +178,11 @@
               </div>
 
               <div id="member-conversation-list" class="message-list">
-                <!-- conversation with replies: avatar = latest replier -->
+                <!-- conversation with replies: avatar = originator, date = original send -->
                 <article class="message-row" data-testid="conversation-row" data-conversation-id="msg_30000000-0000-0000-0000-000000000001" data-reply-count="2">
                   <a class="conversation-row__link" data-testid="conversation-link" href="#">
-                    <span class="avatar avatar-placeholder" data-testid="conversation-latest-initials" aria-hidden="true">
-                      <span class="avatar-circle avatar-circle--soft">CC</span>
+                    <span class="avatar avatar-placeholder" data-testid="conversation-originator-initials" aria-hidden="true">
+                      <span class="avatar-circle">AA</span>
                     </span>
                     <span>
                       <span class="conversation-subject">Saturday ridge walk</span>
@@ -198,26 +191,18 @@
                         <svg class="conversation-activity__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span data-testid="conversation-reply-count"><strong>2 replies</strong> · latest from Carmen Cho</span>
                       </span>
-                      <span class="receipt-glance" data-testid="conversation-receipt-glance">
-                        <span class="mini-bar" aria-hidden="true">
-                          <span class="mini-segment status-fill--delivered" style="width:25%"></span>
-                          <span class="mini-segment status-fill--sent" style="width:25%"></span>
-                          <span class="mini-segment status-fill--problem" style="width:50%"></span>
-                        </span>
-                        <span>1 of 4 delivered</span>
-                      </span>
                     </span>
                     <span class="conversation-row__meta">
-                      <span data-testid="conversation-last-activity">Jun 22</span>
+                      <span data-testid="conversation-sent-at">Jun 22</span>
                       <span class="chevron" aria-hidden="true">›</span>
                     </span>
                   </a>
                 </article>
 
-                <!-- conversation with no replies: avatar = originator -->
+                <!-- conversation with no replies -->
                 <article class="message-row" data-testid="conversation-row" data-conversation-id="msg_30000000-0000-0000-0000-000000000002" data-reply-count="0">
                   <a class="conversation-row__link" data-testid="conversation-link" href="#">
-                    <span class="avatar avatar-placeholder" data-testid="conversation-latest-initials" aria-hidden="true">
+                    <span class="avatar avatar-placeholder" data-testid="conversation-originator-initials" aria-hidden="true">
                       <span class="avatar-circle avatar-circle--alt">BB</span>
                     </span>
                     <span>
@@ -227,27 +212,19 @@
                         <svg class="conversation-activity__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="color:var(--color-ink-3)"><path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span data-testid="conversation-reply-count">No replies yet</span>
                       </span>
-                      <span class="receipt-glance" data-testid="conversation-receipt-glance">
-                        <span class="mini-bar" aria-hidden="true">
-                          <span class="mini-segment status-fill--delivered" style="width:50%"></span>
-                          <span class="mini-segment status-fill--sent" style="width:25%"></span>
-                          <span class="mini-segment status-fill--problem" style="width:25%"></span>
-                        </span>
-                        <span>2 of 4 delivered</span>
-                      </span>
                     </span>
                     <span class="conversation-row__meta">
-                      <span data-testid="conversation-last-activity">Jun 20</span>
+                      <span data-testid="conversation-sent-at">Jun 20</span>
                       <span class="chevron" aria-hidden="true">›</span>
                     </span>
                   </a>
                 </article>
 
-                <!-- fully delivered, busy conversation -->
+                <!-- busy conversation -->
                 <article class="message-row" data-testid="conversation-row" data-conversation-id="msg_30000000-0000-0000-0000-000000000007" data-reply-count="4">
                   <a class="conversation-row__link" data-testid="conversation-link" href="#">
-                    <span class="avatar avatar-placeholder" data-testid="conversation-latest-initials" aria-hidden="true">
-                      <span class="avatar-circle avatar-circle--deep">DD</span>
+                    <span class="avatar avatar-placeholder" data-testid="conversation-originator-initials" aria-hidden="true">
+                      <span class="avatar-circle avatar-circle--soft">CC</span>
                     </span>
                     <span>
                       <span class="conversation-subject">Gear swap shelf in the clubroom</span>
@@ -256,15 +233,9 @@
                         <svg class="conversation-activity__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         <span data-testid="conversation-reply-count"><strong>4 replies</strong> · latest from Drew Diaz</span>
                       </span>
-                      <span class="receipt-glance" data-testid="conversation-receipt-glance">
-                        <span class="mini-bar" aria-hidden="true">
-                          <span class="mini-segment status-fill--delivered" style="width:100%"></span>
-                        </span>
-                        <span>Delivered to all 4 members</span>
-                      </span>
                     </span>
                     <span class="conversation-row__meta">
-                      <span data-testid="conversation-last-activity">Jun 18</span>
+                      <span data-testid="conversation-sent-at">Jun 18</span>
                       <span class="chevron" aria-hidden="true">›</span>
                     </span>
                   </a>
@@ -288,12 +259,12 @@
         <span>Replies no longer appear as separate rows; the root message and its replies collapse into a single conversation row.</span>
       </div>
       <div class="note">
-        <strong>Reply count + last activity</strong>
-        <span>Each row shows "N replies · latest from &lt;name&gt;" and is sorted by most recent reply or send.</span>
+        <strong>Origin-led, reply count</strong>
+        <span>Avatar and date are the originator and original send date; "N replies · latest from &lt;name&gt;" gives the activity. Ordered by original send, newest first.</span>
       </div>
       <div class="note">
-        <strong>Delivery demoted</strong>
-        <span>The delivery glance reflects the root message's club-wide send only; full receipts live on the conversation page.</span>
+        <strong>No delivery on the home</strong>
+        <span>The per-message delivery glance is gone from the home; full delivery detail lives on the conversation page.</span>
       </div>
     </aside>
   </div>

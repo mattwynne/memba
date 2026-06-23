@@ -1,13 +1,15 @@
-<!-- @dsCard group="Member App" viewport="760x900" subtitle="Message detail as a conversation — original message, follow, replies, composer" name="Conversation (message detail)" -->
-<!-- @startingPoint section="Member App" subtitle="Member message detail reframed as a conversation" viewport="760x900" -->
+<!-- @dsCard group="Member App" viewport="760x1180" subtitle="Conversation detail — cards, follow toggle, collapsed delivery, composer states" name="Conversation (message detail)" -->
+<!-- @startingPoint section="Member App" subtitle="Member message detail as a conversation, with reply-composer states" viewport="760x1180" -->
 <!--
   FINAL (post-040) version: includes the "Follow this conversation" toggle.
   Iteration 039 ships the same screen WITHOUT the follow toggle (no follow concept yet)
   and with replies emailed to all members. Delivery receipts are demoted to a collapsed
   panel (was the whole screen pre-039). See design sketch §4.1.
 
-  2026-06-22: appended the reply-composer STATES (posted, validation error) so the
-  implementation has a target for them — see docs/problems/2026-06-22-replies-feature-design-gaps.md.
+  2026-06-22 (iteration 044): reconciled to the app's richer treatment — the original
+  message and replies are boxed CARDS, and the composer shows "Replying as <name>". Also
+  carries the reply-composer STATES (posted, validation error). See
+  docs/problems/2026-06-22-conversation-page-design-barer-than-app.md.
 -->
 <!doctype html>
 <html lang="en" data-theme="light">
@@ -34,8 +36,6 @@
       --color-primary:#5a7050; --color-primary-content:#f6f5ea;
       --color-secondary:#555a47; --color-secondary-content:#f6f5ea;
       --color-accent:#d2925a; --color-accent-content:#25291d;
-      --color-neutral:#25291d; --color-neutral-content:#f6f5ea;
-      --color-info:#4f6b78; --color-info-content:#f6f5ea;
       --color-success:#5f7a4f; --color-success-content:#f6f5ea;
       --color-warning:#a8772e; --color-warning-content:#f6f5ea;
       --color-error:#a8503a; --color-error-content:#f6f5ea;
@@ -52,24 +52,23 @@
     .nav__av { width:30px; height:30px; border-radius:50%; background:var(--color-sage-400); display:grid; place-items:center; font-size:11px; font-weight:700; color:#fff; }
     .nav__out { font-size:12px; color:rgba(255,255,255,0.55); background:none; border:0; cursor:pointer; font-family:var(--font-sans); }
 
-    .wrap { max-width:680px; margin:0 auto; padding:26px 24px 56px; }
+    .wrap { max-width:680px; margin:0 auto; padding:26px 24px 36px; }
     .back { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--color-ink-3); text-decoration:none; }
     .back svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
     .eyebrow { font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--color-ink-3); margin:18px 0 0; }
     .subject { font-size:32px; font-weight:700; letter-spacing:-0.022em; line-height:1.12; color:var(--color-ink); margin:7px 0 0; }
-    .meta { font-size:13.5px; color:var(--color-ink-2); margin:12px 0 0; }
+    .meta { font-size:13.5px; color:var(--color-ink-2); margin:12px 0 16px; }
     .meta strong { color:var(--color-ink); font-weight:600; }
-    .msgbody { font-size:16px; line-height:1.7; color:var(--color-ink-2); margin:16px 0 0; padding-bottom:22px; border-bottom:1px solid var(--color-line); }
 
-    /* follow control */
-    .follow { display:flex; align-items:center; gap:14px; margin:20px 0 0; padding:14px 16px; background:var(--color-paper);
+    /* follow control — a toggle */
+    .follow { display:flex; align-items:center; gap:14px; margin:8px 0 0; padding:14px 16px; background:var(--color-paper);
               border:1px solid var(--color-line); border-radius:14px; }
     .follow__t { flex:1; }
     .follow__t strong { display:block; font-size:14px; font-weight:600; color:var(--color-ink); }
     .follow__t span { display:block; font-size:12.5px; color:var(--color-ink-3); margin-top:2px; }
 
-    /* collapsed delivery summary (demoted from the whole page) */
+    /* collapsed delivery summary */
     .deliv { display:flex; align-items:center; gap:10px; width:100%; margin:12px 0 0; padding:12px 16px; background:transparent;
              border:1px solid var(--color-line); border-radius:12px; cursor:pointer; font-family:var(--font-sans); text-align:left; }
     .deliv svg.chev { width:16px; height:16px; fill:none; stroke:var(--color-ink-3); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -80,31 +79,45 @@
     .bar { display:flex; height:6px; width:120px; border-radius:999px; overflow:hidden; background:var(--color-base-200); box-shadow:inset 0 0 0 1px var(--color-line); }
     .bar > span { display:block; height:100%; }
 
-    /* replies */
-    .replies-h { font-size:15px; font-weight:700; color:var(--color-ink); margin:28px 0 0; }
-    .reply { display:flex; gap:13px; align-items:flex-start; padding:16px 0; border-top:1px solid var(--color-line); }
-    .reply__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--color-sage-800); flex:none; }
-    .reply__b { flex:1; min-width:0; }
-    .reply__head { font-size:13.5px; color:var(--color-ink-3); }
-    .reply__head strong { color:var(--color-ink); font-weight:600; }
-    .reply__body { font-size:15px; line-height:1.6; color:var(--color-ink-2); margin:4px 0 0; }
+    /* message cards — original + replies share this treatment (matches the app) */
+    .entry { display:flex; gap:13px; align-items:flex-start; padding:16px; background:var(--color-base-100);
+             border:1px solid var(--color-line); border-radius:14px; box-shadow:0 6px 16px rgba(37,41,29,0.05); }
+    .entry__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--color-sage-800); flex:none; }
+    .entry__b { flex:1; min-width:0; }
+    .entry__head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .entry__name { font-size:14px; font-weight:600; color:var(--color-ink); }
+    .entry__time { font-size:12.5px; color:var(--color-ink-3); }
+    .entry__badge { margin-left:auto; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+                    color:var(--color-sage-700); background:var(--color-sage-100); border-radius:999px; padding:3px 9px; }
+    .entry__body { font-size:15px; line-height:1.65; color:var(--color-ink-2); margin:6px 0 0; }
+
+    .original { margin-top:4px; }
+    .replies-h { font-size:15px; font-weight:700; color:var(--color-ink); margin:28px 0 12px; }
+    .replies { display:grid; gap:10px; }
 
     /* composer */
     .composer { margin:18px 0 0; padding:16px; background:var(--color-paper); border:1px solid var(--color-line); border-radius:14px; }
+    .composer__head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .composer__title { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:var(--color-ink); }
+    .composer__title svg { width:18px; height:18px; fill:none; stroke:var(--color-primary); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .replying-as { font-size:12.5px; font-weight:600; color:var(--color-ink-2); background:var(--color-base-100);
+                   border:1px solid var(--color-line); border-radius:999px; padding:5px 11px; }
+    .replying-as strong { color:var(--color-ink); }
     .composer textarea { width:100%; resize:vertical; }
     .composer__actions { display:flex; justify-content:flex-end; margin-top:12px; }
-    .dot { width:7px; height:7px; border-radius:999px; background:currentColor; display:inline-block; }
 
-    /* composer states (appended 2026-06-22) */
+    /* composer state messages */
+    .state-note { border-radius:12px; padding:11px 14px; font-size:13.5px; font-weight:600; margin:0 0 12px;
+                  background:#e9eedd; border:1px solid rgba(95,122,79,0.3); color:var(--color-success); }
+    .field-error { color:var(--color-error); font-size:13px; font-weight:600; margin:8px 0 0; }
+    .composer textarea.is-error { border-color:var(--color-error); }
+
     .states { max-width:680px; margin:0 auto; padding:0 24px 48px; }
     .states__head { font-size:15px; font-weight:700; color:var(--color-ink); margin:0 0 14px; }
     .state-card { border:1px solid var(--color-line); border-radius:16px; overflow:hidden; background:var(--color-base-100); margin-top:14px; }
     .state-card__label { background:var(--color-base-200); border-bottom:1px solid var(--color-line); color:var(--color-ink-2); font-family:var(--font-mono); font-size:11px; padding:8px 14px; }
     .state-card__body { padding:14px; }
     .state-card .composer { margin:0; }
-    .state-note { border-radius:12px; padding:11px 14px; font-size:13.5px; font-weight:600; margin:0 0 12px; background:#e9eedd; border:1px solid rgba(95,122,79,0.3); color:var(--color-success); }
-    .field-error { color:var(--color-error); font-size:13px; font-weight:600; margin:8px 0 0; }
-    .composer textarea.is-error { border-color:var(--color-error); }
   </style>
 </head>
 <body>
@@ -118,22 +131,33 @@
   <div class="wrap">
     <a class="back" href="#"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg> Club home</a>
 
-    <!-- original message -->
-    <p class="eyebrow">Club message</p>
+    <p class="eyebrow">Club conversation</p>
     <h1 class="subject">Saturday ridge walk</h1>
     <p class="meta">From <strong>Eira Sandhu</strong> · sent to <strong>142</strong> members · 3 Jun</p>
-    <p class="msgbody">Meeting at the trailhead 8am sharp. Bring microspikes — the north side still has ice in the gullies. We'll regroup at the saddle for lunch.</p>
+
+    <!-- original message — boxed card with an "Original message" badge (matches the app) -->
+    <div class="entry original">
+      <div class="entry__av" style="background:var(--color-sage-200)">ES</div>
+      <div class="entry__b">
+        <div class="entry__head">
+          <span class="entry__name">Eira Sandhu</span>
+          <span class="entry__time">3 Jun, 7:02am</span>
+          <span class="entry__badge">Original message</span>
+        </div>
+        <div class="entry__body">Meeting at the trailhead 8am sharp. Bring microspikes — the north side still has ice in the gullies. We'll regroup at the saddle for lunch.</div>
+      </div>
+    </div>
 
     <!-- follow control (FINAL/040 — 039 omits this) -->
     <div class="follow">
       <input type="checkbox" class="toggle toggle-primary" checked aria-label="Follow this conversation" />
       <div class="follow__t">
-        <strong>Follow this conversation to receive any new replies</strong>
+        <strong>You're following this conversation</strong>
         <span>You'll get an email when someone replies. Stop any time.</span>
       </div>
     </div>
 
-    <!-- demoted delivery summary -->
+    <!-- demoted, collapsed delivery summary -->
     <button class="deliv">
       <span class="deliv__ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/></svg></span>
       <span class="deliv__t"><strong>Delivery</strong> — 142 delivered · 0 sending · 0 problems</span>
@@ -141,25 +165,42 @@
       <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
     </button>
 
-    <!-- replies -->
+    <!-- replies — count header + cards with timestamps -->
     <h2 class="replies-h">Replies · 2</h2>
-    <div class="reply">
-      <div class="reply__av" style="background:var(--color-sage-100)">PD</div>
-      <div class="reply__b">
-        <div class="reply__head"><strong>Phil Dunbar</strong> · 3 Jun, 9:14am</div>
-        <div class="reply__body">I can bring a spare set of microspikes — happy to lend them out at the trailhead for anyone who needs them.</div>
+    <div class="replies">
+      <div class="entry">
+        <div class="entry__av" style="background:var(--color-sage-100)">PD</div>
+        <div class="entry__b">
+          <div class="entry__head">
+            <span class="entry__name">Phil Dunbar</span>
+            <span class="entry__time">3 Jun, 9:14am</span>
+            <span class="entry__badge">Reply</span>
+          </div>
+          <div class="entry__body">I can bring a spare set of microspikes — happy to lend them out at the trailhead for anyone who needs them.</div>
+        </div>
       </div>
-    </div>
-    <div class="reply">
-      <div class="reply__av" style="background:var(--color-sage-200)">MW</div>
-      <div class="reply__b">
-        <div class="reply__head"><strong>Marta Wiśniewska</strong> · 3 Jun, 9:40am</div>
-        <div class="reply__body">Carpool from the north lot? I have three seats — reply here if you want one.</div>
+      <div class="entry">
+        <div class="entry__av" style="background:var(--color-sage-200)">MW</div>
+        <div class="entry__b">
+          <div class="entry__head">
+            <span class="entry__name">Marta Wiśniewska</span>
+            <span class="entry__time">3 Jun, 9:40am</span>
+            <span class="entry__badge">Reply</span>
+          </div>
+          <div class="entry__body">Carpool from the north lot? I have three seats — reply here if you want one.</div>
+        </div>
       </div>
     </div>
 
-    <!-- inline reply composer -->
+    <!-- composer BELOW the replies, with "Replying as" (best of both) -->
     <div class="composer">
+      <div class="composer__head">
+        <span class="composer__title">
+          <svg viewBox="0 0 24 24"><path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z"/></svg>
+          Reply
+        </span>
+        <span class="replying-as">Replying as <strong>Lou Thirgood</strong></span>
+      </div>
       <textarea class="textarea" rows="3" placeholder="Write a reply…"></textarea>
       <div class="composer__actions">
         <button class="btn btn-primary">Post reply</button>
@@ -167,7 +208,7 @@
     </div>
   </div>
 
-  <!-- reply-composer states (appended 2026-06-22) -->
+  <!-- reply-composer states -->
   <div class="states">
     <h2 class="states__head">Reply composer — states</h2>
 
@@ -175,6 +216,10 @@
       <div class="state-card__label">state: posted — after a successful reply</div>
       <div class="state-card__body">
         <div class="composer">
+          <div class="composer__head">
+            <span class="composer__title">Reply</span>
+            <span class="replying-as">Replying as <strong>Lou Thirgood</strong></span>
+          </div>
           <p class="state-note">Your reply is being sent.</p>
           <textarea class="textarea" rows="3" placeholder="Write a reply…"></textarea>
           <div class="composer__actions"><button class="btn btn-primary">Post reply</button></div>
@@ -186,6 +231,10 @@
       <div class="state-card__label">state: validation error — empty reply submitted</div>
       <div class="state-card__body">
         <div class="composer">
+          <div class="composer__head">
+            <span class="composer__title">Reply</span>
+            <span class="replying-as">Replying as <strong>Lou Thirgood</strong></span>
+          </div>
           <textarea class="textarea is-error" rows="3" placeholder="Write a reply…"></textarea>
           <p class="field-error">Your reply can't be blank.</p>
           <div class="composer__actions"><button class="btn btn-primary">Post reply</button></div>
