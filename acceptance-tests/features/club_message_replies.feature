@@ -124,3 +124,22 @@ Feature: Club message replies (conversations)
       When Bob replies by email to "Trip planning night" through everyone@kmc.clubs.memba.io
       Then the conversation for "Trip planning night" should show Bob's reply
       And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
+
+  @iteration-043 @todo-domain
+  Rule: On the club home, each conversation is one entry with its reply count
+
+    Scenario: A replied-to message appears once, with its reply count
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      And Carol replies "I'll bring the maps" to "Trip planning night"
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation should show 2 replies
+      And the "Trip planning night" conversation should show the latest reply is from Carol
+
+    Scenario: A message with no replies shows none yet
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation should show no replies yet
+
+    Scenario: Conversations are ordered by original message, newest first
+      Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
+      When Carol replies "I'll take the old skis" to "Trip planning night"
+      Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
