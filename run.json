@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-23T07:00:50.231951037Z",
-  "last_event_at": "2026-06-23T07:22:49.359166029Z",
+  "last_event_at": "2026-06-23T07:23:58.157210889Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3928,9 +3928,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 298,
       "checkpoint": {
-        "timestamp": "2026-06-23T07:22:50.598476829Z",
+        "timestamp": "2026-06-23T07:22:53.504797556Z",
         "current_node": "finalize_iteration_status",
         "completed_nodes": [
           "start",
@@ -3950,58 +3950,460 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.gemini_review": 0,
           "current_node": "finalize_iteration_status",
-          "internal.node_visit_count": 1,
-          "internal.run_id": "01KVSMDTG0HMT8FT02RSSPY3TB",
-          "graph.max_node_visits": "160",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.synthesize_review": 0,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
-          "internal.retry_count.codex_review": 0,
+          "graph.rankdir": "LR",
+          "code_health_recording_ok": true,
+          "internal.run_id": "01KVSMDTG0HMT8FT02RSSPY3TB",
+          "response.record_code_health": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `docs/code-health.md` was not updated.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
+          "internal.retry_count.dev_check": 0,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+          "internal.retry_count.review_gate": 0,
+          "thread.start.current_node": "read_plan",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "last_response": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `d",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.record_code_health": 0,
+          "internal.retry_count.finalize_iteration_status": 0,
+          "internal.fidelity": "summary:high",
+          "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
           "thread.codex_review.current_node": "gemini_review",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "failure_class": "",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.thread_id": "publish_polish_to_main",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.publish_polish_to_main": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.review_gate.current_node": "record_code_health",
+          "response.claude_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `MessageProjection` as indicated by the plan's citation of ADR-0032. The query layer separation (context → presentation → view) follows CQRS boundaries appropriately.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone.\n\n## Bounded-Safe Fixes\n\nNone required. The implementation is clean and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **SQL Fragment Performance Pattern** (`lib/memba/messaging.ex:102-128`)\n   - **Smell**: Three correlated subqueries in the SELECT clause for reply_count, latest_replier_id, and latest_replier_name. Each subquery scans message_projections independently.\n   - **Why judgement-worthy**: The plan explicitly left this as an open technical decision (\"window function vs. a second query keyed by conversation. Either is acceptable; prefer one query if clean\"). The chosen subquery approach is simpler to read but may scale poorly for clubs with hundreds of conversations or thousands of messages. A window function would execute as a single scan, potentially 3× faster for large datasets.\n   - **Human decision needed**: Whether to preemptively optimize (window function or lateral join) or wait for measured performance data. Current implementation is correct and working; optimization is speculative until load patterns are known.\n\n2. **Duplicate Subquery Logic** (`lib/memba/messaging.ex:115-128`)\n   - **Smell**: The latest_replier_id and latest_replier_name subqueries differ only in the selected column (`sender_id` vs `sender_name`), repeating identical WHERE/ORDER BY/LIMIT clauses.\n   - **Why judgement-worthy**: If the \"latest replier\" definition changes (e.g., filtering out deleted users, or changing the ordering logic), both subqueries must be updated identically. A window function or lateral join would express this logic once. However, the duplication is small, isolated to one function, and unlikely to diverge.\n   - **Human decision needed**: Whether the DRY violation justifies the complexity of refactoring to window functions or whether the current clarity is preferable.\n\n3. **Hardcoded Table Name in Fragments** (`lib/memba/messaging.ex:109, 115, 121`)\n   - **Smell**: Raw SQL fragments reference `message_projections` by name. If the table is ever renamed (e.g., via Ecto schema changes or a migration), these queries will break at runtime, not compile time.\n   - **Why judgement-worthy**: Ecto schema changes are rare and would be caught in tests, but this is a fragility point. Using Ecto query composition (joins/subqueries) would bind to the schema name, making renames safe. However, the fragments are readable and the risk is low given test coverage.\n   - **Human decision needed**: Whether to enforce a project-wide rule against table-name literals in fragments or accept the tradeoff of clarity vs. schema-rename safety.\n\n## Suggested Fixes\n\nNone required for acceptance. The judgement-worthy findings above are architectural/optimization concerns that do not block this iteration.\n\n## Validation Notes\n\n1. **Automated Coverage (PASS)**\n   - Dev check passed: 85 scenarios (85 passed), 523 steps (523 passed) in 4m00.548s.\n   - ExUnit tests cover `Messaging.list_conversations_for_club/1`:\n     - Reply count calculation (0 replies, 1 reply, multiple replies)\n     - Latest replier lookup (id and name)\n     - Ordering by inserted_at DESC, message_id DESC\n     - Conversation grouping (only root messages returned)\n   - ExUnit tests cover `MemberDashboardPresentation.present_message_rows/2`:\n     - Conversation row structure (subject, sender, reply activity, date)\n     - Edge cases (nil inserted_at, 0 replies, missing latest replier)\n     - Authorization (forbidden access, identity validation)\n   - No failing or skipped tests related to this iteration.\n\n2. **Plan Conformance (PASS)**\n   - ✅ Added `Messaging.list_conversations_for_club/1` returning one row per conversation with reply_count and latest_replier.\n   - ✅ Updated `MemberDashboardPresentation` to build rows from conversations (removed `receipt_glance_fields`, added conversation-row fields).\n   - ✅ Updated `club.html.heex` markup to render conversation rows (removed delivery glance, added reply activity line).\n   - ✅ Row link target unchanged (conversation/message detail route).\n   - ✅ Open technical decision (query shape) resolved via subquery approach.\n\n3. **ADR/Reference Compliance (PASS)**\n   - Read model query uses `MessageProjection` (event-sourced projection) per CQRS patterns.\n   - Query isolated to `Messaging` context (DDD context boundary).\n   - Presentation logic separated into `MemberDashboardPresentation` (RDD responsibility separation).\n   - No direct aggregate or command-side coupling (query-only path).\n\n4. **Feature Evidence (PASS)**\n   - Implementation removes delivery glance from member home (per plan: \"The home no longer renders a delivery glance on conversation rows\").\n   - Reply count includes both in-app and email replies (verified by subquery filtering `message_id != conversation_id`).\n   - Conversations ordered by root message `inserted_at` descending (per plan).\n\n## Summary\n\nThe implementation is **plan-conforming, ADR-compliant, well-tested, and production-ready**. The three judgement-worthy findings are all acceptable tradeoffs explicitly acknowledged in the plan's open technical decisions or low-risk by nature. The subquery approach prioritizes readability and simplicity over speculative performance optimization, which is appropriate for an initial iteration without measured load data. No changes are required before merge.",
+          "last_stage": "record_code_health",
+          "outcome": "succeeded",
+          "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence.",
+          "failure_signature": "",
+          "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "implementation_accepted": true,
           "review_fixes_available": false,
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "internal.retry_count.final_artifact_gate": 0,
+          "thread.record_code_health.current_node": "final_artifact_gate"
+        },
+        "node_outcomes": {
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "implementation_accepted": true,
+              "review_fixes_available": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7904,
+                    "output_tokens": 36,
+                    "reasoning_tokens": 241,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 47830
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 22849,
+              "tool_time_ms": 0,
+              "active_time_ms": 22849
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2f50de7e24c31dc908fabaa7c998a4cb6b282df513f10490d5065a35f042a973"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/043-conversations-overview-grouping/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 235,
+              "active_time_ms": 235
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6b9e3f71840d06018775c8716d99e4f460207c18355d6582bd19047303304b89"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 400510,
+              "active_time_ms": 400510
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/dad6871221dcfbfb0d2f56132fa0f3f1b9d488a100e1efcdda7e517c62c998d2"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155617,
+              "active_time_ms": 155617
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-so",
+              "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5665,
+                    "output_tokens": 813,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 68195
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 55515,
+              "tool_time_ms": 0,
+              "active_time_ms": 55515
+            }
+          },
+          "finalize_iteration_status": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1225,
+              "active_time_ms": 1225
+            }
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "record_code_health",
+              "last_response": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `d",
+              "response.record_code_health": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `docs/code-health.md` was not updated.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
+              "code_health_recording_ok": true
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 429794,
+                    "output_tokens": 3294,
+                    "reasoning_tokens": 1881,
+                    "cache_read_tokens": 244736,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2426588
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 475597,
+              "tool_time_ms": 16261,
+              "active_time_ms": 491858
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9d97cf2484daecea9d2c8347b8af02da57617fb1ed3417fe65b6e7a4e02790da"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '61faebe455a1f6617feeb43978b5041c71139381'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 259,
+              "active_time_ms": 259
+            }
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/176a49b6dbc00f417e850df52667a2be66cb6cf2b12e0afd334718bb9573a979"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/043-conversations-overview-grouping/plan.md' '61faebe455a1f6617feeb43978b5041c71139381'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 263,
+              "active_time_ms": 263
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `Me",
+              "response.claude_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `MessageProjection` as indicated by the plan's citation of ADR-0032. The query layer separation (context → presentation → view) follows CQRS boundaries appropriately.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone.\n\n## Bounded-Safe Fixes\n\nNone required. The implementation is clean and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **SQL Fragment Performance Pattern** (`lib/memba/messaging.ex:102-128`)\n   - **Smell**: Three correlated subqueries in the SELECT clause for reply_count, latest_replier_id, and latest_replier_name. Each subquery scans message_projections independently.\n   - **Why judgement-worthy**: The plan explicitly left this as an open technical decision (\"window function vs. a second query keyed by conversation. Either is acceptable; prefer one query if clean\"). The chosen subquery approach is simpler to read but may scale poorly for clubs with hundreds of conversations or thousands of messages. A window function would execute as a single scan, potentially 3× faster for large datasets.\n   - **Human decision needed**: Whether to preemptively optimize (window function or lateral join) or wait for measured performance data. Current implementation is correct and working; optimization is speculative until load patterns are known.\n\n2. **Duplicate Subquery Logic** (`lib/memba/messaging.ex:115-128`)\n   - **Smell**: The latest_replier_id and latest_replier_name subqueries differ only in the selected column (`sender_id` vs `sender_name`), repeating identical WHERE/ORDER BY/LIMIT clauses.\n   - **Why judgement-worthy**: If the \"latest replier\" definition changes (e.g., filtering out deleted users, or changing the ordering logic), both subqueries must be updated identically. A window function or lateral join would express this logic once. However, the duplication is small, isolated to one function, and unlikely to diverge.\n   - **Human decision needed**: Whether the DRY violation justifies the complexity of refactoring to window functions or whether the current clarity is preferable.\n\n3. **Hardcoded Table Name in Fragments** (`lib/memba/messaging.ex:109, 115, 121`)\n   - **Smell**: Raw SQL fragments reference `message_projections` by name. If the table is ever renamed (e.g., via Ecto schema changes or a migration), these queries will break at runtime, not compile time.\n   - **Why judgement-worthy**: Ecto schema changes are rare and would be caught in tests, but this is a fragility point. Using Ecto query composition (joins/subqueries) would bind to the schema name, making renames safe. However, the fragments are readable and the risk is low given test coverage.\n   - **Human decision needed**: Whether to enforce a project-wide rule against table-name literals in fragments or accept the tradeoff of clarity vs. schema-rename safety.\n\n## Suggested Fixes\n\nNone required for acceptance. The judgement-worthy findings above are architectural/optimization concerns that do not block this iteration.\n\n## Validation Notes\n\n1. **Automated Coverage (PASS)**\n   - Dev check passed: 85 scenarios (85 passed), 523 steps (523 passed) in 4m00.548s.\n   - ExUnit tests cover `Messaging.list_conversations_for_club/1`:\n     - Reply count calculation (0 replies, 1 reply, multiple replies)\n     - Latest replier lookup (id and name)\n     - Ordering by inserted_at DESC, message_id DESC\n     - Conversation grouping (only root messages returned)\n   - ExUnit tests cover `MemberDashboardPresentation.present_message_rows/2`:\n     - Conversation row structure (subject, sender, reply activity, date)\n     - Edge cases (nil inserted_at, 0 replies, missing latest replier)\n     - Authorization (forbidden access, identity validation)\n   - No failing or skipped tests related to this iteration.\n\n2. **Plan Conformance (PASS)**\n   - ✅ Added `Messaging.list_conversations_for_club/1` returning one row per conversation with reply_count and latest_replier.\n   - ✅ Updated `MemberDashboardPresentation` to build rows from conversations (removed `receipt_glance_fields`, added conversation-row fields).\n   - ✅ Updated `club.html.heex` markup to render conversation rows (removed delivery glance, added reply activity line).\n   - ✅ Row link target unchanged (conversation/message detail route).\n   - ✅ Open technical decision (query shape) resolved via subquery approach.\n\n3. **ADR/Reference Compliance (PASS)**\n   - Read model query uses `MessageProjection` (event-sourced projection) per CQRS patterns.\n   - Query isolated to `Messaging` context (DDD context boundary).\n   - Presentation logic separated into `MemberDashboardPresentation` (RDD responsibility separation).\n   - No direct aggregate or command-side coupling (query-only path).\n\n4. **Feature Evidence (PASS)**\n   - Implementation removes delivery glance from member home (per plan: \"The home no longer renders a delivery glance on conversation rows\").\n   - Reply count includes both in-app and email replies (verified by subquery filtering `message_id != conversation_id`).\n   - Conversations ordered by root message `inserted_at` descending (per plan).\n\n## Summary\n\nThe implementation is **plan-conforming, ADR-compliant, well-tested, and production-ready**. The three judgement-worthy findings are all acceptable tradeoffs explicitly acknowledged in the plan's open technical decisions or low-risk by nature. The subquery approach prioritizes readability and simplicity over speculative performance optimization, which is appropriate for an initial iteration without measured load data. No changes are required before merge.",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5329,
+                    "output_tokens": 4341,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 81102
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 91607,
+              "tool_time_ms": 0,
+              "active_time_ms": 91607
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
+              "last_response": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-m"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6683,
+                    "output_tokens": 808,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 73135
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 53812,
+              "tool_time_ms": 0,
+              "active_time_ms": 53812
+            }
+          },
+          "publish_polish_to_main": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c576b62eb0a227499f01570d9d4957d974521cea97ea5b4b55a6952eac37f5af"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 262,
+              "active_time_ms": 262
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "final_summary",
+        "git_commit_sha": "fdc90968559d8baa2c8e96dd0ce6baf5c98ce7d5",
+        "node_visits": {
+          "publish_polish_to_main": 1,
+          "read_plan": 1,
+          "record_code_health": 1,
+          "review_gate": 1,
+          "start": 1,
+          "synthesize_review": 1,
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
+          "final_artifact_gate": 1,
+          "codex_review": 1,
+          "finalize_iteration_status": 1,
+          "gemini_review": 1,
+          "claude_review": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/design-system/emails/inbound-rejection.html b/design-system/emails/inbound-rejection.html\nnew file mode 100644\nindex 0000000..5400c54\n--- /dev/null\n+++ b/design-system/emails/inbound-rejection.html\n@@ -0,0 +1,131 @@\n+<!-- @screen-label \"Email — Inbound rejection\" -->\n+<!--\n+  Memba · Transactional email — Inbound club email rejection  (v3 — From names the club)\n+  DIAL: club-named sender, Memba-voiced body. The From is \"{{club_name}} via Memba\"\n+        (kept from iteration 031 so the recipient sees the club they wrote to), while the\n+        body stays Memba-voiced because a bounce genuinely comes from the carrier — with a\n+        one-line clarifier (\"Memba delivers email for {{club_name}}\").\n+  Canonical sample shown: UNKNOWN SENDER (includes the optional club hint + original-message context).\n+  Dynamic fields:  {{rejection_reason}}  {{club_name}}  {{club_hint}}  {{original_subject}}\n+                   {{original_snippet}}  {{support_email}}  {{recipient_email}}\n+  Subject: Your email to Wessex Chamber Choir wasn't posted   (or \"Re: {{original_subject}}\")\n+  From:    {{club_name}} via Memba   (e.g. \"Wessex Chamber Choir via Memba\")\n+  Reply-To: {{support_email}}   (help@memba.io)\n+-->\n+<!doctype html>\n+<html lang=\"en\" xmlns=\"http://www.w3.org/1999/xhtml\">\n+<head>\n+  <meta charset=\"utf-8\">\n+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n+  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n+  <meta name=\"color-scheme\" content=\"light only\">\n+  <meta name=\"supported-color-schemes\" content=\"light only\">\n+  <title>Your email wasn't posted</title>\n+  <!--[if mso]><xml><o:OfficeDocumentSettings xmlns:o=\"urn:schemas-microsoft-com:office:office\"><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->\n+  <style>\n+    @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap');\n+    body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }\n+    table { border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; }\n+    a { color:#5a7050; }\n+    @media only screen and (max-width:600px) {\n+      .container { width:100% !important; max-width:100% !important; border-radius:0 !important; }\n+      .gutter { padding-left:22px !important; padding-right:22px !important; }\n+      .h1 { font-size:23px !important; }\n+    }\n+  </style>\n+</head>\n+<body style=\"margin:0; padding:0; background:#ece9d9; font-family:'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color:#25291d; -webkit-font-smoothing:antialiased;\">\n+\n+  <!-- preheader -->\n+  <div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#ece9d9;\">\n+    Your email to Wessex Chamber Choir wasn&rsquo;t posted. Here&rsquo;s why, and how to fix it.\n+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;\n+  </div>\n+\n+  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:#ece9d9;\">\n+    <tr>\n+      <td align=\"center\" style=\"padding:32px 16px;\">\n+\n+        <table role=\"presentation\" class=\"container\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:560px; max-width:560px; background:#ffffff; border:1px solid #e8e6d4; border-radius:14px; overflow:hidden;\">\n+\n+          <!-- header: MEMBA mark (this is the carrier speaking) + club clarifier -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:24px 28px 16px;\">\n+              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                <td style=\"vertical-align:middle;\">\n+                  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                    <td style=\"padding-right:9px; vertical-align:middle;\">\n+                      <svg width=\"22\" height=\"22\" viewBox=\"0 0 64 64\" aria-hidden=\"true\"><rect x=\"2\" y=\"2\" width=\"60\" height=\"60\" rx=\"12\" fill=\"#5a7050\"></rect><path d=\"M32 51 C32 43 32 36 32 18\" fill=\"none\" stroke=\"#f6f5ea\" stroke-width=\"4.6\" stroke-linecap=\"round\"></path><path d=\"M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z\" fill=\"#f6f5ea\"></path><path d=\"M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z\" fill=\"#f6f5ea\"></path><circle cx=\"32\" cy=\"15\" r=\"3.7\" fill=\"#d2925a\"></circle></svg>\n+                    </td>\n+                    <td style=\"vertical-align:middle; font-size:16px; font-weight:600; color:#25291d; letter-spacing:-0.018em;\">Memba</td>\n+                  </tr></table>\n+                </td>\n+                <td align=\"right\" style=\"vertical-align:middle; font-size:11px; color:#b0b3a3; letter-spacing:0.04em; text-transform:uppercase;\">Delivery notice</td>\n+              </tr></table>\n+            </td>\n+          </tr>\n+\n+          <!-- body -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:6px 28px 24px; font-size:15px; line-height:1.55; color:#555a47;\">\n+\n+              <!-- calm status mark — neutral, not alarming -->\n+              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin:6px 0 2px;\"><tr>\n+                <td width=\"40\" height=\"40\" align=\"center\" valign=\"middle\" style=\"width:40px; height:40px; background:#e3e9ec; border-radius:999px; text-align:center; line-height:40px;\">\n+                  <svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#4f6b78\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"></path><path d=\"m3.5 6.5 8.5 6 8.5-6\"></path></svg>\n+                </td>\n+              </tr></table>\n+\n+              <h1 class=\"h1\" style=\"margin:12px 0 12px; font-family:'Figtree',sans-serif; font-size:26px; font-weight:600; line-height:1.15; letter-spacing:-0.028em; color:#25291d;\">Your email wasn&rsquo;t posted</h1>\n+              <p style=\"margin:0 0 16px;\">Sorry &mdash; your message to <b style=\"color:#25291d; font-weight:600;\">Wessex Chamber Choir</b> didn&rsquo;t go out to members. Here&rsquo;s why:</p>\n+\n+              <!-- reason -->\n+              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin:0 0 16px;\"><tr>\n+                <td style=\"background:#f6f5ea; border:1px solid #e8e6d4; border-radius:10px; padding:14px 16px; font-size:15px; line-height:1.5; color:#25291d;\">\n+                  We couldn&rsquo;t find a member account for this email address, so your message hasn&rsquo;t been posted.\n+                </td>\n+              </tr></table>\n+\n+              <!-- optional hint (unknown-sender case) -->\n+              <p style=\"margin:0 0 18px;\">Is it possible you signed up for membership of Wessex Chamber Choir with a different email address?</p>\n+\n+              <!-- next step -->\n+              <p style=\"margin:0 0 6px; color:#25291d; font-weight:600; font-size:15px;\">What to do next</p>\n+              <p style=\"margin:0 0 18px;\">Just reply to this email and a person will help, or write to <a href=\"mailto:help@memba.io\" style=\"color:#5a7050; text-decoration:underline;\">help@memba.io</a>. Nothing was sent to the club, so there&rsquo;s nothing to undo.</p>\n+\n+              <!-- preserved original context -->\n+              <p style=\"margin:0 0 7px; font-size:12px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:#878b76;\">Your message</p>\n+              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                <td style=\"background:#ffffff; border:1px solid #e8e6d4; border-radius:10px; padding:14px 16px;\">\n+                  <div style=\"font-size:14px; font-weight:600; color:#25291d; letter-spacing:-0.01em; margin-bottom:4px;\">Can I bring a guest on Saturday?</div>\n+                  <div style=\"font-size:13.5px; line-height:1.5; color:#878b76;\">Hi &mdash; I wanted to check whether members are allowed to bring a guest along to the open rehearsal this weekend, or if it&rsquo;s members only&hellip;</div>\n+                </td>\n+              </tr></table>\n+\n+            </td>\n+          </tr>\n+\n+          <!-- footer: ambient Memba baseline, with the carrier clarifier -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:16px 28px 24px; border-top:1px solid #e8e6d4;\">\n+              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin-bottom:9px;\"><tr>\n+                <td style=\"padding-right:7px; vertical-align:middle;\">\n+                  <svg width=\"15\" height=\"15\" viewBox=\"0 0 64 64\" aria-hidden=\"true\"><rect x=\"2\" y=\"2\" width=\"60\" height=\"60\" rx=\"12\" fill=\"#5a7050\"></rect><path d=\"M32 51 C32 43 32 36 32 18\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"4.6\" stroke-linecap=\"round\"></path><path d=\"M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z\" fill=\"#ffffff\"></path><path d=\"M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z\" fill=\"#ffffff\"></path><circle cx=\"32\" cy=\"15\" r=\"3.7\" fill=\"#d2925a\"></circle></svg>\n+                </td>\n+                <td style=\"vertical-align:middle; font-size:11.5px; color:#878b76;\">Memba delivers email for Wessex Chamber Choir</td>\n+              </tr></table>\n+              <div style=\"font-size:12px; line-height:1.6; color:#878b76;\">\n+                This is an automatic notice, sent to margaret.ellis@gmail.com.<br>\n+                Replies go to <a href=\"mailto:help@memba.io\" style=\"color:#878b76; text-decoration:underline;\">help@memba.io</a>.\n+              </div>\n+            </td>\n+          </tr>\n+\n+        </table>\n+\n+      </td>\n+    </tr>\n+  </table>\n+\n+</body>\n+</html>\ndiff --git a/design-system/emails/reply-notification.html b/design-system/emails/reply-notification.html\nnew file mode 100644\nindex 0000000..91da385\n--- /dev/null\n+++ b/design-system/emails/reply-notification.html\n@@ -0,0 +1,162 @@\n+<!-- @screen-label \"Email — Reply notification\" -->\n+<!--\n+  Memba · Transactional email — Reply notification (conversation)\n+  Sent when someone replies to a club message conversation.\n+\n+  DESIGN DECISION (2026-06-19): lean on the email client for history.\n+  The branded body is just the NEW reply + a \"View the conversation\" CTA + footer.\n+  The earlier messages are emitted as a STANDARD quoted thread (blockquote.gmail_quote\n+  with \"On <date>, <name> wrote:\" attributions), so email clients fold it natively\n+  (\"See more\" in Apple Mail, \"•••\" in Gmail) and thread it via Message-ID / In-Reply-To /\n+  References headers. We deliberately do NOT inline a branded full history — that would\n+  fight the client and show the thread twice in clients that thread by headers.\n+\n+  Dynamic fields:  {{club_name}} {{club_slug}} {{club_initials}} {{replier_name}} {{replier_initials}}\n+                   {{conversation_subject}} {{reply_body}} {{conversation_url}}\n+                   {{recipient_email}} {{follow_reason}} {{stop_following_url}}\n+                   quoted_history[] (most-recent-first, nested): {author, sent_label, body}\n+  Subject:   [{{club_slug}}] Re: {{conversation_subject}}   (club-slug prefix kept — iteration 025, for mailbox filtering)\n+  From:      {{club_name}} via Memba <{{club_slug}}@clubs.memba.io>\n+  Reply-To:  everyone@{{club_slug}}.clubs.memba.io   (the club everyone address — iteration 042)\n+  Headers:   Message-ID, In-Reply-To, References set so clients thread + fold AND so replies\n+             route back to this conversation by header (iteration 041 pivoted reply routing to\n+             email headers; there is no per-conversation plus-address).\n+-->\n+<!doctype html>\n+<html lang=\"en\" xmlns=\"http://www.w3.org/1999/xhtml\">\n+<head>\n+  <meta charset=\"utf-8\">\n+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n+  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n+  <meta name=\"color-scheme\" content=\"light only\">\n+  <meta name=\"supported-color-schemes\" content=\"light only\">\n+  <title>Re: Saturday ridge walk</title>\n+  <!--[if mso]><xml><o:OfficeDocumentSettings xmlns:o=\"urn:schemas-microsoft-com:office:office\"><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->\n+  <style>\n+    @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap');\n+    body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }\n+    table { border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; }\n+    a { color:#5a7050; }\n+    @media only screen and (max-width:600px) {\n+      .container { width:100% !important; max-width:100% !important; border-radius:0 !important; }\n+      .gutter { padding-left:22px !important; padding-right:22px !important; }\n+      .h1 { font-size:20px !important; }\n+    }\n+  </style>\n+</head>\n+<body style=\"margin:0; padding:0; background:#ece9d9; font-family:'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color:#25291d; -webkit-font-smoothing:antialiased;\">\n+\n+  <!-- preheader -->\n+  <div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#ece9d9;\">\n+    Phil Dunbar replied in the Saturday ridge walk conversation.\n+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;\n+  </div>\n+\n+  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:#ece9d9;\">\n+    <tr>\n+      <td align=\"center\" style=\"padding:32px 16px;\">\n+\n+        <table role=\"presentation\" class=\"container\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:560px; max-width:560px; background:#ffffff; border:1px solid #e8e6d4; border-radius:14px; overflow:hidden;\">\n+\n+          <!-- header: CLUB lockup -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:18px 28px; border-bottom:1px solid #e8e6d4;\">\n+              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                <td style=\"vertical-align:middle;\">\n+                  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                    <td style=\"padding-right:10px; vertical-align:middle;\">\n+                      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                        <td width=\"26\" height=\"26\" align=\"center\" valign=\"middle\" style=\"width:26px; height:26px; background:#25291d; border-radius:7px; font-size:11px; font-weight:600; color:#f6f5ea; text-align:center; line-height:26px;\">KAC</td>\n+                      </tr></table>\n+                    </td>\n+                    <td style=\"vertical-align:middle; font-size:14px; font-weight:600; color:#25291d; letter-spacing:-0.012em;\">Kootenay Alpine Club</td>\n+                  </tr></table>\n+                </td>\n+                <td align=\"right\" style=\"vertical-align:middle; font-size:11px; color:#b0b3a3; letter-spacing:0.04em; text-transform:uppercase;\">New reply</td>\n+              </tr></table>\n+            </td>\n+          </tr>\n+\n+          <!-- conversation subject -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:20px 28px 2px;\">\n+              <div style=\"font-size:11px; color:#878b76; letter-spacing:0.04em; text-transform:uppercase;\">In the conversation</div>\n+              <h1 class=\"h1\" style=\"margin:5px 0 0; font-family:'Figtree',sans-serif; font-size:22px; font-weight:600; line-height:1.2; letter-spacing:-0.022em; color:#25291d;\">Saturday ridge walk</h1>\n+            </td>\n+          </tr>\n+\n+          <!-- the NEW reply (the only branded message body) -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:18px 28px 4px;\">\n+              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                <td style=\"vertical-align:middle; padding-right:12px;\">\n+                  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                    <td width=\"42\" height=\"42\" align=\"center\" valign=\"middle\" style=\"width:42px; height:42px; background:#5a7050; border-radius:999px; font-size:15px; font-weight:600; color:#f6f5ea; text-align:center; line-height:42px;\">PD</td>\n+                  </tr></table>\n+                </td>\n+                <td style=\"vertical-align:middle;\">\n+                  <div style=\"font-size:15px; font-weight:600; color:#25291d; letter-spacing:-0.01em;\">Phil Dunbar replied</div>\n+                  <div style=\"font-size:12.5px; color:#878b76; margin-top:1px;\">just now</div>\n+                </td>\n+              </tr></table>\n+            </td>\n+          </tr>\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:12px 28px 20px; font-size:15.5px; line-height:1.6; color:#323a2a;\">\n+              <p style=\"margin:0 0 14px;\">I can bring a spare set of microspikes &mdash; happy to lend them out at the trailhead for anyone who needs them.</p>\n+              <p style=\"margin:0;\">Also bringing the big thermos, so there&rsquo;ll be hot tea at the saddle.</p>\n+            </td>\n+          </tr>\n+\n+          <!-- CTA -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:0 28px 22px;\">\n+              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+                <td align=\"center\" style=\"background:#5a7050; border-radius:999px;\">\n+                  <a href=\"#\" style=\"display:inline-block; padding:12px 26px; font-size:14px; font-weight:600; color:#ffffff; text-decoration:none;\">View the conversation</a>\n+                </td>\n+              </tr></table>\n+            </td>\n+          </tr>\n+\n+          <!-- quoted history: STANDARD email quote so clients fold/thread it natively -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:0 28px 18px;\">\n+              <div class=\"gmail_quote\" style=\"font-size:13.5px; line-height:1.55; color:#878b76;\">\n+                On 3 Jun, Marta Wi&#347;niewska wrote:\n+                <blockquote class=\"gmail_quote\" style=\"margin:6px 0 0; padding:2px 0 2px 14px; border-left:2px solid #d9d6bf; color:#878b76;\">\n+                  Carpool from the north lot? I have three seats &mdash; reply here if you want one.\n+                  <br><br>\n+                  On 3 Jun, Eira Sandhu wrote:\n+                  <blockquote class=\"gmail_quote\" style=\"margin:6px 0 0; padding:2px 0 2px 14px; border-left:2px solid #d9d6bf; color:#a4a892;\">\n+                    Meeting at the trailhead 8am sharp. Bring microspikes &mdash; the north side still has ice in the gullies. We&rsquo;ll regroup at the saddle for lunch.\n+                  </blockquote>\n+                </blockquote>\n+              </div>\n+            </td>\n+          </tr>\n+\n+          <!-- footer: Memba baseline + follow controls -->\n+          <tr>\n+            <td class=\"gutter\" style=\"padding:20px 28px 24px; border-top:1px solid #e8e6d4;\">\n+              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin-bottom:10px;\"><tr>\n+                <td style=\"padding-right:7px; vertical-align:middle;\">\n+                  <svg width=\"15\" height=\"15\" viewBox=\"0 0 64 64\" aria-hidden=\"true\"><rect x=\"2\" y=\"2\" width=\"60\" height=\"60\" rx=\"12\" fill=\"#5a7050\"></rect><path d=\"M32 51 C32 43 32 36 32 18\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"4.6\" stroke-linecap=\"round\"></path><path d=\"M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z\" fill=\"#ffffff\"></path><path d=\"M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z\" fill=\"#ffffff\"></path><circle cx=\"32\" cy=\"15\" r=\"3.7\" fill=\"#d2925a\"></circle></svg>\n+                </td>\n+                <td style=\"vertical-align:middle; font-size:11.5px; color:#878b76;\">Delivered for Kootenay Alpine Club by <a href=\"https://memba.io\" style=\"color:#555a47; text-decoration:none; font-weight:600;\">Memba</a></td>\n+              </tr></table>\n+              <div style=\"font-size:12px; line-height:1.6; color:#878b76;\">\n+                You&rsquo;re following this conversation because you replied to it.<br>\n+                <a href=\"#\" style=\"color:#878b76; text-decoration:underline;\">Stop following this conversation</a>\n+              </div>\n+            </td>\n+          </tr>\n+\n+        </table>\n+\n+      </td>\n+    </tr>\n+  </table>\n+\n+</body>\n+</html>\ndiff --git a/design-system/wireframes/member-conversation-overview.html b/design-system/wireframes/member-conversation-overview.html\nindex 72cf3fd..df1479e 100644\n--- a/design-system/wireframes/member-conversation-overview.html\n+++ b/design-system/wireframes/member-conversation-overview.html\n@@ -1,12 +1,13 @@\n-<!-- @dsCard group=\"Member App\" viewport=\"1280x1200\" name=\"Conversations overview (club home)\" subtitle=\"Recent messages reworked as one row per conversation, with a reply count and last-activity\" -->\n-<!-- @startingPoint section=\"Member App\" subtitle=\"Replies-aware club home: conversations grouped, not one row per reply\" viewport=\"1280x1200\" -->\n+<!-- @dsCard group=\"Member App\" viewport=\"1280x1100\" name=\"Conversations overview (club home)\" subtitle=\"Recent messages reworked as one row per conversation, with a reply count\" -->\n+<!-- @startingPoint section=\"Member App\" subtitle=\"Replies-aware club home: conversations grouped, not one row per reply\" viewport=\"1280x1100\" -->\n <!--\n-  NEW (2026-06-22). Fixes the gap where each reply surfaced as its own top-level\n-  row in \"Recent club messages\" (duplicate subjects, one delivery bar per reply).\n-  Here the club home lists CONVERSATIONS: one row per root message, activity-led —\n-  avatar of the latest participant, subject, \"Started by <originator>\", a reply\n-  count + who replied last, and the root message's delivery glance. Sorted by last\n-  activity. See docs/problems/2026-06-22-replies-feature-design-gaps.md.\n+  NEW (2026-06-22), origin-led (iteration 043). Fixes the gap where each reply surfaced as\n+  its own top-level row in \"Recent club messages\" (duplicate subjects, one delivery bar per\n+  reply). Here the club home lists CONVERSATIONS: one row per root message, ordered by the\n+  original send time (newest first). Each row shows the ORIGINATOR's avatar, the subject,\n+  \"Started by <originator>\", and a reply count with who replied last. The date is the\n+  original send date. The delivery glance is intentionally NOT shown here — delivery detail\n+  lives on the conversation page. See docs/problems/2026-06-22-replies-feature-design-gaps.md.\n -->\n <!doctype html>\n <html lang=\"en\" data-theme=\"light\">\n@@ -17,7 +18,6 @@\n   <link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap\">\n   <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/daisyui@5\">\n   <style>\n-    /* Memba raw tokens (mirror of web/assets/css/app.css @theme). */\n     :root {\n       --color-sage-50:#eef1e6; --color-sage-100:#dde3cf; --color-sage-200:#bccaa6;\n       --color-sage-300:#98ab80; --color-sage-400:#6f8760; --color-sage-500:#5a7050;\n@@ -25,7 +25,6 @@\n       --color-cream:#f6f5ea; --color-paper:#fffef9; --color-apricot:#d2925a;\n       --color-ink:#25291d; --color-ink-2:#555a47; --color-ink-3:#878b76;\n       --color-line:#e8e6d4; --color-line-strong:#d9d6bf;\n-      --color-success:#5f7a4f; --color-warning:#a8772e; --color-error:#a8503a; --color-info:#4f6b78;\n       --font-sans:\"Figtree\",ui-sans-serif,system-ui,sans-serif;\n       --font-mono:\"JetBrains Mono\",ui-monospace,SFMono-Regular,Menlo,monospace;\n     }\n@@ -33,9 +32,6 @@\n       color-scheme:light;\n       --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;\n       --color-primary:#5a7050; --color-primary-content:#f6f5ea;\n-      --color-secondary:#555a47; --color-secondary-content:#f6f5ea;\n-      --color-accent:#d2925a; --color-accent-content:#25291d;\n-      --color-success:#5f7a4f; --color-warning:#a8772e; --color-error:#a8503a; --color-info:#4f6b78;\n       --radius-selector:0.375rem; --radius-field:0.375rem; --radius-box:0.75rem;\n       --size-selector:0.25rem; --size-field:0.25rem; --border:1px; --depth:0; --noise:0;\n     }\n@@ -58,7 +54,7 @@\n     .window-dot--sage { background:var(--color-sage-300); } .window-dot--cream { background:var(--color-line-strong); } .window-dot--apricot { background:var(--color-apricot); }\n     .browser-frame__path { color:var(--color-ink-3); font-family:var(--font-mono); font-size:11px; margin-left:8px; }\n \n-    .club-site-layout { background:var(--color-base-200); color:var(--color-base-content); min-height:930px; }\n+    .club-site-layout { background:var(--color-base-200); color:var(--color-base-content); min-height:840px; }\n     .club-site-header { background:var(--color-base-100); border-bottom:1px solid var(--color-base-300); padding:0 28px; }\n     .club-site-header__inner { align-items:center; display:flex; gap:20px; justify-content:space-between; margin:0 auto; max-width:1120px; padding:18px 0; }\n     .club-site-name { color:var(--color-base-content); font-size:18px; font-weight:700; letter-spacing:-0.02em; }\n@@ -89,7 +85,7 @@\n     .message-row { background:var(--color-base-100); border:1px solid var(--color-base-300); border-radius:18px; box-shadow:0 8px 18px rgba(37,41,29,0.05); transition:transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }\n     .message-row:hover { border-color:rgba(135,139,118,0.45); box-shadow:0 12px 24px rgba(37,41,29,0.08); transform:translateY(-2px); }\n \n-    /* conversation row: avatar of latest participant | body | last-activity meta */\n+    /* conversation row: originator avatar | body | original-send-date meta */\n     .conversation-row__link { display:grid; gap:16px; grid-template-columns:40px minmax(0, 1fr) auto; padding:16px; align-items:start; }\n     .avatar-circle { align-items:center; background:var(--color-sage-200); border-radius:999px; color:var(--color-sage-800); display:flex; font-size:13px; font-weight:700; height:40px; justify-content:center; width:40px; }\n     .avatar-circle--alt { background:var(--color-sage-300); } .avatar-circle--soft { background:var(--color-sage-100); } .avatar-circle--deep { background:var(--color-sage-400); }\n@@ -99,10 +95,6 @@\n     .conversation-activity__icon { color:var(--color-primary); flex:none; height:15px; width:15px; }\n     .conversation-activity strong { color:var(--color-ink); font-weight:700; }\n     .conversation-activity--empty { color:var(--color-ink-3); font-weight:500; }\n-    .receipt-glance { align-items:center; color:var(--color-ink-3); display:flex; flex-wrap:wrap; font-size:12px; font-weight:600; gap:8px; margin-top:8px; }\n-    .mini-bar { background:var(--color-base-200); border:1px solid var(--color-base-300); border-radius:999px; display:flex; height:7px; overflow:hidden; width:72px; }\n-    .mini-segment { display:block; height:100%; }\n-    .status-fill--delivered { background:var(--color-sage-600); } .status-fill--sent { background:var(--color-warning); } .status-fill--problem { background:var(--color-error); }\n     .conversation-row__meta { align-items:flex-start; color:var(--color-ink-2); display:flex; font-size:12px; font-weight:600; gap:12px; justify-content:flex-end; white-space:nowrap; }\n     .chevron { color:var(--color-ink-2); font-size:20px; line-height:1; }\n \n@@ -129,9 +121,10 @@\n         <h1>Conversations overview</h1>\n         <p>\n           The club home lists conversations, not individual messages. Each row is one\n-          conversation — the latest participant's avatar, the subject, who started it,\n-          a reply count with who replied last, and the original message's delivery\n-          glance. Rows are ordered by most recent activity.\n+          conversation — the originator's avatar, the subject, who started it, and a reply\n+          count with who replied last. Rows are ordered by the original send time, newest\n+          first; the date is the original send date. Delivery detail lives on the\n+          conversation page, not here.\n         </p>\n       </div>\n       <span class=\"variant-label\">wireframes/member-conversation-overview.html</span>\n@@ -185,11 +178,11 @@\n               </div>\n \n               <div id=\"member-conversation-list\" class=\"message-list\">\n-                <!-- conversation with replies: avatar = latest replier -->\n+                <!-- conversation with replies: avatar = originator, date = original send -->\n                 <article class=\"message-row\" data-testid=\"conversation-row\" data-conversation-id=\"msg_30000000-0000-0000-0000-000000000001\" data-reply-count=\"2\">\n                   <a class=\"conversation-row__link\" data-testid=\"conversation-link\" href=\"#\">\n-                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-latest-initials\" aria-hidden=\"true\">\n-                      <span class=\"avatar-circle avatar-circle--soft\">CC</span>\n+                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-originator-initials\" aria-hidden=\"true\">\n+                      <span class=\"avatar-circle\">AA</span>\n                     </span>\n                     <span>\n                       <span class=\"conversation-subject\">Saturday ridge walk</span>\n@@ -198,26 +191,18 @@\n                         <svg class=\"conversation-activity__icon\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n                         <span data-testid=\"conversation-reply-count\"><strong>2 replies</strong> · latest from Carmen Cho</span>\n                       </span>\n-                      <span class=\"receipt-glance\" data-testid=\"conversation-receipt-glance\">\n-                        <span class=\"mini-bar\" aria-hidden=\"true\">\n-                          <span class=\"mini-segment status-fill--delivered\" style=\"width:25%\"></span>\n-                          <span class=\"mini-segment status-fill--sent\" style=\"width:25%\"></span>\n-                          <span class=\"mini-segment status-fill--problem\" style=\"width:50%\"></span>\n-                        </span>\n-                        <span>1 of 4 delivered</span>\n-                      </span>\n                     </span>\n                     <span class=\"conversation-row__meta\">\n-                      <span data-testid=\"conversation-last-activity\">Jun 22</span>\n+                      <span data-testid=\"conversation-sent-at\">Jun 22</span>\n                       <span class=\"chevron\" aria-hidden=\"true\">›</span>\n                     </span>\n                   </a>\n                 </article>\n \n-                <!-- conversation with no replies: avatar = originator -->\n+                <!-- conversation with no replies -->\n                 <article class=\"message-row\" data-testid=\"conversation-row\" data-conversation-id=\"msg_30000000-0000-0000-0000-000000000002\" data-reply-count=\"0\">\n                   <a class=\"conversation-row__link\" data-testid=\"conversation-link\" href=\"#\">\n-                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-latest-initials\" aria-hidden=\"true\">\n+                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-originator-initials\" aria-hidden=\"true\">\n                       <span class=\"avatar-circle avatar-circle--alt\">BB</span>\n                     </span>\n                     <span>\n@@ -227,27 +212,19 @@\n                         <svg class=\"conversation-activity__icon\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\" style=\"color:var(--color-ink-3)\"><path d=\"M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n                         <span data-testid=\"conversation-reply-count\">No replies yet</span>\n                       </span>\n-                      <span class=\"receipt-glance\" data-testid=\"conversation-receipt-glance\">\n-                        <span class=\"mini-bar\" aria-hidden=\"true\">\n-                          <span class=\"mini-segment status-fill--delivered\" style=\"width:50%\"></span>\n-                          <span class=\"mini-segment status-fill--sent\" style=\"width:25%\"></span>\n-                          <span class=\"mini-segment status-fill--problem\" style=\"width:25%\"></span>\n-                        </span>\n-                        <span>2 of 4 delivered</span>\n-                      </span>\n                     </span>\n                     <span class=\"conversation-row__meta\">\n-                      <span data-testid=\"conversation-last-activity\">Jun 20</span>\n+                      <span data-testid=\"conversation-sent-at\">Jun 20</span>\n                       <span class=\"chevron\" aria-hidden=\"true\">›</span>\n                     </span>\n                   </a>\n                 </article>\n \n-                <!-- fully delivered, busy conversation -->\n+                <!-- busy conversation -->\n                 <article class=\"message-row\" data-testid=\"conversation-row\" data-conversation-id=\"msg_30000000-0000-0000-0000-000000000007\" data-reply-count=\"4\">\n                   <a class=\"conversation-row__link\" data-testid=\"conversation-link\" href=\"#\">\n-                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-latest-initials\" aria-hidden=\"true\">\n-                      <span class=\"avatar-circle avatar-circle--deep\">DD</span>\n+                    <span class=\"avatar avatar-placeholder\" data-testid=\"conversation-originator-initials\" aria-hidden=\"true\">\n+                      <span class=\"avatar-circle avatar-circle--soft\">CC</span>\n                     </span>\n                     <span>\n                       <span class=\"conversation-subject\">Gear swap shelf in the clubroom</span>\n@@ -256,15 +233,9 @@\n                         <svg class=\"conversation-activity__icon\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n                         <span data-testid=\"conversation-reply-count\"><strong>4 replies</strong> · latest from Drew Diaz</span>\n                       </span>\n-                      <span class=\"receipt-glance\" data-testid=\"conversation-receipt-glance\">\n-                        <span class=\"mini-bar\" aria-hidden=\"true\">\n-                          <span class=\"mini-segment status-fill--delivered\" style=\"width:100%\"></span>\n-                        </span>\n-                        <span>Delivered to all 4 members</span>\n-                      </span>\n                     </span>\n                     <span class=\"conversation-row__meta\">\n-                      <span data-testid=\"conversation-last-activity\">Jun 18</span>\n+                      <span data-testid=\"conversation-sent-at\">Jun 18</span>\n                       <span class=\"chevron\" aria-hidden=\"true\">›</span>\n                     </span>\n                   </a>\n@@ -288,12 +259,12 @@\n         <span>Replies no longer appear as separate rows; the root message and its replies collapse into a single conversation row.</span>\n       </div>\n       <div class=\"note\">\n-        <strong>Reply count + last activity</strong>\n-        <span>Each row shows \"N replies · latest from &lt;name&gt;\" and is sorted by most recent reply or send.</span>\n+        <strong>Origin-led, reply count</strong>\n+        <span>Avatar and date are the originator and original send date; \"N replies · latest from &lt;name&gt;\" gives the activity. Ordered by original send, newest first.</span>\n       </div>\n       <div class=\"note\">\n-        <strong>Delivery demoted</strong>\n-        <span>The delivery glance reflects the root message's club-wide send only; full receipts live on the conversation page.</span>\n+        <strong>No delivery on the home</strong>\n+        <span>The per-message delivery glance is gone from the home; full delivery detail lives on the conversation page.</span>\n       </div>\n     </aside>\n   </div>\ndiff --git a/design-system/wireframes/member-conversation.html b/design-system/wireframes/member-conversation.html\nindex fcea32a..4749900 100644\n--- a/design-system/wireframes/member-conversation.html\n+++ b/design-system/wireframes/member-conversation.html\n@@ -1,13 +1,15 @@\n-<!-- @dsCard group=\"Member App\" viewport=\"760x900\" subtitle=\"Message detail as a conversation — original message, follow, replies, composer\" name=\"Conversation (message detail)\" -->\n-<!-- @startingPoint section=\"Member App\" subtitle=\"Member message detail reframed as a conversation\" viewport=\"760x900\" -->\n+<!-- @dsCard group=\"Member App\" viewport=\"760x1180\" subtitle=\"Conversation detail — cards, follow toggle, collapsed delivery, composer states\" name=\"Conversation (message detail)\" -->\n+<!-- @startingPoint section=\"Member App\" subtitle=\"Member message detail as a conversation, with reply-composer states\" viewport=\"760x1180\" -->\n <!--\n   FINAL (post-040) version: includes the \"Follow this conversation\" toggle.\n   Iteration 039 ships the same screen WITHOUT the follow toggle (no follow concept yet)\n   and with replies emailed to all members. Delivery receipts are demoted to a collapsed\n   panel (was the whole screen pre-039). See design sketch §4.1.\n \n-  2026-06-22: appended the reply-composer STATES (posted, validation error) so the\n-  implementation has a target for them — see docs/problems/2026-06-22-replies-feature-design-gaps.md.\n+  2026-06-22 (iteration 044): reconciled to the app's richer treatment — the original\n+  message and replies are boxed CARDS, and the composer shows \"Replying as <name>\". Also\n+  carries the reply-composer STATES (posted, validation error). See\n+  docs/problems/2026-06-22-conversation-page-design-barer-than-app.md.\n -->\n <!doctype html>\n <html lang=\"en\" data-theme=\"light\">\n@@ -34,8 +36,6 @@\n       --color-primary:#5a7050; --color-primary-content:#f6f5ea;\n       --color-secondary:#555a47; --color-secondary-content:#f6f5ea;\n       --color-accent:#d2925a; --color-accent-content:#25291d;\n-      --color-neutral:#25291d; --color-neutral-content:#f6f5ea;\n-      --color-info:#4f6b78; --color-info-content:#f6f5ea;\n       --color-success:#5f7a4f; --color-success-content:#f6f5ea;\n       --color-warning:#a8772e; --color-warning-content:#f6f5ea;\n       --color-error:#a8503a; --color-error-content:#f6f5ea;\n@@ -52,24 +52,23 @@\n     .nav__av { width:30px; height:30px; border-radius:50%; background:var(--color-sage-400); display:grid; place-items:center; font-size:11px; font-weight:700; color:#fff; }\n     .nav__out { font-size:12px; color:rgba(255,255,255,0.55); background:none; border:0; cursor:pointer; font-family:var(--font-sans); }\n \n-    .wrap { max-width:680px; margin:0 auto; padding:26px 24px 56px; }\n+    .wrap { max-width:680px; margin:0 auto; padding:26px 24px 36px; }\n     .back { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--color-ink-3); text-decoration:none; }\n     .back svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }\n \n     .eyebrow { font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--color-ink-3); margin:18px 0 0; }\n     .subject { font-size:32px; font-weight:700; letter-spacing:-0.022em; line-height:1.12; color:var(--color-ink); margin:7px 0 0; }\n-    .meta { font-size:13.5px; color:var(--color-ink-2); margin:12px 0 0; }\n+    .meta { font-size:13.5px; color:var(--color-ink-2); margin:12px 0 16px; }\n     .meta strong { color:var(--color-ink); font-weight:600; }\n-    .msgbody { font-size:16px; line-height:1.7; color:var(--color-ink-2); margin:16px 0 0; padding-bottom:22px; border-bottom:1px solid var(--color-line); }\n \n-    /* follow control */\n-    .follow { display:flex; align-items:center; gap:14px; margin:20px 0 0; padding:14px 16px; background:var(--color-paper);\n+    /* follow control — a toggle */\n+    .follow { display:flex; align-items:center; gap:14px; margin:8px 0 0; padding:14px 16px; background:var(--color-paper);\n               border:1px solid var(--color-line); border-radius:14px; }\n     .follow__t { flex:1; }\n     .follow__t strong { display:block; font-size:14px; font-weight:600; color:var(--color-ink); }\n     .follow__t span { display:block; font-size:12.5px; color:var(--color-ink-3); margin-top:2px; }\n \n-    /* collapsed delivery summary (demoted from the whole page) */\n+    /* collapsed delivery summary */\n     .deliv { display:flex; align-items:center; gap:10px; width:100%; margin:12px 0 0; padding:12px 16px; background:transparent;\n              border:1px solid var(--color-line); border-radius:12px; cursor:pointer; font-family:var(--font-sans); text-align:left; }\n     .deliv svg.chev { width:16px; height:16px; fill:none; stroke:var(--color-ink-3); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }\n@@ -80,31 +79,45 @@\n     .bar { display:flex; height:6px; width:120px; border-radius:999px; overflow:hidden; background:var(--color-base-200); box-shadow:inset 0 0 0 1px var(--color-line); }\n     .bar > span { display:block; height:100%; }\n \n-    /* replies */\n-    .replies-h { font-size:15px; font-weight:700; color:var(--color-ink); margin:28px 0 0; }\n-    .reply { display:flex; gap:13px; align-items:flex-start; padding:16px 0; border-top:1px solid var(--color-line); }\n-    .reply__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--color-sage-800); flex:none; }\n-    .reply__b { flex:1; min-width:0; }\n-    .reply__head { font-size:13.5px; color:var(--color-ink-3); }\n-    .reply__head strong { color:var(--color-ink); font-weight:600; }\n-    .reply__body { font-size:15px; line-height:1.6; color:var(--color-ink-2); margin:4px 0 0; }\n+    /* message cards — original + replies share this treatment (matches the app) */\n+    .entry { display:flex; gap:13px; align-items:flex-start; padding:16px; background:var(--color-base-100);\n+             border:1px solid var(--color-line); border-radius:14px; box-shadow:0 6px 16px rgba(37,41,29,0.05); }\n+    .entry__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--color-sage-800); flex:none; }\n+    .entry__b { flex:1; min-width:0; }\n+    .entry__head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }\n+    .entry__name { font-size:14px; font-weight:600; color:var(--color-ink); }\n+    .entry__time { font-size:12.5px; color:var(--color-ink-3); }\n+    .entry__badge { margin-left:auto; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;\n+                    color:var(--color-sage-700); background:var(--color-sage-100); border-radius:999px; padding:3px 9px; }\n+    .entry__body { font-size:15px; line-height:1.65; color:var(--color-ink-2); margin:6px 0 0; }\n+\n+    .original { margin-top:4px; }\n+    .replies-h { font-size:15px; font-weight:700; color:var(--color-ink); margin:28px 0 12px; }\n+    .replies { display:grid; gap:10px; }\n \n     /* composer */\n     .composer { margin:18px 0 0; padding:16px; background:var(--color-paper); border:1px solid var(--color-line); border-radius:14px; }\n+    .composer__head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }\n+    .composer__title { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:var(--color-ink); }\n+    .composer__title svg { width:18px; height:18px; fill:none; stroke:var(--color-primary); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }\n+    .replying-as { font-size:12.5px; font-weight:600; color:var(--color-ink-2); background:var(--color-base-100);\n+                   border:1px solid var(--color-line); border-radius:999px; padding:5px 11px; }\n+    .replying-as strong { color:var(--color-ink); }\n     .composer textarea { width:100%; resize:vertical; }\n     .composer__actions { display:flex; justify-content:flex-end; margin-top:12px; }\n-    .dot { width:7px; height:7px; border-radius:999px; background:currentColor; display:inline-block; }\n \n-    /* composer states (appended 2026-06-22) */\n+    /* composer state messages */\n+    .state-note { border-radius:12px; padding:11px 14px; font-size:13.5px; font-weight:600; margin:0 0 12px;\n+                  background:#e9eedd; border:1px solid rgba(95,122,79,0.3); color:var(--color-success); }\n+    .field-error { color:var(--color-error); font-size:13px; font-weight:600; margin:8px 0 0; }\n+    .composer textarea.is-error { border-color:var(--color-error); }\n+\n     .states { max-width:680px; margin:0 auto; padding:0 24px 48px; }\n     .states__head { font-size:15px; font-weight:700; color:var(--color-ink); margin:0 0 14px; }\n     .state-card { border:1px solid var(--color-line); border-radius:16px; overflow:hidden; background:var(--color-base-100); margin-top:14px; }\n     .state-card__label { background:var(--color-base-200); border-bottom:1px solid var(--color-line); color:var(--color-ink-2); font-family:var(--font-mono); font-size:11px; padding:8px 14px; }\n     .state-card__body { padding:14px; }\n     .state-card .composer { margin:0; }\n-    .state-note { border-radius:12px; padding:11px 14px; font-size:13.5px; font-weight:600; margin:0 0 12px; background:#e9eedd; border:1px solid rgba(95,122,79,0.3); color:var(--color-success); }\n-    .field-error { color:var(--color-error); font-size:13px; font-weight:600; margin:8px 0 0; }\n-    .composer textarea.is-error { border-color:var(--color-error); }\n   </style>\n </head>\n <body>\n@@ -118,22 +131,33 @@\n   <div class=\"wrap\">\n     <a class=\"back\" href=\"#\"><svg viewBox=\"0 0 24 24\"><path d=\"m15 6-6 6 6 6\"/></svg> Club home</a>\n \n-    <!-- original message -->\n-    <p class=\"eyebrow\">Club message</p>\n+    <p class=\"eyebrow\">Club conversation</p>\n     <h1 class=\"subject\">Saturday ridge walk</h1>\n     <p class=\"meta\">From <strong>Eira Sandhu</strong> · sent to <strong>142</strong> members · 3 Jun</p>\n-    <p class=\"msgbody\">Meeting at the trailhead 8am sharp. Bring microspikes — the north side still has ice in the gullies. We'll regroup at the saddle for lunch.</p>\n+\n+    <!-- original message — boxed card with an \"Original message\" badge (matches the app) -->\n+    <div class=\"entry original\">\n+      <div class=\"entry__av\" style=\"background:var(--color-sage-200)\">ES</div>\n+      <div class=\"entry__b\">\n+        <div class=\"entry__head\">\n+          <span class=\"entry__name\">Eira Sandhu</span>\n+          <span class=\"entry__time\">3 Jun, 7:02am</span>\n+          <span class=\"entry__badge\">Original message</span>\n+        </div>\n+        <div class=\"entry__body\">Meeting at the trailhead 8am sharp. Bring microspikes — the north side still has ice in the gullies. We'll regroup at the saddle for lunch.</div>\n+      </div>\n+    </div>\n \n     <!-- follow control (FINAL/040 — 039 omits this) -->\n     <div class=\"follow\">\n       <input type=\"checkbox\" class=\"toggle toggle-primary\" checked aria-label=\"Follow this conversation\" />\n       <div class=\"follow__t\">\n-        <strong>Follow this conversation to receive any new replies</strong>\n+        <strong>You're following this conversation</strong>\n         <span>You'll get an email when someone replies. Stop any time.</span>\n       </div>\n     </div>\n \n-    <!-- demoted delivery summary -->\n+    <!-- demoted, collapsed delivery summary -->\n     <button class=\"deliv\">\n       <span class=\"deliv__ic\"><svg viewBox=\"0 0 24 24\"><circle cx=\"9\" cy=\"8\" r=\"3.2\"/><path d=\"M3.5 19a5.5 5.5 0 0 1 11 0\"/></svg></span>\n       <span class=\"deliv__t\"><strong>Delivery</strong> — 142 delivered · 0 sending · 0 problems</span>\n@@ -141,25 +165,42 @@\n       <svg class=\"chev\" viewBox=\"0 0 24 24\"><path d=\"m6 9 6 6 6-6\"/></svg>\n     </button>\n \n-    <!-- replies -->\n+    <!-- replies — count header + cards with timestamps -->\n     <h2 class=\"replies-h\">Replies · 2</h2>\n-    <div class=\"reply\">\n-      <div class=\"reply__av\" style=\"background:var(--color-sage-100)\">PD</div>\n-      <div class=\"reply__b\">\n-        <div class=\"reply__head\"><strong>Phil Dunbar</strong> · 3 Jun, 9:14am</div>\n-        <div class=\"reply__body\">I can bring a spare set of microspikes — happy to lend them out at the trailhead for anyone who needs them.</div>\n+    <div class=\"replies\">\n+      <div class=\"entry\">\n+        <div class=\"entry__av\" style=\"background:var(--color-sage-100)\">PD</div>\n+        <div class=\"entry__b\">\n+          <div class=\"entry__head\">\n+            <span class=\"entry__name\">Phil Dunbar</span>\n+            <span class=\"entry__time\">3 Jun, 9:14am</span>\n+            <span class=\"entry__badge\">Reply</span>\n+          </div>\n+          <div class=\"entry__body\">I can bring a spare set of microspikes — happy to lend them out at the trailhead for anyone who needs them.</div>\n+        </div>\n       </div>\n-    </div>\n-    <div class=\"reply\">\n-      <div class=\"reply__av\" style=\"background:var(--color-sage-200)\">MW</div>\n-      <div class=\"reply__b\">\n-        <div class=\"reply__head\"><strong>Marta Wiśniewska</strong> · 3 Jun, 9:40am</div>\n-        <div class=\"reply__body\">Carpool from the north lot? I have three seats — reply here if you want one.</div>\n+      <div class=\"entry\">\n+        <div class=\"entry__av\" style=\"background:var(--color-sage-200)\">MW</div>\n+        <div class=\"entry__b\">\n+          <div class=\"entry__head\">\n+            <span class=\"entry__name\">Marta Wiśniewska</span>\n+            <span class=\"entry__time\">3 Jun, 9:40am</span>\n+            <span class=\"entry__badge\">Reply</span>\n+          </div>\n+          <div class=\"entry__body\">Carpool from the north lot? I have three seats — reply here if you want one.</div>\n+        </div>\n       </div>\n     </div>\n \n-    <!-- inline reply composer -->\n+    <!-- composer BELOW the replies, with \"Replying as\" (best of both) -->\n     <div class=\"composer\">\n+      <div class=\"composer__head\">\n+        <span class=\"composer__title\">\n+          <svg viewBox=\"0 0 24 24\"><path d=\"M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v6A2.25 2.25 0 0 1 17.25 15H9l-4.5 4.5V6.75Z\"/></svg>\n+          Reply\n+        </span>\n+        <span class=\"replying-as\">Replying as <strong>Lou Thirgood</strong></span>\n+      </div>\n       <textarea class=\"textarea\" rows=\"3\" placeholder=\"Write a reply…\"></textarea>\n       <div class=\"composer__actions\">\n         <button class=\"btn btn-primary\">Post reply</button>\n@@ -167,7 +208,7 @@\n     </div>\n   </div>\n \n-  <!-- reply-composer states (appended 2026-06-22) -->\n+  <!-- reply-composer states -->\n   <div class=\"states\">\n     <h2 class=\"states__head\">Reply composer — states</h2>\n \n@@ -175,6 +216,10 @@\n       <div class=\"state-card__label\">state: posted — after a successful reply</div>\n       <div class=\"state-card__body\">\n         <div class=\"composer\">\n+          <div class=\"composer__head\">\n+            <span class=\"composer__title\">Reply</span>\n+            <span class=\"replying-as\">Replying as <strong>Lou Thirgood</strong></span>\n+          </div>\n           <p class=\"state-note\">Your reply is being sent.</p>\n           <textarea class=\"textarea\" rows=\"3\" placeholder=\"Write a reply…\"></textarea>\n           <div class=\"composer__actions\"><button class=\"btn btn-primary\">Post reply</button></div>\n@@ -186,6 +231,10 @@\n       <div class=\"state-card__label\">state: validation error — empty reply submitted</div>\n       <div class=\"state-card__body\">\n         <div class=\"composer\">\n+          <div class=\"composer__head\">\n+            <span class=\"composer__title\">Reply</span>\n+            <span class=\"replying-as\">Replying as <strong>Lou Thirgood</strong></span>\n+          </div>\n           <textarea class=\"textarea is-error\" rows=\"3\" placeholder=\"Write a reply…\"></textarea>\n           <p class=\"field-error\">Your reply can't be blank.</p>\n           <div class=\"composer__actions\"><button class=\"btn btn-primary\">Post reply</button></div>\ndiff --git a/docs/iterations/044-conversation-page-alignment/plan.md b/docs/iterations/044-conversation-page-alignment/plan.md\nindex 21f6dc3..acab0ac 100644\n--- a/docs/iterations/044-conversation-page-alignment/plan.md\n+++ b/docs/iterations/044-conversation-page-alignment/plan.md\n@@ -1,7 +1,7 @@\n # 044 — Conversation page: align to the conversation wireframe\n \n Date: 2026-06-22\n-Status: draft\n+Status: implementing\n \n ## Goal\n \n@@ -87,8 +87,9 @@ added or changed. Validation is by LiveView/component tests and a gallery-walk s\n - The delivery section is collapsed to a one-line summary by default and can be expanded\n   to the existing members-by-delivery-status detail.\n - The reply composer appears **after** the reply list and shows \"Replying as \\<name\\>\".\n-- A \"Replies · N\" header appears above the replies (N = reply count; hidden or \"no replies\n-  yet\" treatment when there are none).\n+- When there is at least one reply, a \"Replies · N\" header appears above the reply list\n+  (N = reply count). When there are no replies, the header **and** the reply list are\n+  omitted entirely — only the original message, follow control, and composer show.\n - Each reply shows its posted timestamp.\n - The original-message meta shows the sent date.\n - The original message and replies remain boxed cards.\n@@ -112,15 +113,18 @@ None known.\n    - Add a timestamp to each `conversation_entry_card` reply.\n    - Add the sent date to `#member-message-meta`.\n 2. `MemberMessageLive.Show` / `MemberMessageDetail`: supply a reply count, per-reply\n-   timestamps, and the original sent date to the template if not already available; add a\n-   `delivery_expanded?` assign (default false) + a toggle event for the disclosure.\n-3. No changes to commands, projections, or follow/reply behaviour.\n+   timestamps, and the original sent date to the template if not already available. The\n+   delivery disclosure is **server-driven**: add a `delivery_expanded?` assign (default\n+   `false`) and a `toggle_delivery` `phx-click` event, consistent with the existing\n+   `toggle_receipt_group` pattern. The collapsed summary reuses the existing member\n+   delivery summary copy; timestamps/date use the app's existing formatting helpers.\n+3. When the reply count is zero, render neither the \"Replies · N\" header nor the reply\n+   list — only the original message, follow control, and composer.\n+4. No changes to commands, projections, or follow/reply behaviour.\n \n ## Open Technical Decisions\n \n-- Whether the delivery disclosure is server-driven (a `phx-click` assign toggle, matching\n-  the existing receipt-group expand pattern) or client-only. Prefer server-driven for\n-  consistency with `toggle_receipt_group`.\n+None known. (The delivery disclosure is server-driven, per Implementation Plan step 2.)\n \n ## New Capability\n \n@@ -132,8 +136,10 @@ asked for — instead of delivery receipts dominating the page.\n \n - LiveView/component tests for `MemberMessageLive.Show` asserting: the follow toggle is\n   present and reflects/toggles state; the delivery detail is collapsed by default and\n-  expandable; the composer renders after the replies and shows \"Replying as\"; a \"Replies · N\"\n-  header; per-reply timestamps; the sent date on the original.\n+  expands (and collapses again) via the server-driven toggle; the composer renders after\n+  the replies and shows \"Replying as\"; a \"Replies · N\" header with the right count when\n+  replies exist; the header and list are omitted when there are none; per-reply timestamps;\n+  the sent date on the original.\n - Existing `club_message_replies.feature` scenarios stay green (behaviour unchanged).\n - A `bin/dev gallery-walk` screenshot of the member message-detail confirming the new layout.\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex a0a2ad2..7efc292 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -53,7 +53,7 @@ green than before.\n | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |\n | 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |\n | 043 | 2026-06-22 | merged | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |\n-| 044 | 2026-06-22 | draft | Conversation page: align to the conversation wireframe | [plan](044-conversation-page-alignment/plan.md) |\n+| 044 | 2026-06-22 | implementing | Conversation page: align to the conversation wireframe | [plan](044-conversation-page-alignment/plan.md) |\n \n Status notes:\n \ndiff --git a/docs/problems/README.md b/docs/problems/README.md\nindex a5b522a..526edd9 100644\n--- a/docs/problems/README.md\n+++ b/docs/problems/README.md\n@@ -38,6 +38,6 @@ Captured product problems and their current resolution status.\n | 2026-06-21 | [Automatic email responses can be posted as conversation replies](2026-06-21-auto-replies-can-be-posted-as-conversation-replies.md) | Unresolved | Surfaced during iteration 041 review: reply-by-email handles the normal human reply path, but obvious auto-responses and mail-loop prevention remain future behaviour. |\n | 2026-06-21 | [Some email-client threading edge cases can keep replies out of the right conversation](2026-06-21-email-client-threading-edge-cases-can-misroute-replies.md) | Unresolved | Surfaced during iteration 041 review: header-based routing is safe and conservative, but real-world mail-client/provider header variants need broader behavioural coverage. |\n | 2026-06-22 | [Sign-in email delivery can be slow enough that links expire before use](2026-06-22-sign-in-email-delivery-latency.md) | Unresolved | Production diagnosis found Postmark accepting auth email immediately while Fastmail SMTP acceptance could lag by minutes. Auth-stream Postmark webhooks were configured on 2026-06-22; root cause still needs provider/Fly hypothesis investigation. |\n-| 2026-06-22 | [The replies feature diverges from its designs, and the conversations overview has no replies-aware design](2026-06-22-replies-feature-design-gaps.md) | Partially addressed | Surfaced extending gallery-walk coverage of the replies feature (iterations 039–041): the overview lists each reply as its own row with no conversation grouping or reply count, and the conversation/compose/stop-following/email surfaces diverge from their designs. Target wireframes produced (`member-conversation-overview`, `member-conversation`, `conversation-stop-following`); full comparison in [docs/replies-wireframe-gaps.md](../replies-wireframe-gaps.md). [Iteration 043](../iterations/043-conversations-overview-grouping/plan.md) takes the overview grouping/reply-count slice (A); [iteration 044](../iterations/044-conversation-page-alignment/plan.md) takes the conversation page (B); emails (C) and stop-following (D) remain. |\n+| 2026-06-22 | [The replies feature diverges from its designs, and the conversations overview has no replies-aware design](2026-06-22-replies-feature-design-gaps.md) | Partially addressed | Surfaced extending gallery-walk coverage of the replies feature (iterations 039–041): the overview lists each reply as its own row with no conversation grouping or reply count, and the conversation/compose/stop-following/email surfaces diverge from their designs. Target wireframes produced (`member-conversation-overview`, `member-conversation`, `conversation-stop-following`); full comparison in [docs/replies-wireframe-gaps.md](../replies-wireframe-gaps.md). [Iteration 043](../iterations/043-conversations-overview-grouping/plan.md) takes the overview grouping/reply-count slice (A); [iteration 044](../iterations/044-conversation-page-alignment/plan.md) takes the conversation page (B); emails (C) resolved in the app's favour — the rejection `From` keeps `<club> via Memba` (iteration 031) and reply subjects keep the `[slug]` prefix (iteration 025), with the email designs updated to match and the stale reply-routing annotation corrected; stop-following (D) is [iteration 045](../iterations/045-stop-following-page-header/plan.md). |\n | 2026-06-22 | [Conversations give no indication of new or unread replies](2026-06-22-no-conversation-unread-activity-indication.md) | Unresolved | Deferred from [iteration 043](../iterations/043-conversations-overview-grouping/plan.md) as scope creep: reply counts are static, with no per-member read state to highlight conversations with unseen replies. Needs a new read-state model. No iteration yet. |\n | 2026-06-22 | [The conversation-page design is barer than the app it is meant to mirror](2026-06-22-conversation-page-design-barer-than-app.md) | Being addressed | Found aligning the conversation page (iteration 044): the wireframe's composer and original/reply treatment are barer than the app's \"Replying as\" affordance and boxed cards. [Iteration 044](../iterations/044-conversation-page-alignment/plan.md) keeps the app and updates the design (fast-follow). |\n",
+        "summary": {
+          "files_changed": 7,
+          "additions": 435,
+          "deletions": 116
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-23T07:23:58.195821406Z",
+        "current_node": "final_summary",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate",
+          "publish_polish_to_main",
+          "finalize_iteration_status",
+          "final_summary"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.synthesize_review.current_node": "review_gate",
+          "internal.retry_count.codex_review": 0,
+          "review_fixes_available": false,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate.",
+          "graph.rankdir": "LR",
           "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a",
           "graph.default_fidelity": "summary:high",
           "failure_class": "",
           "response.claude_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `MessageProjection` as indicated by the plan's citation of ADR-0032. The query layer separation (context → presentation → view) follows CQRS boundaries appropriately.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone.\n\n## Bounded-Safe Fixes\n\nNone required. The implementation is clean and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **SQL Fragment Performance Pattern** (`lib/memba/messaging.ex:102-128`)\n   - **Smell**: Three correlated subqueries in the SELECT clause for reply_count, latest_replier_id, and latest_replier_name. Each subquery scans message_projections independently.\n   - **Why judgement-worthy**: The plan explicitly left this as an open technical decision (\"window function vs. a second query keyed by conversation. Either is acceptable; prefer one query if clean\"). The chosen subquery approach is simpler to read but may scale poorly for clubs with hundreds of conversations or thousands of messages. A window function would execute as a single scan, potentially 3× faster for large datasets.\n   - **Human decision needed**: Whether to preemptively optimize (window function or lateral join) or wait for measured performance data. Current implementation is correct and working; optimization is speculative until load patterns are known.\n\n2. **Duplicate Subquery Logic** (`lib/memba/messaging.ex:115-128`)\n   - **Smell**: The latest_replier_id and latest_replier_name subqueries differ only in the selected column (`sender_id` vs `sender_name`), repeating identical WHERE/ORDER BY/LIMIT clauses.\n   - **Why judgement-worthy**: If the \"latest replier\" definition changes (e.g., filtering out deleted users, or changing the ordering logic), both subqueries must be updated identically. A window function or lateral join would express this logic once. However, the duplication is small, isolated to one function, and unlikely to diverge.\n   - **Human decision needed**: Whether the DRY violation justifies the complexity of refactoring to window functions or whether the current clarity is preferable.\n\n3. **Hardcoded Table Name in Fragments** (`lib/memba/messaging.ex:109, 115, 121`)\n   - **Smell**: Raw SQL fragments reference `message_projections` by name. If the table is ever renamed (e.g., via Ecto schema changes or a migration), these queries will break at runtime, not compile time.\n   - **Why judgement-worthy**: Ecto schema changes are rare and would be caught in tests, but this is a fragility point. Using Ecto query composition (joins/subqueries) would bind to the schema name, making renames safe. However, the fragments are readable and the risk is low given test coverage.\n   - **Human decision needed**: Whether to enforce a project-wide rule against table-name literals in fragments or accept the tradeoff of clarity vs. schema-rename safety.\n\n## Suggested Fixes\n\nNone required for acceptance. The judgement-worthy findings above are architectural/optimization concerns that do not block this iteration.\n\n## Validation Notes\n\n1. **Automated Coverage (PASS)**\n   - Dev check passed: 85 scenarios (85 passed), 523 steps (523 passed) in 4m00.548s.\n   - ExUnit tests cover `Messaging.list_conversations_for_club/1`:\n     - Reply count calculation (0 replies, 1 reply, multiple replies)\n     - Latest replier lookup (id and name)\n     - Ordering by inserted_at DESC, message_id DESC\n     - Conversation grouping (only root messages returned)\n   - ExUnit tests cover `MemberDashboardPresentation.present_message_rows/2`:\n     - Conversation row structure (subject, sender, reply activity, date)\n     - Edge cases (nil inserted_at, 0 replies, missing latest replier)\n     - Authorization (forbidden access, identity validation)\n   - No failing or skipped tests related to this iteration.\n\n2. **Plan Conformance (PASS)**\n   - ✅ Added `Messaging.list_conversations_for_club/1` returning one row per conversation with reply_count and latest_replier.\n   - ✅ Updated `MemberDashboardPresentation` to build rows from conversations (removed `receipt_glance_fields`, added conversation-row fields).\n   - ✅ Updated `club.html.heex` markup to render conversation rows (removed delivery glance, added reply activity line).\n   - ✅ Row link target unchanged (conversation/message detail route).\n   - ✅ Open technical decision (query shape) resolved via subquery approach.\n\n3. **ADR/Reference Compliance (PASS)**\n   - Read model query uses `MessageProjection` (event-sourced projection) per CQRS patterns.\n   - Query isolated to `Messaging` context (DDD context boundary).\n   - Presentation logic separated into `MemberDashboardPresentation` (RDD responsibility separation).\n   - No direct aggregate or command-side coupling (query-only path).\n\n4. **Feature Evidence (PASS)**\n   - Implementation removes delivery glance from member home (per plan: \"The home no longer renders a delivery glance on conversation rows\").\n   - Reply count includes both in-app and email replies (verified by subquery filtering `message_id != conversation_id`).\n   - Conversations ordered by root message `inserted_at` descending (per plan).\n\n## Summary\n\nThe implementation is **plan-conforming, ADR-compliant, well-tested, and production-ready**. The three judgement-worthy findings are all acceptable tradeoffs explicitly acknowledged in the plan's open technical decisions or low-risk by nature. The subquery approach prioritizes readability and simplicity over speculative performance optimization, which is appropriate for an initial iteration without measured load data. No changes are required before merge.",
           "thread.read_plan.current_node": "preflight_sandbox",
           "thread.claude_review.current_node": "codex_review",
-          "internal.retry_count.synthesize_review": 0,
-          "thread.synthesize_review.current_node": "review_gate",
-          "thread.review_gate.current_node": "record_code_health",
-          "thread.dev_check.current_node": "collect_implementation_evidence",
-          "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence.",
-          "internal.retry_count.final_artifact_gate": 0,
-          "internal.retry_count.record_code_health": 0,
-          "internal.thread_id": "publish_polish_to_main",
-          "internal.retry_count.review_gate": 0,
-          "implementation_accepted": true,
-          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
           "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
-          "thread.start.current_node": "read_plan",
-          "thread.gemini_review.current_node": "synthesize_review",
+          "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence.",
+          "implementation_accepted": true,
           "internal.retry_count.collect_implementation_evidence": 0,
           "internal.retry_count.dev_check": 0,
           "internal.retry_count.claude_review": 0,
-          "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
-          "internal.work_dir": "/workspace/memba",
           "internal.retry_count.gemini_review": 0,
           "response.record_code_health": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `docs/code-health.md` was not updated.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
-          "thread.record_code_health.current_node": "final_artifact_gate",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.start": 0,
+          "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45",
+          "failure_signature": "",
+          "outcome": "succeeded",
+          "last_stage": "final_summary",
+          "thread.preflight_sandbox.current_node": "dev_check",
           "internal.retry_count.finalize_iteration_status": 0,
+          "current_node": "final_summary",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "thread.review_gate.current_node": "record_code_health",
+          "internal.run_id": "01KVSMDTG0HMT8FT02RSSPY3TB",
+          "internal.retry_count.final_artifact_gate": 0,
+          "thread.finalize_iteration_status.current_node": "final_summary",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.record_code_health": 0,
+          "internal.thread_id": "finalize_iteration_status",
+          "internal.retry_count.review_gate": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
+          "thread.record_code_health.current_node": "final_artifact_gate",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.final_summary": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "code_health_recording_ok": true,
           "internal.retry_count.publish_polish_to_main": 0,
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
-          "last_response": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `d",
-          "failure_signature": "",
-          "outcome": "succeeded",
-          "last_stage": "record_code_health",
-          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.synthesize_review": 0,
           "internal.retry_count.read_plan": 0,
-          "thread.collect_implementation_evidence.current_node": "claude_review",
           "internal.retry_count.preflight_sandbox": 0,
+          "internal.node_visit_count": 1,
           "internal.fidelity": "summary:high",
-          "graph.rankdir": "LR"
+          "graph.max_node_visits": "160"
         },
         "node_outcomes": {
           "read_plan": {
@@ -4186,6 +4588,42 @@
               "active_time_ms": 91607
             }
           },
+          "final_summary": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate.",
+              "last_stage": "final_summary",
+              "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45"
+            },
+            "notes": "Stage completed: final_summary",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8433,
+                    "output_tokens": 1496,
+                    "reasoning_tokens": 130,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 90945
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 64520,
+              "tool_time_ms": 0,
+              "active_time_ms": 64520
+            }
+          },
           "record_code_health": {
             "status": "succeeded",
             "context_updates": {
@@ -4297,21 +4735,22 @@
             }
           }
         },
-        "next_node_id": "final_summary",
+        "next_node_id": "exit",
         "node_visits": {
           "preflight_sandbox": 1,
-          "codex_review": 1,
-          "gemini_review": 1,
-          "review_gate": 1,
+          "record_code_health": 1,
+          "finalize_iteration_status": 1,
           "final_artifact_gate": 1,
+          "read_plan": 1,
+          "gemini_review": 1,
+          "codex_review": 1,
+          "review_gate": 1,
           "collect_implementation_evidence": 1,
           "publish_polish_to_main": 1,
           "synthesize_review": 1,
-          "record_code_health": 1,
-          "finalize_iteration_status": 1,
+          "final_summary": 1,
           "start": 1,
           "claude_review": 1,
-          "read_plan": 1,
           "dev_check": 1
         }
       },
@@ -4379,55 +4818,6 @@
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
-      },
-      "state": "succeeded"
-    },
-    "publish_polish_to_main@1": {
-      "first_event_seq": 279,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-        "failure_reason": null,
-        "timestamp": "2026-06-23T07:22:46.347674240Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-        "language": "shell",
-        "timeout_ms": 300000
-      },
-      "script_timing": {
-        "output": "blob://sha256/c576b62eb0a227499f01570d9d4957d974521cea97ea5b4b55a6952eac37f5af",
-        "exit_code": 0,
-        "duration_ms": 262,
-        "termination": "exited",
-        "output_bytes": 74,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 74,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-23T07:22:46.069328578Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 278,
-        "inference_time_ms": 0,
-        "tool_time_ms": 262,
-        "active_time_ms": 262
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
       },
       "state": "succeeded"
     },
@@ -4524,132 +4914,38 @@
       },
       "state": "succeeded"
     },
-    "start@1": {
-      "first_event_seq": 20,
+    "final_summary@1": {
+      "first_event_seq": 301,
       "prompt": null,
       "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-06-23T07:00:52.425654198Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-23T07:00:52.424377556Z",
-      "handler": "start",
-      "timing": {
-        "wall_time_ms": 1,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "gemini_review@1": {
-      "first_event_seq": 84,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: gemini_review",
-        "failure_reason": null,
-        "timestamp": "2026-06-23T07:13:51.632536757Z"
-      },
+      "completion": null,
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
         "model": "gpt-5.5",
-        "reasoning_effort": "high"
+        "reasoning_effort": "low"
       },
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-23T07:12:57.772191708Z",
+      "started_at": "2026-06-23T07:22:53.565864606Z",
       "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 53860,
-        "inference_time_ms": 53812,
-        "tool_time_ms": 0,
-        "active_time_ms": 53812
-      },
       "usage": {
-        "input_tokens": 6683,
-        "output_tokens": 808,
-        "total_tokens": 8007,
-        "reasoning_tokens": 516,
+        "input_tokens": 8433,
+        "output_tokens": 1496,
+        "total_tokens": 10059,
+        "reasoning_tokens": 130,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
-        "total_usd_micros": 73135
+        "total_usd_micros": 90945
       },
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
       },
-      "state": "succeeded"
-    },
-    "dev_check@1": {
-      "first_event_seq": 44,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
-        "failure_reason": null,
-        "timestamp": "2026-06-23T07:10:16.120108098Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "PATH=\"$PWD/bin:$PATH\" dev ci",
-        "command": "exec 2>&1\nPATH=\"$PWD/bin:$PATH\" dev ci",
-        "language": "shell",
-        "timeout_ms": 1800000
-      },
-      "script_timing": {
-        "output": "blob://sha256/6b9e3f71840d06018775c8716d99e4f460207c18355d6582bd19047303304b89",
-        "exit_code": 0,
-        "duration_ms": 400510,
-        "termination": "exited",
-        "output_bytes": 105151,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 105151,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-23T07:03:35.589042279Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 400531,
-        "inference_time_ms": 0,
-        "tool_time_ms": 400510,
-        "active_time_ms": 400510
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
+      "state": "running"
     },
     "review_gate@1": {
       "first_event_seq": 104,
@@ -4674,6 +4970,55 @@
         "inference_time_ms": 0,
         "tool_time_ms": 0,
         "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "finalize_iteration_status@1": {
+      "first_event_seq": 290,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:22:50.597314517Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
+      "script_timing": {
+        "output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a",
+        "exit_code": 0,
+        "duration_ms": 1225,
+        "termination": "exited",
+        "output_bytes": 458,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 458,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-23T07:22:49.348053070Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 1248,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1225,
+        "active_time_ms": 1225
       },
       "usage": {
         "input_tokens": 0,
@@ -5019,6 +5364,182 @@
       },
       "state": "succeeded"
     },
+    "publish_polish_to_main@1": {
+      "first_event_seq": 279,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:22:46.347674240Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
+      "script_timing": {
+        "output": "blob://sha256/c576b62eb0a227499f01570d9d4957d974521cea97ea5b4b55a6952eac37f5af",
+        "exit_code": 0,
+        "duration_ms": 262,
+        "termination": "exited",
+        "output_bytes": 74,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 74,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-23T07:22:46.069328578Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 278,
+        "inference_time_ms": 0,
+        "tool_time_ms": 262,
+        "active_time_ms": 262
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "start@1": {
+      "first_event_seq": 20,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:00:52.425654198Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-23T07:00:52.424377556Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 1,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "gemini_review@1": {
+      "first_event_seq": 84,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: gemini_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:13:51.632536757Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-23T07:12:57.772191708Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 53860,
+        "inference_time_ms": 53812,
+        "tool_time_ms": 0,
+        "active_time_ms": 53812
+      },
+      "usage": {
+        "input_tokens": 6683,
+        "output_tokens": 808,
+        "total_tokens": 8007,
+        "reasoning_tokens": 516,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 73135
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
+    },
+    "dev_check@1": {
+      "first_event_seq": 44,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:10:16.120108098Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PATH=\"$PWD/bin:$PATH\" dev ci",
+        "command": "exec 2>&1\nPATH=\"$PWD/bin:$PATH\" dev ci",
+        "language": "shell",
+        "timeout_ms": 1800000
+      },
+      "script_timing": {
+        "output": "blob://sha256/6b9e3f71840d06018775c8716d99e4f460207c18355d6582bd19047303304b89",
+        "exit_code": 0,
+        "duration_ms": 400510,
+        "termination": "exited",
+        "output_bytes": 105151,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 105151,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-23T07:03:35.589042279Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 400531,
+        "inference_time_ms": 0,
+        "tool_time_ms": 400510,
+        "active_time_ms": 400510
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "final_artifact_gate@1": {
       "first_event_seq": 269,
       "prompt": null,
@@ -5066,34 +5587,6 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
-    },
-    "finalize_iteration_status@1": {
-      "first_event_seq": 290,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-        "language": "shell",
-        "timeout_ms": 300000
-      },
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-23T07:22:49.348053070Z",
-      "handler": "command",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "running"
     },
     "collect_implementation_evidence@1": {
       "first_event_seq": 54,
