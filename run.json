@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-23T07:00:50.231951037Z",
-  "last_event_at": "2026-06-23T07:23:58.157210889Z",
+  "last_event_at": "2026-06-23T07:24:01.404235143Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -4326,9 +4326,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 309,
       "checkpoint": {
-        "timestamp": "2026-06-23T07:23:58.195821406Z",
+        "timestamp": "2026-06-23T07:24:01.403729166Z",
         "current_node": "final_summary",
         "completed_nodes": [
           "start",
@@ -4349,207 +4349,63 @@
         ],
         "node_retries": {},
         "context_values": {
-          "thread.codex_review.current_node": "gemini_review",
-          "thread.synthesize_review.current_node": "review_gate",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+          "internal.retry_count.publish_polish_to_main": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.start.current_node": "read_plan",
           "internal.retry_count.codex_review": 0,
-          "review_fixes_available": false,
-          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
-          "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate.",
-          "graph.rankdir": "LR",
-          "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a",
-          "graph.default_fidelity": "summary:high",
-          "failure_class": "",
-          "response.claude_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `MessageProjection` as indicated by the plan's citation of ADR-0032. The query layer separation (context → presentation → view) follows CQRS boundaries appropriately.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone.\n\n## Bounded-Safe Fixes\n\nNone required. The implementation is clean and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **SQL Fragment Performance Pattern** (`lib/memba/messaging.ex:102-128`)\n   - **Smell**: Three correlated subqueries in the SELECT clause for reply_count, latest_replier_id, and latest_replier_name. Each subquery scans message_projections independently.\n   - **Why judgement-worthy**: The plan explicitly left this as an open technical decision (\"window function vs. a second query keyed by conversation. Either is acceptable; prefer one query if clean\"). The chosen subquery approach is simpler to read but may scale poorly for clubs with hundreds of conversations or thousands of messages. A window function would execute as a single scan, potentially 3× faster for large datasets.\n   - **Human decision needed**: Whether to preemptively optimize (window function or lateral join) or wait for measured performance data. Current implementation is correct and working; optimization is speculative until load patterns are known.\n\n2. **Duplicate Subquery Logic** (`lib/memba/messaging.ex:115-128`)\n   - **Smell**: The latest_replier_id and latest_replier_name subqueries differ only in the selected column (`sender_id` vs `sender_name`), repeating identical WHERE/ORDER BY/LIMIT clauses.\n   - **Why judgement-worthy**: If the \"latest replier\" definition changes (e.g., filtering out deleted users, or changing the ordering logic), both subqueries must be updated identically. A window function or lateral join would express this logic once. However, the duplication is small, isolated to one function, and unlikely to diverge.\n   - **Human decision needed**: Whether the DRY violation justifies the complexity of refactoring to window functions or whether the current clarity is preferable.\n\n3. **Hardcoded Table Name in Fragments** (`lib/memba/messaging.ex:109, 115, 121`)\n   - **Smell**: Raw SQL fragments reference `message_projections` by name. If the table is ever renamed (e.g., via Ecto schema changes or a migration), these queries will break at runtime, not compile time.\n   - **Why judgement-worthy**: Ecto schema changes are rare and would be caught in tests, but this is a fragility point. Using Ecto query composition (joins/subqueries) would bind to the schema name, making renames safe. However, the fragments are readable and the risk is low given test coverage.\n   - **Human decision needed**: Whether to enforce a project-wide rule against table-name literals in fragments or accept the tradeoff of clarity vs. schema-rename safety.\n\n## Suggested Fixes\n\nNone required for acceptance. The judgement-worthy findings above are architectural/optimization concerns that do not block this iteration.\n\n## Validation Notes\n\n1. **Automated Coverage (PASS)**\n   - Dev check passed: 85 scenarios (85 passed), 523 steps (523 passed) in 4m00.548s.\n   - ExUnit tests cover `Messaging.list_conversations_for_club/1`:\n     - Reply count calculation (0 replies, 1 reply, multiple replies)\n     - Latest replier lookup (id and name)\n     - Ordering by inserted_at DESC, message_id DESC\n     - Conversation grouping (only root messages returned)\n   - ExUnit tests cover `MemberDashboardPresentation.present_message_rows/2`:\n     - Conversation row structure (subject, sender, reply activity, date)\n     - Edge cases (nil inserted_at, 0 replies, missing latest replier)\n     - Authorization (forbidden access, identity validation)\n   - No failing or skipped tests related to this iteration.\n\n2. **Plan Conformance (PASS)**\n   - ✅ Added `Messaging.list_conversations_for_club/1` returning one row per conversation with reply_count and latest_replier.\n   - ✅ Updated `MemberDashboardPresentation` to build rows from conversations (removed `receipt_glance_fields`, added conversation-row fields).\n   - ✅ Updated `club.html.heex` markup to render conversation rows (removed delivery glance, added reply activity line).\n   - ✅ Row link target unchanged (conversation/message detail route).\n   - ✅ Open technical decision (query shape) resolved via subquery approach.\n\n3. **ADR/Reference Compliance (PASS)**\n   - Read model query uses `MessageProjection` (event-sourced projection) per CQRS patterns.\n   - Query isolated to `Messaging` context (DDD context boundary).\n   - Presentation logic separated into `MemberDashboardPresentation` (RDD responsibility separation).\n   - No direct aggregate or command-side coupling (query-only path).\n\n4. **Feature Evidence (PASS)**\n   - Implementation removes delivery glance from member home (per plan: \"The home no longer renders a delivery glance on conversation rows\").\n   - Reply count includes both in-app and email replies (verified by subquery filtering `message_id != conversation_id`).\n   - Conversations ordered by root message `inserted_at` descending (per plan).\n\n## Summary\n\nThe implementation is **plan-conforming, ADR-compliant, well-tested, and production-ready**. The three judgement-worthy findings are all acceptable tradeoffs explicitly acknowledged in the plan's open technical decisions or low-risk by nature. The subquery approach prioritizes readability and simplicity over speculative performance optimization, which is appropriate for an initial iteration without measured load data. No changes are required before merge.",
-          "thread.read_plan.current_node": "preflight_sandbox",
-          "thread.claude_review.current_node": "codex_review",
-          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
-          "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence.",
-          "implementation_accepted": true,
-          "internal.retry_count.collect_implementation_evidence": 0,
           "internal.retry_count.dev_check": 0,
+          "response.claude_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation correctly uses read-model query patterns over `MessageProjection` as indicated by the plan's citation of ADR-0032. The query layer separation (context → presentation → view) follows CQRS boundaries appropriately.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone.\n\n## Bounded-Safe Fixes\n\nNone required. The implementation is clean and maintainable as-is.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **SQL Fragment Performance Pattern** (`lib/memba/messaging.ex:102-128`)\n   - **Smell**: Three correlated subqueries in the SELECT clause for reply_count, latest_replier_id, and latest_replier_name. Each subquery scans message_projections independently.\n   - **Why judgement-worthy**: The plan explicitly left this as an open technical decision (\"window function vs. a second query keyed by conversation. Either is acceptable; prefer one query if clean\"). The chosen subquery approach is simpler to read but may scale poorly for clubs with hundreds of conversations or thousands of messages. A window function would execute as a single scan, potentially 3× faster for large datasets.\n   - **Human decision needed**: Whether to preemptively optimize (window function or lateral join) or wait for measured performance data. Current implementation is correct and working; optimization is speculative until load patterns are known.\n\n2. **Duplicate Subquery Logic** (`lib/memba/messaging.ex:115-128`)\n   - **Smell**: The latest_replier_id and latest_replier_name subqueries differ only in the selected column (`sender_id` vs `sender_name`), repeating identical WHERE/ORDER BY/LIMIT clauses.\n   - **Why judgement-worthy**: If the \"latest replier\" definition changes (e.g., filtering out deleted users, or changing the ordering logic), both subqueries must be updated identically. A window function or lateral join would express this logic once. However, the duplication is small, isolated to one function, and unlikely to diverge.\n   - **Human decision needed**: Whether the DRY violation justifies the complexity of refactoring to window functions or whether the current clarity is preferable.\n\n3. **Hardcoded Table Name in Fragments** (`lib/memba/messaging.ex:109, 115, 121`)\n   - **Smell**: Raw SQL fragments reference `message_projections` by name. If the table is ever renamed (e.g., via Ecto schema changes or a migration), these queries will break at runtime, not compile time.\n   - **Why judgement-worthy**: Ecto schema changes are rare and would be caught in tests, but this is a fragility point. Using Ecto query composition (joins/subqueries) would bind to the schema name, making renames safe. However, the fragments are readable and the risk is low given test coverage.\n   - **Human decision needed**: Whether to enforce a project-wide rule against table-name literals in fragments or accept the tradeoff of clarity vs. schema-rename safety.\n\n## Suggested Fixes\n\nNone required for acceptance. The judgement-worthy findings above are architectural/optimization concerns that do not block this iteration.\n\n## Validation Notes\n\n1. **Automated Coverage (PASS)**\n   - Dev check passed: 85 scenarios (85 passed), 523 steps (523 passed) in 4m00.548s.\n   - ExUnit tests cover `Messaging.list_conversations_for_club/1`:\n     - Reply count calculation (0 replies, 1 reply, multiple replies)\n     - Latest replier lookup (id and name)\n     - Ordering by inserted_at DESC, message_id DESC\n     - Conversation grouping (only root messages returned)\n   - ExUnit tests cover `MemberDashboardPresentation.present_message_rows/2`:\n     - Conversation row structure (subject, sender, reply activity, date)\n     - Edge cases (nil inserted_at, 0 replies, missing latest replier)\n     - Authorization (forbidden access, identity validation)\n   - No failing or skipped tests related to this iteration.\n\n2. **Plan Conformance (PASS)**\n   - ✅ Added `Messaging.list_conversations_for_club/1` returning one row per conversation with reply_count and latest_replier.\n   - ✅ Updated `MemberDashboardPresentation` to build rows from conversations (removed `receipt_glance_fields`, added conversation-row fields).\n   - ✅ Updated `club.html.heex` markup to render conversation rows (removed delivery glance, added reply activity line).\n   - ✅ Row link target unchanged (conversation/message detail route).\n   - ✅ Open technical decision (query shape) resolved via subquery approach.\n\n3. **ADR/Reference Compliance (PASS)**\n   - Read model query uses `MessageProjection` (event-sourced projection) per CQRS patterns.\n   - Query isolated to `Messaging` context (DDD context boundary).\n   - Presentation logic separated into `MemberDashboardPresentation` (RDD responsibility separation).\n   - No direct aggregate or command-side coupling (query-only path).\n\n4. **Feature Evidence (PASS)**\n   - Implementation removes delivery glance from member home (per plan: \"The home no longer renders a delivery glance on conversation rows\").\n   - Reply count includes both in-app and email replies (verified by subquery filtering `message_id != conversation_id`).\n   - Conversations ordered by root message `inserted_at` descending (per plan).\n\n## Summary\n\nThe implementation is **plan-conforming, ADR-compliant, well-tested, and production-ready**. The three judgement-worthy findings are all acceptable tradeoffs explicitly acknowledged in the plan's open technical decisions or low-risk by nature. The subquery approach prioritizes readability and simplicity over speculative performance optimization, which is appropriate for an initial iteration without measured load data. No changes are required before merge.",
+          "review_fixes_available": false,
+          "code_health_recording_ok": true,
+          "graph.default_fidelity": "summary:high",
           "internal.retry_count.claude_review": 0,
-          "internal.retry_count.gemini_review": 0,
-          "response.record_code_health": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `docs/code-health.md` was not updated.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
-          "internal.retry_count.start": 0,
-          "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45",
-          "failure_signature": "",
-          "outcome": "succeeded",
-          "last_stage": "final_summary",
-          "thread.preflight_sandbox.current_node": "dev_check",
-          "internal.retry_count.finalize_iteration_status": 0,
-          "current_node": "final_summary",
-          "thread.collect_implementation_evidence.current_node": "claude_review",
-          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
-          "thread.review_gate.current_node": "record_code_health",
-          "internal.run_id": "01KVSMDTG0HMT8FT02RSSPY3TB",
-          "internal.retry_count.final_artifact_gate": 0,
+          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
+          "internal.retry_count.final_summary": 0,
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.preflight_sandbox": 0,
           "thread.finalize_iteration_status.current_node": "final_summary",
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "internal.retry_count.record_code_health": 0,
-          "internal.thread_id": "finalize_iteration_status",
-          "internal.retry_count.review_gate": 0,
-          "thread.start.current_node": "read_plan",
+          "internal.retry_count.collect_implementation_evidence": 0,
           "thread.gemini_review.current_node": "synthesize_review",
+          "graph.max_node_visits": "160",
           "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
+          "internal.retry_count.record_code_health": 0,
+          "response.record_code_health": "No code-health note is needed. I found no visible reviewer/synthesis artifact containing judgement-worthy findings, and I did not identify a concrete non-blocking code-health issue worth recording. `docs/code-health.md` was not updated.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
+          "implementation_accepted": true,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "internal.retry_count.review_gate": 0,
           "thread.record_code_health.current_node": "final_artifact_gate",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.final_summary": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "code_health_recording_ok": true,
-          "internal.retry_count.publish_polish_to_main": 0,
-          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
-          "internal.retry_count.synthesize_review": 0,
-          "internal.retry_count.read_plan": 0,
-          "internal.retry_count.preflight_sandbox": 0,
           "internal.node_visit_count": 1,
+          "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a",
+          "response.codex_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to preserve the project’s CQRS/event-sourced read-model architecture: the new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not appear to bypass the projection/read-model layer or introduce command-side coupling for a read concern.\n\n`dev ci` passed on the reviewed state, including acceptance coverage.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated SQL subqueries in the conversation read model**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may become expensive as message volume grows because the same table is queried repeatedly per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If clubs are expected to accumulate many conversations/replies, a future refactor to a single grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated “latest replier” selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The lookup for latest replier id and latest replier name likely repeats the same filtering and ordering logic, differing only by selected column.\n   - **Why it may need human judgement:** The duplication is small and localized, but it creates a maintenance footgun if the definition of “latest replier” changes later. A more structured query could express the latest-reply row once and select both fields from it. The current implementation is acceptable for this iteration because the behaviour is covered and the query remains understandable.\n\n3. **Raw table-name references inside SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is common when Ecto query composition becomes awkward, but it weakens compile-time/schema-level protection and makes future table renames or projection changes easier to miss. Given the isolated use and passing tests, this should not block merge, but it is worth tracking if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later decides to polish the query, the most useful follow-up would be to replace the repeated correlated subqueries with one query shape that computes the latest reply row once per conversation, while preserving the existing public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- The implementation appears consistent with the iteration plan:\n  - Adds `Messaging.list_conversations_for_club/1`.\n  - Groups home-page rows by root conversation instead of rendering every raw message.\n  - Computes reply count and latest replier data.\n  - Keeps the row target pointed at the existing conversation/message detail route.\n  - Removes the delivery/receipt glance from member home message rows.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply counts.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture changes, routing churn, or command-side/event-sourcing bypasses were evident from the implementation evidence.",
+          "current_node": "final_summary",
+          "internal.run_id": "01KVSMDTG0HMT8FT02RSSPY3TB",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.synthesize_review.current_node": "review_gate",
+          "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45",
+          "outcome": "succeeded",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.thread_id": "finalize_iteration_status",
+          "thread.review_gate.current_node": "record_code_health",
+          "last_stage": "final_summary",
           "internal.fidelity": "summary:high",
-          "graph.max_node_visits": "160"
+          "internal.retry_count.final_artifact_gate": 0,
+          "internal.retry_count.finalize_iteration_status": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.synthesize_review": 0,
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "internal.retry_count.gemini_review": 0,
+          "failure_class": "",
+          "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate."
         },
         "node_outcomes": {
-          "read_plan": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/2f50de7e24c31dc908fabaa7c998a4cb6b282df513f10490d5065a35f042a973"
-            },
-            "notes": "Script completed: PLAN_PATH='docs/iterations/043-conversations-overview-grouping/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 235,
-              "active_time_ms": 235
-            }
-          },
-          "synthesize_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_stage": "synthesize_review",
-              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
-              "implementation_accepted": true,
-              "review_fixes_available": false,
-              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}"
-            },
-            "notes": "Stage completed: synthesize_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 7904,
-                    "output_tokens": 36,
-                    "reasoning_tokens": 241,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 47830
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 22849,
-              "tool_time_ms": 0,
-              "active_time_ms": 22849
-            }
-          },
-          "final_artifact_gate": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/176a49b6dbc00f417e850df52667a2be66cb6cf2b12e0afd334718bb9573a979"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/043-conversations-overview-grouping/plan.md' '61faebe455a1f6617feeb43978b5041c71139381'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 263,
-              "active_time_ms": 263
-            }
-          },
-          "finalize_iteration_status": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 1225,
-              "active_time_ms": 1225
-            }
-          },
-          "collect_implementation_evidence": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/9d97cf2484daecea9d2c8347b8af02da57617fb1ed3417fe65b6e7a4e02790da"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '61faebe455a1f6617feeb43978b5041c71139381'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 259,
-              "active_time_ms": 259
-            }
-          },
-          "preflight_sandbox": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/dad6871221dcfbfb0d2f56132fa0f3f1b9d488a100e1efcdda7e517c62c998d2"
-            },
-            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 155617,
-              "active_time_ms": 155617
-            }
-          },
-          "gemini_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_stage": "gemini_review",
-              "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
-              "last_response": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-m"
-            },
-            "notes": "Stage completed: gemini_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 6683,
-                    "output_tokens": 808,
-                    "reasoning_tokens": 516,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 73135
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 53812,
-              "tool_time_ms": 0,
-              "active_time_ms": 53812
-            }
-          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -4588,40 +4444,18 @@
               "active_time_ms": 91607
             }
           },
-          "final_summary": {
+          "final_artifact_gate": {
             "status": "succeeded",
             "context_updates": {
-              "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate.",
-              "last_stage": "final_summary",
-              "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45"
+              "command.output": "blob://sha256/176a49b6dbc00f417e850df52667a2be66cb6cf2b12e0afd334718bb9573a979"
             },
-            "notes": "Stage completed: final_summary",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 8433,
-                    "output_tokens": 1496,
-                    "reasoning_tokens": 130,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 90945
-            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/043-conversations-overview-grouping/plan.md' '61faebe455a1f6617feeb43978b5041c71139381'",
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 64520,
-              "tool_time_ms": 0,
-              "active_time_ms": 64520
+              "inference_time_ms": 0,
+              "tool_time_ms": 263,
+              "active_time_ms": 263
             }
           },
           "record_code_health": {
@@ -4661,9 +4495,24 @@
               "active_time_ms": 491858
             }
           },
-          "start": {
+          "review_gate": {
             "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
             "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/dad6871221dcfbfb0d2f56132fa0f3f1b9d488a100e1efcdda7e517c62c998d2"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155617,
+              "active_time_ms": 155617
+            }
           },
           "dev_check": {
             "status": "succeeded",
@@ -4679,10 +4528,175 @@
               "active_time_ms": 400510
             }
           },
-          "review_gate": {
+          "publish_polish_to_main": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: review_gate",
+            "context_updates": {
+              "command.output": "blob://sha256/c576b62eb0a227499f01570d9d4957d974521cea97ea5b4b55a6952eac37f5af"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 262,
+              "active_time_ms": 262
+            }
+          },
+          "final_summary": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe455a1f6617feeb43978b5041c71139381`, as confirmed by the final artifact gate.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed reviewed implementation evidence and listed the changed files since the base SHA:\n\n> “Final artifact evidence confirmed.”  \n> “Final artifact gate passed.”\n\nIt also reported the implementation file set:\n\n- `acceptance-tests/features/club_message_replies.feature`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n\nThe gate also confirmed the acceptance feature change was explicitly permitted by the plan.\n\n## ADR conformance summary\n\nIndependent reviews agreed the implementation conforms to the project’s CQRS/read-model architecture:\n\n- The conversation overview is derived from `MessageProjection`.\n- The query is exposed through the `Messaging` context.\n- Presentation shaping remains in `MemberDashboardPresentation`.\n- Rendering remains in the Phoenix page/template layer.\n- No command-side coupling or projection bypass was identified.\n\nADR conformance: PASS.\n\nADR violations: none identified.\n\n## Independent review outcome\n\nAll independent reviewers accepted the implementation.\n\nDecision: ACCEPT  \nConfidence: High  \nBlocking issues: none  \nRequired bounded-safe fixes: none\n\nThe implementation was found to be plan-conforming:\n\n- Added `Messaging.list_conversations_for_club/1`.\n- Groups member home rows by conversation/root message.\n- Computes reply count and latest replier.\n- Removes delivery/receipt glance from the member home row.\n- Keeps row link target unchanged.\n- Includes automated coverage for grouping, reply counts, latest replier fields, ordering, presentation shape, absence of delivery-glance fields, and authorization/error handling.\n\n## Finding disposition\n\n### 1. Correlated SQL subqueries in `Messaging.list_conversations_for_club/1`\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that `web/lib/memba/messaging.ex` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated subqueries over `message_projections`.\n\nReason this is non-blocking: the plan explicitly left the query shape open, and reviewers judged the current implementation readable, correct, and acceptable for the iteration.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`. The `record_code_health` stage reported that no code-health note was needed, despite the independent reviews identifying judgement-worthy non-blocking findings. This should be treated as a review-recording gap rather than as fully handled.\n\n### 2. Duplicated latest-replier selection logic\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that latest replier ID and latest replier name appear to be selected using nearly identical query logic that differs only by selected column.\n\nReason this is non-blocking: the duplication is small, localized, covered by tests, and may be preferable to a more complex query until there is evidence the complexity is worthwhile.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n### 3. Raw table-name references in SQL fragments\n\nDisposition: unhandled workflow gap / non-blocking follow-up\n\nIndependent reviews noted that SQL fragments reference `message_projections` directly.\n\nReason this is non-blocking: the use is isolated, pragmatic, and covered by tests; table/projection renames are expected to be rare.\n\nWorkflow gap: this finding was not fixed and was not recorded in `docs/code-health.md`.\n\n## Repairs applied during review\n\nNone.\n\nThe publish step reported:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\nNo review polish was pushed to `main`.\n\n## Code-health note status\n\n`docs/code-health.md` was not updated.\n\nThe code-health recording stage stated that no code-health note was needed. However, because the independent reviews did identify judgement-worthy non-blocking findings and those findings were neither fixed nor recorded, this is a workflow gap in the review record.\n\n## Key files reviewed or repaired\n\nReviewed implementation evidence, matching the final artifact gate:\n\n- `web/lib/memba/messaging.ex`\n- `web/lib/memba_web/member_dashboard_presentation.ex`\n- `web/lib/memba_web/controllers/page_html.ex`\n- `web/lib/memba_web/controllers/page_html/club.html.heex`\n- `web/test/memba/messaging/message_projection_test.exs`\n- `web/test/memba_web/member_dashboard_presentation_test.exs`\n- `web/test/memba_web/live/member_dashboard_live_test.exs`\n- `web/test/features/step_definitions/messaging_steps.exs`\n- `acceptance-tests/features/club_message_replies.feature`\n- `web/test/memba/messaging/no_crud_spike_test.exs`\n- `docs/iterations/043-conversations-overview-grouping/plan.md`\n- `docs/iterations/043-conversations-overview-grouping/todo.md`\n- `docs/iterations/README.md`\n\nNo repaired files were produced during review.\n\n## Publish outcome\n\nReview polish pushed to main: no  \nMain left unchanged: yes\n\nPublish output:\n\n> “No staged review diff remains after squash reset; main remains unchanged.”\n\n## Tests and validation run\n\n`dev ci` passed.\n\nReported validation:\n\n- Acceptance: `85 scenarios (85 passed)`\n- Steps: `523 steps (523 passed)`\n- Duration: `4m00.548s`\n\nThe preflight sandbox check also passed.\n\nThe final artifact gate passed and confirmed implementation evidence.\n\n## Manual demo/checks still recommended\n\nThe plan’s validation section recommended:\n\n- `bin/dev gallery-walk` screenshot confirming the “Saturday ridge walk” conversation renders as a single row with its reply count on the member club home.\n\nNo gallery-walk/manual screenshot evidence was included in the provided pipeline output, so this remains recommended if the team wants visual confirmation before or after merge.\n\n## Non-blocking follow-ups\n\nConsider, if future scale or maintainability warrants it:\n\n1. Refactor the conversation overview query to avoid repeated correlated subqueries, potentially using a grouped query, lateral join, or window-function approach.\n2. Express latest-replier lookup once and project both ID and name from the same latest-reply row.\n3. Avoid or standardize raw table-name references in SQL fragments if similar patterns accumulate.",
+              "last_stage": "final_summary",
+              "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/043-conversations-overview-grouping/plan.md`\n\nBase SHA: `61faebe455a1f6617feeb43978b5041c71139381`\n\nReviewed commit range: changes since `61faebe45"
+            },
+            "notes": "Stage completed: final_summary",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8433,
+                    "output_tokens": 1496,
+                    "reasoning_tokens": 130,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 90945
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 64520,
+              "tool_time_ms": 0,
+              "active_time_ms": 64520
+            }
+          },
+          "finalize_iteration_status": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/667a6a3ff191bf4fc763ae12b37a02d72223f2ccd878ff8bab6db4993b0c399a"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1225,
+              "active_time_ms": 1225
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "response.gemini_review": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-model architecture and the ADR direction cited by the plan. The new conversation overview is derived from `MessageProjection`, exposed through the `Messaging` context, transformed by `MemberDashboardPresentation`, and rendered by the Phoenix page template. It does not introduce command-side coupling, bypass the projection/read-model layer, or replace ADR-mandated infrastructure with a local shortcut.\n\n`dev ci` passed on the reviewed state.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Correlated subqueries in the conversation read-model query**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** `Messaging.list_conversations_for_club/1` appears to compute `reply_count`, `latest_replier_id`, and `latest_replier_name` with separate correlated SQL subqueries over `message_projections`.\n   - **Why it may need human judgement:** This is plan-conforming and readable, but it may scale less well as clubs accumulate many conversations and replies because the same projection table is repeatedly queried per root conversation. The plan explicitly allowed flexibility here, so this is not a blocker. If message volume becomes material, a later refactor to a grouped query, lateral join, or window-function approach may be worth considering.\n\n2. **Duplicated latest-replier selection logic**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** The latest replier id and latest replier name are selected via nearly identical subqueries that differ only in the selected column.\n   - **Why it may need human judgement:** The duplication is localized and easy to understand, but it creates a small maintenance footgun if the definition of “latest reply” changes later. A query shape that identifies the latest reply row once and projects both fields would reduce drift risk, at the cost of added SQL/Ecto complexity.\n\n3. **Raw table-name references in SQL fragments**\n\n   - **File(s):** `lib/memba/messaging.ex`\n   - **Smell:** SQL fragments reference `message_projections` directly.\n   - **Why it may need human judgement:** This is a common pragmatic choice when Ecto composition gets awkward, but it weakens schema-level protection and makes table/projection renames easier to miss. Given the isolated usage and passing tests, this should not block the iteration, but it is worth watching if similar fragments accumulate.\n\n## Suggested fixes\n\nNo required fixes.\n\nIf the team later chooses to polish the query, the highest-value follow-up would be to express the conversation summary in one query shape that computes the latest reply row once per conversation while preserving the current public return shape and tests.\n\n## Validation notes\n\n- `dev ci` passed successfully.\n  - Acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n- Implementation evidence indicates the iteration plan was satisfied:\n  - Added `Messaging.list_conversations_for_club/1`.\n  - Member home rows are built from conversations rather than raw messages.\n  - Reply count and latest replier fields are available to presentation.\n  - Delivery/receipt glance fields were removed from the member home row.\n  - Row link target remains the existing conversation/message detail route.\n- Automated coverage evidence includes tests for:\n  - Conversation grouping.\n  - Reply count calculation.\n  - Latest replier fields.\n  - Ordering.\n  - Presentation row structure.\n  - Absence of delivery-glance fields.\n  - Authorization/error handling around selected clubs.\n- No out-of-scope architecture churn, route churn, command-side coupling, or projection bypass was evident from the collected implementation evidence.",
+              "last_response": "# Iteration Review Report: 043-conversations-overview-grouping\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to conform to the project’s CQRS/read-m"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6683,
+                    "output_tokens": 808,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 73135
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 53812,
+              "tool_time_ms": 0,
+              "active_time_ms": 53812
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9d97cf2484daecea9d2c8347b8af02da57617fb1ed3417fe65b6e7a4e02790da"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '61faebe455a1f6617feeb43978b5041c71139381'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 259,
+              "active_time_ms": 259
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2f50de7e24c31dc908fabaa7c998a4cb6b282df513f10490d5065a35f042a973"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/043-conversations-overview-grouping/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 235,
+              "active_time_ms": 235
+            }
+          },
+          "start": {
+            "status": "succeeded",
             "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "implementation_accepted": true,
+              "review_fixes_available": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7904,
+                    "output_tokens": 36,
+                    "reasoning_tokens": 241,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 47830
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 22849,
+              "tool_time_ms": 0,
+              "active_time_ms": 22849
+            }
           },
           "codex_review": {
             "status": "succeeded",
@@ -4719,45 +4733,232 @@
               "tool_time_ms": 0,
               "active_time_ms": 55515
             }
-          },
-          "publish_polish_to_main": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/c576b62eb0a227499f01570d9d4957d974521cea97ea5b4b55a6952eac37f5af"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/043-conversations-overview-grouping/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 262,
-              "active_time_ms": 262
-            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "b87bebf930f01a62b041c89a43275f3407f0f4ed",
         "node_visits": {
-          "preflight_sandbox": 1,
-          "record_code_health": 1,
-          "finalize_iteration_status": 1,
-          "final_artifact_gate": 1,
-          "read_plan": 1,
-          "gemini_review": 1,
-          "codex_review": 1,
-          "review_gate": 1,
-          "collect_implementation_evidence": 1,
-          "publish_polish_to_main": 1,
-          "synthesize_review": 1,
-          "final_summary": 1,
           "start": 1,
+          "review_gate": 1,
+          "finalize_iteration_status": 1,
+          "record_code_health": 1,
+          "gemini_review": 1,
+          "synthesize_review": 1,
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
           "claude_review": 1,
-          "dev_check": 1
+          "codex_review": 1,
+          "final_summary": 1,
+          "read_plan": 1,
+          "publish_polish_to_main": 1,
+          "final_artifact_gate": 1,
+          "preflight_sandbox": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 7,
+          "additions": 435,
+          "deletions": 116
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-23T07:24:01.483488091Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 1391204,
+      "inference_time_ms": 763900,
+      "tool_time_ms": 574632,
+      "active_time_ms": 1338532
+    },
+    "final_git_commit_sha": "b87bebf930f01a62b041c89a43275f3407f0f4ed",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan",
+        "stage_label": "read_plan",
+        "timing": {
+          "wall_time_ms": 251,
+          "inference_time_ms": 0,
+          "tool_time_ms": 235,
+          "active_time_ms": 235
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "preflight_sandbox",
+        "stage_label": "preflight_sandbox",
+        "timing": {
+          "wall_time_ms": 155636,
+          "inference_time_ms": 0,
+          "tool_time_ms": 155617,
+          "active_time_ms": 155617
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "dev_check",
+        "stage_label": "dev_check",
+        "timing": {
+          "wall_time_ms": 400531,
+          "inference_time_ms": 0,
+          "tool_time_ms": 400510,
+          "active_time_ms": 400510
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "collect_implementation_evidence",
+        "stage_label": "collect_implementation_evidence",
+        "timing": {
+          "wall_time_ms": 273,
+          "inference_time_ms": 0,
+          "tool_time_ms": 259,
+          "active_time_ms": 259
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 91660,
+          "inference_time_ms": 91607,
+          "tool_time_ms": 0,
+          "active_time_ms": 91607
+        },
+        "billing_usd_micros": 81102,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 55568,
+          "inference_time_ms": 55515,
+          "tool_time_ms": 0,
+          "active_time_ms": 55515
+        },
+        "billing_usd_micros": 68195,
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 53860,
+          "inference_time_ms": 53812,
+          "tool_time_ms": 0,
+          "active_time_ms": 53812
+        },
+        "billing_usd_micros": 73135,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize_review",
+        "stage_label": "synthesize_review",
+        "timing": {
+          "wall_time_ms": 22922,
+          "inference_time_ms": 22849,
+          "tool_time_ms": 0,
+          "active_time_ms": 22849
+        },
+        "billing_usd_micros": 47830,
+        "retries": 0
+      },
+      {
+        "stage_id": "review_gate",
+        "stage_label": "review_gate",
+        "timing": {
+          "wall_time_ms": 2,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "record_code_health",
+        "stage_label": "record_code_health",
+        "timing": {
+          "wall_time_ms": 492460,
+          "inference_time_ms": 475597,
+          "tool_time_ms": 16261,
+          "active_time_ms": 491858
+        },
+        "billing_usd_micros": 2426588,
+        "retries": 0
+      },
+      {
+        "stage_id": "final_artifact_gate",
+        "stage_label": "final_artifact_gate",
+        "timing": {
+          "wall_time_ms": 283,
+          "inference_time_ms": 0,
+          "tool_time_ms": 263,
+          "active_time_ms": 263
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_polish_to_main",
+        "stage_label": "publish_polish_to_main",
+        "timing": {
+          "wall_time_ms": 278,
+          "inference_time_ms": 0,
+          "tool_time_ms": 262,
+          "active_time_ms": 262
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "finalize_iteration_status",
+        "stage_label": "finalize_iteration_status",
+        "timing": {
+          "wall_time_ms": 1248,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1225,
+          "active_time_ms": 1225
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "final_summary",
+        "stage_label": "final_summary",
+        "timing": {
+          "wall_time_ms": 64591,
+          "inference_time_ms": 64520,
+          "tool_time_ms": 0,
+          "active_time_ms": 64520
+        },
+        "billing_usd_micros": 90945,
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 463808,
+      "output_tokens": 10788,
+      "total_tokens": 722616,
+      "reasoning_tokens": 3284,
+      "cache_read_tokens": 244736,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 2787795
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
@@ -4918,7 +5119,12 @@
       "first_event_seq": 301,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: final_summary",
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:23:58.157495593Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -4932,6 +5138,12 @@
       "output": null,
       "started_at": "2026-06-23T07:22:53.565864606Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 64591,
+        "inference_time_ms": 64520,
+        "tool_time_ms": 0,
+        "active_time_ms": 64520
+      },
       "usage": {
         "input_tokens": 8433,
         "output_tokens": 1496,
@@ -4945,7 +5157,7 @@
         "provider": "openai",
         "model_id": "gpt-5.5"
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "review_gate@1": {
       "first_event_seq": 104,
@@ -5577,6 +5789,40 @@
         "inference_time_ms": 0,
         "tool_time_ms": 263,
         "active_time_ms": 263
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 312,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-23T07:24:01.404235143Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-23T07:24:01.404208910Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
         "input_tokens": 0,
