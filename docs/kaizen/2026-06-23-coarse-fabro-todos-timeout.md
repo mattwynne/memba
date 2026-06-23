@@ -111,3 +111,29 @@ Single-piece-flow delivery depends on tasks being small, observable, and recover
 - Add deterministic or prompt-level checks that reject todos containing multiple semicolon-separated behaviours, multiple plan sub-bullets, or broad phrases such as "PageHTML.message" with a trailing colon and hidden child bullets.
 - Teach plan validation or delivery launch to report the generated task list before marking the iteration `implementing`, at least when tasks are broad.
 - Add diagnostics to `task_not_ready` timeout failures that summarize whether the selected todo was checked off, whether validation reportedly passed, and how much time was spent in validation commands versus implementation.
+
+## Resolution
+
+Date: 2026-06-23
+
+Root cause: the implementation workflow generated `todo.md` with a shell snippet that copied each numbered `## Implementation Plan` item into one todo. It ignored child bullets, so one broad numbered item with six UI changes became one `implement_next_task` unit.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/scripts/sync_task_list.py`: added a tested deterministic todo generator. It preserves an existing `todo.md`, splits substantive plan sub-bullets into separate todos with parent context, splits overlong unbulleted prose on sentence boundaries when safe, omits explicit `No changes to ...` constraints from the execution task list, and fails early when a generated todo is still too coarse.
+- `.fabro/workflows/iteration-implementation/scripts/test_sync_task_list.sh`: added regression coverage for sub-bullet splitting, existing-todo preservation, wrapped-line handling, sentence splitting, no-op constraint omission, and coarse-task rejection.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: replaced the inline flattening shell snippet with the new helper.
+- `.fabro/workflows/iteration-implementation/prompts/sync_task_list.md`: documented the one-node-sized todo standard and the split/reject rule.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_sync_task_list.sh` — passed.
+- `python3 -m py_compile .fabro/workflows/iteration-implementation/scripts/sync_task_list.py` — passed.
+- `bash -n .fabro/workflows/iteration-implementation/scripts/test_sync_task_list.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with pre-existing goal-gate retry warnings.
+- Manual smoke against `docs/iterations/044-conversation-page-alignment/plan.md` generated ten smaller implementation todos instead of the previous four coarse todos.
+
+Remaining follow-up:
+
+- This fixes initial task-list generation for new or absent `todo.md` files. Existing `todo.md` files are still preserved by design; if one is already coarse, a human or agent must split it explicitly.
+- The separate sandbox-friction note remains unresolved: `docs/kaizen/2026-06-23-fabro-sandbox-validation-friction.md`.

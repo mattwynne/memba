@@ -20,7 +20,7 @@ Todo path: `<iteration directory>/todo.md`.
 - Read `AGENTS.md`, the plan at `{{ inputs.plan_path }}`, and any ADRs or project guidance referenced by the plan.
 - Create `todo.md` if it does not exist.
 - If `todo.md` exists, reconcile it with the approved plan without weakening the plan or overwriting execution state.
-- Keep the todo file lean:
+- Keep the todo file lean and one-node-sized:
 
   ```md
   # Implementation TODO
@@ -28,6 +28,10 @@ Todo path: `<iteration directory>/todo.md`.
   - [ ] 001 Short task title
   - [ ] 002 Short task title
   ```
+
+- Split substantive `## Implementation Plan` sub-bullets into separate todos instead of flattening the parent numbered item into one broad todo.
+- Do not generate a todo that merely names a file/module and ends with `:`; that indicates hidden child work and must be split before implementation starts.
+- Reject or report a generated task list as too coarse when an item cannot reasonably be completed, validated, and checked off by one `implement_next_task` node.
 
 - Preserve checked tasks unless there is clear evidence they were checked incorrectly; if so, stop and report the inconsistency instead of silently changing completed state.
 - You may split, add, or reorder unchecked todos only to satisfy dependencies or make the approved plan executable.
