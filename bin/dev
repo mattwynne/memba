@@ -1645,16 +1645,27 @@ _fabro_deliver() {
     if [ -n "$implementation_run_id" ]; then
       implementation_status_kind=$(_fabro_inspect_status_kind "$implementation_run_id" 2>/dev/null || true)
       implementation_status_class=$(_fabro_implementation_status_class "$implementation_status_kind")
-      if [ "$implementation_status_class" = "failed" ]; then
-        _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
-      else
-        echo "Not rolling back iteration status because Fabro returned run ID $implementation_run_id and its remote status is '${implementation_status_kind:-unknown}'." >&2
-        _fabro_print_implementation_recovery_commands "$implementation_run_id" "$plan_path" "$poll_interval"
-      fi
+      case "$implementation_status_class" in
+        succeeded)
+          echo "Fabro launch failed locally, but remote implementation run $implementation_run_id is '${implementation_status_kind}'. Continuing to review." >&2
+          implementation_create_status=0
+          ;;
+        failed)
+          _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+          exit 1
+          ;;
+        active|unknown)
+          echo "Not rolling back iteration status because Fabro returned run ID $implementation_run_id and its remote status is '${implementation_status_kind:-unknown}'." >&2
+          _fabro_print_implementation_recovery_commands "$implementation_run_id" "$plan_path" "$poll_interval"
+          exit 1
+          ;;
+      esac
     else
       _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
     fi
-    exit 1
+    if [ "$implementation_create_status" -ne 0 ]; then
+      exit 1
+    fi
   fi
 
   if [ -z "$implementation_run_id" ]; then
