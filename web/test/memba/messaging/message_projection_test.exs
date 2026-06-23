@@ -131,6 +131,10 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert Messaging.list_conversation_messages(nil) == []
     assert Messaging.list_conversation_messages("not-a-uuid") == []
 
+    assert Messaging.list_conversations_for_club(Memba.ID.generate(:club)) == []
+    assert Messaging.list_conversations_for_club(nil) == []
+    assert Messaging.list_conversations_for_club("not-a-uuid") == []
+
     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_email_delivery(nil))
     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
@@ -138,6 +142,127 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert Messaging.list_recipient_deliveries(Memba.ID.generate(:message)) == []
     assert Messaging.list_recipient_deliveries(nil) == []
     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+  end
+
+  describe "list_conversations_for_club/1" do
+    test "returns root conversations with reply counts and latest replier names" do
+      club_id = Memba.ID.generate(:club)
+      other_club_id = Memba.ID.generate(:club)
+
+      alice =
+        insert_membership_person!(
+          person_id: Memba.ID.generate(:person),
+          name: "Alice Ridge",
+          email: "alice-ridge@example.com"
+        )
+
+      bob =
+        insert_membership_person!(
+          person_id: Memba.ID.generate(:person),
+          name: "Bob Maps",
+          email: "bob-maps@example.com"
+        )
+
+      carol =
+        insert_membership_person!(
+          person_id: Memba.ID.generate(:person),
+          name: "Carol Snacks",
+          email: "carol-snacks@example.com"
+        )
+
+      newer_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice.person_id,
+          subject: "Sunday weather window",
+          body: "Looks good for a short hike.",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      older_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice.person_id,
+          subject: "Saturday ridge walk",
+          body: "Meet at the trailhead.",
+          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
+        )
+
+      older_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: bob.person_id,
+          conversation_id: older_root.message_id,
+          reply_to_message_id: older_root.message_id,
+          subject: "Saturday ridge walk",
+          body: "I can bring maps.",
+          inserted_at: ~U[2026-06-05 10:10:00.000000Z]
+        )
+
+      newer_reply_to_older_conversation =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: carol.person_id,
+          conversation_id: older_root.message_id,
+          reply_to_message_id: older_reply.message_id,
+          subject: "Saturday ridge walk",
+          body: "I can bring snacks.",
+          inserted_at: ~U[2026-06-05 13:00:00.000000Z]
+        )
+
+      unrelated_root =
+        insert_message_projection!(
+          club_id: other_club_id,
+          sender_id: bob.person_id,
+          subject: "Other club thread",
+          inserted_at: ~U[2026-06-05 14:00:00.000000Z]
+        )
+
+      _unrelated_reply =
+        insert_message_projection!(
+          club_id: other_club_id,
+          sender_id: carol.person_id,
+          conversation_id: unrelated_root.message_id,
+          reply_to_message_id: unrelated_root.message_id,
+          subject: "Other club thread",
+          inserted_at: ~U[2026-06-05 14:05:00.000000Z]
+        )
+
+      assert [
+               %{
+                 message: %MessageProjection{message_id: newer_root_id},
+                 message_id: newer_root_id,
+                 conversation_id: newer_root_id,
+                 sender_id: newer_sender_id,
+                 subject: "Sunday weather window",
+                 body: "Looks good for a short hike.",
+                 inserted_at: ~U[2026-06-05 12:00:00.000000Z],
+                 reply_count: 0,
+                 latest_replier_id: nil,
+                 latest_replier_name: nil
+               },
+               %{
+                 message: %MessageProjection{message_id: older_root_id},
+                 message_id: older_root_id,
+                 conversation_id: older_root_id,
+                 sender_id: older_sender_id,
+                 subject: "Saturday ridge walk",
+                 body: "Meet at the trailhead.",
+                 inserted_at: ~U[2026-06-05 10:00:00.000000Z],
+                 reply_count: 2,
+                 latest_replier_id: latest_replier_id,
+                 latest_replier_name: "Carol Snacks"
+               }
+             ] = Messaging.list_conversations_for_club(club_id)
+
+      assert newer_root_id == newer_root.message_id
+      assert older_root_id == older_root.message_id
+      assert newer_sender_id == alice.person_id
+      assert older_sender_id == alice.person_id
+      assert latest_replier_id == carol.person_id
+      refute newer_reply_to_older_conversation.message_id in [newer_root_id, older_root_id]
+      refute unrelated_root.message_id in [newer_root_id, older_root_id]
+    end
   end
 
   describe "list_conversation_messages/1" do

@@ -320,6 +320,26 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List projected root conversations sent to a club.
+
+  Invalid or missing club IDs return an empty list. Results include one row per
+  conversation root, a count of projected replies in that conversation, and the
+  latest projected replier when replies exist. Conversations are ordered by the
+  original root message insertion time, newest first, so newer replies do not
+  reorder the overview.
+  """
+  def list_conversations_for_club(club_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id) do
+      club_id
+      |> conversations_for_club_query()
+      |> Repo.all()
+      |> add_latest_replier_names()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List the projected conversation containing a message.
 
   The argument may be the root message ID or any reply message ID. Invalid,
@@ -672,6 +692,65 @@ defmodule Memba.Messaging do
 
   defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
     delivery
+  end
+
+  defp conversations_for_club_query(club_id) do
+    reply_counts_query =
+      from reply in MessageProjection,
+        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
+        group_by: reply.conversation_id,
+        select: %{
+          conversation_id: reply.conversation_id,
+          reply_count: count(reply.message_id)
+        }
+
+    latest_replies_query =
+      from reply in MessageProjection,
+        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
+        distinct: [asc: reply.conversation_id],
+        order_by: [asc: reply.conversation_id, desc: reply.inserted_at, desc: reply.message_id],
+        select: %{
+          conversation_id: reply.conversation_id,
+          latest_replier_id: reply.sender_id
+        }
+
+    from root in MessageProjection,
+      left_join: reply_counts in subquery(reply_counts_query),
+      on: reply_counts.conversation_id == root.message_id,
+      left_join: latest_reply in subquery(latest_replies_query),
+      on: latest_reply.conversation_id == root.message_id,
+      where: root.club_id == ^club_id and root.message_id == root.conversation_id,
+      order_by: [desc: root.inserted_at, desc: root.message_id],
+      select: %{
+        message: root,
+        message_id: root.message_id,
+        conversation_id: root.conversation_id,
+        club_id: root.club_id,
+        sender_id: root.sender_id,
+        subject: root.subject,
+        body: root.body,
+        inserted_at: root.inserted_at,
+        updated_at: root.updated_at,
+        reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
+        latest_replier_id: latest_reply.latest_replier_id
+      }
+  end
+
+  defp add_latest_replier_names(conversation_rows) do
+    replier_summaries =
+      conversation_rows
+      |> Enum.map(& &1.latest_replier_id)
+      |> Enum.reject(&is_nil/1)
+      |> Membership.list_person_contact_summaries()
+
+    Enum.map(conversation_rows, fn row ->
+      latest_replier_name =
+        row.latest_replier_id
+        |> then(&Map.get(replier_summaries, &1, %{}))
+        |> Map.get(:name)
+
+      Map.put(row, :latest_replier_name, latest_replier_name)
+    end)
   end
 
   defp conversation_id_for_message(%MessageProjection{conversation_id: conversation_id}) do
