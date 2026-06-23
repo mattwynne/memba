@@ -51,7 +51,7 @@ green than before.
 | 039 | 2026-06-19 | merged | Club message conversations and replies | [plan](039-club-message-threads-and-in-app-replies/plan.md) |
 | 040 | 2026-06-19 | merged | Follow a conversation, send replies to followers | [plan](040-thread-follow-and-reply-notification-emails/plan.md) |
 | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
-| 042 | 2026-06-21 | implementing | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
+| 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
 | 043 | 2026-06-22 | validated | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
 
 Status notes:

@@ -13,4 +13,4 @@
 - [x] 011 Update `docs/postmark-email.md` and any production cutover/runbook text that describes inbound club-message email.
 - [x] 012 Update `smoke-tests/lib/config.js`, smoke-test assertions, and `smoke-tests/README.md` so the default smoke address is `everyone@test.clubs.memba.io` and Postmark diagnostics look for that recipient.
 - [x] 013 Run `dev check`.
-- [ ] 014 After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result.
+- [x] 014 After Matt confirms Postmark/DNS are configured for `*.clubs.memba.io`, run the production inbound smoke test and record/report the result. Smoke test was run manually.
