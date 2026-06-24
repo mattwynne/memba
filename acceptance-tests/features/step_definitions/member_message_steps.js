@@ -42,6 +42,7 @@ const {
   openMemberMessage,
   reportRecipientEmailStatus,
   removeMemberFromClub,
+  recordMembershipProjectionCheckpoint,
   postMemberReply,
   sendInboundClubEmail,
   sendInboundClubEmailReply,
@@ -630,6 +631,7 @@ function ensureMembersState(world, personNames, clubName) {
         membershipId: result.membershipId,
         personId: result.personId
       };
+      recordMembershipProjectionCheckpoint(world, result);
     }
   }
 

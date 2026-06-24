@@ -8,6 +8,7 @@ const {
   ensureState,
   kootenayClubName,
   nelsonClubName,
+  recordMembershipProjectionCheckpoint,
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
@@ -54,6 +55,7 @@ async function ensureMember(world, personName, clubName) {
     membershipId: result.membershipId,
     personId: result.personId
   };
+  recordMembershipProjectionCheckpoint(world, result);
 }
 
 function clubSlugFor(clubName) {

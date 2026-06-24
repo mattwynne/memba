@@ -113,6 +113,12 @@ membership_id =
       membership_id
   end
 
+%{rows: [[membership_projector_checkpoint]]} =
+  Memba.Repo.query!(
+    "SELECT COALESCE(MAX(last_seen_event_number), 0) FROM projection_versions WHERE projection_name = 'Memba.Membership.Projectors.Membership'",
+    []
+  )
+
 %{
   clubId: club.club_id,
   clubName: club.name,
@@ -120,7 +126,8 @@ membership_id =
   personId: person.person_id,
   personName: person.name,
   email: email,
-  membershipId: membership_id
+  membershipId: membership_id,
+  membershipProjectorCheckpoint: membership_projector_checkpoint
 }
 `,
     { clubName, clubSlug, personName, email }
@@ -209,7 +216,15 @@ ensure_member = fn member ->
   }
 end
 
-Map.fetch!(payload, "members") |> Enum.map(ensure_member)
+results = Map.fetch!(payload, "members") |> Enum.map(ensure_member)
+
+%{rows: [[membership_projector_checkpoint]]} =
+  Memba.Repo.query!(
+    "SELECT COALESCE(MAX(last_seen_event_number), 0) FROM projection_versions WHERE projection_name = 'Memba.Membership.Projectors.Membership'",
+    []
+  )
+
+Enum.map(results, &Map.put(&1, "membershipProjectorCheckpoint", membership_projector_checkpoint))
 `,
     { members }
   );
@@ -394,13 +409,15 @@ end)
   );
 }
 
-function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
+function waitForProjectionBarrier({ projectors, timeoutMs = 1000, checkpoint = null }) {
   return runCommand(
     `
 projectors = Map.fetch!(payload, "projectors")
 timeout = Map.get(payload, "timeoutMs", 1000)
+checkpoint = Map.get(payload, "checkpoint")
+opts = if is_nil(checkpoint), do: [timeout: timeout], else: [timeout: timeout, checkpoint: checkpoint]
 
-case Memba.ProjectionBarrier.await(projectors, timeout: timeout) do
+case Memba.ProjectionBarrier.await(projectors, opts) do
   {:ok, result} ->
     Map.put(result, :status, "satisfied")
 
@@ -408,7 +425,7 @@ case Memba.ProjectionBarrier.await(projectors, timeout: timeout) do
     raise "Projection barrier timed out waiting for #{inspect(projectors)} to reach checkpoint #{result.checkpoint}; positions: #{inspect(result.projectors)}"
 end
 `,
-    { projectors, timeoutMs }
+    { projectors, timeoutMs, checkpoint }
   );
 }
 

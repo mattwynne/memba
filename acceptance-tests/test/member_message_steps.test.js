@@ -654,6 +654,7 @@ test("member send flow opens compose from club home and stores the new message",
     }
   };
   world.people = { Alice: { personId: "person-alice-1" } };
+  world.membershipProjectionCheckpoint = 7;
 
   await sendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
     expect: fakeExpect(expectations)
@@ -669,7 +670,8 @@ test("member send flow opens compose from club home and stores the new message",
   assert.deepEqual(world.projectionBarriers, [
     {
       projectors: ["Memba.Membership.Projectors.Membership"],
-      timeoutMs: 10000
+      timeoutMs: 10000,
+      checkpoint: 7
     }
   ]);
   assert.deepEqual(page.actions, [

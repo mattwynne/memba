@@ -178,6 +178,19 @@ function ensureState(world) {
   return world;
 }
 
+function recordMembershipProjectionCheckpoint(world, result) {
+  if (!result || result.membershipProjectorCheckpoint === undefined || result.membershipProjectorCheckpoint === null) {
+    return;
+  }
+
+  const checkpoint = Number(result.membershipProjectorCheckpoint);
+  if (!Number.isFinite(checkpoint)) {
+    return;
+  }
+
+  world.membershipProjectionCheckpoint = Math.max(world.membershipProjectionCheckpoint || 0, checkpoint);
+}
+
 function rowByData(page, testId, dataName, value) {
   return page
     .locator(`[data-testid=${cssString(testId)}][${dataName}=${cssString(value)}]`)
@@ -1056,7 +1069,11 @@ async function sendMemberMessageToKootenayMembers(
 
   const body = `${subject} details.`;
 
-  await waitForProjectionBarrier(world, memberMessageSetupProjectors);
+  if (world.membershipProjectionCheckpoint !== undefined) {
+    await waitForProjectionBarrier(world, memberMessageSetupProjectors, {
+      checkpoint: world.membershipProjectionCheckpoint
+    });
+  }
 
   const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
@@ -3016,13 +3033,17 @@ async function capturedInboundRejectionEmail(world, senderName) {
   return rejectionEmail;
 }
 
-async function waitForProjectionBarrier(world, projectors, { timeoutMs = projectionTimeoutMs(world) } = {}) {
+async function waitForProjectionBarrier(world, projectors, { timeoutMs = projectionTimeoutMs(world), checkpoint = null } = {}) {
   if (Array.isArray(world.projectionBarriers)) {
-    world.projectionBarriers.push({ projectors, timeoutMs });
-    return { status: "satisfied", checkpoint: 0, projectors: Object.fromEntries(projectors.map((name) => [name, 0])) };
+    world.projectionBarriers.push({ projectors, timeoutMs, checkpoint });
+    return {
+      status: "satisfied",
+      checkpoint: checkpoint || 0,
+      projectors: Object.fromEntries(projectors.map((name) => [name, checkpoint || 0]))
+    };
   }
 
-  return serverCommands.waitForProjectionBarrier({ projectors, timeoutMs });
+  return serverCommands.waitForProjectionBarrier({ projectors, timeoutMs, checkpoint });
 }
 
 async function waitForReadModelChanges(world, predicates, action, { timeoutMs = projectionTimeoutMs(world) } = {}) {
@@ -3368,6 +3389,7 @@ module.exports = {
   openClub,
   openMessage,
   removeMemberFromClub,
+  recordMembershipProjectionCheckpoint,
   restoreClubMessageSending,
   sendInboundClubEmailReply,
   sendInboundClubEmailWithReplyHeaders,
