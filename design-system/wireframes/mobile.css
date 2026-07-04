@@ -1,0 +1,221 @@
+/* ==========================================================================
+   Memba — shared mobile & tablet wireframe layer
+   Single source for the member-app phone/tablet screens. Every mobile
+   wireframe links this file instead of re-declaring the shell inline.
+
+   Maps to the real Phoenix app as follows:
+     • tokens          → web/assets/css/app.css @theme (mirrored here)
+     • .ph-nav shell   → a HEEx <.app_bar> component (Tailwind utilities)
+     • .group/.row     → a HEEx <.grouped_list>/<.list_row> component
+     • badges/buttons  → daisyUI (badge / btn / btn-primary …), as in the app
+   Keep bespoke classes here in sync with those components.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/daisyui@5');
+
+/* ---------- Tokens (mirror of web/assets/css/app.css @theme) ------------- */
+:root {
+  --color-sage-50:#eef1e6; --color-sage-100:#dde3cf; --color-sage-200:#bccaa6;
+  --color-sage-300:#98ab80; --color-sage-400:#6f8760; --color-sage-500:#5a7050;
+  --color-sage-600:#475a40; --color-sage-700:#36462f; --color-sage-800:#232e1e;
+  --color-cream:#f6f5ea; --color-paper:#fffef9; --color-line:#e8e6d4; --color-line-strong:#d9d6bf;
+  --color-ink:#25291d; --color-ink-2:#555a47; --color-ink-3:#878b76;
+  --font-sans:'Figtree',ui-sans-serif,system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --dur-fast:100ms; --ease-out:cubic-bezier(0.22,0.61,0.36,1);
+}
+/* daisyUI "light" theme — copied verbatim from web/assets/css/app.css */
+:root {
+  color-scheme: light;
+  --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;
+  --color-primary:#5a7050; --color-primary-content:#f6f5ea;
+  --color-secondary:#555a47; --color-secondary-content:#f6f5ea;
+  --color-accent:#d2925a; --color-accent-content:#25291d;
+  --color-neutral:#25291d; --color-neutral-content:#f6f5ea;
+  --color-info:#4f6b78; --color-info-content:#f6f5ea;
+  --color-success:#5f7a4f; --color-success-content:#f6f5ea;
+  --color-warning:#a8772e; --color-warning-content:#f6f5ea;
+  --color-error:#a8503a; --color-error-content:#f6f5ea;
+  --radius-selector:0.375rem; --radius-field:0.375rem; --radius-box:0.75rem;
+  --size-selector:0.25rem; --size-field:0.25rem; --border:1px; --depth:0; --noise:0;
+}
+
+/* ---------- Base + device frame ------------------------------------------ */
+* { box-sizing: border-box; }
+body { margin:0; min-height:100vh; padding:24px 12px; font-family:var(--font-sans);
+       background:var(--color-sage-700); display:flex; justify-content:center; }
+
+/* Phone frame. Tablet: add class="ph ph--tablet" for a wider content column. */
+.ph { width:390px; max-width:100%; background:var(--color-cream); border-radius:30px; overflow:hidden;
+      box-shadow:0 12px 40px rgba(21,32,28,0.35); border:1px solid rgba(255,255,255,0.25); }
+.ph--tablet { width:760px; border-radius:22px; }
+.ph--tablet .ph-body { max-width:600px; margin:0 auto; }
+
+/* ---------- App shell: sticky top bar ------------------------------------
+   Club identity lives at the TOP, always. Left: club sprig mark + name.
+   Right: the logged-in member's avatar (who am I), never an action. */
+.ph-nav { display:flex; align-items:center; gap:10px; padding:13px 16px;
+          background:var(--color-sage-700); position:sticky; top:0; z-index:2; }
+.ph-nav__mark { width:30px; height:30px; border-radius:8px; background:rgba(255,255,255,0.15);
+                display:grid; place-items:center; flex:none; }
+.ph-nav__mark svg { width:18px; height:18px; }
+.ph-nav__txt { flex:1; min-width:0; }
+.ph-nav__name { font-size:14px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ph-nav__av { width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.16); color:#fff;
+              display:grid; place-items:center; font-size:11px; font-weight:700; flex:none;
+              box-shadow:inset 0 0 0 1px rgba(255,255,255,0.15); }
+
+.ph-body { padding:18px 16px 28px; display:flex; flex-direction:column; gap:18px; }
+
+/* ---------- Back / cancel affordance -------------------------------------
+   Plain text. A chevron means "pop to previous screen"; on a task/leaf
+   screen use the word (Cancel) with no chevron. */
+.back { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600;
+        color:var(--color-ink-3); text-decoration:none; }
+.back svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ---------- Paired action bar (primary + dismiss) ------------------------
+   Primary (Send) dims until the form is valid; dismiss (Cancel) is text. */
+.compose-bar { display:flex; align-items:center; justify-content:space-between; }
+.compose-bar .send { border:0; background:var(--color-sage-600); color:var(--color-sage-50); font-family:inherit;
+                     font-size:15px; font-weight:600; letter-spacing:-0.01em; padding:8px 18px; border-radius:8px;
+                     cursor:pointer; transition:opacity var(--dur-fast) var(--ease-out); }
+.compose-bar .send:disabled { background:var(--color-base-200); color:var(--color-ink-3); cursor:default; }
+
+/* ---------- Titles ------------------------------------------------------- */
+.eyebrow { font-size:11px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--color-ink-3); margin:6px 0 0; }
+.title { font-size:23px; font-weight:700; letter-spacing:-0.02em; line-height:1.15; color:var(--color-ink); margin:6px 0 0; }
+
+/* ==========================================================================
+   Grouped-inset forms (iOS Settings/Mail idiom)
+   Rows inside rounded white cards on a tinted background; hairline dividers
+   inset from a fixed left label column. Use for any compose / edit form.
+   ========================================================================== */
+.form-body { background:var(--color-sage-50); }         /* tinted grouped bg */
+.group { background:var(--color-paper); border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(21,32,28,0.05); }
+.group__cap { font-size:12px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--color-ink-3); margin:0 0 7px 14px; }
+.row { display:flex; align-items:center; gap:12px; padding:12px 14px; min-height:44px; position:relative; }
+.row + .row::before { content:""; position:absolute; top:0; left:14px; right:0; height:1px; background:var(--color-line); }
+.row--to { align-items:flex-start; }
+.row--stack { flex-direction:column; align-items:stretch; }
+.row__lab { flex:none; width:74px; font-size:15px; font-weight:400; color:var(--color-ink); }
+.row__input { flex:1; min-width:0; border:0; background:transparent; font-family:inherit; font-size:15px; color:var(--color-ink); padding:0; }
+.row__input::placeholder { color:var(--color-ink-3); }
+.row__input:focus { outline:none; }
+.row__area { width:100%; border:0; background:transparent; resize:none; font-family:inherit; font-size:15px; line-height:1.5; color:var(--color-ink); padding:0; }
+.row__area::placeholder { color:var(--color-ink-3); }
+.row__area:focus { outline:none; }
+.row__val { flex:1; display:flex; align-items:center; gap:11px; font-size:15px; color:var(--color-ink); }
+.row__val small { display:block; font-size:12px; color:var(--color-ink-3); margin-top:1px; font-weight:400; }
+.row__val--wrap { flex:1; display:block; font-size:14px; line-height:1.45; color:var(--color-ink-2); }
+.row__val--wrap strong { color:var(--color-ink); font-weight:600; }
+.from__av { width:32px; height:32px; border-radius:50%; background:var(--color-base-200); color:var(--color-sage-600);
+            display:grid; place-items:center; font-size:11px; font-weight:700; flex:none; box-shadow:inset 0 0 0 1px var(--color-line); }
+
+/* ---------- Recipient callout (assist banner) ---------------------------- */
+.callout { display:flex; gap:11px; align-items:flex-start; padding:13px; border-radius:13px;
+           background:var(--color-sage-50); border:1px solid var(--color-sage-100); }
+.callout__ic { width:32px; height:32px; border-radius:50%; background:var(--color-paper); color:var(--color-sage-600);
+               display:grid; place-items:center; flex:none; box-shadow:inset 0 0 0 1px var(--color-sage-100); }
+.callout__ic svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.callout p { margin:0; font-size:13px; line-height:1.5; color:var(--color-ink-2); }
+.callout strong { color:var(--color-ink); font-weight:600; }
+
+/* ==========================================================================
+   Club-home components
+   ========================================================================== */
+.id__title { font-size:26px; font-weight:700; letter-spacing:-0.02em; line-height:1.1; color:var(--color-ink); margin:6px 0 0; }
+.id__desc { font-size:14px; line-height:1.5; color:var(--color-ink-2); margin:10px 0 0; }
+.id__meta { margin-top:10px; }
+
+.cta { background:var(--color-sage-500); color:#fff; border-radius:16px; padding:18px; }
+.cta__title { font-size:17px; font-weight:700; margin:0; }
+.cta__sub { font-size:13px; color:rgba(255,255,255,0.8); margin:4px 0 0; line-height:1.45; }
+.cta__email { margin-top:13px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15);
+              border-radius:11px; padding:10px 12px; font-size:12.5px; color:rgba(255,255,255,0.88); line-height:1.5; }
+.cta__email a { color:#fff; font-weight:600; }
+.cta .btn { margin-top:15px; width:100%; }
+
+.sec__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.sec__title { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; color:var(--color-ink); margin:0; }
+.sec__title svg { width:18px; height:18px; fill:none; stroke:var(--color-sage-500); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+.msg { display:flex; gap:12px; align-items:flex-start; padding:14px; background:var(--color-paper);
+       border:1px solid var(--color-line); border-radius:14px; text-decoration:none; }
+.msg + .msg { margin-top:9px; }
+.msg__av { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-size:12px;
+           font-weight:700; color:var(--color-sage-800); flex:none; }
+.msg__b { flex:1; min-width:0; }
+.msg__top { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.msg__sender { font-size:12px; font-weight:500; color:var(--color-ink-3); }
+.msg__date { font-size:11px; color:var(--color-ink-3); flex:none; }
+.msg__subject { font-size:15px; font-weight:600; color:var(--color-ink); margin:2px 0 0; line-height:1.3; }
+.msg__glance { display:flex; align-items:center; gap:8px; margin-top:9px; font-size:11.5px; color:var(--color-ink-3); }
+.bar { display:flex; height:6px; width:84px; border-radius:999px; overflow:hidden;
+       background:var(--color-base-200); box-shadow:inset 0 0 0 1px var(--color-line); flex:none; }
+.bar > span { display:block; height:100%; }
+
+.mem { background:var(--color-paper); border:1px solid var(--color-line); border-radius:16px; padding:16px;
+       display:flex; align-items:center; gap:14px; }
+.mem__stack { display:flex; }
+.mem__stack .av { width:36px; height:36px; border-radius:50%; border:2px solid var(--color-paper);
+                  background:var(--color-base-200); display:grid; place-items:center; font-size:11px;
+                  font-weight:700; color:var(--color-sage-600); margin-left:-9px; }
+.mem__stack .av:first-child { margin-left:0; }
+.mem__stack .av--more { background:var(--color-sage-500); color:#fff; }
+.mem__txt strong { display:block; font-size:14px; font-weight:600; color:var(--color-ink); }
+.mem__txt p { margin:3px 0 0; font-size:12.5px; line-height:1.45; color:var(--color-ink-2); }
+.dot { width:6px; height:6px; border-radius:999px; background:currentColor; display:inline-block; }
+
+/* ==========================================================================
+   Message-detail components
+   ========================================================================== */
+.hd__title { font-size:24px; font-weight:700; letter-spacing:-0.02em; line-height:1.15; color:var(--color-ink); margin:6px 0 0; }
+.hd__meta { font-size:13px; color:var(--color-ink-2); margin:10px 0 0; line-height:1.5; }
+.hd__meta strong { color:var(--color-ink); font-weight:600; }
+.hd__body { font-size:15px; line-height:1.65; color:var(--color-ink-2); margin:14px 0 0; white-space:pre-wrap; padding-bottom:16px; border-bottom:1px solid var(--color-line); }
+
+.card { background:var(--color-paper); border:1px solid var(--color-line); border-radius:16px; padding:16px; }
+.card__head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.card__title { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; color:var(--color-ink); margin:0; }
+.card__title svg { width:18px; height:18px; fill:none; stroke:var(--color-sage-500); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+.delbar { display:flex; height:12px; border-radius:999px; overflow:hidden; margin-top:14px;
+          background:var(--color-base-200); box-shadow:inset 0 0 0 1px var(--color-line); }
+.delbar > span { display:block; height:100%; }
+.legend { margin-top:14px; display:flex; flex-direction:column; gap:9px; }
+.leg { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--color-line);
+       border-radius:11px; background:var(--color-base-100); }
+.leg__sw { width:10px; height:10px; border-radius:3px; flex:none; }
+.leg__txt { flex:1; min-width:0; }
+.leg__lab { display:block; font-size:13px; font-weight:600; color:var(--color-ink); }
+.leg__desc { display:block; font-size:11.5px; color:var(--color-ink-3); margin-top:1px; }
+.leg__n { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--color-ink); }
+.leg__pct { font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--color-ink-3); }
+
+.grp { background:var(--color-paper); border:1px solid var(--color-line); border-radius:14px; overflow:hidden; }
+.grp + .grp { margin-top:9px; }
+.grp__btn { width:100%; display:flex; align-items:center; gap:12px; padding:13px 14px; background:none; border:0;
+            text-align:left; cursor:pointer; font-family:var(--font-sans); }
+.grp__ic { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+.grp__ic svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.grp__t { flex:1; min-width:0; }
+.grp__lab { display:block; font-size:14px; font-weight:600; color:var(--color-ink); }
+.grp__desc { display:block; font-size:11.5px; color:var(--color-ink-3); margin-top:1px; }
+.grp__n { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--color-ink); }
+.grp__rows { border-top:1px solid var(--color-line); padding:4px 14px; }
+.rcpt { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; }
+.rcpt + .rcpt { border-top:1px solid var(--color-line); }
+.rcpt__id { display:flex; align-items:center; gap:10px; min-width:0; }
+.rcpt__av { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-size:11px; font-weight:700; flex:none; }
+.rcpt__name { font-size:13.5px; font-weight:500; color:var(--color-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* status tints (delivered = sage, not blue) */
+.t-ok  { background:var(--color-sage-100); color:var(--color-sage-700); }
+.t-snd { background:#f3ecd8; color:var(--color-warning); }
+.t-bad { background:#f1ddd3; color:var(--color-error); }
+.bg-ok { background:var(--color-success); } .bg-snd { background:var(--color-warning); } .bg-bad { background:var(--color-error); }
+
+/* ---------- Shared sprig mark (for inline <svg> in .ph-nav__mark) --------- */
+/* Use: <svg viewBox="0 0 64 64"> … cream foliage + apricot bud … </svg>     */

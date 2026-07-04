@@ -12,6 +12,44 @@ The generic `/design-sync` converter does not apply here — see `.design-sync/c
   **no bulk download** — each file's content is fetched and re-written individually, so mirroring the
   whole project locally (50+ files) is impractical. The foundational layer is read on demand instead.
 
+## 2026-07-04 pull (cloud → local, refresh + new)
+
+Pulled **down** from the cloud (source of truth) to refresh a stale mirror. Every refreshed
+screen had drifted from the cloud since the 2026-06-22 push.
+
+Refreshed (existing local files, updated from cloud):
+- `wireframes/club-home.html` ← `templates/club-home/index.html`
+- `wireframes/member-conversation.html` ← `templates/member-conversation/member-conversation.html`
+- `wireframes/admin-request-review.html`, `check-email-delivery-progress.html`,
+  `member-empty-first-run-states.html`, `invite-a-member.html`, `conversation-stop-following.html`
+  ← their `templates/<name>/…` cloud paths
+- `wireframes/mobile-message-detail.html` ← `wireframes/mobile-message-detail.html`
+- `components/badges/badges.card.html` (unchanged content, re-verified)
+- `emails/reply-notification.html`, `emails/inbound-rejection.html` (already in sync — no diff)
+
+Added (new local files, following the existing flattened `wireframes/` convention):
+- `wireframes/marketing-homepage.html` ← `templates/marketing-homepage/index.html` (NEW cloud screen)
+- `wireframes/staff-console.html` ← `templates/staff-console/index.html` (NEW cloud screen)
+- `wireframes/mobile-club-home.html` ← `wireframes/mobile-club-home.html` (NEW cloud screen)
+
+Path mapping note: the cloud reorganised member/staff screens under `templates/<name>/…`
+(with `index.html` or a named file). Local keeps the flattened `wireframes/<name>.html`
+convention, so cloud `templates/X/index.html` → local `wireframes/X.html`.
+
+Also pulled (follow-up, to complete the mobile set):
+- `wireframes/mobile-compose.html` (refreshed — the current iOS-style grouped-inset compose form)
+- `wireframes/mobile.css` (NEW locally — the shared mobile layer every mobile wireframe links;
+  was missing, so the local mobile previews couldn't render before)
+
+Not pulled this pass (still cloud-resident, read on demand — deferred to keep the pull
+focused on the surfaces a design/app gap analysis needs):
+- `templates/onboarding-request-flow/…`, `templates/profile-completion/…`
+- `templates/new-request-email/new-request-notification.html` and the newer emails
+  (`welcome`, `sign-in-link`, `event-confirmation`, `member-message`, `renewal-reminder`,
+  `email-system-spec`, `index`)
+- foundational layer: `styles.css`, `memba.css`, `tokens.css`, `brand/**`, `components/**`,
+  `guidelines/**`, `design-system.html`, `brand-guidelines.html`, `index.html`
+
 ## 2026-06-22 sync
 
 Pushed **up** (local → cloud), additive:
