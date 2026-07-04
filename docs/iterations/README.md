@@ -55,6 +55,7 @@ green than before.
 | 043 | 2026-06-22 | merged | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
 | 044 | 2026-06-22 | implementing | Conversation page: align to the conversation wireframe | [plan](044-conversation-page-alignment/plan.md) |
 | 045 | 2026-06-23 | validated | Stop-following page: minimal header | [plan](045-stop-following-page-header/plan.md) |
+| 046 | 2026-07-04 | draft | Club home: Conversations / Members section tabs | [plan](046-club-home-section-tabs/plan.md) |
 
 Status notes:
 
