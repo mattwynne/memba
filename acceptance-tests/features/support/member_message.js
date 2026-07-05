@@ -547,7 +547,7 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect, 
 async function openMemberComposeFromClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
   await openMemberClubHome(world, clubName, { expect, timeoutMs });
 
-  const composeLink = world.page.locator("#member-send-message-link");
+  const composeLink = world.page.locator("#member-section-action-new-message");
   await waitForProjectedVisible(world, composeLink, `member compose link for ${clubName}`, {
     expect,
     timeoutMs

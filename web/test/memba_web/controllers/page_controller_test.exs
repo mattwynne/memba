@@ -332,9 +332,12 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query(
-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']"
            )
            |> Enum.any?()
+
+    refute html |> LazyHTML.query("#member-dashboard-cta") |> Enum.any?()
+    refute html |> LazyHTML.query("#member-send-message-link") |> Enum.any?()
 
     assert html
            |> LazyHTML.query(

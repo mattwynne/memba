@@ -118,6 +118,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     refute has_element?(view, "#member-section-action-new-message[hidden]")
     refute has_element?(view, "#member-section-action-new-message[data-action='members']")
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
   end
 
   test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
@@ -351,10 +353,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     refute has_element?(view, "#member-dashboard-hero")
 
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
+
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
-             "Send club message"
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+             "New message"
            )
 
     assert has_element?(
@@ -735,7 +741,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+             "New message"
            )
 
     assert has_element?(
@@ -773,10 +780,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/")
 
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
+
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
-             "Send club message"
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+             "New message"
            )
 
     refute has_element?(view, "form#member-message-form")

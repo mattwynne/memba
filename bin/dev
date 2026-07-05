@@ -422,7 +422,18 @@ start_processes() {
 }
 
 gallery_server_reachable() {
-  curl -fsS --max-time 2 http://localhost:4000/ >/dev/null 2>&1
+  python3 - <<'PY'
+import sys
+import urllib.request
+
+try:
+    with urllib.request.urlopen("http://127.0.0.1:4000/", timeout=2) as response:
+        status = response.status
+except Exception:
+    sys.exit(1)
+
+sys.exit(0 if status < 500 else 1)
+PY
 }
 
 wait_for_gallery_server() {
@@ -469,6 +480,58 @@ stop_gallery_server() {
 
   kill "$gallery_server_pid" 2>/dev/null || true
   wait "$gallery_server_pid" 2>/dev/null || true
+  python3 - <<'PY'
+import os
+import signal
+import time
+
+proc = "/proc"
+if not os.path.isdir(proc):
+    raise SystemExit(0)
+
+current = {os.getpid(), os.getppid()}
+matches = []
+
+for entry in os.listdir(proc):
+    if not entry.isdigit():
+        continue
+
+    pid = int(entry)
+    if pid in current:
+        continue
+
+    try:
+        with open(os.path.join(proc, entry, "cmdline"), "rb") as handle:
+            command = handle.read().replace(b"\0", b" ").decode("utf-8", "ignore")
+    except OSError:
+        continue
+
+    if "mix phx.server" in command or ("beam.smp" in command and "phx.server" in command):
+        matches.append(pid)
+
+for pid in matches:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        pass
+
+time.sleep(1)
+
+for pid in matches:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        continue
+
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        pass
+PY
   pkill -f 'mix phx.server' 2>/dev/null || true
 }
 
@@ -862,6 +925,7 @@ gallery_walk() {
   local gallery_server_pid=""
 
   start_postgres
+  migrate_databases
 
   if gallery_server_reachable; then
     echo "Using existing Phoenix server at http://localhost:4000/."
