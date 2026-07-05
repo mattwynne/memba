@@ -1,0 +1,49 @@
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index c2996db..6f17c7b 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -398,21 +398,12 @@ defmodule MembaWeb.Layouts do
+ 
+   defp club_identity_label(_member_name, _identity), do: "Member"
+ 
+-  defp club_identity_initials(member_name, identity) when is_binary(member_name) do
+-    case String.trim(member_name) do
+-      "" -> club_identity_initials(nil, identity)
+-      name -> initials(name)
+-    end
+-  end
+-
+-  defp club_identity_initials(_member_name, %{email: email}) when is_binary(email) do
+-    email
+-    |> email_local_part()
++  defp club_identity_initials(member_name, identity) do
++    member_name
++    |> club_identity_label(identity)
+     |> initials()
+   end
+ 
+-  defp club_identity_initials(_member_name, _identity), do: "M"
+-
+   defp email_local_part(email) do
+     email
+     |> String.split("@", parts: 2)
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index c0ad747..039115a 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -180,6 +180,15 @@ defmodule MembaWeb.LayoutsTest do
+       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
+     )
+ 
++    assert [csrf_token] =
++             attributes(
++               html,
++               "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_csrf_token'][type='hidden']",
++               "value"
++             )
++
++    assert String.trim(csrf_token) != ""
++
+     assert_selector(
+       html,
+       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
