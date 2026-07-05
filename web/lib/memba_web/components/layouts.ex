@@ -296,6 +296,10 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the signed-in identity shown in club member chrome"
 
+  attr :member_name, :string,
+    default: nil,
+    doc: "the optional signed-in member display name shown in club member chrome"
+
   attr :current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
@@ -385,7 +389,14 @@ defmodule MembaWeb.Layouts do
     email
     |> String.split("@", parts: 2)
     |> List.first()
-    |> String.split(~r/[^a-zA-Z0-9]+/, trim: true)
+    |> initials()
+  end
+
+  defp club_identity_initials(_identity), do: "M"
+
+  defp initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/[^\p{L}\p{N}]+/u, trim: true)
     |> Enum.take(2)
     |> Enum.map(&String.first/1)
     |> Enum.join()
@@ -396,7 +407,7 @@ defmodule MembaWeb.Layouts do
     end
   end
 
-  defp club_identity_initials(_identity), do: "M"
+  defp initials(_name), do: "M"
 
   @doc """
   Shows the flash group with standard titles and content.

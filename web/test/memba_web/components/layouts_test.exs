@@ -219,6 +219,30 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "#public-club-site-layout-slot")
   end
 
+  test "club-site layout accepts optional member names and derives name-like initials" do
+    assigns = %{
+      flash: %{},
+      current_identity: %{email: "élodie.durand@example.com"},
+      member_name: "Élodie Durand"
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site
+        flash={@flash}
+        club_name="Riverside Tennis Club"
+        current_identity={@current_identity}
+        member_name={@member_name}
+      >
+        <section id="club-site-layout-slot-with-member-name">Club member page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+    assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
+    assert_selector(html, "#club-site-layout-slot-with-member-name")
+  end
+
   test "root footer shows linked git commit when enabled" do
     System.put_env("MEMBA_GIT_SHA", @sha)
     Application.put_env(:memba, :show_git_commit_in_footer, true)
