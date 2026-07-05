@@ -101,6 +101,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+    html = dashboard_html(%{current_member_can_manage_members?: true})
+
+    conversations_click = attribute(html, "#member-section-tab-conversations", "phx-click")
+    members_click = attribute(html, "#member-section-tab-members", "phx-click")
+
+    assert conversations_click =~ "member-section-panel-conversations"
+    assert conversations_click =~ "data-action='conversations'"
+    assert conversations_click =~ "aria-selected"
+    assert conversations_click =~ "is-active"
+    refute conversations_click =~ "push"
+
+    assert members_click =~ "member-section-panel-members"
+    assert members_click =~ "data-action='members'"
+    assert members_click =~ "aria-selected"
+    assert members_click =~ "is-active"
+    refute members_click =~ "push"
+  end
+
   test "dashboard renders conversations in the default visible section panel", %{
     conn: conn
   } do
@@ -1087,5 +1106,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.any?()
+  end
+
+  defp attribute(html, selector, attribute) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(attribute)
+    |> List.first("")
   end
 end
