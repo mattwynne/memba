@@ -1,0 +1,113 @@
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 934b998..85e708c 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping its `mailto:` affordance and `data-inbound-address` hook.
+ - [x] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
+ - [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+-- [ ] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
++- [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+ - [ ] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+ - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 96620d5..cf352dc 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -67,6 +67,26 @@ defmodule MembaWeb.PageHTML do
+   defp active_member_count_label(1), do: "1 current member"
+   defp active_member_count_label(count), do: "#{count} current members"
+ 
++  defp member_section_tab_js(section) when section in ["conversations", "members"] do
++    selected_tab = "#member-section-tab-#{section}"
++    selected_panel = "#member-section-panel-#{section}"
++    selected_action = "#member-section-tabs-action [data-action='#{section}']"
++
++    %JS{}
++    |> JS.remove_class("is-active", to: "#member-section-tabs-list .section-tab")
++    |> JS.add_class("is-active", to: selected_tab)
++    |> JS.set_attribute({"aria-selected", "false"}, to: "#member-section-tabs-list .section-tab")
++    |> JS.set_attribute({"aria-selected", "true"}, to: selected_tab)
++    |> JS.hide(to: ".section-panel", time: 0)
++    |> JS.set_attribute({"hidden", ""}, to: ".section-panel")
++    |> JS.remove_attribute("hidden", to: selected_panel)
++    |> JS.show(to: selected_panel, display: "block", time: 0)
++    |> JS.hide(to: "#member-section-tabs-action [data-action]", time: 0)
++    |> JS.set_attribute({"hidden", ""}, to: "#member-section-tabs-action [data-action]")
++    |> JS.remove_attribute("hidden", to: selected_action)
++    |> JS.show(to: selected_action, display: "inline-flex", time: 0)
++  end
++
+   defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
+   defp status_slug(_status), do: "unknown"
+ 
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index d2f5623..5094061 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -25,8 +25,10 @@
+           type="button"
+           class="section-tab is-active"
+           data-tab="conversations"
++          phx-click={member_section_tab_js("conversations")}
+           role="tab"
+           aria-selected="true"
++          aria-controls="member-section-panel-conversations"
+         >
+           Conversations
+         </button>
+@@ -35,8 +37,10 @@
+           type="button"
+           class="section-tab"
+           data-tab="members"
++          phx-click={member_section_tab_js("members")}
+           role="tab"
+           aria-selected="false"
++          aria-controls="member-section-panel-members"
+         >
+           Members
+         </button>
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 803fa72..1872773 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -101,6 +101,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
++    html = dashboard_html(%{current_member_can_manage_members?: true})
++
++    conversations_click = attribute(html, "#member-section-tab-conversations", "phx-click")
++    members_click = attribute(html, "#member-section-tab-members", "phx-click")
++
++    assert conversations_click =~ "member-section-panel-conversations"
++    assert conversations_click =~ "data-action='conversations'"
++    assert conversations_click =~ "aria-selected"
++    assert conversations_click =~ "is-active"
++    refute conversations_click =~ "push"
++
++    assert members_click =~ "member-section-panel-members"
++    assert members_click =~ "data-action='members'"
++    assert members_click =~ "aria-selected"
++    assert members_click =~ "is-active"
++    refute members_click =~ "push"
++  end
++
+   test "dashboard renders conversations in the default visible section panel", %{
+     conn: conn
+   } do
+@@ -1088,4 +1107,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     |> LazyHTML.query(selector)
+     |> Enum.any?()
+   end
++
++  defp attribute(html, selector, attribute) do
++    html
++    |> LazyHTML.from_fragment()
++    |> LazyHTML.query(selector)
++    |> LazyHTML.attribute(attribute)
++    |> List.first("")
++  end
+ end
