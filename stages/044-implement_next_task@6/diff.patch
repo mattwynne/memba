@@ -1,0 +1,109 @@
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 44e6639..49ddc17 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add a `section-tabs__action` slot with a per-tab primary **New message** action on Conversations, linking to `member_compose_path(@selected_club, club_id_source)`.
+ - [x] 004 In the same action slot, add the **Invite member** action linking to `member_invitation_path`, rendered only when `@current_member_can_manage_members?` (hidden otherwise).
+ - [x] 005 Wrap today's conversation list and its existing empty state in a Conversations `section-panel` that is visible by default; keep the `@message_rows` rows unchanged.
+-- [ ] 006 Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping its `mailto:` affordance and `data-inbound-address` hook.
++- [x] 006 Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping its `mailto:` affordance and `data-inbound-address` hook.
+ - [ ] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
+ - [ ] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+ - [ ] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 187e8e6..f639803 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -77,26 +77,6 @@
+           <p class="mt-1 text-sm leading-6 text-white/75">
+             Messages go to all current members.
+           </p>
+-          <div
+-            :if={inbound_email_address}
+-            id="member-dashboard-inbound-email"
+-            data-inbound-address={inbound_email_address}
+-            class="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-sm leading-6 text-white/85 ring-1 ring-white/15"
+-          >
+-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
+-              Prefer email?
+-            </p>
+-            <p class="mt-1">
+-              You can also send a club-wide message to
+-              <a
+-                id="member-dashboard-inbound-email-link"
+-                href={"mailto:#{inbound_email_address}"}
+-                class="font-semibold text-white underline decoration-white/40 underline-offset-4 transition duration-200 hover:decoration-white"
+-              >
+-                {inbound_email_address}
+-              </a>
+-            </p>
+-          </div>
+         </div>
+ 
+         <.button
+@@ -209,6 +189,27 @@
+           </article>
+         </div>
+       </section>
++
++      <div
++        :if={inbound_email_address}
++        id="member-dashboard-inbound-email"
++        data-inbound-address={inbound_email_address}
++        class="mt-4 rounded-2xl border border-base-300 bg-base-100 px-4 py-3 text-sm leading-6 text-ink-2 shadow-sm"
++      >
++        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-ink-3">
++          Prefer email?
++        </p>
++        <p class="mt-1">
++          You can also send a club-wide message to
++          <a
++            id="member-dashboard-inbound-email-link"
++            href={"mailto:#{inbound_email_address}"}
++            class="font-semibold text-primary underline decoration-primary/35 underline-offset-4 transition duration-200 hover:decoration-primary"
++          >
++            {inbound_email_address}
++          </a>
++        </p>
++      </div>
+     </div>
+ 
+     <section id="club-members">
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c4581a6..d1e7c96 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -704,20 +704,28 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
++             "#member-section-panel-conversations " <>
++               "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+            )
+ 
+-    assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
++    refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-inbound-email",
++             "#member-section-panel-conversations #member-dashboard-inbound-email",
++             "Prefer email?"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-conversations #member-dashboard-inbound-email",
+              "You can also send a club-wide message to"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
++             "#member-section-panel-conversations " <>
++               "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+              "everyone@kmc.clubs.memba.io"
+            )
+ 
