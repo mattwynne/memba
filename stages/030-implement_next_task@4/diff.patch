@@ -1,0 +1,186 @@
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index fc436ac..0fccd3b 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -340,18 +340,28 @@ async function openClubPage(world, clubName) {
+ }
+ 
+ async function signOut(world) {
++  const clubIdentityMenuButton = world.page.locator("#club-site-identity-menu-button");
++
++  if ((await clubIdentityMenuButton.count()) > 0 && (await clubIdentityMenuButton.isVisible())) {
++    await clubIdentityMenuButton.click();
++  }
++
+   await world.page.getByRole("button", { name: "Sign out" }).click();
+ }
+ 
+ async function assertSignedInOnClubPage(world, personName) {
+   const person = personFromWorld(world, personName);
+   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+-  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
+-    `Signed in as ${signedInEmailFor(world, personName, person)}`
+-  );
++  await assertClubIdentityVisible(world, signedInEmailFor(world, personName, person));
++  await world.page.locator("#club-site-identity-menu-button").click();
+   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+ }
+ 
++async function assertClubIdentityVisible(world, email) {
++  await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
++}
++
+ async function assertClubMarketingPage(world, clubName) {
+   const club = world.clubs[clubName];
+   assert.ok(club, `Expected ${clubName} to be known in the scenario`);
+diff --git a/acceptance-tests/features/support/club_member_invitations.js b/acceptance-tests/features/support/club_member_invitations.js
+index 8cbc162..2d2f156 100644
+--- a/acceptance-tests/features/support/club_member_invitations.js
++++ b/acceptance-tests/features/support/club_member_invitations.js
+@@ -268,7 +268,7 @@ async function assertSignedInToClub(world, personName, clubName) {
+   await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
+     timeout: projectionTimeoutMs(world)
+   });
+-  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(`Signed in as ${email}`);
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
+ }
+ 
+ async function leaveWithoutEnteringName(world) {
+diff --git a/acceptance-tests/features/support/request_account.js b/acceptance-tests/features/support/request_account.js
+index 0f7ba36..38f7172 100644
+--- a/acceptance-tests/features/support/request_account.js
++++ b/acceptance-tests/features/support/request_account.js
+@@ -468,7 +468,7 @@ async function assertSignedInToClub(world, personName, clubName) {
+   await playwrightExpect(
+     world.page.locator(`#member-club-home[data-club-id=${cssString(world.clubs[clubName].clubId)}]`)
+   ).toBeVisible({ timeout: projectionTimeoutMs(world) });
+-  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(`Signed in as ${email}`);
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
+ }
+ 
+ async function openConversionPanel(world, clubName) {
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 1f7a758..7f00ddd 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Port the app-shell CSS classes (`app-frame`, `app-card`, `app-bar` and its children, `app-menu`, `app-foot`) verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the mirror (daisyUI `dropdown` already exists).
+ - [x] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
+ - [x] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
+-- [ ] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
++- [x] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+ - [ ] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+ - [ ] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+ - [ ] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 8681023..fa4fb83 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -327,26 +327,29 @@ defmodule MembaWeb.Layouts do
+                   type="button"
+                   class="app-bar__me"
+                   aria-haspopup="menu"
++                  aria-controls="club-site-identity-menu"
+                   aria-label="Member identity menu"
+                 >
+                   <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
+                   <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
+                 </button>
+-              </div>
+ 
+-              <span id="club-site-current-identity" class="text-ink-2">
+-                Signed in as {@current_identity.email}
+-              </span>
+-              <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+-                <.button
+-                  id="club-site-sign-out-button"
+-                  type="submit"
+-                  variant="secondary"
+-                  size="sm"
++                <div
++                  id="club-site-identity-menu"
++                  tabindex="0"
++                  class="dropdown-content app-menu app-menu--id"
+                 >
+-                  Sign out
+-                </.button>
+-              </.form>
++                  <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
++                    <button
++                      id="club-site-sign-out-button"
++                      type="submit"
++                      class="app-menu__signout"
++                    >
++                      Sign out
++                    </button>
++                  </.form>
++                </div>
++              </div>
+             </nav>
+           </div>
+         </div>
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 48297aa..8393841 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -143,7 +143,6 @@ defmodule MembaWeb.LayoutsTest do
+     assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
+     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
+     assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+-    assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
+ 
+@@ -152,9 +151,26 @@ defmodule MembaWeb.LayoutsTest do
+       "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
+     )
+ 
+-    assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
+-    assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
+-    assert_selector(html, "button#club-site-sign-out-button.btn.btn-soft.btn-sm[type='submit']")
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[tabindex='0']"
++    )
++
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
++    )
++
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
++    )
++
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
++    )
++
+     refute_text(html, "#club-site-footer", "Commit")
+ 
+     assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
+@@ -181,6 +197,8 @@ defmodule MembaWeb.LayoutsTest do
+     refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
+     refute_selector(html, "#club-site-layout header .app-bar__avatar")
+     refute_selector(html, "#club-site-layout header .app-bar__who")
++    refute_selector(html, "#club-site-layout header .app-menu")
++    refute_selector(html, "#club-site-layout header #club-site-sign-out-form")
+     refute_text(html, "#club-site-layout header", "Signed in as")
+     assert_selector(html, "#public-club-site-layout-slot")
+   end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 52aea71..95ebafb 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
+            )
+ 
+-    assert has_element?(view, "#club-site-current-identity", "Signed in as alice@example.com")
++    assert has_element?(view, "#club-site-identity-menu-button .app-bar__who", "alice@example.com")
+     assert has_element?(view, "#member-message-#{message.message_id}")
+     assert has_element?(view, "#club-member-#{alice.person_id}")
+     assert has_element?(view, "#club-member-#{bob.person_id}")
