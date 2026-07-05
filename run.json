@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-05T10:45:42.978629566Z",
-  "last_event_at": "2026-07-05T11:08:33.940945308Z",
+  "last_event_at": "2026-07-05T11:08:37.358795710Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3189,9 +3189,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 276,
       "checkpoint": {
-        "timestamp": "2026-07-05T11:08:34.221367487Z",
+        "timestamp": "2026-07-05T11:08:37.334292248Z",
         "current_node": "final_artifact_gate",
         "completed_nodes": [
           "start",
@@ -3209,16 +3209,379 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.record_code_health": 0,
+          "internal.retry_count.codex_review": 0,
+          "response.record_code_health": "CODE_HEALTH_RECORDED\n\nUpdated `docs/code-health.md` with a dated Iteration 044 entry because no reviewer-report or synthesis artifacts were visible in this checkout, but independent inspection found one judgement-worthy, non-blocking code-health issue: the shared repo-root `styles.css` used by static design-system previews depends on Memba design tokens that the linked previews do not define.\n\nVerified with `git diff -- docs/code-health.md`; the diff shows the new entry. No `dev check` was run because this was a docs-only code-health recording step.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
+          "internal.work_dir": "/workspace/memba",
+          "response.codex_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan/evidence. The plan does not cite a specific ADR, and this iteration is primarily Phoenix layout/CSS/UI plumbing rather than domain modeling, CQRS, event-sourcing, aggregates, projections, or read-model architecture. The implementation appears to keep the shared shell in the Phoenix layout layer and does not appear to replace ADR-style infrastructure with local substitutes.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing email-local-part fallback for signed-in member display name**\n\n   The iteration plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, for example:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   If `member.name` is `nil`, `member_name` is also `nil`. The layout then uses the presence of `member_name` to render the identity dropdown. That means a valid signed-in member without a stored name may not see the identity dropdown or its Sign out action.\n\n   This is both a plan-fidelity gap and a behavioural/coverage gap. Existing tests pass because test members appear to provide names, so the nil-name case is not exercised.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank strings**\n\n   If `Layouts.initials/1` receives `\"\"` or whitespace-only input, it can produce an empty string instead of a fallback such as `\"?\"`.\n\n   This is low-risk to fix while addressing the display-name fallback issue, especially if member names can be blank strings as well as `nil`.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown appears to rely on CSS hover/focus-style interaction rather than an explicit LiveView/JS click interaction.  \n   **Why it may need human judgement:** This is acceptable for a first shared-shell slice if the design-system mirror uses the same behaviour, but it may be fragile on touch devices and for keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is a current requirement.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is currently small and understandable. However, future slices mention role badges/member metadata; if more shell identity data is added, this could drift. A small helper or plug may become worthwhile, but extracting now is optional.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the member display name, treating nil and blank names as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place this somewhere appropriate for web/UI identity display logic, then use it consistently from the four signed-in member surfaces.\n\n2. Update the four signed-in club surfaces to assign the derived name, not `member.name` directly.\n\n3. Add automated coverage for a signed-in member with `name: nil`, preferably at one rendered surface level, verifying that:\n   - the app shell still renders,\n   - the identity dropdown is present,\n   - the display name uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank/whitespace input, for example:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     name\n     |> String.trim()\n     |> case do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after the fix.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed before review.\n- The acceptance run reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- The green check is meaningful for the existing behaviour, but it does not cover the explicit nil-name/email-fallback case required by the plan.\n- No feature-file changes are requested.\n- The main shared-shell capability appears implemented: shared `club_site` app frame/card, app bar, identity dropdown for signed-in surfaces, public-page gating, and CSS component class porting. The rejection is limited to the missing fallback and test coverage for that plan-required behaviour.",
+          "graph.rankdir": "LR",
+          "code_health_recording_ok": true,
+          "command.output": "blob://sha256/586425f2c1f1710a0e93dc805c1410e65643fef3772b9335a47021ab9cd126c0",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.node_visit_count": 1,
+          "last_stage": "record_code_health",
+          "graph.max_node_visits": "160",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.read_plan": 0,
+          "internal.run_id": "01KWRY2P5YRT9H7R2TSTNPH1Y9",
+          "internal.thread_id": "record_code_health",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.review_gate": 0,
+          "review_fixes_available": false,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "current_node": "final_artifact_gate",
+          "internal.retry_count.dev_check": 0,
+          "implementation_accepted": true,
+          "internal.retry_count.claude_review": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.synthesize_review.current_node": "review_gate",
+          "response.claude_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: CANNOT ASSESS\n\n**Limitation**: The plan does not cite specific ADRs, and no ADR files from `docs/adr/` are included in the review context. Without access to ADRs governing layout architecture, CSS organization, authentication/identity handling, or component structure, I cannot provide a definitive PASS/FAIL assessment of ADR conformance. No obvious violations of standard Phoenix/LiveView patterns were detected, and the implementation follows the plan's explicit architectural decisions (CSS porting approach, shared layout strategy, identity assign pattern).\n\n## ADR Violations\n\nNone detected (but see ADR conformance limitation above).\n\n## Blocking Issues\n\n1. **Email-local-part fallback missing**: The plan's Implementation Plan step 4 explicitly specifies: \"add `member_name` (derived from the member as `member.name || local_part_of(member.email)`, or a similar small computation/helper)\". The implementation assigns `member.name` directly without a fallback:\n\n   ```elixir\n   # In controllers/LiveViews (lib/memba_web/controllers/club_home_controller.ex, etc.)\n   conn |> assign(:member_name, member.name)  # No fallback\n   ```\n\n   **Impact**: If `member.name` is nil, `member_name` will be nil, causing the identity dropdown (including the Sign out button) to be hidden due to `<%= if assigns[:member_name] do %>` in the layout. This prevents signed-in members without names from signing out via the UI — a behavioural gap.\n\n   **Evidence**: The plan's technical decision states \"with an email-local-part fallback\", and the validation plan does not test this case. All test members provide names, masking the gap.\n\n   **Fix required**: Controllers should compute `member_name` with the email fallback before assigning. Example:\n   ```elixir\n   member_name = member.name || email_local_part(member.email)\n   conn |> assign(:member_name, member_name)\n   ```\n   A small helper to extract the email local part (e.g., `\"alice@example.com\" -> \"alice\"`) should be added, and tests should cover a member with nil name showing the dropdown with email-derived initials.\n\n## Bounded-Safe Fixes\n\n1. **Empty string initials edge case**: The `Layouts.initials/1` function (lib/memba_web/components/layouts.ex) correctly handles `nil` by returning `\"?\"`, but an empty string `\"\"` would match the first clause and return `\"\"` instead of `\"?\"`:\n\n   ```elixir\n   # Current:\n   def initials(name) when is_binary(name) do\n     name |> String.split() |> Enum.take(2) |> Enum.map(&String.first/1) |> Enum.map(&String.upcase/1) |> Enum.join()\n   end\n   def initials(_), do: \"?\"\n   \n   # initials(\"\") returns \"\", not \"?\"\n   ```\n\n   **Fix**: Add a guard clause before the main binary clause:\n   ```elixir\n   def initials(\"\"), do: \"?\"\n   def initials(name) when is_binary(name) do\n     # ... existing logic\n   end\n   def initials(_), do: \"?\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Files**: `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell**: CSS-only dropdown interaction using `:hover` does not work on touch devices  \n   **Why judgement**: The identity dropdown uses `data-dropdown` with CSS `:hover` to show/hide the menu. On mobile/touch devices, users cannot hover, so they might be unable to open the dropdown to sign out. This is a UX gap but not a blocking bug — the plan does not specify mobile/accessibility requirements, and adding touch/click handling is a future enhancement. Consider whether mobile support is required before merge or acceptable as follow-up work.\n\n2. **Files**: `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell**: Repetitive code — four locations each assign `club_name` and `member_name` identically  \n   **Why judgement**: The duplication is minimal (2 assigns per location, 4 locations), and extracting into a plug might add indirection without clear benefit. However, as more shared-layout assigns are added (e.g., member role for badges in a future iteration), this duplication could grow. Consider whether a shared plug or mount helper for club-site assigns would reduce future maintenance burden.\n\n## Suggested Fixes\n\n### To unblock (blocking issue #1):\n\n**Step 1**: Add an `email_local_part/1` helper to `lib/memba_web/components/layouts.ex`:\n```elixir\ndefp email_local_part(email) when is_binary(email) do\n  email |> String.split(\"@\") |> List.first()\nend\ndefp email_local_part(_), do: nil\n```\n\n**Step 2**: Update all four controllers/LiveViews to use the fallback:\n```elixir\n# In ClubHomeController.show, MemberConversationLive.mount, etc.\nmember_name = member.name || email_local_part(member.email)\nconn |> assign(:member_name, member_name)\n# (or socket |> assign(:member_name, member_name) for LiveViews)\n```\n\n**Step 3**: Add a test for the fallback behavior in `test/memba_web/components/layouts_test.exs`:\n```elixir\ntest \"identity dropdown shows email-derived initials when member has no name\" do\n  html = render_component(&club_site/1,\n    club_name: \"Alpine Club\",\n    member_name: \"alice\",  # derived from \"alice@example.com\"\n    inner_block: fn _, _ -> ~H\"\" end\n  )\n  \n  assert html =~ ~s(<div class=\"identity-initial\">A</div>)\n  assert html =~ ~s(<div class=\"identity-name\">alice</div>)\nend\n```\n\nAnd add an integration test to `test/memba_web/controllers/club_home_controller_test.exs` (or similar) that creates a member with `name: nil` and verifies the dropdown appears.\n\n### For bounded-safe fix #1 (empty string initials):\n\nIn `lib/memba_web/components/layouts.ex`, add before the main clause:\n```elixir\ndef initials(\"\"), do: \"?\"\n```\n\n## Validation Notes\n\n- **dev check**: Passed (green) — all existing tests pass, but the email fallback case is not covered\n- **Automated tests**: Cover app-bar rendering, identity dropdown presence/absence, sign-out form structure, and all club_site surfaces rendering with the app shell. However, no test verifies the email fallback for members without names.\n- **Manual validation**: The plan's step 13 (gallery-walk comparison to design-system wireframes) is a manual step not verifiable from the review evidence. Assuming this was completed as part of the implementation-conformance workflow.\n- **Plan conformance**: The implementation-conformance workflow marked this as plan-conforming, but the email fallback (an explicit step in the Implementation Plan) is missing. This suggests the conformance check may have focused on structural/visual conformance rather than line-by-line step verification.\n\n---\n\n**Summary**: The implementation delivers the core app shell capability (shared layout, app-bar, identity dropdown, app-card wrapper, design-system CSS porting) successfully. However, the explicit email-local-part fallback specified in the plan is missing, creating a behavioural gap where members without names cannot sign out. This must be implemented and tested before merge. The empty-string initials edge case is a low-risk fix. Mobile dropdown UX and controller duplication are non-blocking but worth noting for future work.",
+          "failure_class": "",
+          "failure_signature": "",
+          "thread.review_gate.current_node": "record_code_health",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.fidelity": "summary:high",
+          "response.gemini_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan and implementation evidence. The plan does not cite specific ADRs, and this iteration appears limited to Phoenix layout/CSS/UI shell plumbing rather than domain modeling, Commanded aggregates, projections, event streams, read models, or CQRS infrastructure.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing required email-local-part fallback for signed-in member identity**\n\n   The plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, e.g. conceptually:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   This is a plan-fidelity and behavioural gap. If a signed-in member has `name == nil`, then `member_name` is also `nil`. The shared layout gates the identity dropdown on the presence of `member_name`, so the dropdown — including the Sign out action — can disappear for a valid signed-in member.\n\n   Existing tests passed because they appear to create members with names, so the nil-name fallback case is not covered.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank or whitespace-only strings**\n\n   The initials helper should treat `\"\"` and whitespace-only names the same as missing names. Returning an empty avatar label is avoidable and low-risk to fix while touching the identity-display path.\n\n2. **Add focused automated coverage for member identity fallback**\n\n   Add at least one rendered signed-in club-surface test where the member has `name: nil` and a valid email. The test should verify that the app shell still renders the identity dropdown, displays the email local part, and includes the Sign out form/action.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown interaction appears CSS-driven, likely hover/focus based.  \n   **Why it may need human judgement:** This is acceptable if it intentionally mirrors the design-system shell for this slice, but it may be fragile for touch devices and keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is considered required for the current release.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is small today and may be clearer than premature abstraction. However, future iterations mention additional identity/member metadata such as role badges; if more shell assigns are added, a shared helper or plug-style assign path may prevent drift.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the signed-in member display name, treating both `nil` and blank strings as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place it in an appropriate web/presentation-layer module or shared helper used by the signed-in club surfaces.\n\n2. Update all signed-in `club_site` surfaces to assign the derived display name instead of `member.name` directly.\n\n3. Add automated coverage for a signed-in member with no stored name. The test should prove:\n\n   - the shared app shell renders,\n   - the identity dropdown is present,\n   - the displayed identity uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank strings:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     case String.trim(name) do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after changes.\n\n## Validation notes\n\n- Pre-review working tree was clean.\n- Sandbox check passed.\n- `dev ci` / dev check passed before review.\n- Acceptance output reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- Green test output is meaningful for the existing covered paths, but it does not cover the explicit nil-name/email-local-part fallback required by the iteration plan.\n- No feature-file changes are requested.\n- The core shared-shell implementation appears otherwise aligned with the plan: shared `club_site` app frame/card, app bar, identity dropdown gating, public-page no-identity behavior, sign-out form wiring, and design-system CSS class porting. The rejection is limited to the missing required fallback and its coverage.",
+          "thread.record_code_health.current_node": "final_artifact_gate",
+          "last_response": "CODE_HEALTH_RECORDED\n\nUpdated `docs/code-health.md` with a dated Iteration 044 entry because no reviewer-report or synthesis artifacts were visible in this checkout, but independent inspection found o",
+          "internal.retry_count.synthesize_review": 0,
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.start": 0,
+          "graph.default_fidelity": "summary:high",
+          "thread.claude_review.current_node": "codex_review",
+          "outcome": "succeeded",
+          "internal.retry_count.final_artifact_gate": 0
+        },
+        "node_outcomes": {
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7fbfd517895e2b5f635f0fbe601db50aa0a00f7d0c1f4ed615896fc34ab2729d"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/044-shared-app-shell/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 201,
+              "active_time_ms": 201
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: CANNOT ASSESS\n\n**Limitation**: The plan does not cite specific ADRs, and no ADR files from `docs",
+              "response.claude_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: CANNOT ASSESS\n\n**Limitation**: The plan does not cite specific ADRs, and no ADR files from `docs/adr/` are included in the review context. Without access to ADRs governing layout architecture, CSS organization, authentication/identity handling, or component structure, I cannot provide a definitive PASS/FAIL assessment of ADR conformance. No obvious violations of standard Phoenix/LiveView patterns were detected, and the implementation follows the plan's explicit architectural decisions (CSS porting approach, shared layout strategy, identity assign pattern).\n\n## ADR Violations\n\nNone detected (but see ADR conformance limitation above).\n\n## Blocking Issues\n\n1. **Email-local-part fallback missing**: The plan's Implementation Plan step 4 explicitly specifies: \"add `member_name` (derived from the member as `member.name || local_part_of(member.email)`, or a similar small computation/helper)\". The implementation assigns `member.name` directly without a fallback:\n\n   ```elixir\n   # In controllers/LiveViews (lib/memba_web/controllers/club_home_controller.ex, etc.)\n   conn |> assign(:member_name, member.name)  # No fallback\n   ```\n\n   **Impact**: If `member.name` is nil, `member_name` will be nil, causing the identity dropdown (including the Sign out button) to be hidden due to `<%= if assigns[:member_name] do %>` in the layout. This prevents signed-in members without names from signing out via the UI — a behavioural gap.\n\n   **Evidence**: The plan's technical decision states \"with an email-local-part fallback\", and the validation plan does not test this case. All test members provide names, masking the gap.\n\n   **Fix required**: Controllers should compute `member_name` with the email fallback before assigning. Example:\n   ```elixir\n   member_name = member.name || email_local_part(member.email)\n   conn |> assign(:member_name, member_name)\n   ```\n   A small helper to extract the email local part (e.g., `\"alice@example.com\" -> \"alice\"`) should be added, and tests should cover a member with nil name showing the dropdown with email-derived initials.\n\n## Bounded-Safe Fixes\n\n1. **Empty string initials edge case**: The `Layouts.initials/1` function (lib/memba_web/components/layouts.ex) correctly handles `nil` by returning `\"?\"`, but an empty string `\"\"` would match the first clause and return `\"\"` instead of `\"?\"`:\n\n   ```elixir\n   # Current:\n   def initials(name) when is_binary(name) do\n     name |> String.split() |> Enum.take(2) |> Enum.map(&String.first/1) |> Enum.map(&String.upcase/1) |> Enum.join()\n   end\n   def initials(_), do: \"?\"\n   \n   # initials(\"\") returns \"\", not \"?\"\n   ```\n\n   **Fix**: Add a guard clause before the main binary clause:\n   ```elixir\n   def initials(\"\"), do: \"?\"\n   def initials(name) when is_binary(name) do\n     # ... existing logic\n   end\n   def initials(_), do: \"?\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Files**: `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell**: CSS-only dropdown interaction using `:hover` does not work on touch devices  \n   **Why judgement**: The identity dropdown uses `data-dropdown` with CSS `:hover` to show/hide the menu. On mobile/touch devices, users cannot hover, so they might be unable to open the dropdown to sign out. This is a UX gap but not a blocking bug — the plan does not specify mobile/accessibility requirements, and adding touch/click handling is a future enhancement. Consider whether mobile support is required before merge or acceptable as follow-up work.\n\n2. **Files**: `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell**: Repetitive code — four locations each assign `club_name` and `member_name` identically  \n   **Why judgement**: The duplication is minimal (2 assigns per location, 4 locations), and extracting into a plug might add indirection without clear benefit. However, as more shared-layout assigns are added (e.g., member role for badges in a future iteration), this duplication could grow. Consider whether a shared plug or mount helper for club-site assigns would reduce future maintenance burden.\n\n## Suggested Fixes\n\n### To unblock (blocking issue #1):\n\n**Step 1**: Add an `email_local_part/1` helper to `lib/memba_web/components/layouts.ex`:\n```elixir\ndefp email_local_part(email) when is_binary(email) do\n  email |> String.split(\"@\") |> List.first()\nend\ndefp email_local_part(_), do: nil\n```\n\n**Step 2**: Update all four controllers/LiveViews to use the fallback:\n```elixir\n# In ClubHomeController.show, MemberConversationLive.mount, etc.\nmember_name = member.name || email_local_part(member.email)\nconn |> assign(:member_name, member_name)\n# (or socket |> assign(:member_name, member_name) for LiveViews)\n```\n\n**Step 3**: Add a test for the fallback behavior in `test/memba_web/components/layouts_test.exs`:\n```elixir\ntest \"identity dropdown shows email-derived initials when member has no name\" do\n  html = render_component(&club_site/1,\n    club_name: \"Alpine Club\",\n    member_name: \"alice\",  # derived from \"alice@example.com\"\n    inner_block: fn _, _ -> ~H\"\" end\n  )\n  \n  assert html =~ ~s(<div class=\"identity-initial\">A</div>)\n  assert html =~ ~s(<div class=\"identity-name\">alice</div>)\nend\n```\n\nAnd add an integration test to `test/memba_web/controllers/club_home_controller_test.exs` (or similar) that creates a member with `name: nil` and verifies the dropdown appears.\n\n### For bounded-safe fix #1 (empty string initials):\n\nIn `lib/memba_web/components/layouts.ex`, add before the main clause:\n```elixir\ndef initials(\"\"), do: \"?\"\n```\n\n## Validation Notes\n\n- **dev check**: Passed (green) — all existing tests pass, but the email fallback case is not covered\n- **Automated tests**: Cover app-bar rendering, identity dropdown presence/absence, sign-out form structure, and all club_site surfaces rendering with the app shell. However, no test verifies the email fallback for members without names.\n- **Manual validation**: The plan's step 13 (gallery-walk comparison to design-system wireframes) is a manual step not verifiable from the review evidence. Assuming this was completed as part of the implementation-conformance workflow.\n- **Plan conformance**: The implementation-conformance workflow marked this as plan-conforming, but the email fallback (an explicit step in the Implementation Plan) is missing. This suggests the conformance check may have focused on structural/visual conformance rather than line-by-line step verification.\n\n---\n\n**Summary**: The implementation delivers the core app shell capability (shared layout, app-bar, identity dropdown, app-card wrapper, design-system CSS porting) successfully. However, the explicit email-local-part fallback specified in the plan is missing, creating a behavioural gap where members without names cannot sign out. This must be implemented and tested before merge. The empty-string initials edge case is a low-risk fix. Mobile dropdown UX and controller duplication are non-blocking but worth noting for future work."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5554,
+                    "output_tokens": 12895,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 210087
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 251883,
+              "tool_time_ms": 0,
+              "active_time_ms": 251883
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e3ee3f87f9a25a6de291b6e1b3c74607835d6401ae280fb7b655631051a4bc0a"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'ab7d47a642afc7f29774f681d30ad635ac6043ba'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/586425f2c1f1710a0e93dc805c1410e65643fef3772b9335a47021ab9cd126c0"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/044-shared-app-shell/plan.md' 'ab7d47a642afc7f29774f681d30ad635ac6043ba'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 258,
+              "active_time_ms": 258
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan and implementation evidence. The pla",
+              "response.gemini_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan and implementation evidence. The plan does not cite specific ADRs, and this iteration appears limited to Phoenix layout/CSS/UI shell plumbing rather than domain modeling, Commanded aggregates, projections, event streams, read models, or CQRS infrastructure.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing required email-local-part fallback for signed-in member identity**\n\n   The plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, e.g. conceptually:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   This is a plan-fidelity and behavioural gap. If a signed-in member has `name == nil`, then `member_name` is also `nil`. The shared layout gates the identity dropdown on the presence of `member_name`, so the dropdown — including the Sign out action — can disappear for a valid signed-in member.\n\n   Existing tests passed because they appear to create members with names, so the nil-name fallback case is not covered.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank or whitespace-only strings**\n\n   The initials helper should treat `\"\"` and whitespace-only names the same as missing names. Returning an empty avatar label is avoidable and low-risk to fix while touching the identity-display path.\n\n2. **Add focused automated coverage for member identity fallback**\n\n   Add at least one rendered signed-in club-surface test where the member has `name: nil` and a valid email. The test should verify that the app shell still renders the identity dropdown, displays the email local part, and includes the Sign out form/action.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown interaction appears CSS-driven, likely hover/focus based.  \n   **Why it may need human judgement:** This is acceptable if it intentionally mirrors the design-system shell for this slice, but it may be fragile for touch devices and keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is considered required for the current release.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is small today and may be clearer than premature abstraction. However, future iterations mention additional identity/member metadata such as role badges; if more shell assigns are added, a shared helper or plug-style assign path may prevent drift.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the signed-in member display name, treating both `nil` and blank strings as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place it in an appropriate web/presentation-layer module or shared helper used by the signed-in club surfaces.\n\n2. Update all signed-in `club_site` surfaces to assign the derived display name instead of `member.name` directly.\n\n3. Add automated coverage for a signed-in member with no stored name. The test should prove:\n\n   - the shared app shell renders,\n   - the identity dropdown is present,\n   - the displayed identity uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank strings:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     case String.trim(name) do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after changes.\n\n## Validation notes\n\n- Pre-review working tree was clean.\n- Sandbox check passed.\n- `dev ci` / dev check passed before review.\n- Acceptance output reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- Green test output is meaningful for the existing covered paths, but it does not cover the explicit nil-name/email-local-part fallback required by the iteration plan.\n- No feature-file changes are requested.\n- The core shared-shell implementation appears otherwise aligned with the plan: shared `club_site` app frame/card, app bar, identity dropdown gating, public-page no-identity behavior, sign-out form wiring, and design-system CSS class porting. The rejection is limited to the missing required fallback and its coverage.",
+              "last_stage": "gemini_review"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8021,
+                    "output_tokens": 1254,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 93205
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 66924,
+              "tool_time_ms": 0,
+              "active_time_ms": 66924
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0d8c673a95f3bd3aebd29af71fdeb9740f41c7f6d510c737b4f32f36a425312a"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 144986,
+              "active_time_ms": 144986
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "CODE_HEALTH_RECORDED\n\nUpdated `docs/code-health.md` with a dated Iteration 044 entry because no reviewer-report or synthesis artifacts were visible in this checkout, but independent inspection found o",
+              "response.record_code_health": "CODE_HEALTH_RECORDED\n\nUpdated `docs/code-health.md` with a dated Iteration 044 entry because no reviewer-report or synthesis artifacts were visible in this checkout, but independent inspection found one judgement-worthy, non-blocking code-health issue: the shared repo-root `styles.css` used by static design-system previews depends on Memba design tokens that the linked previews do not define.\n\nVerified with `git diff -- docs/code-health.md`; the diff shows the new entry. No `dev check` was run because this was a docs-only code-health recording step.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
+              "last_stage": "record_code_health",
+              "code_health_recording_ok": true
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 513078,
+                    "output_tokens": 3537,
+                    "reasoning_tokens": 3432,
+                    "cache_read_tokens": 465408,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3007164
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 337235,
+              "tool_time_ms": 33038,
+              "active_time_ms": 370273
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ef57e490810272ee9fd8f80e718e89c25ce086030ea70574e7b2bd2e5f3cffe7"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 399047,
+              "active_time_ms": 399047
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "last_stage": "synthesize_review",
+              "implementation_accepted": true,
+              "review_fixes_available": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9827,
+                    "output_tokens": 36,
+                    "reasoning_tokens": 470,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 64315
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 19318,
+              "tool_time_ms": 0,
+              "active_time_ms": 19318
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan/evidence. The plan does not cite a s",
+              "last_stage": "codex_review",
+              "response.codex_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan/evidence. The plan does not cite a specific ADR, and this iteration is primarily Phoenix layout/CSS/UI plumbing rather than domain modeling, CQRS, event-sourcing, aggregates, projections, or read-model architecture. The implementation appears to keep the shared shell in the Phoenix layout layer and does not appear to replace ADR-style infrastructure with local substitutes.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing email-local-part fallback for signed-in member display name**\n\n   The iteration plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, for example:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   If `member.name` is `nil`, `member_name` is also `nil`. The layout then uses the presence of `member_name` to render the identity dropdown. That means a valid signed-in member without a stored name may not see the identity dropdown or its Sign out action.\n\n   This is both a plan-fidelity gap and a behavioural/coverage gap. Existing tests pass because test members appear to provide names, so the nil-name case is not exercised.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank strings**\n\n   If `Layouts.initials/1` receives `\"\"` or whitespace-only input, it can produce an empty string instead of a fallback such as `\"?\"`.\n\n   This is low-risk to fix while addressing the display-name fallback issue, especially if member names can be blank strings as well as `nil`.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown appears to rely on CSS hover/focus-style interaction rather than an explicit LiveView/JS click interaction.  \n   **Why it may need human judgement:** This is acceptable for a first shared-shell slice if the design-system mirror uses the same behaviour, but it may be fragile on touch devices and for keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is a current requirement.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is currently small and understandable. However, future slices mention role badges/member metadata; if more shell identity data is added, this could drift. A small helper or plug may become worthwhile, but extracting now is optional.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the member display name, treating nil and blank names as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place this somewhere appropriate for web/UI identity display logic, then use it consistently from the four signed-in member surfaces.\n\n2. Update the four signed-in club surfaces to assign the derived name, not `member.name` directly.\n\n3. Add automated coverage for a signed-in member with `name: nil`, preferably at one rendered surface level, verifying that:\n   - the app shell still renders,\n   - the identity dropdown is present,\n   - the display name uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank/whitespace input, for example:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     name\n     |> String.trim()\n     |> case do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after the fix.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed before review.\n- The acceptance run reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- The green check is meaningful for the existing behaviour, but it does not cover the explicit nil-name/email-fallback case required by the plan.\n- No feature-file changes are requested.\n- The main shared-shell capability appears implemented: shared `club_site` app frame/card, app bar, identity dropdown for signed-in surfaces, public-page gating, and CSS component class porting. The rejection is limited to the missing fallback and test coverage for that plan-required behaviour."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6447,
+                    "output_tokens": 1239,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 100425
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82862,
+              "tool_time_ms": 0,
+              "active_time_ms": 82862
+            }
+          }
+        },
+        "next_node_id": "publish_polish_to_main",
+        "git_commit_sha": "7b8892d4b07c8430a27371f56ab6155e25ee5c8e",
+        "node_visits": {
+          "review_gate": 1,
+          "collect_implementation_evidence": 1,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "synthesize_review": 1,
+          "final_artifact_gate": 1,
+          "codex_review": 1,
+          "claude_review": 1,
+          "gemini_review": 1,
+          "dev_check": 1,
+          "read_plan": 1,
+          "record_code_health": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 11,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-05T11:08:39.197478718Z",
+        "current_node": "publish_polish_to_main",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate",
+          "publish_polish_to_main"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.run_id": "01KWRY2P5YRT9H7R2TSTNPH1Y9",
           "internal.retry_count.review_gate": 0,
           "response.record_code_health": "CODE_HEALTH_RECORDED\n\nUpdated `docs/code-health.md` with a dated Iteration 044 entry because no reviewer-report or synthesis artifacts were visible in this checkout, but independent inspection found one judgement-worthy, non-blocking code-health issue: the shared repo-root `styles.css` used by static design-system previews depends on Memba design tokens that the linked previews do not define.\n\nVerified with `git diff -- docs/code-health.md`; the diff shows the new entry. No `dev check` was run because this was a docs-only code-health recording step.\n\n{\"context_updates\":{\"code_health_recording_ok\":true}}",
           "thread.start.current_node": "read_plan",
-          "command.output": "blob://sha256/586425f2c1f1710a0e93dc805c1410e65643fef3772b9335a47021ab9cd126c0",
+          "command.output": "blob://sha256/c35bad68741e720d0299aa768f5a569a3689c4779e27e210ab47a884f393742c",
           "response.codex_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan/evidence. The plan does not cite a specific ADR, and this iteration is primarily Phoenix layout/CSS/UI plumbing rather than domain modeling, CQRS, event-sourcing, aggregates, projections, or read-model architecture. The implementation appears to keep the shared shell in the Phoenix layout layer and does not appear to replace ADR-style infrastructure with local substitutes.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing email-local-part fallback for signed-in member display name**\n\n   The iteration plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, for example:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   If `member.name` is `nil`, `member_name` is also `nil`. The layout then uses the presence of `member_name` to render the identity dropdown. That means a valid signed-in member without a stored name may not see the identity dropdown or its Sign out action.\n\n   This is both a plan-fidelity gap and a behavioural/coverage gap. Existing tests pass because test members appear to provide names, so the nil-name case is not exercised.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank strings**\n\n   If `Layouts.initials/1` receives `\"\"` or whitespace-only input, it can produce an empty string instead of a fallback such as `\"?\"`.\n\n   This is low-risk to fix while addressing the display-name fallback issue, especially if member names can be blank strings as well as `nil`.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown appears to rely on CSS hover/focus-style interaction rather than an explicit LiveView/JS click interaction.  \n   **Why it may need human judgement:** This is acceptable for a first shared-shell slice if the design-system mirror uses the same behaviour, but it may be fragile on touch devices and for keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is a current requirement.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is currently small and understandable. However, future slices mention role badges/member metadata; if more shell identity data is added, this could drift. A small helper or plug may become worthwhile, but extracting now is optional.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the member display name, treating nil and blank names as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place this somewhere appropriate for web/UI identity display logic, then use it consistently from the four signed-in member surfaces.\n\n2. Update the four signed-in club surfaces to assign the derived name, not `member.name` directly.\n\n3. Add automated coverage for a signed-in member with `name: nil`, preferably at one rendered surface level, verifying that:\n   - the app shell still renders,\n   - the identity dropdown is present,\n   - the display name uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank/whitespace input, for example:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     name\n     |> String.trim()\n     |> case do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after the fix.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed before review.\n- The acceptance run reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- The green check is meaningful for the existing behaviour, but it does not cover the explicit nil-name/email-fallback case required by the plan.\n- No feature-file changes are requested.\n- The main shared-shell capability appears implemented: shared `club_site` app frame/card, app bar, identity dropdown for signed-in surfaces, public-page gating, and CSS component class porting. The rejection is limited to the missing fallback and test coverage for that plan-required behaviour.",
           "internal.retry_count.claude_review": 0,
           "response.gemini_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nNo ADR violations were evident from the supplied plan and implementation evidence. The plan does not cite specific ADRs, and this iteration appears limited to Phoenix layout/CSS/UI shell plumbing rather than domain modeling, Commanded aggregates, projections, event streams, read models, or CQRS infrastructure.\n\n## ADR violations\n\nNone found.\n\n## Blocking issues\n\n1. **Missing required email-local-part fallback for signed-in member identity**\n\n   The plan explicitly decided that signed-in member surfaces should pass a new optional `member_name` assign with an email-local-part fallback:\n\n   > “Identity name/initials plumbing: decided — a new optional `member_name` assign on `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback…”\n\n   The implementation evidence indicates the signed-in surfaces assign `member.name` directly, e.g. conceptually:\n\n   ```elixir\n   assign(:member_name, member.name)\n   ```\n\n   This is a plan-fidelity and behavioural gap. If a signed-in member has `name == nil`, then `member_name` is also `nil`. The shared layout gates the identity dropdown on the presence of `member_name`, so the dropdown — including the Sign out action — can disappear for a valid signed-in member.\n\n   Existing tests passed because they appear to create members with names, so the nil-name fallback case is not covered.\n\n## Bounded-safe fixes\n\n1. **Harden `Layouts.initials/1` for blank or whitespace-only strings**\n\n   The initials helper should treat `\"\"` and whitespace-only names the same as missing names. Returning an empty avatar label is avoidable and low-risk to fix while touching the identity-display path.\n\n2. **Add focused automated coverage for member identity fallback**\n\n   Add at least one rendered signed-in club-surface test where the member has `name: nil` and a valid email. The test should verify that the app shell still renders the identity dropdown, displays the email local part, and includes the Sign out form/action.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `lib/memba_web/components/layouts/club_site.html.heex`, `web/assets/css/app.css`  \n   **Smell:** Identity dropdown interaction appears CSS-driven, likely hover/focus based.  \n   **Why it may need human judgement:** This is acceptable if it intentionally mirrors the design-system shell for this slice, but it may be fragile for touch devices and keyboard/accessibility expectations. I would not block this iteration on it unless mobile/touch sign-out access is considered required for the current release.\n\n2. **Files:** `lib/memba_web/controllers/club_home_controller.ex`, `lib/memba_web/live/member_conversation_live/show.ex`, `lib/memba_web/live/member_message_detail_live/show.ex`, `lib/memba_web/live/member_message_compose_live/show.ex`  \n   **Smell:** Shared shell assigns such as `club_name` and `member_name` are repeated across multiple signed-in club surfaces.  \n   **Why it may need human judgement:** The duplication is small today and may be clearer than premature abstraction. However, future iterations mention additional identity/member metadata such as role badges; if more shell assigns are added, a shared helper or plug-style assign path may prevent drift.\n\n## Suggested fixes\n\nTo unblock:\n\n1. Add a single helper for deriving the signed-in member display name, treating both `nil` and blank strings as missing:\n\n   ```elixir\n   def member_display_name(member) do\n     member.name\n     |> blank_to_nil()\n     || email_local_part(member.email)\n   end\n\n   defp email_local_part(email) when is_binary(email) do\n     email\n     |> String.split(\"@\", parts: 2)\n     |> List.first()\n     |> blank_to_nil()\n   end\n\n   defp email_local_part(_), do: nil\n\n   defp blank_to_nil(value) when is_binary(value) do\n     case String.trim(value) do\n       \"\" -> nil\n       trimmed -> trimmed\n     end\n   end\n\n   defp blank_to_nil(_), do: nil\n   ```\n\n   Place it in an appropriate web/presentation-layer module or shared helper used by the signed-in club surfaces.\n\n2. Update all signed-in `club_site` surfaces to assign the derived display name instead of `member.name` directly.\n\n3. Add automated coverage for a signed-in member with no stored name. The test should prove:\n\n   - the shared app shell renders,\n   - the identity dropdown is present,\n   - the displayed identity uses the email local part,\n   - the Sign out form/action remains available.\n\n4. Harden `Layouts.initials/1` for blank strings:\n\n   ```elixir\n   def initials(name) when is_binary(name) do\n     case String.trim(name) do\n       \"\" ->\n         \"?\"\n\n       trimmed ->\n         trimmed\n         |> String.split()\n         |> Enum.take(2)\n         |> Enum.map(&String.first/1)\n         |> Enum.map(&String.upcase/1)\n         |> Enum.join()\n     end\n   end\n\n   def initials(_), do: \"?\"\n   ```\n\n5. Re-run the required project check after changes.\n\n## Validation notes\n\n- Pre-review working tree was clean.\n- Sandbox check passed.\n- `dev ci` / dev check passed before review.\n- Acceptance output reported `85 scenarios (85 passed)` and `523 steps (523 passed)`.\n- Green test output is meaningful for the existing covered paths, but it does not cover the explicit nil-name/email-local-part fallback required by the iteration plan.\n- No feature-file changes are requested.\n- The core shared-shell implementation appears otherwise aligned with the plan: shared `club_site` app frame/card, app bar, identity dropdown gating, public-page no-identity behavior, sign-out form wiring, and design-system CSS class porting. The rejection is limited to the missing required fallback and its coverage.",
           "internal.retry_count.gemini_review": 0,
           "thread.review_gate.current_node": "record_code_health",
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.read_plan": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
@@ -3232,17 +3595,18 @@
           "internal.node_visit_count": 1,
           "failure_signature": "",
           "graph.rankdir": "LR",
-          "current_node": "final_artifact_gate",
+          "current_node": "publish_polish_to_main",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "last_stage": "record_code_health",
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
           "review_fixes_available": false,
           "code_health_recording_ok": true,
+          "internal.retry_count.publish_polish_to_main": 0,
           "internal.retry_count.codex_review": 0,
           "implementation_accepted": true,
           "thread.synthesize_review.current_node": "review_gate",
           "thread.gemini_review.current_node": "synthesize_review",
-          "internal.thread_id": "record_code_health",
+          "internal.thread_id": "final_artifact_gate",
           "internal.fidelity": "summary:high",
           "internal.retry_count.collect_implementation_evidence": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
@@ -3263,6 +3627,20 @@
             "status": "succeeded",
             "notes": "Conditional node evaluated: review_gate",
             "usage": null
+          },
+          "publish_polish_to_main": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c35bad68741e720d0299aa768f5a569a3689c4779e27e210ab47a884f393742c"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1817,
+              "active_time_ms": 1817
+            }
           },
           "preflight_sandbox": {
             "status": "succeeded",
@@ -3524,9 +3902,10 @@
             }
           }
         },
-        "next_node_id": "publish_polish_to_main",
+        "next_node_id": "finalize_iteration_status",
         "node_visits": {
           "record_code_health": 1,
+          "publish_polish_to_main": 1,
           "read_plan": 1,
           "final_artifact_gate": 1,
           "review_gate": 1,
@@ -3693,6 +4072,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "publish_polish_to_main@1": {
+      "first_event_seq": 279,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-05T11:08:37.352857839Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "claude_review@1": {
       "first_event_seq": 65,
@@ -4006,7 +4413,12 @@
       "first_event_seq": 269,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/044-shared-app-shell/plan.md' 'ab7d47a642afc7f29774f681d30ad635ac6043ba'",
+        "failure_reason": null,
+        "timestamp": "2026-07-05T11:08:34.211287677Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -4014,11 +4426,27 @@
         "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/044-shared-app-shell/plan.md' 'ab7d47a642afc7f29774f681d30ad635ac6043ba'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/586425f2c1f1710a0e93dc805c1410e65643fef3772b9335a47021ab9cd126c0",
+        "exit_code": 0,
+        "duration_ms": 258,
+        "termination": "exited",
+        "output_bytes": 1881,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 1881,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-07-05T11:08:33.932790515Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 278,
+        "inference_time_ms": 0,
+        "tool_time_ms": 258,
+        "active_time_ms": 258
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -4027,7 +4455,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "record_code_health@1": {
       "first_event_seq": 113,
