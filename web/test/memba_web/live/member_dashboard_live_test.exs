@@ -63,6 +63,248 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "dashboard renders the section tab spine with conversations selected by default", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(view, "#member-section-tabs.section-tabs")
+    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations.section-tab.is-active" <>
+               "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
+               "[aria-controls='member-section-panel-conversations']",
+             "Conversations"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members.section-tab" <>
+               "[data-tab='members'][role='tab'][aria-selected='false']" <>
+               "[aria-controls='member-section-panel-members']",
+             "Members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+             "New message"
+           )
+
+    refute has_element?(view, "#member-section-action-new-message[hidden]")
+    refute has_element?(view, "#member-section-action-new-message[data-action='members']")
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
+  end
+
+  test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+    html = dashboard_html(%{current_member_can_manage_members?: true})
+
+    conversations_click = attribute(html, "#member-section-tab-conversations", "phx-click")
+    members_click = attribute(html, "#member-section-tab-members", "phx-click")
+
+    assert conversations_click =~ "member-section-panel-conversations"
+    assert conversations_click =~ "data-action='conversations'"
+    assert conversations_click =~ "aria-selected"
+    assert conversations_click =~ "is-active"
+    refute conversations_click =~ "push"
+
+    assert members_click =~ "member-section-panel-members"
+    assert members_click =~ "data-action='members'"
+    assert members_click =~ "aria-selected"
+    assert members_click =~ "is-active"
+    refute members_click =~ "push"
+  end
+
+  test "dashboard renders conversations in the default visible section panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+    assert has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations #club-messages #member-message-list " <>
+               "#member-message-#{message.message_id}[data-testid='club-message-row'][data-message-subject='Trip planning night']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
+  end
+
+  test "dashboard renders the empty conversation state inside the default panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations'] " <>
+               "#member-message-list-empty",
+             "No club messages yet"
+           )
+  end
+
+  test "dashboard renders member content inside the hidden members section panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    grant_manage_members!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-card[data-active-member-count='2'][data-active-members-state='active-members']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-avatar-stack " <>
+               "#club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-avatar-stack " <>
+               "#club-member-#{bob.person_id}[data-testid='club-member-row'][data-member-name='Bob Builder']",
+             "BB"
+           )
+  end
+
+  test "dashboard renders the members tab invite action only for members who can manage members",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, admin_view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/")
+
+    assert has_element?(
+             admin_view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm[data-action='members'][hidden][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    refute has_element?(
+             admin_view,
+             "#member-section-action-invite-member[data-action='conversations']"
+           )
+
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers"
+      )
+
+    {:ok, member_view, _html} =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    refute has_element?(
+             member_view,
+             "#member-section-tabs .section-tabs__action #member-section-action-invite-member"
+           )
+  end
+
   test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
        %{conn: conn} do
     alice =
@@ -109,12 +351,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/")
 
-    assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
+    refute has_element?(view, "#member-dashboard-hero")
+
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
 
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
-             "Send club message"
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+             "New message"
            )
 
     assert has_element?(
@@ -495,7 +741,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+             "New message"
            )
 
     assert has_element?(
@@ -533,10 +780,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/")
 
+    refute has_element?(view, "#member-dashboard-cta")
+    refute has_element?(view, "#member-send-message-link")
+
     assert has_element?(
              view,
-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
-             "Send club message"
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+             "New message"
            )
 
     refute has_element?(view, "form#member-message-form")
@@ -564,20 +815,28 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+             "#member-section-panel-conversations " <>
+               "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
            )
 
-    assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
+    refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email",
+             "#member-section-panel-conversations #member-dashboard-inbound-email",
+             "Prefer email?"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations #member-dashboard-inbound-email",
              "You can also send a club-wide message to"
            )
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+             "#member-section-panel-conversations " <>
+               "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
              "everyone@kmc.clubs.memba.io"
            )
 
@@ -883,5 +1142,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.any?()
+  end
+
+  defp attribute(html, selector, attribute) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(attribute)
+    |> List.first("")
   end
 end

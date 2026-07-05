@@ -64,21 +64,28 @@ defmodule MembaWeb.PageHTML do
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
-  defp first_name(%{name: name}) when is_binary(name) do
-    name
-    |> String.split(~r/\s+/, trim: true)
-    |> List.first()
-    |> case do
-      nil -> "member"
-      "" -> "member"
-      first_name -> first_name
-    end
-  end
-
-  defp first_name(_member), do: "member"
-
   defp active_member_count_label(1), do: "1 current member"
   defp active_member_count_label(count), do: "#{count} current members"
+
+  defp member_section_tab_js(section) when section in ["conversations", "members"] do
+    selected_tab = "#member-section-tab-#{section}"
+    selected_panel = "#member-section-panel-#{section}"
+    selected_action = "#member-section-tabs-action [data-action='#{section}']"
+
+    %JS{}
+    |> JS.remove_class("is-active", to: "#member-section-tabs-list .section-tab")
+    |> JS.add_class("is-active", to: selected_tab)
+    |> JS.set_attribute({"aria-selected", "false"}, to: "#member-section-tabs-list .section-tab")
+    |> JS.set_attribute({"aria-selected", "true"}, to: selected_tab)
+    |> JS.hide(to: ".section-panel", time: 0)
+    |> JS.set_attribute({"hidden", ""}, to: ".section-panel")
+    |> JS.remove_attribute("hidden", to: selected_panel)
+    |> JS.show(to: selected_panel, display: "block", time: 0)
+    |> JS.hide(to: "#member-section-tabs-action [data-action]", time: 0)
+    |> JS.set_attribute({"hidden", ""}, to: "#member-section-tabs-action [data-action]")
+    |> JS.remove_attribute("hidden", to: selected_action)
+    |> JS.show(to: selected_action, display: "inline-flex", time: 0)
+  end
 
   defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
   defp status_slug(_status), do: "unknown"

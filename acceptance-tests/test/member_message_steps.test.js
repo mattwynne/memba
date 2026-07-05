@@ -120,7 +120,7 @@ class FakeLocator {
   async click() {
     this.page.actions.push(["click", "locator", this.selector]);
 
-    if (this.selector.includes("#member-send-message-link")) {
+    if (this.selector.includes("#member-section-action-new-message")) {
       this.page.openMemberCompose();
     }
 
@@ -676,7 +676,7 @@ test("member send flow opens compose from club home and stores the new message",
   ]);
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
-    ["click", "locator", "#member-send-message-link"],
+    ["click", "locator", "#member-section-action-new-message"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
     ["click", "button", { name: "Send to all current members" }],
@@ -721,7 +721,7 @@ test("member failed-send flow stays on compose failure state with support guidan
   assert.equal(page.rows.clubMessages.length, 0);
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
-    ["click", "locator", "#member-send-message-link"],
+    ["click", "locator", "#member-section-action-new-message"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
     ["click", "button", { name: "Send to all current members" }]

@@ -121,7 +121,8 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     |> click_button("Join Kootenay Mountaineering Club")
     |> assert_path("/")
     |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
-    |> assert_has("#member-dashboard-hero", "Hello, Robin.")
+    |> assert_has("#club-site-identity-menu-button .app-bar__who", "Robin Example")
+    |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")
 
     assert %{name: "Robin Example", email: "robin@example.com"} =
              Membership.get_person_by_email("robin@example.com")

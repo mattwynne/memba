@@ -253,12 +253,22 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "Hello, Smoke."
+    refute response =~ "Hello, Smoke."
     refute response =~ "Welcome to Smoke Test Club"
 
     assert html
            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
            |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
+           |> LazyHTML.text() =~ "Smoke Tester"
+
+    assert html
+           |> LazyHTML.query(
+             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
+           )
+           |> LazyHTML.text() =~ "Conversations"
   end
 
   test "GET / with a member club_id redirects active members to the club subdomain", %{conn: conn} do
@@ -303,7 +313,7 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "Hello, Alice."
+    refute response =~ "Hello, Alice."
     refute response =~ "Welcome to Kootenay Mountaineering Club"
 
     assert html
@@ -311,10 +321,23 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
+           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
+           |> LazyHTML.text() =~ "Alice Adams"
+
+    assert html
            |> LazyHTML.query(
-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
+           )
+           |> LazyHTML.text() =~ "Conversations"
+
+    assert html
+           |> LazyHTML.query(
+             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']"
            )
            |> Enum.any?()
+
+    refute html |> LazyHTML.query("#member-dashboard-cta") |> Enum.any?()
+    refute html |> LazyHTML.query("#member-send-message-link") |> Enum.any?()
 
     assert html
            |> LazyHTML.query(

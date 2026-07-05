@@ -1,0 +1,14 @@
+# Implementation TODO
+
+- [x] 001 In `web/lib/memba_web/controllers/page_html/club.html.heex`, remove the `#member-dashboard-hero` greeting section; club/member identity now lives in the 044 app-bar.
+- [x] 002 Add a `section-tabs` spine with `role="tablist"` holding two `section-tab` controls: Conversations (default, `is-active`, `aria-selected="true"`) and Members.
+- [x] 003 Add a `section-tabs__action` slot with a per-tab primary **New message** action on Conversations, linking to `member_compose_path(@selected_club, club_id_source)`.
+- [x] 004 In the same action slot, add the **Invite member** action linking to `member_invitation_path`, rendered only when `@current_member_can_manage_members?` (hidden otherwise).
+- [x] 005 Wrap today's conversation list and its existing empty state in a Conversations `section-panel` that is visible by default; keep the `@message_rows` rows unchanged.
+- [x] 006 Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping its `mailto:` affordance and `data-inbound-address` hook.
+- [x] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
+- [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+- [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+- [x] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+- [x] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+- [x] 012 Run `dev check` and confirm it is green (no feature-file changes).

@@ -82,7 +82,8 @@ Then("{word} should see the Kootenay Mountaineering Club member dashboard", asyn
   const club = this.clubs && this.clubs[kootenayClubName];
   assert.ok(club, `Expected ${kootenayClubName} to be known in the scenario`);
   await playwrightExpect(this.page.locator(`#member-club-home[data-club-id="${club.clubId}"]`)).toBeVisible();
-  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toContainText(kootenayClubName);
+  await playwrightExpect(this.page.locator(".app-bar__club")).toContainText(kootenayClubName);
+  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toHaveCount(0);
 });
 
 Then("the message should be addressed to Kootenay Mountaineering Club members", async function () {

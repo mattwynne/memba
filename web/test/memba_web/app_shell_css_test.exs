@@ -4,6 +4,7 @@ defmodule MembaWeb.AppShellCssTest do
   @app_css Path.expand("../../assets/css/app.css", __DIR__)
   @design_system_css Path.expand("../../../styles.css", __DIR__)
   @member_app_shell_marker "/* ============================================================\n   Member app shell components."
+  @club_home_section_tabs_marker "/* ============================================================\n   Club-home section tabs."
 
   test "app stylesheet defines the shared member app shell classes" do
     css = File.read!(@app_css)
@@ -55,6 +56,34 @@ defmodule MembaWeb.AppShellCssTest do
 
   defp member_app_shell_css(css) do
     [_before, member_app_shell_css] = String.split(css, @member_app_shell_marker, parts: 2)
-    @member_app_shell_marker <> member_app_shell_css
+
+    (@member_app_shell_marker <> member_app_shell_css)
+    |> strip_club_home_section_tabs()
+    |> strip_club_home_section_tab_media_rules()
+  end
+
+  defp strip_club_home_section_tabs(css) do
+    case String.split(css, @club_home_section_tabs_marker, parts: 2) do
+      [before, rest] ->
+        [_section_tabs_css, after_section_tabs_css] =
+          String.split(rest, "@media (max-width: 640px)", parts: 2)
+
+        before <> "@media (max-width: 640px)" <> after_section_tabs_css
+
+      [_css_without_section_tabs] ->
+        css
+    end
+  end
+
+  defp strip_club_home_section_tab_media_rules(css) do
+    css
+    |> String.replace(
+      ~r/\n\s*\.section-tabs \{\n\s*align-items: stretch;\n\s*flex-direction: column;\n\s*\}\n/,
+      "\n"
+    )
+    |> String.replace(
+      ~r/\n\s*\.section-tabs__action,\n\s*\.section-tabs__action \.btn \{\n\s*width: 100%;\n\s*\}\n/,
+      "\n"
+    )
   end
 end

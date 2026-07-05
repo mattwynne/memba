@@ -1,7 +1,7 @@
 # 045 — Club home: Conversations / Members section tabs
 
 Date: 2026-07-04
-Status: implementing
+Status: merged
 
 > Independently decided (not bound to the prior 045/046 drafts). This repurposes the 045 slot —
 > which previously held the low-value "stop-following page header" tweak — so the club-home tabs
