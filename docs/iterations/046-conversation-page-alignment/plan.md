@@ -3,9 +3,10 @@
 Date: 2026-07-04
 Status: draft
 
-> Draft — to be finalised and validated when its turn comes (after 044 shell + 045 tabs). Written
-> against the 2026-07-04 refreshed `member-conversation.html`. Repurposes the 046 slot (previously
-> a duplicate club-home-tabs draft, now superseded by 045).
+> Finalised 2026-07-04. Written against the refreshed `member-conversation.html`; grounded in the
+> current `message.html.heex` and `member_message_detail.ex`. Delivers after 044 (shell) and 045
+> (tabs) in number order. Repurposes the 046 slot (previously a duplicate club-home-tabs draft,
+> superseded by 045).
 
 ## Goal
 
@@ -61,8 +62,11 @@ follow, reply, and delivery behaviour are unchanged.
 
 ## Acceptance Scenarios / Feature Files
 
-**BDD decision: Not useful for this slice (tentative).** No new rule; follow/reply behaviour is
-unchanged and covered by existing conversation/replies scenarios. To confirm when finalised.
+**BDD decision: Not useful for this slice.** No new business rule, permission, or lifecycle state
+is introduced — follow and reply behaviour are unchanged and already covered by the existing
+conversation/replies scenarios. The presentation changes (follow toggle, composer position,
+timestamps, card treatment) are verified by LiveView tests. No `.feature` files change; mainline
+stays green.
 
 ## Designs
 
@@ -87,23 +91,39 @@ None known (delivery relocation split out to 047, confirmed intended).
 
 ## Implementation Plan
 
-_To be finalised when this slice is shaped for delivery (after 044 + 045). Sketch:_
-
-1. Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact
-   follow **toggle** beside the subject, wired to the existing follow/unfollow events and gating.
-2. Move the `#member-message-reply-composer` block to render **after** the replies list, keeping
-   "Replying as" and the posted / validation-error states.
-3. Add a `Replies` count/heading only if the design keeps one (the refreshed design does not — omit).
-4. Expose the original-message and per-reply **timestamp** in the conversation-entry presentation
-   (`member_message_detail.ex`) if not already, format it, and render it in each message card head.
-5. Apply the boxed message-card markup/classes to the original and reply cards per the design.
-6. Update LiveView tests for the toggle, composer-below-replies order, and timestamps.
-7. Run `./bin/dev gallery-walk`; compare to `member-conversation.html`. Run `dev check`.
+1. Add a private `format_message_time/1` helper (near `conversation_entry_card` in
+   `web/lib/memba_web/controllers/page_html.ex`) that formats a `%DateTime{}` like the design
+   ("3 Jun, 7:02am").
+2. In `conversation_entry_card` (`page_html.ex`), render `@entry.message.inserted_at` via that
+   helper in the card head, beside the sender name — a timestamp on the original and every reply.
+3. Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row
+   from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+4. In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so
+   the follow control sits compactly beside the title.
+5. Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact
+   follow **toggle** (checkbox/switch) that reads as following/not-following from
+   `@following_conversation`.
+6. Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the
+   matching event from the toggle's change), unchanged server-side.
+7. Preserve the non-member state: when `!@can_follow_conversation`, show the existing
+   "Only current club members can follow…" explanation instead of an interactive toggle.
+8. Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies`
+   (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
+9. Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card`
+   so they match the design (`message` / `message--original`).
+10. Update `MemberMessageDetailLive` tests: follow toggle reflects and changes following state via the
+    existing events; the composer renders after the replies; original + replies show a timestamp.
+11. Run `./bin/dev gallery-walk` and compare the conversation screenshot to
+    `design-system/wireframes/member-conversation.html`.
+12. Run `dev check` and confirm it is green (no feature-file changes).
 
 ## Open Technical Decisions
 
-- **Timestamp source:** confirm the conversation-entry presentation exposes a message time; if not,
-  add it from the message projection and format it for display.
+None open. **Timestamp source: decided —** each conversation entry already carries the full message
+struct, and the `messaging_messages` projection has `timestamps(type: :utc_datetime_usec)`, so
+`@entry.message.inserted_at` is available directly; no presentation or projection change is needed,
+only a display-format helper. **Follow control: decided —** a compact toggle wired to the existing
+`follow_conversation` / `unfollow_conversation` events (no new events or server state).
 
 ## New Capability
 
