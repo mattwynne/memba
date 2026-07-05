@@ -1,0 +1,212 @@
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index 0fccd3b..222a799 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -352,14 +352,18 @@ async function signOut(world) {
+ async function assertSignedInOnClubPage(world, personName) {
+   const person = personFromWorld(world, personName);
+   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+-  await assertClubIdentityVisible(world, signedInEmailFor(world, personName, person));
++  await assertClubIdentityVisible(world, clubIdentityFallbackLabelFor(signedInEmailFor(world, personName, person)));
+   await world.page.locator("#club-site-identity-menu-button").click();
+   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+ }
+ 
+-async function assertClubIdentityVisible(world, email) {
++async function assertClubIdentityVisible(world, label) {
+   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(label);
++}
++
++function clubIdentityFallbackLabelFor(email) {
++  return String(email).split("@")[0].trim() || "Member";
+ }
+ 
+ async function assertClubMarketingPage(world, clubName) {
+diff --git a/acceptance-tests/features/support/club_member_invitations.js b/acceptance-tests/features/support/club_member_invitations.js
+index 2d2f156..8b4e109 100644
+--- a/acceptance-tests/features/support/club_member_invitations.js
++++ b/acceptance-tests/features/support/club_member_invitations.js
+@@ -264,11 +264,12 @@ async function assertOnlyOneActiveMembership(world, personName, clubName) {
+ async function assertSignedInToClub(world, personName, clubName) {
+   const club = await ensureClub(world, clubName);
+   const email = emailForPerson(world, personName);
++  const identityLabel = clubIdentityFallbackLabelFor(email);
+ 
+   await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
+     timeout: projectionTimeoutMs(world)
+   });
+-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(identityLabel);
+ }
+ 
+ async function leaveWithoutEnteringName(world) {
+@@ -586,6 +587,10 @@ function normalizeEmail(email) {
+   return String(email || "").trim().toLowerCase();
+ }
+ 
++function clubIdentityFallbackLabelFor(email) {
++  return String(email).split("@")[0].trim() || "Member";
++}
++
+ function clubSlugFor(clubName) {
+   return String(clubName || "")
+     .trim()
+diff --git a/acceptance-tests/features/support/request_account.js b/acceptance-tests/features/support/request_account.js
+index 38f7172..9f6cd33 100644
+--- a/acceptance-tests/features/support/request_account.js
++++ b/acceptance-tests/features/support/request_account.js
+@@ -461,6 +461,7 @@ async function followWelcomeLink(world, personName) {
+ async function assertSignedInToClub(world, personName, clubName) {
+   const club = world.clubs[clubName] || clubByName(clubName);
+   const email = requestEmailFor(personName, world);
++  const identityLabel = clubIdentityFallbackLabelFor(email);
+ 
+   assert.ok(club, `Expected ${clubName} to be known before asserting signed-in club access`);
+   world.clubs[clubName] = { clubId: club.clubId, name: club.clubName || clubName, slug: club.clubSlug || club.slug };
+@@ -468,7 +469,11 @@ async function assertSignedInToClub(world, personName, clubName) {
+   await playwrightExpect(
+     world.page.locator(`#member-club-home[data-club-id=${cssString(world.clubs[clubName].clubId)}]`)
+   ).toBeVisible({ timeout: projectionTimeoutMs(world) });
+-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
++  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(identityLabel);
++}
++
++function clubIdentityFallbackLabelFor(email) {
++  return String(email).split("@")[0].trim() || "Member";
+ }
+ 
+ async function openConversionPanel(world, clubName) {
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 4eee679..03c7606 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+ - [x] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+ - [x] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+-- [ ] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
++- [x] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+ - [ ] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+ - [ ] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
+ - [ ] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
+diff --git a/smoke-tests/lib/browser.js b/smoke-tests/lib/browser.js
+index 5d5e0e4..0f7de19 100644
+--- a/smoke-tests/lib/browser.js
++++ b/smoke-tests/lib/browser.js
+@@ -77,7 +77,9 @@ async function ensureSmokeMemberSignedIn(world) {
+ 
+   await world.page.goto(clubSiteUrl(world.config, "/"));
+   await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+-  await expect(world.page.locator("body")).toContainText(`Signed in as ${world.config.member.email}`);
++  await expect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(
++    clubIdentityFallbackLabelFor(world.config.member.email)
++  );
+ }
+ 
+ async function openSmokeClubHome(world) {
+@@ -138,6 +140,10 @@ function cssStringValue(value) {
+   return String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\a ");
+ }
+ 
++function clubIdentityFallbackLabelFor(email) {
++  return String(email).split("@")[0].trim() || "Member";
++}
++
+ module.exports = {
+   assertMemberDoesNotSeeMessage,
+   assertMemberSeesMessage,
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 0778610..7de0e95 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -334,8 +334,12 @@ defmodule MembaWeb.Layouts do
+                   aria-controls="club-site-identity-menu"
+                   aria-label="Member identity menu"
+                 >
+-                  <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
+-                  <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
++                  <span class="app-bar__avatar">
++                    {club_identity_initials(@member_name, @current_identity)}
++                  </span>
++                  <span class="app-bar__who">
++                    {club_identity_label(@member_name, @current_identity)}
++                  </span>
+                 </button>
+ 
+                 <div
+@@ -382,17 +386,44 @@ defmodule MembaWeb.Layouts do
+     """
+   end
+ 
+-  defp club_identity_label(%{email: email}) when is_binary(email), do: email
+-  defp club_identity_label(_identity), do: "Member"
++  defp club_identity_label(member_name, identity) when is_binary(member_name) do
++    case String.trim(member_name) do
++      "" -> club_identity_label(nil, identity)
++      name -> name
++    end
++  end
++
++  defp club_identity_label(_member_name, %{email: email}) when is_binary(email) do
++    email_local_part(email)
++  end
++
++  defp club_identity_label(_member_name, _identity), do: "Member"
++
++  defp club_identity_initials(member_name, identity) when is_binary(member_name) do
++    case String.trim(member_name) do
++      "" -> club_identity_initials(nil, identity)
++      name -> initials(name)
++    end
++  end
+ 
+-  defp club_identity_initials(%{email: email}) when is_binary(email) do
++  defp club_identity_initials(_member_name, %{email: email}) when is_binary(email) do
+     email
+-    |> String.split("@", parts: 2)
+-    |> List.first()
++    |> email_local_part()
+     |> initials()
+   end
+ 
+-  defp club_identity_initials(_identity), do: "M"
++  defp club_identity_initials(_member_name, _identity), do: "M"
++
++  defp email_local_part(email) do
++    email
++    |> String.split("@", parts: 2)
++    |> List.first()
++    |> String.trim()
++    |> case do
++      "" -> "Member"
++      local_part -> local_part
++    end
++  end
+ 
+   defp initials(name) when is_binary(name) do
+     name
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index d8aad92..1129b82 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -154,7 +154,8 @@ defmodule MembaWeb.LayoutsTest do
+     )
+ 
+     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
+-    assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
++    assert_text(html, "#club-site-layout header .app-bar__who", "alice")
++    refute_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
+     assert_selector(html, "#club-site-footer.app-foot")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
+@@ -240,6 +241,8 @@ defmodule MembaWeb.LayoutsTest do
+ 
+     assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+     assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
++    assert_text(html, "#club-site-layout header .app-bar__who", "Élodie Durand")
++    refute_text(html, "#club-site-layout header .app-bar__who", "élodie.durand")
+     assert_selector(html, "#club-site-layout-slot-with-member-name")
+   end
+ 
