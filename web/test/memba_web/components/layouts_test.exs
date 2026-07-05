@@ -139,6 +139,10 @@ defmodule MembaWeb.LayoutsTest do
     assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
     refute_selector(html, "#club-site-layout header .app-bar__club[href]")
     refute_selector(html, "#club-site-layout header a[href='/']")
+    assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
+    assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
+    assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
+    assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
     assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_text(html, "#club-site-footer", "Powered by Memba")
@@ -159,6 +163,26 @@ defmodule MembaWeb.LayoutsTest do
     assert only_attribute(html, "#club-site-layout header", "class") =~ "border-base-300"
     refute html =~ "--club-site-"
     assert [] = attributes(html, "#club-site-layout", "style")
+  end
+
+  test "club-site layout gates the member identity dropdown when signed out" do
+    assigns = %{flash: %{}}
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club">
+        <section id="public-club-site-layout-slot">Public club page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout header .app-bar")
+    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
+    refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+    refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
+    refute_selector(html, "#club-site-layout header .app-bar__avatar")
+    refute_selector(html, "#club-site-layout header .app-bar__who")
+    refute_text(html, "#club-site-layout header", "Signed in as")
+    assert_selector(html, "#public-club-site-layout-slot")
   end
 
   test "root footer shows linked git commit when enabled" do

@@ -321,6 +321,19 @@ defmodule MembaWeb.Layouts do
               class="flex flex-wrap items-center gap-3 text-sm font-medium"
               aria-label="Club member navigation"
             >
+              <div class="dropdown dropdown-end app-bar__id">
+                <button
+                  id="club-site-identity-menu-button"
+                  type="button"
+                  class="app-bar__me"
+                  aria-haspopup="menu"
+                  aria-label="Member identity menu"
+                >
+                  <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
+                  <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
+                </button>
+              </div>
+
               <span id="club-site-current-identity" class="text-ink-2">
                 Signed in as {@current_identity.email}
               </span>
@@ -364,6 +377,26 @@ defmodule MembaWeb.Layouts do
     <.flash_group flash={@flash} />
     """
   end
+
+  defp club_identity_label(%{email: email}) when is_binary(email), do: email
+  defp club_identity_label(_identity), do: "Member"
+
+  defp club_identity_initials(%{email: email}) when is_binary(email) do
+    email
+    |> String.split("@", parts: 2)
+    |> List.first()
+    |> String.split(~r/[^a-zA-Z0-9]+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "M"
+      initials -> initials
+    end
+  end
+
+  defp club_identity_initials(_identity), do: "M"
 
   @doc """
   Shows the flash group with standard titles and content.
