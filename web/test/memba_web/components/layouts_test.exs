@@ -203,6 +203,22 @@ defmodule MembaWeb.LayoutsTest do
     assert [] = attributes(html, "#club-site-layout", "style")
   end
 
+  test "club-site layout renders flash messages" do
+    assigns = %{flash: %{"info" => "Club settings saved"}}
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club">
+        <section id="club-site-layout-slot-with-flash">Club member page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout-slot-with-flash")
+    assert_selector(html, "#flash-group[aria-live='polite']")
+    assert_selector(html, "#flash-info[role='alert']")
+    assert_text(html, "#flash-info", "Club settings saved")
+  end
+
   test "club-site layout gates the member identity dropdown when signed out" do
     assigns = %{flash: %{}}
 
