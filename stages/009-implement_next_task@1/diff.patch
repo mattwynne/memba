@@ -1,0 +1,183 @@
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 7f00ddd..c0ff912 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
+ - [x] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
+ - [x] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+-- [ ] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
++- [x] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+ - [ ] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+ - [ ] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+ - [ ] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index fa4fb83..ba1cc54 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -307,10 +307,10 @@ defmodule MembaWeb.Layouts do
+     <div
+       id="club-site-layout"
+       data-surface="club-site"
+-      class="min-h-screen bg-base-200 text-base-content"
++      class="app-frame"
+     >
+-      <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
+-        <div class="mx-auto max-w-7xl py-4">
++      <div class="app-card">
++        <header>
+           <div class="app-bar">
+             <div class="app-bar__brand">
+               <span class="app-bar__club">{@club_name}</span>
+@@ -352,28 +352,25 @@ defmodule MembaWeb.Layouts do
+               </div>
+             </nav>
+           </div>
+-        </div>
+-      </header>
++        </header>
+ 
+-      <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+-        {render_slot(@inner_block)}
+-      </main>
++        <main class="px-4 py-10 sm:px-6 lg:px-8">
++          {render_slot(@inner_block)}
++        </main>
++      </div>
+ 
+       <footer
+         id="club-site-footer"
+-        class="border-t border-base-300 bg-base-100 px-4 py-6 sm:px-6 lg:px-8"
++        class="app-foot"
+       >
+-        <div class="mx-auto max-w-7xl text-sm font-medium text-ink-2">
+-          Powered by
+-          <a
+-            id="club-site-footer-memba-home-link"
+-            href={ClubSite.root_url()}
+-            aria-label="Visit Memba home"
+-            class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
+-          >
+-            Memba
+-          </a>
+-        </div>
++        Powered by
++        <a
++          id="club-site-footer-memba-home-link"
++          href={ClubSite.root_url()}
++          aria-label="Visit Memba home"
++        >
++          Memba
++        </a>
+       </footer>
+     </div>
+ 
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 8393841..148fa8b 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -132,18 +132,31 @@ defmodule MembaWeb.LayoutsTest do
+       </Layouts.club_site>
+       """)
+ 
+-    assert_selector(html, "#club-site-layout[data-surface='club-site']")
+-    assert_selector(html, "#club-site-layout-slot")
+-    assert_text(html, "#club-site-layout header", "Riverside Tennis Club")
+-    assert_selector(html, "#club-site-layout header .app-bar")
+-    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
++    assert_selector(html, "#club-site-layout.app-frame[data-surface='club-site']")
++    assert_selector(html, "#club-site-layout > .app-card")
++    assert_selector(html, "#club-site-layout > .app-card > main #club-site-layout-slot")
++    assert_text(html, "#club-site-layout .app-card > header", "Riverside Tennis Club")
++    assert_selector(html, "#club-site-layout .app-card > header .app-bar")
++
++    assert_text(
++      html,
++      "#club-site-layout header .app-bar__brand .app-bar__club",
++      "Riverside Tennis Club"
++    )
++
+     refute_selector(html, "#club-site-layout header .app-bar__club[href]")
+     refute_selector(html, "#club-site-layout header a[href='/']")
+     assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
+-    assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
++
++    assert_selector(
++      html,
++      "#club-site-layout header button#club-site-identity-menu-button.app-bar__me"
++    )
++
+     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
+     assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
++    assert_selector(html, "#club-site-footer.app-foot")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
+ 
+     assert_selector(
+@@ -173,10 +186,7 @@ defmodule MembaWeb.LayoutsTest do
+ 
+     refute_text(html, "#club-site-footer", "Commit")
+ 
+-    assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
+-    assert only_attribute(html, "#club-site-layout", "class") =~ "text-base-content"
+-    assert only_attribute(html, "#club-site-layout header", "class") =~ "bg-base-100"
+-    assert only_attribute(html, "#club-site-layout header", "class") =~ "border-base-300"
++    assert only_attribute(html, "#club-site-layout", "class") == "app-frame"
+     refute html =~ "--club-site-"
+     assert [] = attributes(html, "#club-site-layout", "style")
+   end
+@@ -192,7 +202,13 @@ defmodule MembaWeb.LayoutsTest do
+       """)
+ 
+     assert_selector(html, "#club-site-layout header .app-bar")
+-    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
++
++    assert_text(
++      html,
++      "#club-site-layout header .app-bar__brand .app-bar__club",
++      "Riverside Tennis Club"
++    )
++
+     refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+     refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
+     refute_selector(html, "#club-site-layout header .app-bar__avatar")
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 95ebafb..bce583b 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -46,7 +46,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
+            )
+ 
+-    assert has_element?(view, "#club-site-identity-menu-button .app-bar__who", "alice@example.com")
++    assert has_element?(
++             view,
++             "#club-site-identity-menu-button .app-bar__who",
++             "alice@example.com"
++           )
++
+     assert has_element?(view, "#member-message-#{message.message_id}")
+     assert has_element?(view, "#club-member-#{alice.person_id}")
+     assert has_element?(view, "#club-member-#{bob.person_id}")
+diff --git a/web/test/memba_web/member_page_design_system_alignment_test.exs b/web/test/memba_web/member_page_design_system_alignment_test.exs
+index 5252584..51a853f 100644
+--- a/web/test/memba_web/member_page_design_system_alignment_test.exs
++++ b/web/test/memba_web/member_page_design_system_alignment_test.exs
+@@ -32,7 +32,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+     {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex",
+      ["<.button", "<.avatar"]},
+     {"public club page LiveView", "lib/memba_web/live/public_club_page_live.ex", ["<.button"]},
+-    {"club site layout", :club_site, ["<.button"]}
++    {"club site layout", :club_site, ["app-frame", "app-card", "app-bar"]}
+   ]
+ 
+   test "member page sources use theme tokens rather than hardcoded hex or legacy palette utilities" do
+@@ -48,7 +48,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
+     end
+   end
+ 
+-  test "member page sources call shared design-system components for buttons, avatars, and status pills" do
++  test "member page sources call shared design-system components and shell classes" do
+     for {label, source_ref, required_components} <- @expected_component_usage do
+       source = source_for(source_ref)
+ 
