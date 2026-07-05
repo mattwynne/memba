@@ -162,6 +162,62 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard renders member content inside the hidden members section panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    grant_manage_members!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-card[data-active-member-count='2'][data-active-members-state='active-members']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-avatar-stack " <>
+               "#club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-avatar-stack " <>
+               "#club-member-#{bob.person_id}[data-testid='club-member-row'][data-member-name='Bob Builder']",
+             "BB"
+           )
+  end
+
   test "dashboard renders the members tab invite action only for members who can manage members",
        %{conn: conn} do
     robin =
