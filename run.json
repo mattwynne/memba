@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-05T05:31:54.120011277Z",
-  "last_event_at": "2026-07-05T05:34:16.513380683Z",
+  "last_event_at": "2026-07-05T05:34:31.375448228Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1066,14 +1066,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-07-05T05:34:29.918132414Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-07-05T05:34:33.205401895Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1084,14 +1085,15 @@
           "claude_review_blocking_gaps": "None",
           "codex_review_decision": "READY",
           "plan_needs_fix": false,
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.synthesize": 0,
           "plan_ready": true,
           "last_stage": "synthesize",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "internal.node_visit_count": 1,
           "codex_review_blocking_gaps": "None",
           "graph.rankdir": "LR",
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "failure_class": "",
           "thread.start.current_node": "gemini_review",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
@@ -1112,6 +1114,7 @@
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "internal.retry_count.start": 0,
           "graph.default_fidelity": "summary:high",
+          "thread.synthesize.current_node": "synthesis_gate",
           "gemini_review_blocking_gap_count": 0,
           "response.claude_review": "Now I'll evaluate this plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 046 Plan Review\n\n**Decision:** READY  \n**Confidence:** High  \n**Date:** 2026-07-05\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Timestamp format example could be more precise** — Step 1 specifies `\"3 Jun, 7:02am\"` format, but could clarify timezone handling (appears to be UTC from the schema, but display timezone isn't stated). Not blocking because the design file is the source of truth and the helper can be adjusted during implementation.\n\n2. **Card CSS class names could reference line numbers** — Step 9 mentions `message` / `message--original` classes from the design but doesn't specify where in `app.css` to place them. Not blocking because step 3 already establishes the pattern of porting from design-system 1:1.\n\n3. **Gallery-walk comparison method could be more specific** — Step 11 says \"compare the conversation screenshot\" but doesn't state whether this is a visual diff, side-by-side review, or overlay. Not blocking because the validation plan clarifies manual testing follows automated tests.\n\n## Smallest Viable Iteration\n\n**This is already the smallest viable iteration.** The plan explicitly:\n- Excludes delivery relocation (deferred to 047)\n- Changes only presentation (no new business rules)\n- Bundles three tightly-coupled UI changes that must ship together for coherence (follow toggle + replies-first ordering + timestamps + card treatment)\n\nAttempting to split further (e.g., \"just timestamps\" or \"just reorder composer\") would leave the page in an inconsistent half-migrated state that doesn't match either the old or new design.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Against Readiness Questions\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal clearly states:\n- **User/business outcome:** \"Align the member conversation page to the refreshed interaction model\"\n- **Beneficiary:** Members viewing conversations\n- **What changes:** Compact follow toggle, replies-first reading order, timestamps, card treatment\n- **What doesn't change:** Delivery (explicitly excluded), follow/reply behavior\n\nThe goal is outcome-focused, not task-focused.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is:\n- **Coherent:** All changes align the conversation page to the refreshed design's interaction model\n- **Minimal:** Explicitly excludes delivery relocation (047), any behavior changes, and unrelated features\n- **Useful while small:** Delivers a complete visual alignment step without half-states\n- **Boundaries clear:** In-scope and out-of-scope sections are explicit and comprehensive\n\nCould not be smaller without leaving the page inconsistent.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Pass.**\n\n**Acceptance criteria:**\n- Concrete: \"toggle beside the subject,\" \"composer renders below replies,\" \"show a timestamp,\" \"boxed cards\"\n- Complete: Cover follow control (toggle), composer position, timestamps (original + replies), card treatment, delivery preservation\n- Testable: Each criterion maps to observable UI state or behavior\n- Appropriate scope: Cover presentation changes and behavior preservation (no new edge cases because no new behavior)\n\n**BDD classification:**\n- Correctly classified as \"Technical / UI restructure (presentation)\"\n- Explicit rationale: \"No new business rule, permission, or lifecycle state... follow and reply behaviour unchanged\"\n\n**Acceptance Scenarios / Feature Files:**\n- Clear decision: \"Not useful for this slice\"\n- Justified: No new business rules, existing scenarios cover behavior, presentation verified by LiveView tests\n- Appropriate: Technical presentation changes don't need stakeholder-readable Gherkin\n\n**Business decisions:**\n- Explicitly states: \"None known\"\n- Context provided: Delivery relocation confirmed as intentional split to 047\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.**\n\n**Implementation steps:**\n- Clear and ordered: 12 sequential steps from helper function → CSS → markup → tests → validation\n- Specific files named: `page_html.ex`, `message.html.heex`, `app.css`, `conversation_entry_card`, `MemberMessageDetailLive` tests\n- Integration points clear: Existing `follow_conversation`/`unfollow_conversation` events, `@following_conversation` assign, `@can_follow_conversation` gating\n- Data model: Confirms `@entry.message.inserted_at` available (no projection change needed)\n- Tests: Step 10 specifies what to test (toggle state, composer position, timestamps)\n- Validation: Steps 11-12 specify gallery-walk and `dev check`\n\n**Technical decisions:**\n- Explicitly resolved: Timestamp source (`inserted_at` from existing projection), follow control (compact toggle wired to existing events)\n- States: \"None open\"\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n**New capability clearly stated:**\n- \"The conversation page reads replies-first with a lightweight follow toggle and message timestamps — matching the refreshed app-like design\"\n\n**Success proof:**\n- **Automated:** LiveView tests green, `dev check` green\n- **Visual:** Gallery-walk screenshot comparison to design\n- **Manual:** Follow/unfollow, post reply, confirm order and timestamps\n\n**Stop condition:** Clear — all acceptance criteria met, tests green, visual match confirmed.\n\n## Summary\n\nThis plan is **production-ready**. It demonstrates:\n\n- **Excellent scope discipline:** Tight focus on presentation alignment, explicit exclusion of delivery (047)\n- **Thorough grounding:** References current implementation files, design source of record, existing events\n- **Clear decisions:** BDD rationale explicit, timestamp source decided, follow control approach decided\n- **Implementable steps:** 12 concrete steps with file names, integration points, and test expectations\n- **Complete validation:** Automated + visual + manual verification specified\n\nThe plan correctly identifies this as a technical/presentation change requiring LiveView tests but not new Gherkin scenarios. The delivery relocation split (047) is well-justified and prevents this iteration from growing too large.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
           "failure_signature": "",
@@ -1252,6 +1255,11 @@
               "active_time_ms": 47282
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1294,13 +1302,14 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "claude_review": 1,
           "gemini_review": 1,
           "start": 1,
           "codex_review": 1,
-          "synthesize": 1
+          "synthesize": 1,
+          "synthesis_gate": 1
         }
       },
       "diff": {}
@@ -1542,7 +1551,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-07-05T05:34:29.917669096Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1556,15 +1570,26 @@
       "output": null,
       "started_at": "2026-07-05T05:34:16.498873935Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 13416,
+        "inference_time_ms": 13336,
+        "tool_time_ms": 0,
+        "active_time_ms": 13336
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 4855,
+        "output_tokens": 33,
+        "total_tokens": 5196,
+        "reasoning_tokens": 308,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 34505
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "gemini_review@1": {
       "first_event_seq": 21,
