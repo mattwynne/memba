@@ -159,6 +159,14 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
+           |> LazyHTML.query("#club-site-layout header .app-bar__club")
+           |> LazyHTML.text() =~ "Kootenay Mountaineering Club"
+
+    refute html |> LazyHTML.query("#club-site-identity-menu-button") |> Enum.any?()
+    refute html |> LazyHTML.query("#club-site-sign-out-form") |> Enum.any?()
+    refute html |> LazyHTML.query("#club-site-layout header .app-bar__id") |> Enum.any?()
+
+    assert html
            |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
            |> LazyHTML.text() =~ "Visit Memba home"
 
@@ -335,6 +343,9 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
            |> Enum.any?()
+
+    refute html |> LazyHTML.query("#club-site-identity-menu-button") |> Enum.any?()
+    refute html |> LazyHTML.query("#club-site-sign-out-form") |> Enum.any?()
 
     refute response =~ "Send club message"
   end

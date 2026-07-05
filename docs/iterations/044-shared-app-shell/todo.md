@@ -9,7 +9,7 @@
 - [x] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
 - [x] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
 - [x] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
-- [ ] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
+- [x] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
 - [ ] 011 Update LiveView/layout tests: app-bar renders `@club_name`; identity dropdown gated on `@current_identity`; Sign out posts to `DELETE /auth`; content sits in the app-card.
 - [ ] 012 Add/adjust a test that every `club_site` surface still renders under the new shell (club home, conversation, compose, invitation, public club page).
 - [ ] 013 Run `./bin/dev gallery-walk` and compare the club-home and conversation screenshots to `design-system/wireframes/club-home.html` / `member-conversation.html`.
