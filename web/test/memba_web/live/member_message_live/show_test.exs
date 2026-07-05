@@ -12,11 +12,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
-  test "renders a member message detail LiveView shell in the club site layout", %{conn: conn} do
-    {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.Show)
-
-    assert has_element?(view, "#club-site-layout[data-surface='club-site']")
-    assert has_element?(view, "#member-message-detail[data-live-view='member-message-detail']")
+  test "isolated message detail without route params fails instead of rendering stale shell", %{
+    conn: conn
+  } do
+    assert_raise RuntimeError, ~r/requires a loaded message before rendering/, fn ->
+      live_isolated(conn, MembaWeb.MemberMessageLive.Show)
+    end
   end
 
   test "routed GET keeps the member message URL shape and passes club_id to the LiveView", %{

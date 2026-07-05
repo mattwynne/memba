@@ -325,12 +325,10 @@ defmodule MembaWeb.Layouts do
               class="flex flex-wrap items-center gap-3 text-sm font-medium"
               aria-label="Club member navigation"
             >
-              <div class="dropdown dropdown-end app-bar__id">
-                <button
+              <details class="dropdown dropdown-end app-bar__id">
+                <summary
                   id="club-site-identity-menu-button"
-                  type="button"
                   class="app-bar__me"
-                  aria-haspopup="menu"
                   aria-controls="club-site-identity-menu"
                   aria-label="Member identity menu"
                 >
@@ -340,24 +338,25 @@ defmodule MembaWeb.Layouts do
                   <span class="app-bar__who">
                     {club_identity_label(@member_name, @current_identity)}
                   </span>
-                </button>
+                </summary>
 
                 <div
                   id="club-site-identity-menu"
-                  tabindex="0"
+                  role="menu"
                   class="dropdown-content app-menu app-menu--id"
                 >
                   <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
                     <button
                       id="club-site-sign-out-button"
                       type="submit"
+                      role="menuitem"
                       class="app-menu__signout"
                     >
                       Sign out
                     </button>
                   </.form>
                 </div>
-              </div>
+              </details>
             </nav>
           </div>
         </header>

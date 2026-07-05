@@ -346,6 +346,13 @@ async function signOut(world) {
     await clubIdentityMenuButton.click();
   }
 
+  const clubSignOutButton = world.page.locator("#club-site-sign-out-button");
+
+  if ((await clubSignOutButton.count()) > 0 && (await clubSignOutButton.isVisible())) {
+    await clubSignOutButton.click();
+    return;
+  }
+
   await world.page.getByRole("button", { name: "Sign out" }).click();
 }
 

@@ -150,7 +150,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header button#club-site-identity-menu-button.app-bar__me"
+      "#club-site-layout header details.app-bar__id > summary#club-site-identity-menu-button.app-bar__me[aria-controls='club-site-identity-menu'][aria-label='Member identity menu']"
     )
 
     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
@@ -167,7 +167,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[tabindex='0']"
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
     )
 
     assert_selector(
@@ -182,7 +182,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
     )
 
     assert_text(html, "#club-site-sign-out-button", "Sign out")

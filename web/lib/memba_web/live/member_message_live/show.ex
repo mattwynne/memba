@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
         end
 
       _params ->
-        {:ok, assign(socket, :route_params, params)}
+        not_found!(socket)
     end
   end
 
@@ -149,31 +149,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
     MembaWeb.PageHTML.message(assigns)
   end
 
-  def render(assigns) do
-    ~H"""
-    <Layouts.club_site flash={@flash}>
-      <div
-        id="member-message-detail"
-        data-live-view="member-message-detail"
-        data-club-id={Map.get(@route_params, "club_id")}
-        data-message-id={Map.get(@route_params, "message_id")}
-        class="space-y-8"
-      >
-        <section class="overflow-hidden rounded-3xl border border-base-300 bg-base-100 p-8 shadow-sm">
-          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
-            Club message
-          </p>
-          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-base-content">
-            Member message detail
-          </h1>
-          <p class="mt-4 max-w-2xl leading-7 text-ink-2">
-            This LiveView surface is ready for the existing member message route to load and
-            render the selected club message.
-          </p>
-        </section>
-      </div>
-    </Layouts.club_site>
-    """
+  def render(_assigns) do
+    raise "MemberMessageLive.Show requires a loaded message before rendering"
   end
 
   defp put_session_club_id(params, session) do
