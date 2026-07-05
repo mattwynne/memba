@@ -1,0 +1,96 @@
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 46fe3bc..89533fe 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 In `web/lib/memba_web/controllers/page_html/club.html.heex`, remove the `#member-dashboard-hero` greeting section; club/member identity now lives in the 044 app-bar.
+-- [ ] 002 Add a `section-tabs` spine with `role="tablist"` holding two `section-tab` controls: Conversations (default, `is-active`, `aria-selected="true"`) and Members.
++- [x] 002 Add a `section-tabs` spine with `role="tablist"` holding two `section-tab` controls: Conversations (default, `is-active`, `aria-selected="true"`) and Members.
+ - [ ] 003 Add a `section-tabs__action` slot with a per-tab primary **New message** action on Conversations, linking to `member_compose_path(@selected_club, club_id_source)`.
+ - [ ] 004 In the same action slot, add the **Invite member** action linking to `member_invitation_path`, rendered only when `@current_member_can_manage_members?` (hidden otherwise).
+ - [ ] 005 Wrap today's conversation list and its existing empty state in a Conversations `section-panel` that is visible by default; keep the `@message_rows` rows unchanged.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index ea1c026..8f37720 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -13,6 +13,36 @@
+     data-club-id={@selected_club.club_id}
+     class="mx-auto max-w-3xl space-y-8"
+   >
++    <div id="member-section-tabs" class="section-tabs">
++      <div
++        id="member-section-tabs-list"
++        class="section-tabs__list"
++        role="tablist"
++        aria-label="Club home sections"
++      >
++        <button
++          id="member-section-tab-conversations"
++          type="button"
++          class="section-tab is-active"
++          data-tab="conversations"
++          role="tab"
++          aria-selected="true"
++        >
++          Conversations
++        </button>
++        <button
++          id="member-section-tab-members"
++          type="button"
++          class="section-tab"
++          data-tab="members"
++          role="tab"
++          aria-selected="false"
++        >
++          Members
++        </button>
++      </div>
++    </div>
++
+     <section
+       id="member-dashboard-cta"
+       class="rounded-3xl bg-primary p-6 text-white shadow-sm"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 596a95c..c06c1ac 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -63,6 +63,37 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(view, "#club-member-#{bob.person_id}")
+   end
+ 
++  test "dashboard renders the section tab spine with conversations selected by default", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/")
++
++    assert has_element?(view, "#member-section-tabs.section-tabs")
++    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
++
++    assert has_element?(
++             view,
++             "#member-section-tab-conversations.section-tab.is-active[role='tab'][aria-selected='true']",
++             "Conversations"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-tab-members.section-tab[role='tab'][aria-selected='false']",
++             "Members"
++           )
++  end
++
+   test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
+        %{conn: conn} do
+     alice =
