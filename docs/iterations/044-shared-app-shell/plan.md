@@ -126,23 +126,30 @@ detail deferred).
   `app-menu`, `app-foot`, and the identity-dropdown pieces) from `design-system/` (`memba.css` /
   `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the design so the mirror
   stays authoritative.
-- Source the identity dropdown's **member name + initials**: pass the current member's display
-  name (and derived initials) into `club_site` via an assign where a signed-in member exists
-  (club home, conversation, compose, invitation). Fall back gracefully to the current
-  `current_identity.email` where a member display name is not readily available. [Open technical
-  decision]
+- Source the identity dropdown's **member name + initials** via a new **optional** `member_name`
+  assign on `club_site` (default `nil`). The four signed-in member surfaces (club home,
+  conversation, compose, invitation) pass the current member's display name; the layout derives
+  the avatar initials from it. When `member_name` is absent but `current_identity` is present, fall
+  back to the email local-part for both the label and the initials. The public (signed-out) club
+  page passes neither `current_identity` nor `member_name`, so the identity dropdown is gated off
+  and no member data is required there. Add a small private `initials/1` helper in `Layouts`.
 - Update LiveView/layout tests for the new header structure: app-bar shows the club name; the
   identity dropdown is gated on `@current_identity`; the Sign out control still posts to
   `DELETE /auth`; content sits in the app-card; each `club_site` surface renders.
 
 ## Open Technical Decisions
 
-- **CSS source.** Port the DS component classes into `web/assets/css/app.css` (recommended — keeps
-  app and design 1:1) vs re-expressing the shell with Tailwind utilities. Prefer porting.
-- **Identity name/initials plumbing.** The shared layout currently receives only `club_name` and
-  `current_identity` (email). Decide the cleanest way to supply the member display name + initials
-  to `club_site` (a new optional assign passed by the signed-in member surfaces, with an
-  email-derived fallback) without forcing the public (signed-out) surface to provide one.
+None open — both prior technical questions are decided in the Implementation Plan:
+
+- **CSS source: decided — port the DS component classes** (`app-frame`, `app-card`, `app-bar` &
+  children, `app-menu`, `app-foot`, identity-dropdown pieces) verbatim from `design-system/`
+  (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping class names 1:1 with the
+  design mirror rather than re-expressing the shell in Tailwind utilities. This keeps the design
+  mirror authoritative and the app pixel-faithful.
+- **Identity name/initials plumbing: decided — a new optional `member_name` assign** on
+  `club_site`, passed by the four signed-in member surfaces, with an email-local-part fallback and
+  a `Layouts.initials/1` helper for the avatar. The signed-out public page supplies neither
+  identity nor name (dropdown gated off).
 
 ## New Capability
 
