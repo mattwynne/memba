@@ -1,0 +1,88 @@
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index c0ff912..4eee679 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
+ - [x] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+ - [x] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+-- [ ] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
++- [x] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+ - [ ] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+ - [ ] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+ - [ ] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index ba1cc54..0778610 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -296,6 +296,10 @@ defmodule MembaWeb.Layouts do
+     default: nil,
+     doc: "the signed-in identity shown in club member chrome"
+ 
++  attr :member_name, :string,
++    default: nil,
++    doc: "the optional signed-in member display name shown in club member chrome"
++
+   attr :current_scope, :map,
+     default: nil,
+     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+@@ -385,7 +389,14 @@ defmodule MembaWeb.Layouts do
+     email
+     |> String.split("@", parts: 2)
+     |> List.first()
+-    |> String.split(~r/[^a-zA-Z0-9]+/, trim: true)
++    |> initials()
++  end
++
++  defp club_identity_initials(_identity), do: "M"
++
++  defp initials(name) when is_binary(name) do
++    name
++    |> String.split(~r/[^\p{L}\p{N}]+/u, trim: true)
+     |> Enum.take(2)
+     |> Enum.map(&String.first/1)
+     |> Enum.join()
+@@ -396,7 +407,7 @@ defmodule MembaWeb.Layouts do
+     end
+   end
+ 
+-  defp club_identity_initials(_identity), do: "M"
++  defp initials(_name), do: "M"
+ 
+   @doc """
+   Shows the flash group with standard titles and content.
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 148fa8b..d8aad92 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -219,6 +219,30 @@ defmodule MembaWeb.LayoutsTest do
+     assert_selector(html, "#public-club-site-layout-slot")
+   end
+ 
++  test "club-site layout accepts optional member names and derives name-like initials" do
++    assigns = %{
++      flash: %{},
++      current_identity: %{email: "élodie.durand@example.com"},
++      member_name: "Élodie Durand"
++    }
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.club_site
++        flash={@flash}
++        club_name="Riverside Tennis Club"
++        current_identity={@current_identity}
++        member_name={@member_name}
++      >
++        <section id="club-site-layout-slot-with-member-name">Club member page content</section>
++      </Layouts.club_site>
++      """)
++
++    assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
++    assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
++    assert_selector(html, "#club-site-layout-slot-with-member-name")
++  end
++
+   test "root footer shows linked git commit when enabled" do
+     System.put_env("MEMBA_GIT_SHA", @sha)
+     Application.put_env(:memba, :show_git_commit_in_footer, true)
