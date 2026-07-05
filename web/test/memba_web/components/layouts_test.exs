@@ -134,9 +134,9 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(html, "#club-site-layout.app-frame[data-surface='club-site']")
     assert_selector(html, "#club-site-layout > .app-card")
-    assert_selector(html, "#club-site-layout > .app-card > main #club-site-layout-slot")
+    assert_selector(html, "#club-site-layout > .app-card > main > #club-site-layout-slot")
     assert_text(html, "#club-site-layout .app-card > header", "Riverside Tennis Club")
-    assert_selector(html, "#club-site-layout .app-card > header .app-bar")
+    assert_selector(html, "#club-site-layout > .app-card > header > .app-bar")
 
     assert_text(
       html,
@@ -184,6 +184,8 @@ defmodule MembaWeb.LayoutsTest do
       html,
       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
     )
+
+    assert_text(html, "#club-site-sign-out-button", "Sign out")
 
     refute_text(html, "#club-site-footer", "Commit")
 
