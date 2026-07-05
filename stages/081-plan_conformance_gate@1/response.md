@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,220p' docs/iterations/044-shared-app-shell/plan.md && printf '\\n--- TODO ---\\n' && sed -n '1,180p' docs/iterations/044-shared-app-shell/todo.md && printf '\\n--- STATUS ---\\n' && git status --short && printf '\\n--- LOG ---\\n' && git log --oneline --decorate --max-count=20"}{"context_updates":{"plan_conformant":true,"plan_rework_available":false}}
