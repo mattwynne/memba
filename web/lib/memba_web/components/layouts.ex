@@ -310,30 +310,32 @@ defmodule MembaWeb.Layouts do
       class="min-h-screen bg-base-200 text-base-content"
     >
       <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-base-content">
-            {@club_name}
-          </a>
+        <div class="mx-auto max-w-7xl py-4">
+          <div class="app-bar">
+            <div class="app-bar__brand">
+              <span class="app-bar__club">{@club_name}</span>
+            </div>
 
-          <nav
-            :if={@current_identity}
-            class="flex flex-wrap items-center gap-3 text-sm font-medium"
-            aria-label="Club member navigation"
-          >
-            <span id="club-site-current-identity" class="text-ink-2">
-              Signed in as {@current_identity.email}
-            </span>
-            <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-              <.button
-                id="club-site-sign-out-button"
-                type="submit"
-                variant="secondary"
-                size="sm"
-              >
-                Sign out
-              </.button>
-            </.form>
-          </nav>
+            <nav
+              :if={@current_identity}
+              class="flex flex-wrap items-center gap-3 text-sm font-medium"
+              aria-label="Club member navigation"
+            >
+              <span id="club-site-current-identity" class="text-ink-2">
+                Signed in as {@current_identity.email}
+              </span>
+              <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+                <.button
+                  id="club-site-sign-out-button"
+                  type="submit"
+                  variant="secondary"
+                  size="sm"
+                >
+                  Sign out
+                </.button>
+              </.form>
+            </nav>
+          </div>
         </div>
       </header>
 
