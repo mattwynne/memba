@@ -327,26 +327,29 @@ defmodule MembaWeb.Layouts do
                   type="button"
                   class="app-bar__me"
                   aria-haspopup="menu"
+                  aria-controls="club-site-identity-menu"
                   aria-label="Member identity menu"
                 >
                   <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
                   <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
                 </button>
-              </div>
 
-              <span id="club-site-current-identity" class="text-ink-2">
-                Signed in as {@current_identity.email}
-              </span>
-              <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-                <.button
-                  id="club-site-sign-out-button"
-                  type="submit"
-                  variant="secondary"
-                  size="sm"
+                <div
+                  id="club-site-identity-menu"
+                  tabindex="0"
+                  class="dropdown-content app-menu app-menu--id"
                 >
-                  Sign out
-                </.button>
-              </.form>
+                  <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+                    <button
+                      id="club-site-sign-out-button"
+                      type="submit"
+                      class="app-menu__signout"
+                    >
+                      Sign out
+                    </button>
+                  </.form>
+                </div>
+              </div>
             </nav>
           </div>
         </div>

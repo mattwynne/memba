@@ -340,16 +340,26 @@ async function openClubPage(world, clubName) {
 }
 
 async function signOut(world) {
+  const clubIdentityMenuButton = world.page.locator("#club-site-identity-menu-button");
+
+  if ((await clubIdentityMenuButton.count()) > 0 && (await clubIdentityMenuButton.isVisible())) {
+    await clubIdentityMenuButton.click();
+  }
+
   await world.page.getByRole("button", { name: "Sign out" }).click();
 }
 
 async function assertSignedInOnClubPage(world, personName) {
   const person = personFromWorld(world, personName);
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
-    `Signed in as ${signedInEmailFor(world, personName, person)}`
-  );
+  await assertClubIdentityVisible(world, signedInEmailFor(world, personName, person));
+  await world.page.locator("#club-site-identity-menu-button").click();
   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+}
+
+async function assertClubIdentityVisible(world, email) {
+  await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
 }
 
 async function assertClubMarketingPage(world, clubName) {

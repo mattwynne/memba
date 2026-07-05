@@ -143,7 +143,6 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
     assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
-    assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_text(html, "#club-site-footer", "Powered by Memba")
 
@@ -152,9 +151,26 @@ defmodule MembaWeb.LayoutsTest do
       "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
     )
 
-    assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
-    assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
-    assert_selector(html, "button#club-site-sign-out-button.btn.btn-soft.btn-sm[type='submit']")
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[tabindex='0']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
+    )
+
     refute_text(html, "#club-site-footer", "Commit")
 
     assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
@@ -181,6 +197,8 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
     refute_selector(html, "#club-site-layout header .app-bar__avatar")
     refute_selector(html, "#club-site-layout header .app-bar__who")
+    refute_selector(html, "#club-site-layout header .app-menu")
+    refute_selector(html, "#club-site-layout header #club-site-sign-out-form")
     refute_text(html, "#club-site-layout header", "Signed in as")
     assert_selector(html, "#public-club-site-layout-slot")
   end

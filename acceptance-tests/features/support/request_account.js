@@ -468,7 +468,7 @@ async function assertSignedInToClub(world, personName, clubName) {
   await playwrightExpect(
     world.page.locator(`#member-club-home[data-club-id=${cssString(world.clubs[clubName].clubId)}]`)
   ).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(`Signed in as ${email}`);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
 }
 
 async function openConversionPanel(world, clubName) {
