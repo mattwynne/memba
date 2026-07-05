@@ -1,0 +1,89 @@
+diff --git a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+index 122162f..09ca8b0 100644
+--- a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
++++ b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+@@ -82,7 +82,8 @@ Then("{word} should see the Kootenay Mountaineering Club member dashboard", asyn
+   const club = this.clubs && this.clubs[kootenayClubName];
+   assert.ok(club, `Expected ${kootenayClubName} to be known in the scenario`);
+   await playwrightExpect(this.page.locator(`#member-club-home[data-club-id="${club.clubId}"]`)).toBeVisible();
+-  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toContainText(kootenayClubName);
++  await playwrightExpect(this.page.locator(".app-bar__club")).toContainText(kootenayClubName);
++  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toHaveCount(0);
+ });
+ 
+ Then("the message should be addressed to Kootenay Mountaineering Club members", async function () {
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index e647907..46fe3bc 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 In `web/lib/memba_web/controllers/page_html/club.html.heex`, remove the `#member-dashboard-hero` greeting section; club/member identity now lives in the 044 app-bar.
++- [x] 001 In `web/lib/memba_web/controllers/page_html/club.html.heex`, remove the `#member-dashboard-hero` greeting section; club/member identity now lives in the 044 app-bar.
+ - [ ] 002 Add a `section-tabs` spine with `role="tablist"` holding two `section-tab` controls: Conversations (default, `is-active`, `aria-selected="true"`) and Members.
+ - [ ] 003 Add a `section-tabs__action` slot with a per-tab primary **New message** action on Conversations, linking to `member_compose_path(@selected_club, club_id_source)`.
+ - [ ] 004 In the same action slot, add the **Invite member** action linking to `member_invitation_path`, rendered only when `@current_member_can_manage_members?` (hidden otherwise).
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 9862776..96620d5 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -64,19 +64,6 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
+ 
+-  defp first_name(%{name: name}) when is_binary(name) do
+-    name
+-    |> String.split(~r/\s+/, trim: true)
+-    |> List.first()
+-    |> case do
+-      nil -> "member"
+-      "" -> "member"
+-      first_name -> first_name
+-    end
+-  end
+-
+-  defp first_name(_member), do: "member"
+-
+   defp active_member_count_label(1), do: "1 current member"
+   defp active_member_count_label(count), do: "#{count} current members"
+ 
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 6dc1224..ea1c026 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -13,21 +13,6 @@
+     data-club-id={@selected_club.club_id}
+     class="mx-auto max-w-3xl space-y-8"
+   >
+-    <section
+-      id="member-dashboard-hero"
+-      class="border-b border-base-300 pb-8"
+-    >
+-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
+-        {@selected_club.name}
+-      </p>
+-      <h1 class="mt-2 text-4xl font-semibold leading-tight tracking-tight text-base-content sm:text-5xl">
+-        Hello, {first_name(@current_member)}.
+-      </h1>
+-      <p class="mt-3 max-w-2xl text-base leading-7 text-ink-2">
+-        Read recent club messages, send a note to all current members, and see who is on the member list.
+-      </p>
+-    </section>
+-
+     <section
+       id="member-dashboard-cta"
+       class="rounded-3xl bg-primary p-6 text-white shadow-sm"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c559305..596a95c 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -109,7 +109,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/")
+ 
+-    assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
++    refute has_element?(view, "#member-dashboard-hero")
+ 
+     assert has_element?(
+              view,
