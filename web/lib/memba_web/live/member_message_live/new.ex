@@ -111,6 +111,7 @@ defmodule MembaWeb.MemberMessageLive.New do
       flash={@flash}
       club_name={selected_club_name(@selected_club)}
       current_identity={@current_identity}
+      member_name={@current_member && @current_member.name}
     >
       <div
         id="member-message-compose"

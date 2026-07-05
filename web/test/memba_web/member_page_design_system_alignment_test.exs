@@ -32,7 +32,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
     {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex",
      ["<.button", "<.avatar"]},
     {"public club page LiveView", "lib/memba_web/live/public_club_page_live.ex", ["<.button"]},
-    {"club site layout", :club_site, ["<.button"]}
+    {"club site layout", :club_site, ["app-frame", "app-card", "app-bar"]}
   ]
 
   test "member page sources use theme tokens rather than hardcoded hex or legacy palette utilities" do
@@ -48,7 +48,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
     end
   end
 
-  test "member page sources call shared design-system components for buttons, avatars, and status pills" do
+  test "member page sources call shared design-system components and shell classes" do
     for {label, source_ref, required_components} <- @expected_component_usage do
       source = source_for(source_ref)
 

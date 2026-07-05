@@ -46,7 +46,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
            )
 
-    assert has_element?(view, "#club-site-current-identity", "Signed in as alice@example.com")
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__who",
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__avatar",
+             "AA"
+           )
+
     assert has_element?(view, "#member-message-#{message.message_id}")
     assert has_element?(view, "#club-member-#{alice.person_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")

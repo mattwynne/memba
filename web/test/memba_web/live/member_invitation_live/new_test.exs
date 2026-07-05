@@ -34,6 +34,18 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert has_element?(
              view,
+             "#club-site-identity-menu-button .app-bar__who",
+             "Robin Rivers"
+           )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__avatar",
+             "RR"
+           )
+
+    assert has_element?(
+             view,
              "#member-club-invitation-selected-club[data-club-id='#{robin.club_id}']",
              "West Coast Paddlers"
            )

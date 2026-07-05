@@ -33,6 +33,18 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
              view,
              "#member-message-compose[data-club-id='#{alice.club_id}'][data-live-view='member-message-compose']"
            )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__who",
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__avatar",
+             "AA"
+           )
   end
 
   test "club subdomain routed mount keeps the host-selected club after LiveView connects", %{

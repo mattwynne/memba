@@ -296,6 +296,10 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the signed-in identity shown in club member chrome"
 
+  attr :member_name, :string,
+    default: nil,
+    doc: "the optional signed-in member display name shown in club member chrome"
+
   attr :current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
@@ -307,61 +311,134 @@ defmodule MembaWeb.Layouts do
     <div
       id="club-site-layout"
       data-surface="club-site"
-      class="min-h-screen bg-base-200 text-base-content"
+      class="app-frame"
     >
-      <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-base-content">
-            {@club_name}
-          </a>
+      <div class="app-card">
+        <header>
+          <div class="app-bar">
+            <div class="app-bar__brand">
+              <span class="app-bar__club">{@club_name}</span>
+            </div>
 
-          <nav
-            :if={@current_identity}
-            class="flex flex-wrap items-center gap-3 text-sm font-medium"
-            aria-label="Club member navigation"
-          >
-            <span id="club-site-current-identity" class="text-ink-2">
-              Signed in as {@current_identity.email}
-            </span>
-            <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-              <.button
-                id="club-site-sign-out-button"
-                type="submit"
-                variant="secondary"
-                size="sm"
-              >
-                Sign out
-              </.button>
-            </.form>
-          </nav>
-        </div>
-      </header>
+            <nav
+              :if={@current_identity}
+              class="flex flex-wrap items-center gap-3 text-sm font-medium"
+              aria-label="Club member navigation"
+            >
+              <div class="dropdown dropdown-end app-bar__id">
+                <button
+                  id="club-site-identity-menu-button"
+                  type="button"
+                  class="app-bar__me"
+                  aria-haspopup="menu"
+                  aria-controls="club-site-identity-menu"
+                  aria-label="Member identity menu"
+                >
+                  <span class="app-bar__avatar">
+                    {club_identity_initials(@member_name, @current_identity)}
+                  </span>
+                  <span class="app-bar__who">
+                    {club_identity_label(@member_name, @current_identity)}
+                  </span>
+                </button>
 
-      <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        {render_slot(@inner_block)}
-      </main>
+                <div
+                  id="club-site-identity-menu"
+                  tabindex="0"
+                  class="dropdown-content app-menu app-menu--id"
+                >
+                  <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+                    <button
+                      id="club-site-sign-out-button"
+                      type="submit"
+                      class="app-menu__signout"
+                    >
+                      Sign out
+                    </button>
+                  </.form>
+                </div>
+              </div>
+            </nav>
+          </div>
+        </header>
+
+        <main class="px-4 py-10 sm:px-6 lg:px-8">
+          {render_slot(@inner_block)}
+        </main>
+      </div>
 
       <footer
         id="club-site-footer"
-        class="border-t border-base-300 bg-base-100 px-4 py-6 sm:px-6 lg:px-8"
+        class="app-foot"
       >
-        <div class="mx-auto max-w-7xl text-sm font-medium text-ink-2">
-          Powered by
-          <a
-            id="club-site-footer-memba-home-link"
-            href={ClubSite.root_url()}
-            aria-label="Visit Memba home"
-            class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
-          >
-            Memba
-          </a>
-        </div>
+        Powered by
+        <a
+          id="club-site-footer-memba-home-link"
+          href={ClubSite.root_url()}
+          aria-label="Visit Memba home"
+        >
+          Memba
+        </a>
       </footer>
     </div>
 
     <.flash_group flash={@flash} />
     """
   end
+
+  defp club_identity_label(member_name, identity) when is_binary(member_name) do
+    case String.trim(member_name) do
+      "" -> club_identity_label(nil, identity)
+      name -> name
+    end
+  end
+
+  defp club_identity_label(_member_name, %{email: email}) when is_binary(email) do
+    email_local_part(email)
+  end
+
+  defp club_identity_label(_member_name, _identity), do: "Member"
+
+  defp club_identity_initials(member_name, identity) when is_binary(member_name) do
+    case String.trim(member_name) do
+      "" -> club_identity_initials(nil, identity)
+      name -> initials(name)
+    end
+  end
+
+  defp club_identity_initials(_member_name, %{email: email}) when is_binary(email) do
+    email
+    |> email_local_part()
+    |> initials()
+  end
+
+  defp club_identity_initials(_member_name, _identity), do: "M"
+
+  defp email_local_part(email) do
+    email
+    |> String.split("@", parts: 2)
+    |> List.first()
+    |> String.trim()
+    |> case do
+      "" -> "Member"
+      local_part -> local_part
+    end
+  end
+
+  defp initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/[^\p{L}\p{N}]+/u, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "M"
+      initials -> initials
+    end
+  end
+
+  defp initials(_name), do: "M"
 
   @doc """
   Shows the flash group with standard titles and content.
