@@ -1,0 +1,133 @@
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 0acba04..cd42bc3 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -73,6 +73,8 @@
+       id="member-section-panel-conversations"
+       class="section-panel"
+       data-panel="conversations"
++      role="tabpanel"
++      aria-labelledby="member-section-tab-conversations"
+     >
+       <section id="club-messages">
+         <div class="flex items-center justify-between gap-4">
+@@ -195,6 +197,8 @@
+       id="member-section-panel-members"
+       class="section-panel"
+       data-panel="members"
++      role="tabpanel"
++      aria-labelledby="member-section-tab-members"
+       hidden
+     >
+       <section id="club-members">
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index a491b2e..80569a4 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -99,14 +99,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
++             "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
++               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']"
+            )
+ 
+     refute has_element?(view, "#member-section-panel-conversations[hidden]")
+ 
+     assert has_element?(
+              view,
+-             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
++             "#member-section-panel-members.section-panel[data-panel='members']" <>
++               "[role='tabpanel'][aria-labelledby='member-section-tab-members'][hidden]"
+            )
+ 
+     assert has_element?(
+@@ -125,20 +127,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+     html = dashboard_html(%{current_member_can_manage_members?: true})
+ 
+-    conversations_click = attribute(html, "#member-section-tab-conversations", "phx-click")
+-    members_click = attribute(html, "#member-section-tab-members", "phx-click")
+-
+-    assert conversations_click =~ "member-section-panel-conversations"
+-    assert conversations_click =~ "data-action='conversations'"
+-    assert conversations_click =~ "aria-selected"
+-    assert conversations_click =~ "is-active"
+-    refute conversations_click =~ "push"
+-
+-    assert members_click =~ "member-section-panel-members"
+-    assert members_click =~ "data-action='members'"
+-    assert members_click =~ "aria-selected"
+-    assert members_click =~ "is-active"
+-    refute members_click =~ "push"
++    assert_tab_click_js(js_operations(html, "#member-section-tab-conversations"), "conversations")
++    assert_tab_click_js(js_operations(html, "#member-section-tab-members"), "members")
+   end
+ 
+   test "dashboard renders conversations in the default visible section panel", %{
+@@ -1137,6 +1127,64 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     |> rendered_to_string()
+   end
+ 
++  defp assert_tab_click_js(operations, section) do
++    selected_tab = "#member-section-tab-#{section}"
++    selected_panel = "#member-section-panel-#{section}"
++    selected_action = "#member-section-tabs-action [data-action='#{section}']"
++
++    assert [
++             [
++               "remove_class",
++               %{"names" => ["is-active"], "to" => "#member-section-tabs-list .section-tab"}
++             ],
++             ["add_class", %{"names" => ["is-active"], "to" => ^selected_tab}],
++             [
++               "set_attr",
++               %{
++                 "attr" => ["aria-selected", "false"],
++                 "to" => "#member-section-tabs-list .section-tab"
++               }
++             ],
++             [
++               "set_attr",
++               %{"attr" => ["aria-selected", "true"], "to" => ^selected_tab}
++             ]
++             | _
++           ] = operations
++
++    assert ["hide", %{"time" => 0, "to" => ".section-panel"}] in operations
++    assert ["set_attr", %{"attr" => ["hidden", ""], "to" => ".section-panel"}] in operations
++    assert ["remove_attr", %{"attr" => "hidden", "to" => selected_panel}] in operations
++    assert ["show", %{"display" => "block", "time" => 0, "to" => selected_panel}] in operations
++
++    assert ["hide", %{"time" => 0, "to" => "#member-section-tabs-action [data-action]"}] in operations
++
++    assert [
++             "set_attr",
++             %{"attr" => ["hidden", ""], "to" => "#member-section-tabs-action [data-action]"}
++           ] in operations
++
++    assert ["remove_attr", %{"attr" => "hidden", "to" => selected_action}] in operations
++
++    assert [
++             "show",
++             %{"display" => "inline-flex", "time" => 0, "to" => selected_action}
++           ] in operations
++
++    refute "toggle_class" in operation_names(operations)
++    refute "push" in operation_names(operations)
++  end
++
++  defp js_operations(html, selector) do
++    html
++    |> attribute(selector, "phx-click")
++    |> Jason.decode!()
++  end
++
++  defp operation_names(operations) do
++    Enum.map(operations, fn [name, _options] -> name end)
++  end
++
+   defp html_has_selector?(html, selector) do
+     html
+     |> LazyHTML.from_fragment()
