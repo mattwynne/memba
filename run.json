@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-05T05:54:37.054742429Z",
-  "last_event_at": "2026-07-05T05:56:53.976919426Z",
+  "last_event_at": "2026-07-05T05:57:06.639476648Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1066,14 +1066,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-07-05T05:57:05.257579875Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-07-05T05:57:08.403615592Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1084,13 +1085,15 @@
           "codex_review_blocking_gaps": "None",
           "plan_ready": true,
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "gemini_review_decision": "READY",
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Add an explicit acceptance criterion for the no-receipts/empty-state case, since the plan mentions it under risks but not in acceptance criteria or tests.\n2. Specify the expected behavior for a nonexistent or unauthorized `message_id` on `/messages/:message_id/delivery` — for example, redirect, 404, or the same failure mode as the conversation route.\n3. Clarify whether the ⋮ menu needs keyboard/accessibility behavior beyond linking to the Delivery details page, especially if it is implemented as an actual dropdown/menu rather than a simple action link.\n\n## Smallest viable iteration\n\nThe planned slice is already close to the smallest useful iteration: add the member Delivery details route/page, link to it from each conversation message, and remove the inline delivery blocks from the conversation. Adding the page without removing inline delivery would not complete the user-facing decluttering outcome, and removing inline delivery without the new page would lose access to information.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/route tests showing:\n   - The delivery page renders for an authorized member.\n   - It displays the message header, summary/legend, grouped recipients, bounce reasons, and collapsed delivered count.\n   - The delivery route enforces the same authorization as the conversation route.\n   - Each conversation message includes a Delivery details link.\n   - The conversation page no longer renders the inline receipt summary, “Members by delivery status,” or “sent to N members” meta line.\n\n2. Visual validation:\n   - Run `./bin/dev gallery-walk`.\n   - Compare the new delivery page against `design-system/wireframes/delivery-details.html`.\n   - Compare the updated conversation page against `design-system/wireframes/member-conversation.html`.\n\n3. Final project validation:\n   - Run `dev check` and confirm it passes.\n\n4. Manual smoke test:\n   - Open a conversation as a member.\n   - Use a message’s ⋮ menu to navigate to Delivery details.\n   - Confirm the delivery breakdown is visible.\n   - Use Back to conversation and confirm the conversation remains decluttered.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
           "plan_needs_human": false,
+          "thread.synthesize.current_node": "synthesis_gate",
           "codex_review_confidence": "High",
           "outcome": "succeeded",
           "claude_review_decision": "READY",
+          "internal.retry_count.synthesis_gate": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "internal.retry_count.gemini_review": 0,
           "codex_review_required_edits": "None",
@@ -1114,7 +1117,7 @@
           "codex_review_decision": "READY",
           "gemini_review_blocking_gap_count": 0,
           "claude_review_blocking_gap_count": 0,
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "internal.run_id": "01KWRDFEK7MCXKD8D6FVRD5M6Z",
           "failure_signature": "",
           "last_stage": "synthesize",
@@ -1125,6 +1128,11 @@
           "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n---\n\n# Iteration Plan Review: 047 — Delivery details page\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone. The plan is ready for implementation.\n\n## Non-blocking Improvements\n\n1. **Test specificity**: Step 10 says \"Add tests\" but could name the specific test module(s) — likely `MemberMessageDeliveryLiveTest` and updates to the conversation view test. However, the pattern is clear enough from context.\n\n2. **Empty state handling**: Risks/Follow-ups mentions \"if a message has no receipts yet, the page shows an empty/none state\" but this is not explicitly in acceptance criteria or implementation steps. Adding a step or criterion would make it explicit, but the design reference likely shows this.\n\n3. **Menu icon clarity**: The \"⋮ menu\" is described but not explicitly linked to the kebab menu pattern already in use. The context (046) makes this clear, but stating \"using the kebab menu pattern from 046\" would be slightly clearer.\n\n## Smallest Viable Iteration\n\n**This is already appropriately scoped.** The iteration delivers exactly one coherent outcome: relocate delivery details from inline to a dedicated page. It could not be smaller while remaining useful — you cannot show partial delivery data or leave the old UI partially in place.\n\nThe plan correctly excludes:\n- New delivery statuses or computation changes\n- Staff delivery views\n- Changes to follow/reply/timestamps (already done in 046)\n\n## Required Plan Edits\n\nNone. The plan is complete and ready to implement.\n\n## Validation Plan\n\nThe plan includes a strong three-layer validation approach:\n\n1. **Automated tests** covering the new route, authorization, menu link, and removal of inline sections\n2. **Visual comparison** using `gallery-walk` against the design-system wireframes\n3. **Manual verification** of the end-to-end flow\n\nThe validation plan is clear, testable, and comprehensive.\n\n---\n\n## Detailed Review by Category\n\n### 1. Goal Clarity ✅\n\n**Goal:** \"Complete the refreshed conversation design's delivery relocation: add a per-message Delivery details page, reached from a ⋮ menu on each conversation message, and remove the two inline delivery sections from the conversation page.\"\n\n- **Clear outcome:** Members see delivery details on a dedicated page instead of inline\n- **Clear beneficiary:** Members viewing message delivery status\n- **User value:** Declutters the conversation page, addresses interface complexity problem\n\n### 2. Scope Focus ✅\n\n- **Focused:** Single coherent outcome (relocate delivery UI)\n- **Minimal:** Cannot be smaller while remaining useful\n- **Boundaries clear:** Explicitly excludes delivery computation changes, staff views, and conversation changes from 046\n- **In/out scope sections:** Well-defined with specific elements listed\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria are:**\n- Concrete: Each message shows ⋮ menu → Delivery details link\n- Clear: Delivery page shows header, summary, grouped recipients (problems expanded, delivered collapsed), bounce reasons\n- Complete: Covers what appears on new page, what's removed from old page, authorization parity\n- Testable: All criteria can be objectively verified\n\n**BDD classification:**\n- Correctly classified as \"Technical / UI restructure\"\n- Includes explicit `## Acceptance Scenarios / Feature Files` section\n- Provides clear rationale: \"no new business rule or permission... relocation/re-presentation, verified by LiveView/route tests\"\n- Decision is sound: this is re-presenting existing data under existing authorization\n\n**Business decisions:**\n- None open (explicitly stated)\n- All presentation details are grounded in design-system wireframes\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**12 ordered steps covering:**\n- Route addition with specific path and LiveView module\n- LiveView creation with specific loader pattern\n- Template building against design reference\n- CSS porting with specific class names\n- Menu addition to specific component\n- Removal of specific inline sections\n- Testing with specific scenarios\n- Visual and automated validation\n\n**Named specifics:**\n- Files: `web/lib/memba_web/router.ex`, `message.html.heex`, `web/assets/css/app.css`, `page_html.ex`\n- Modules: `MemberMessageDeliveryLive.Show`, `Messaging`, `MemberEmailDeliveryPresentation`\n- Functions: `list_member_email_deliverys/1`, `present_receipts/1`\n- Route: `/messages/:message_id/delivery`\n- Components: `conversation_entry_card`\n- Design references: `delivery-details.html`, `member-conversation.html`\n\n**Technical decisions:**\n- All resolved\n- Explicitly documented: route/module naming, authorization approach (reuse conversation authz), handling of replies (each message gets its own delivery page)\n\n### 5. Expected Capability and Validation ✅\n\n**New capability:**\n\"Members reach a focused Delivery details page per message, and the conversation page is decluttered of inline delivery — matching the refreshed design.\"\n\n**Proof of success:**\n- Automated tests verify route, authz, links, removal\n- Visual comparison to wireframes\n- Manual flow testing\n- `dev check` green with no feature-file changes\n\n**Stop condition:** Clear — when conversation shows ⋮ menu, delivery page works, inline sections are removed, and all tests pass.\n\n---\n\n## Overall Assessment\n\nThis plan demonstrates excellent preparation:\n\n- **Grounded in design:** Direct references to `delivery-details.html` and `member-conversation.html`\n- **Grounded in code:** References existing loader patterns, modules, and authorization\n- **Clear dependencies:** Builds on 044/045/046, specifically notes 046 leaves inline delivery in place\n- **Risk awareness:** Notes reply receipts are smaller sets, empty states possible\n- **Appropriate scope:** Pure relocation with no behavior changes\n- **BDD decision well-reasoned:** Correctly identifies this as UI restructure, not new business rule\n- **Implementation specificity:** Names files, modules, functions, routes, components, CSS classes\n\nThe plan is ready for implementation without modification.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```"
         },
         "node_outcomes": {
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1294,13 +1302,14 @@
             "usage": null
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "start": 1,
           "gemini_review": 1,
           "claude_review": 1,
           "codex_review": 1,
-          "synthesize": 1
+          "synthesize": 1,
+          "synthesis_gate": 1
         }
       },
       "diff": {}
@@ -1815,7 +1824,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-07-05T05:57:05.257111918Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1829,15 +1843,26 @@
       "output": null,
       "started_at": "2026-07-05T05:56:53.967812267Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 11289,
+        "inference_time_ms": 11247,
+        "tool_time_ms": 0,
+        "active_time_ms": 11247
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 4885,
+        "output_tokens": 33,
+        "total_tokens": 5107,
+        "reasoning_tokens": 189,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 31085
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "codex_review@1": {
       "first_event_seq": 65,
