@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Port the app-shell CSS classes (`app-frame`, `app-card`, `app-bar` and its children, `app-menu`, `app-foot`) verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the mirror (daisyUI `dropdown` already exists).
+- [x] 001 Port the app-shell CSS classes (`app-frame`, `app-card`, `app-bar` and its children, `app-menu`, `app-foot`) verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the mirror (daisyUI `dropdown` already exists).
 - [ ] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
 - [ ] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
 - [ ] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
