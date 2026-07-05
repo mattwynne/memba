@@ -1,0 +1,154 @@
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 6ad0bc3..934b998 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Wrap today's conversation list and its existing empty state in a Conversations `section-panel` that is visible by default; keep the `@message_rows` rows unchanged.
+ - [x] 006 Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping its `mailto:` affordance and `data-inbound-address` hook.
+ - [x] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
+-- [ ] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
++- [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+ - [ ] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+ - [ ] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index 413f223..5a979ef 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -336,6 +336,93 @@ h1, h2, h3, h4 {
+   display: block;
+ }
+ 
++/* ============================================================
++   Club-home section tabs.
++
++   Ported from the design-system club-home section spine so the
++   Phoenix app uses the same section-tabs / section-tab /
++   section-tabs__action / section-panel vocabulary as the
++   static wireframe.
++   ============================================================ */
++.section-tabs {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  padding: 10px;
++  border: 1px solid var(--color-line);
++  border-radius: 16px;
++  background: var(--color-paper);
++  box-shadow: 0 1px 2px rgb(21 32 28 / 0.05);
++}
++
++.section-tabs__list {
++  min-width: 0;
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  overflow-x: auto;
++  scrollbar-width: none;
++}
++
++.section-tabs__list::-webkit-scrollbar {
++  display: none;
++}
++
++.section-tab {
++  appearance: none;
++  border: 0;
++  border-radius: 999px;
++  background: transparent;
++  color: var(--color-ink-3);
++  cursor: pointer;
++  flex: none;
++  font: inherit;
++  font-size: 13px;
++  font-weight: 700;
++  letter-spacing: -0.01em;
++  line-height: 1;
++  padding: 9px 13px;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    box-shadow 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++  white-space: nowrap;
++}
++
++.section-tab:hover,
++.section-tab:focus-visible {
++  background: var(--color-sage-50);
++  color: var(--color-sage-700);
++}
++
++.section-tab:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.section-tab.is-active {
++  background: var(--color-sage-600);
++  color: var(--color-sage-50);
++  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
++}
++
++.section-tabs__action {
++  flex: none;
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  min-width: max-content;
++}
++
++.section-panel {
++  display: block;
++}
++
++.section-panel[hidden] {
++  display: none;
++}
++
+ @media (max-width: 640px) {
+   .app-frame {
+     padding: 12px;
+@@ -352,4 +439,14 @@ h1, h2, h3, h4 {
+   .app-bar__who {
+     display: none;
+   }
++
++  .section-tabs {
++    align-items: stretch;
++    flex-direction: column;
++  }
++
++  .section-tabs__action,
++  .section-tabs__action .btn {
++    width: 100%;
++  }
+ }
+diff --git a/web/test/memba_web/app_css_test.exs b/web/test/memba_web/app_css_test.exs
+new file mode 100644
+index 0000000..281f26d
+--- /dev/null
++++ b/web/test/memba_web/app_css_test.exs
+@@ -0,0 +1,22 @@
++defmodule MembaWeb.AppCssTest do
++  use ExUnit.Case, async: true
++
++  @app_css_path Path.expand("../../assets/css/app.css", __DIR__)
++
++  test "app css includes the club-home section tab and panel rules" do
++    css = File.read!(@app_css_path)
++
++    assert css =~ ".section-tabs {"
++    assert css =~ ".section-tabs__list {"
++    assert css =~ ".section-tab {"
++    assert css =~ ".section-tab.is-active {"
++    assert css =~ ".section-tabs__action {"
++    assert css =~ ".section-panel {"
++    assert css =~ ".section-panel[hidden] {"
++
++    assert css =~ "justify-content: space-between;"
++    assert css =~ "border: 1px solid var(--color-line);"
++    assert css =~ "background: var(--color-sage-600);"
++    assert css =~ "display: none;"
++  end
++end
