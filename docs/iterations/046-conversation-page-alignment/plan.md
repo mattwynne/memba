@@ -1,7 +1,7 @@
 # 046 — Conversation page: follow toggle, replies-first, message timestamps
 
 Date: 2026-07-04
-Status: draft
+Status: validated
 
 > Finalised 2026-07-04. Written against the refreshed `member-conversation.html`; grounded in the
 > current `message.html.heex` and `member_message_detail.ex`. Delivers after 044 (shell) and 045
