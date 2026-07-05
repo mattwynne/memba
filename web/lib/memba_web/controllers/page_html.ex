@@ -64,19 +64,6 @@ defmodule MembaWeb.PageHTML do
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
-  defp first_name(%{name: name}) when is_binary(name) do
-    name
-    |> String.split(~r/\s+/, trim: true)
-    |> List.first()
-    |> case do
-      nil -> "member"
-      "" -> "member"
-      first_name -> first_name
-    end
-  end
-
-  defp first_name(_member), do: "member"
-
   defp active_member_count_label(1), do: "1 current member"
   defp active_member_count_label(count), do: "#{count} current members"
 

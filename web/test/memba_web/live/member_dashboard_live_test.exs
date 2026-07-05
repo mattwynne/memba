@@ -109,7 +109,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/")
 
-    assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
+    refute has_element?(view, "#member-dashboard-hero")
 
     assert has_element?(
              view,
