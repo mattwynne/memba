@@ -1,0 +1,267 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 0088adc..b7390d1 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -547,7 +547,7 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect,
+ async function openMemberComposeFromClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
+   await openMemberClubHome(world, clubName, { expect, timeoutMs });
+ 
+-  const composeLink = world.page.locator("#member-send-message-link");
++  const composeLink = world.page.locator("#member-section-action-new-message");
+   await waitForProjectedVisible(world, composeLink, `member compose link for ${clubName}`, {
+     expect,
+     timeoutMs
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 0ac8a52..a21f776 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -120,7 +120,7 @@ class FakeLocator {
+   async click() {
+     this.page.actions.push(["click", "locator", this.selector]);
+ 
+-    if (this.selector.includes("#member-send-message-link")) {
++    if (this.selector.includes("#member-section-action-new-message")) {
+       this.page.openMemberCompose();
+     }
+ 
+@@ -676,7 +676,7 @@ test("member send flow opens compose from club home and stores the new message",
+   ]);
+   assert.deepEqual(page.actions, [
+     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
+-    ["click", "locator", "#member-send-message-link"],
++    ["click", "locator", "#member-section-action-new-message"],
+     ["fill", "Subject", "Trip planning night"],
+     ["fill", "Message", "Trip planning night details."],
+     ["click", "button", { name: "Send to all current members" }],
+@@ -721,7 +721,7 @@ test("member failed-send flow stays on compose failure state with support guidan
+   assert.equal(page.rows.clubMessages.length, 0);
+   assert.deepEqual(page.actions, [
+     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
+-    ["click", "locator", "#member-send-message-link"],
++    ["click", "locator", "#member-section-action-new-message"],
+     ["fill", "Subject", "Trip planning night"],
+     ["fill", "Message", "Trip planning night details."],
+     ["click", "button", { name: "Send to all current members" }]
+diff --git a/bin/dev b/bin/dev
+index c468e31..0a3fb5e 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -422,7 +422,18 @@ start_processes() {
+ }
+ 
+ gallery_server_reachable() {
+-  curl -fsS --max-time 2 http://localhost:4000/ >/dev/null 2>&1
++  python3 - <<'PY'
++import sys
++import urllib.request
++
++try:
++    with urllib.request.urlopen("http://127.0.0.1:4000/", timeout=2) as response:
++        status = response.status
++except Exception:
++    sys.exit(1)
++
++sys.exit(0 if status < 500 else 1)
++PY
+ }
+ 
+ wait_for_gallery_server() {
+@@ -469,6 +480,58 @@ stop_gallery_server() {
+ 
+   kill "$gallery_server_pid" 2>/dev/null || true
+   wait "$gallery_server_pid" 2>/dev/null || true
++  python3 - <<'PY'
++import os
++import signal
++import time
++
++proc = "/proc"
++if not os.path.isdir(proc):
++    raise SystemExit(0)
++
++current = {os.getpid(), os.getppid()}
++matches = []
++
++for entry in os.listdir(proc):
++    if not entry.isdigit():
++        continue
++
++    pid = int(entry)
++    if pid in current:
++        continue
++
++    try:
++        with open(os.path.join(proc, entry, "cmdline"), "rb") as handle:
++            command = handle.read().replace(b"\0", b" ").decode("utf-8", "ignore")
++    except OSError:
++        continue
++
++    if "mix phx.server" in command or ("beam.smp" in command and "phx.server" in command):
++        matches.append(pid)
++
++for pid in matches:
++    try:
++        os.kill(pid, signal.SIGTERM)
++    except ProcessLookupError:
++        pass
++    except PermissionError:
++        pass
++
++time.sleep(1)
++
++for pid in matches:
++    try:
++        os.kill(pid, 0)
++    except ProcessLookupError:
++        continue
++
++    try:
++        os.kill(pid, signal.SIGKILL)
++    except ProcessLookupError:
++        pass
++    except PermissionError:
++        pass
++PY
+   pkill -f 'mix phx.server' 2>/dev/null || true
+ }
+ 
+@@ -862,6 +925,7 @@ gallery_walk() {
+   local gallery_server_pid=""
+ 
+   start_postgres
++  migrate_databases
+ 
+   if gallery_server_reachable; then
+     echo "Using existing Phoenix server at http://localhost:4000/."
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 40603ec..03220f0 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -10,5 +10,5 @@
+ - [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+ - [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+ - [x] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+-- [ ] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
++- [x] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+ - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 5094061..0acba04 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -11,7 +11,7 @@
+     id="member-club-home"
+     data-live-view="member-dashboard"
+     data-club-id={@selected_club.club_id}
+-    class="mx-auto max-w-3xl space-y-8"
++    class="mx-auto max-w-3xl"
+   >
+     <div id="member-section-tabs" class="section-tabs">
+       <div
+@@ -69,31 +69,6 @@
+       </div>
+     </div>
+ 
+-    <section
+-      id="member-dashboard-cta"
+-      class="rounded-3xl bg-primary p-6 text-white shadow-sm"
+-    >
+-      <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+-        <div>
+-          <h2 class="text-xl font-semibold tracking-tight text-white">
+-            Send a message to the club?
+-          </h2>
+-          <p class="mt-1 text-sm leading-6 text-white/75">
+-            Messages go to all current members.
+-          </p>
+-        </div>
+-
+-        <.button
+-          id="member-send-message-link"
+-          href={member_compose_path(@selected_club, club_id_source)}
+-          variant="secondary"
+-          size="lg"
+-        >
+-          <.icon name="hero-paper-airplane" class="size-5" /> Send club message
+-        </.button>
+-      </div>
+-    </section>
+-
+     <div
+       id="member-section-panel-conversations"
+       class="section-panel"
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 91d4b74..c59fb47 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -332,10 +332,13 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     assert html
+            |> LazyHTML.query(
+-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
++             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']"
+            )
+            |> Enum.any?()
+ 
++    refute html |> LazyHTML.query("#member-dashboard-cta") |> Enum.any?()
++    refute html |> LazyHTML.query("#member-send-message-link") |> Enum.any?()
++
+     assert html
+            |> LazyHTML.query(
+              "a[data-testid='club-message-link'][href='/messages/#{message.message_id}']"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c0100df..a491b2e 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -118,6 +118,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     refute has_element?(view, "#member-section-action-new-message[hidden]")
+     refute has_element?(view, "#member-section-action-new-message[data-action='members']")
++    refute has_element?(view, "#member-dashboard-cta")
++    refute has_element?(view, "#member-send-message-link")
+   end
+ 
+   test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+@@ -351,10 +353,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     refute has_element?(view, "#member-dashboard-hero")
+ 
++    refute has_element?(view, "#member-dashboard-cta")
++    refute has_element?(view, "#member-send-message-link")
++
+     assert has_element?(
+              view,
+-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
+-             "Send club message"
++             "#member-section-tabs .section-tabs__action " <>
++               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
++             "New message"
+            )
+ 
+     assert has_element?(
+@@ -735,7 +741,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
++             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
++             "New message"
+            )
+ 
+     assert has_element?(
+@@ -773,10 +780,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/")
+ 
++    refute has_element?(view, "#member-dashboard-cta")
++    refute has_element?(view, "#member-send-message-link")
++
+     assert has_element?(
+              view,
+-             "#member-dashboard-cta #member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']",
+-             "Send club message"
++             "#member-section-tabs .section-tabs__action " <>
++               "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
++             "New message"
+            )
+ 
+     refute has_element?(view, "form#member-message-form")
