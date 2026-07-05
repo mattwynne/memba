@@ -57,7 +57,7 @@ green than before.
 | 045 | 2026-07-04 | validated | Club home: Conversations / Members section tabs (slot repurposed 2026-07-04; prior stop-following plan in git history) | [plan](045-club-home-section-tabs/plan.md) |
 | 046 | 2026-07-04 | validated | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
 | 047 | 2026-07-04 | validated | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
-| 048 | 2026-07-04 | draft | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
+| 048 | 2026-07-04 | validated | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
 
 Status notes:
 
