@@ -704,20 +704,28 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+             "#member-section-panel-conversations " <>
+               "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
            )
 
-    assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
+    refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email",
+             "#member-section-panel-conversations #member-dashboard-inbound-email",
+             "Prefer email?"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations #member-dashboard-inbound-email",
              "You can also send a club-wide message to"
            )
 
     assert has_element?(
              view,
-             "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+             "#member-section-panel-conversations " <>
+               "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
              "everyone@kmc.clubs.memba.io"
            )
 
