@@ -12,6 +12,34 @@ The generic `/design-sync` converter does not apply here — see `.design-sync/c
   **no bulk download** — each file's content is fetched and re-written individually, so mirroring the
   whole project locally (50+ files) is impractical. The foundational layer is read on demand instead.
 
+## 2026-07-04 pull #2 (cloud → local, in-club refresh)
+
+Second pull of the day, after Matt refreshed the **in-club member-app pages** in the cloud.
+The refresh restructured the in-club app shell: the top bar dropped the Memba mark +
+club-name dropdown and is now just the plain club name, with the club description/identity
+moved into dedicated surfaces.
+
+Refreshed (existing local files, updated from cloud):
+- `wireframes/club-home.html` ← `templates/club-home/index.html`
+  (simplified app-bar; new **About** tab absorbing the old club-name-dropdown description;
+  wired "New message" action + footer; longer conversation subject/preview copy)
+- `wireframes/member-conversation.html` ← `templates/member-conversation/member-conversation.html`
+  (simplified app-bar; compact `follow-toggle` tucked beside the title in a `detail-head`;
+  per-message **kebab → Delivery details** menus replacing the `Original message`/`Reply`
+  badges; dropped the inline receipt-summary block; wired back-link + footer)
+- `wireframes/mobile-message-detail.html`, `wireframes/mobile-compose.html`
+  (back/cancel `href` wired from `#` to `mobile-club-home.html`)
+
+Added (new local files, flattened `wireframes/<name>.html` convention):
+- `wireframes/new-message.html` ← `templates/new-message/index.html`
+  (the refreshed club-home "New message" action links here; carries the desktop/mobile switcher)
+- `wireframes/delivery-details.html` ← `templates/delivery-details/index.html`
+  (the refreshed member-conversation kebab menus link here)
+
+Verified byte-identical to cloud, not touched this pass:
+- `wireframes/mobile-club-home.html`, `wireframes/mobile.css`,
+  `wireframes/conversation-stop-following.html`
+
 ## 2026-07-04 pull (cloud → local, refresh + new)
 
 Pulled **down** from the cloud (source of truth) to refresh a stale mirror. Every refreshed
