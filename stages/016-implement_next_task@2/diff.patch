@@ -1,0 +1,88 @@
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 7e973ea..1cf01fc 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Port the app-shell CSS classes (`app-frame`, `app-card`, `app-bar` and its children, `app-menu`, `app-foot`) verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the mirror (daisyUI `dropdown` already exists).
+-- [ ] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
++- [x] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
+ - [ ] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
+ - [ ] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+ - [ ] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 17aadcd..46ffcbc 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -310,30 +310,32 @@ defmodule MembaWeb.Layouts do
+       class="min-h-screen bg-base-200 text-base-content"
+     >
+       <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
+-        <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+-          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-base-content">
+-            {@club_name}
+-          </a>
++        <div class="mx-auto max-w-7xl py-4">
++          <div class="app-bar">
++            <div class="app-bar__brand">
++              <span class="app-bar__club">{@club_name}</span>
++            </div>
+ 
+-          <nav
+-            :if={@current_identity}
+-            class="flex flex-wrap items-center gap-3 text-sm font-medium"
+-            aria-label="Club member navigation"
+-          >
+-            <span id="club-site-current-identity" class="text-ink-2">
+-              Signed in as {@current_identity.email}
+-            </span>
+-            <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+-              <.button
+-                id="club-site-sign-out-button"
+-                type="submit"
+-                variant="secondary"
+-                size="sm"
+-              >
+-                Sign out
+-              </.button>
+-            </.form>
+-          </nav>
++            <nav
++              :if={@current_identity}
++              class="flex flex-wrap items-center gap-3 text-sm font-medium"
++              aria-label="Club member navigation"
++            >
++              <span id="club-site-current-identity" class="text-ink-2">
++                Signed in as {@current_identity.email}
++              </span>
++              <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
++                <.button
++                  id="club-site-sign-out-button"
++                  type="submit"
++                  variant="secondary"
++                  size="sm"
++                >
++                  Sign out
++                </.button>
++              </.form>
++            </nav>
++          </div>
+         </div>
+       </header>
+ 
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 874b9d6..91642d0 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -135,6 +135,10 @@ defmodule MembaWeb.LayoutsTest do
+     assert_selector(html, "#club-site-layout[data-surface='club-site']")
+     assert_selector(html, "#club-site-layout-slot")
+     assert_text(html, "#club-site-layout header", "Riverside Tennis Club")
++    assert_selector(html, "#club-site-layout header .app-bar")
++    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
++    refute_selector(html, "#club-site-layout header .app-bar__club[href]")
++    refute_selector(html, "#club-site-layout header a[href='/']")
+     assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
