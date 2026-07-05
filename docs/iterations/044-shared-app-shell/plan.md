@@ -1,154 +1,176 @@
-# 044 — Shared app-shell: app-bar + app-card frame
+# 044 — Shared member app-shell: app-bar + app-card frame
 
 Date: 2026-07-04
 Status: draft
 
-> Iteration number 044 is **repurposed**. It previously held "Conversation page: align to the
-> conversation wireframe", which was written against the older standalone conversation design and
-> whose `fabro deliver` run failed on an infrastructure timeout (2026-06-23) and never merged. The
-> design has since converged the member surfaces onto a shared app-shell, so 044 now delivers that
-> shared shell. The conversation-page content alignment is re-planned as a later iteration against
-> the new design (see Risks / Follow-ups). Prior plan is preserved in git history.
-
-> Draft pending Matt's confirmation of the scope decisions under Open Business Decisions.
+> This plan **replaces** the earlier 044 draft (and is decided independently of the 044/045/046
+> drafts). It is written against the **2026-07-04 refreshed** design mirror, in which the in-club
+> app-bar was simplified: it no longer carries a Memba mark or a club dropdown — just the plain
+> club name on the left and the member identity dropdown on the right. Prior 044 drafts are in git
+> history.
 
 ## Goal
 
-Replace the shared club-site layout header with the app-like **app-bar** (club mark + club name /
-club dropdown + member identity dropdown) inside an **app-card** frame, per the refreshed design
-system. This is the foundation the tabbed club-home (046) and the aligned conversation page (future
-iteration) both build on.
+Replace the plain shared club-site header with the app-like **app-bar** inside an **app-card**
+frame, matching the refreshed design system, so every member-facing club surface reads as one
+consistent application shell. This is the foundation the tabbed club home and the aligned
+conversation page build on.
 
 ## Background / Context
 
-The refreshed designs converged the member surfaces onto a shared app-shell — `app-frame` /
-`app-card` / `app-bar` — visible in both `wireframes/club-home.html` and
-`wireframes/member-conversation.html`. In the app, both the club home (`PageHTML.club`) and the
-conversation page (`PageHTML.message`) render inside `Layouts.club_site`, whose current header is a
-plain bar: club-name link on the left, "Signed in as {email}" + a Sign out button on the right.
+The refreshed designs converged the member surfaces onto a shared shell — `app-frame` /
+`app-card` / `app-bar` — visible in both `design-system/wireframes/club-home.html` and
+`design-system/wireframes/member-conversation.html`. Today the app renders every club surface
+inside `Layouts.club_site`, whose header is a plain bar: a club-name link on the left and
+"Signed in as {email}" + a Sign out button on the right (`web/lib/memba_web/components/layouts.ex`).
+There is no app-bar, no app-card frame, and none of the shell CSS exists in the app yet
+(`grep` for `app-bar`/`app-card` in `web/assets` and `web/lib` returns nothing).
 
-Building the shell **once**, in the shared layout, is the prerequisite for gap #1 (tabbed
-club-home) and gaps #4–7 (conversation-page alignment). See `docs/design-gaps-2026-07-04.md`.
+Building the shell **once** in the shared layout lands it on all six `club_site` surfaces at
+once (club home, conversation/message detail, compose, member invitation, and the public club
+page) and is the prerequisite for the club-home tabs and the conversation-page content alignment.
 
 ## Related Problems
 
 - [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
-  — **partially addresses.** Establishes the simple, app-like shell on member surfaces.
+  — **partially addresses.** Establishes the simple, consistent, app-like shell across member
+  surfaces. The full app-like treatment (tabs, mobile) remains later slices.
 - [`docs/problems/2026-06-07-club-homepage-no-cross-site-navigation.md`](../../problems/2026-06-07-club-homepage-no-cross-site-navigation.md)
-  — **leaves unresolved.** The app-bar club dropdown is club-info, **not** a multi-club switcher;
-  cross-club navigation stays deferred.
-- `docs/design-gaps-2026-07-04.md` gap #1 (and a prerequisite for gaps #4–7).
+  — **leaves unresolved.** The refreshed design removed the club dropdown entirely, so there is no
+  club switcher in this slice; cross-club navigation stays deferred.
 
 ## Scope
 
 Changes the shared `Layouts.club_site` header + content frame, so the shell lands on every
-club_site page (club home, conversation/message detail, empty states, member invitation, …).
+`club_site` page.
 
 ### In scope
 
-- Replace the header with the **app-bar**: club/Memba mark + club name; a **club dropdown**
-  (club info); and a **member identity dropdown** (avatar + name) containing membership status +
-  **Sign out**.
-- Wrap page content in the **app-card** frame per the design (`app-frame` / `app-card`).
-- Preserve existing behaviour: the "Powered by Memba" footer link, sign-out (same `DELETE /auth`
-  form), and identity gating (member dropdown only when signed in).
+- Replace the header with the **app-bar**: the **plain club name** on the left, and a **member
+  identity dropdown** (avatar initials + member name, opening to **Sign out**) on the right.
+- Wrap page content in the **app-card** frame (`app-frame` / `app-card`) per the design.
+- Port the needed app-shell component CSS (`app-frame`, `app-card`, `app-bar`, `app-menu`, and the
+  identity dropdown pieces) from the design system into the app stylesheet, so app and design stay
+  1:1. daisyUI `dropdown` is already available in the app.
+- Preserve existing behaviour exactly: the "Powered by Memba" footer link, sign-out (same
+  `DELETE /auth` form/action), and identity gating (identity dropdown only when signed in).
 
 ### Out of scope
 
-- Multi-club switching / navigating to other clubs from the club dropdown (cross-site-navigation
-  problem stays unresolved) — the dropdown is club-info only.
-- The Conversations / Members tabs (iteration 046) and the conversation-page **content** alignment
-  (future iteration) — this slice only establishes the shell they sit in.
-- Staff/admin layouts and the marketing/public layouts.
+- The Conversations / Members / **About** tab spine on the club home (later slice).
+- The conversation-page **content** alignment (compact delivery, follow toggle, replies-first,
+  timestamps — later slice).
+- Any club dropdown / club switcher / Memba mark in the app-bar (removed by the refreshed design;
+  cross-site-navigation problem stays unresolved).
+- Membership-status detail in the identity dropdown (the refreshed club-home shows Sign out only;
+  status is deferred).
+- Staff/admin layouts and the marketing/public marketing layouts.
+- Any change to compose, invitation, conversation, or sign-out **behaviour**.
 
 ## Iteration Type
 
-**Technical / UI restructure (shared layout chrome).** User-observable (new header + frame), but
-**no new business rule**: sign-out, identity display, and navigation behaviour are unchanged.
+**Technical / UI restructure (shared layout chrome).** User-observable (new header + framed
+content), but **no new business rule**: sign-out, identity display, and navigation behaviour are
+unchanged.
 
 ## Acceptance Scenarios / Feature Files
 
-**BDD decision: Not useful for this slice.** No new business rule — sign-out and identity behaviour
-are unchanged and already covered by the authentication scenarios. The header/frame restructure is
-verified by LiveView/layout tests (app-bar renders when signed in; the sign-out control posts to
-`DELETE /auth`; the member dropdown is gated on identity). No `.feature` files change; mainline
-stays green.
+**BDD decision: Not useful for this slice.** No new business rule, permission, or lifecycle state
+is introduced. Sign-out and identity behaviour are unchanged and already covered by the
+authentication scenarios. The header/frame restructure is verified by LiveView/layout tests
+(app-bar renders with the club name; the identity dropdown appears only when signed in and
+contains a Sign out control that posts to `DELETE /auth`; content renders inside the app-card;
+every `club_site` surface still renders). No `.feature` files change; mainline stays green.
 
 ## Designs
 
-**Design of record:** [`design-system/wireframes/club-home.html`](../../../design-system/wireframes/club-home.html)
-and [`design-system/wireframes/member-conversation.html`](../../../design-system/wireframes/member-conversation.html)
-— both show the `app-bar` (club mark + club dropdown + member identity dropdown) inside `app-card`.
-**No new design needed.** This slice builds the shared shell; the tabs (046) and the conversation
-content (future) fill it. Fast-follow: none — the design already reflects the target.
+**Design of record:**
+[`design-system/wireframes/club-home.html`](../../../design-system/wireframes/club-home.html) and
+[`design-system/wireframes/member-conversation.html`](../../../design-system/wireframes/member-conversation.html)
+(refreshed 2026-07-04) — both show the simplified `app-bar` (plain club name + member identity
+dropdown) inside the `app-card` frame, with the "Powered by Memba" `app-foot`.
+
+**No new design needed.** This slice builds the shared shell those screens already specify; the
+tabs and the conversation content fill it in later slices. Fast-follow: none — the design already
+reflects the target shell.
 
 ## Acceptance Criteria
 
-- Signed-in club pages render the **app-bar**: club mark + club name, a **club dropdown**, and a
-  **member identity dropdown** (avatar + name) with **Sign out**.
-- **Sign out still works** from the identity dropdown (same `DELETE /auth` form/action).
-- Page content renders inside the **app-card** frame; the "Powered by Memba" footer link is kept.
-- Signed-out club pages do **not** show the member identity dropdown (same gating as today).
-- Both the club home and the conversation/message-detail page pick up the new shell (shared layout).
+- Signed-in club pages render the **app-bar**: the plain **club name** on the left, and a **member
+  identity dropdown** (avatar initials + member name) on the right.
+- The identity dropdown opens to a **Sign out** control that still posts to `DELETE /auth` (same
+  form/action as today).
+- Signed-out club pages (e.g. the public club page) render the app-bar **without** the identity
+  dropdown (same gating as today's `:if={@current_identity}` nav).
+- Page content renders inside the **app-card** frame, and the **"Powered by Memba"** footer link
+  is preserved (same href/behaviour).
+- All six `club_site` surfaces still render correctly under the new shell: club home,
+  conversation/message detail, compose, member invitation, and the public club page.
+- No club dropdown, club switcher, or Memba mark appears in the app-bar (matches the refreshed
+  design).
 
 ## Open Business Decisions
 
-- **Club dropdown content.** The design shows a club description + member count. Is a club
-  description available to the layout? If not, scope the dropdown to member count only (or defer its
-  content) for this slice.
-- **Member identity dropdown content.** The design shows "Active member since {date}". If the
-  membership-since date isn't readily available to the shared layout, show active-member status
-  without the date.
-- **Surfaces.** `club_site` is shared, so the shell lands on the club home + conversation + all
-  other club_site pages at once (recommended, matches the design's consistency). Confirm that's
-  intended vs scoping to specific pages.
+None known. The refreshed design resolved the earlier open questions: the app-bar carries no club
+dropdown or mark (removed), and the club-home identity dropdown is Sign out only (membership-status
+detail deferred).
 
 ## Implementation Plan
 
 - `web/lib/memba_web/components/layouts.ex` → `club_site/1`: replace the header markup with the
-  app-bar (mark + club name + club dropdown + member identity dropdown incl. sign-out) and wrap
-  `@inner_block` in the app-card frame, using the design-system app-shell classes — mirroring
-  `club-home.html` / `member-conversation.html`. Keep the footer and `flash_group`.
-- Make the app-shell component CSS available to the app (the DS previews use `app-frame` /
-  `app-card` / `app-bar` / `app-menu` from `memba.css`/`styles.css`; daisyUI `dropdown` is already
-  available). Port the needed component classes into `web/assets/css/app.css`. [Open technical
+  app-bar (plain `@club_name` + member identity dropdown containing Sign out) and wrap
+  `@inner_block` in the app-card frame, using the ported app-shell classes — mirroring
+  `club-home.html` / `member-conversation.html`. Keep the footer (`Powered by Memba`) and
+  `flash_group`. Preserve the `:if={@current_identity}` gating for the identity dropdown.
+- Port the app-shell component classes (`app-frame`, `app-card`, `app-bar` and its children,
+  `app-menu`, `app-foot`, and the identity-dropdown pieces) from `design-system/` (`memba.css` /
+  `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the design so the mirror
+  stays authoritative.
+- Source the identity dropdown's **member name + initials**: pass the current member's display
+  name (and derived initials) into `club_site` via an assign where a signed-in member exists
+  (club home, conversation, compose, invitation). Fall back gracefully to the current
+  `current_identity.email` where a member display name is not readily available. [Open technical
   decision]
-- Pass any needed data (member count / membership-since / club description) into the layout via the
-  existing `club_site` assigns, or defer dropdown content that isn't readily available.
-- Update LiveView/layout tests for the new header structure + sign-out; confirm every `club_site`
-  page still renders (empty states, invitation, message detail).
+- Update LiveView/layout tests for the new header structure: app-bar shows the club name; the
+  identity dropdown is gated on `@current_identity`; the Sign out control still posts to
+  `DELETE /auth`; content sits in the app-card; each `club_site` surface renders.
 
 ## Open Technical Decisions
 
-- **CSS source.** The DS previews use bespoke `app-bar` / `app-card` classes (plus daisyUI
-  `dropdown`). Decide: port those component classes into `web/assets/css/app.css`, or re-express the
-  shell with Tailwind utilities. Prefer porting the DS classes so app and design stay 1:1.
+- **CSS source.** Port the DS component classes into `web/assets/css/app.css` (recommended — keeps
+  app and design 1:1) vs re-expressing the shell with Tailwind utilities. Prefer porting.
+- **Identity name/initials plumbing.** The shared layout currently receives only `club_name` and
+  `current_identity` (email). Decide the cleanest way to supply the member display name + initials
+  to `club_site` (a new optional assign passed by the signed-in member surfaces, with an
+  email-derived fallback) without forcing the public (signed-out) surface to provide one.
 
 ## New Capability
 
-A shared, app-like **shell** (app-bar + app-card) across member surfaces — the foundation the
-tabbed club-home and the aligned conversation page build on, so the header is built once, not per
-screen.
+A shared, app-like **shell** (app-bar + app-card) across every member surface — built once in the
+shared layout — so the club-home tabs and the aligned conversation page can be built inside a
+consistent frame instead of each screen re-inventing its own header.
 
 ## Validation Plan
 
-- **Automated:** LiveView/layout tests (app-bar renders when signed in, sign-out posts to
-  `DELETE /auth`, member dropdown gated on identity, every club_site page renders). `dev check`
-  green (no feature changes).
+- **Automated:** LiveView/layout tests (app-bar renders the club name; identity dropdown gated on
+  identity; Sign out posts to `DELETE /auth`; app-card wraps content; every `club_site` surface
+  renders). `dev check` green (no feature-file changes).
 - **Visual:** `./bin/dev gallery-walk`, then compare the club-home and conversation screenshots to
-  `club-home.html` / `member-conversation.html` (app-bar + app-card).
-- **Manual:** signed-in club home + conversation show the app-bar; dropdowns open; sign out works;
-  signed-out pages hide the member dropdown.
+  `design-system/wireframes/club-home.html` / `member-conversation.html` (app-bar + app-card + the
+  "Powered by Memba" foot).
+- **Manual:** signed-in club home + conversation show the app-bar; the identity dropdown opens and
+  Sign out works; the public club page shows the app-bar with no identity dropdown.
 
 ## Risks / Follow-ups
 
-- **Shared layout blast radius:** changing `club_site` touches every club_site page — verify empty
-  states, invitation, and message-detail all still render.
-- **CSS porting:** the app-shell component classes likely need adding to the app's stylesheet.
-- **Iteration 046 (club-home tabs)** must be revised to build **inside** this shell (it currently
-  defers the app-bar); update its plan once 044 is agreed.
-- **Conversation-page content alignment** (the old 044 intent: follow toggle, collapsed delivery,
-  replies-first + "Replies · N", per-reply timestamps, sent date — gaps #4–7) is **deferred to a
-  future iteration**, rewritten against the new app-shell design. Those gaps remain open until then.
-- **Sequencing:** 045 (stop-following) sits between 044 and 046 as `validated` (not merged); Fabro
-  requires earlier-numbered iterations merged before implementing a later one.
+- **Shared-layout blast radius:** changing `club_site` touches all six surfaces — verify the public
+  club page (signed out), compose, invitation, and message detail all still render.
+- **CSS porting:** the app-shell component classes must be added to the app stylesheet; keep them
+  named 1:1 with the design mirror.
+- **Follow-on slices (my own sequencing, not bound to the old 044/045/046 drafts):** (1) club-home
+  Conversations / Members / **About** tabs inside this shell; (2) conversation-page content
+  alignment (compact delivery, follow toggle, replies-first + "Replies · N", message timestamps);
+  (3) member names + role badges (needs role data in the read model). Each is its own later slice.
+- **Numbering:** delivered as iteration 044 so Fabro's "earlier iterations merged first" rule is
+  satisfied (001–043 are merged). The unmerged 045/046 drafts are left untouched and will be
+  re-decided when their turn comes.

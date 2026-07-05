@@ -53,7 +53,7 @@ green than before.
 | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
 | 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
 | 043 | 2026-06-22 | merged | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
-| 044 | 2026-07-04 | draft | Shared app-shell: app-bar + app-card frame (repurposed; see note) | [plan](044-shared-app-shell/plan.md) |
+| 044 | 2026-07-04 | draft | Shared member app-shell: app-bar + app-card frame (plan replaced 2026-07-04 against refreshed design) | [plan](044-shared-app-shell/plan.md) |
 | 045 | 2026-06-23 | validated | Stop-following page: minimal header | [plan](045-stop-following-page-header/plan.md) |
 | 046 | 2026-07-04 | draft | Club home: Conversations / Members section tabs | [plan](046-club-home-section-tabs/plan.md) |
 
