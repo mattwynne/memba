@@ -63,6 +63,37 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "dashboard renders the section tab spine with conversations selected by default", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(view, "#member-section-tabs.section-tabs")
+    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations.section-tab.is-active[role='tab'][aria-selected='true']",
+             "Conversations"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members.section-tab[role='tab'][aria-selected='false']",
+             "Members"
+           )
+  end
+
   test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
        %{conn: conn} do
     alice =
