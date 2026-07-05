@@ -101,6 +101,67 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard renders conversations in the default visible section panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations #club-messages #member-message-list " <>
+               "#member-message-#{message.message_id}[data-testid='club-message-row'][data-message-subject='Trip planning night']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
+  end
+
+  test "dashboard renders the empty conversation state inside the default panel", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations'] " <>
+               "#member-message-list-empty",
+             "No club messages yet"
+           )
+  end
+
   test "dashboard renders the members tab invite action only for members who can manage members",
        %{conn: conn} do
     robin =
