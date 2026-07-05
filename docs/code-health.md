@@ -2,6 +2,22 @@
 
 Judgement-worthy, non-blocking review findings that were intentionally allowed to merge. Clean reviews and silently auto-fixed issues are not recorded here.
 
+## 2026-07-05 — Iteration 044: Shared member app-shell: app-bar + app-card frame
+
+Plan: `docs/iterations/044-shared-app-shell/plan.md`
+
+Note: no reviewer-report or review-synthesis artifact files were visible in this checkout; the findings below are recorded from independent inspection of the merged iteration artifacts.
+
+1. **The app-shell CSS source-of-truth is not durably reviewable against the design mirror.**
+   - Evidence: the plan required porting `app-frame`, `app-card`, `app-bar`, `app-menu`, and `app-foot` CSS verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, but this checkout has no tracked `design-system/styles.css` or `design-system/memba.css` source file. The shipped wireframes such as `design-system/wireframes/club-home.html` still link `../../styles.css`, while `web/test/memba_web/app_shell_css_test.exs` only asserts that selector names exist in `app.css`, not that the rules stay 1:1 with a design-system source.
+   - Risk: future shell polish can drift between the Phoenix app and design mirror without an obvious diff or failing check, and reviewers cannot verify the intended "ported verbatim" contract from repository artifacts alone.
+   - Suggested next action: establish a tracked app-shell CSS source/manifest for the design mirror or update the mirror conventions so the canonical shell rules are explicit, then add a lightweight comparison or checklist that verifies the Phoenix rules against that source when app-shell CSS changes.
+
+2. **One `Layouts.club_site` render path remains a stale, unplumbed fallback.**
+   - Evidence: `web/lib/memba_web/live/member_message_live/show.ex` still contains a fallback `render/1` clause that calls `<Layouts.club_site flash={@flash}>` without `club_name`, `current_identity`, or `member_name`, while the iteration updated the primary loaded message template (`web/lib/memba_web/controllers/page_html/message.html.heex`) and other signed-in surfaces to pass those assigns. `web/test/memba_web/club_site_shell_surfaces_test.exs` covers the loaded conversation view but not this fallback call site.
+   - Risk: if that fallback is reachable through a future route/test/refactor, signed-in member chrome will render with the default "Club" label and no identity dropdown, and the stale path can keep drifting because the "every club_site surface" regression test does not enumerate every `Layouts.club_site` usage.
+   - Suggested next action: decide whether the fallback render path is intentionally unreachable; if so, remove it or make it fail explicitly. If it should remain, plumb the same club/identity/member assigns through it and add a small regression check that every `Layouts.club_site` call site is either covered or documented as unreachable.
+
 ## 2026-06-19 — Iteration 037: Design-system catch-up onboarding requests and refresh
 
 Plan: `docs/iterations/037-ds-catchup-onboarding-requests-and-refresh/plan.md`
