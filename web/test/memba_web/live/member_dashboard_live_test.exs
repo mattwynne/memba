@@ -83,15 +83,31 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tab-conversations.section-tab.is-active[role='tab'][aria-selected='true']",
+             "#member-section-tab-conversations.section-tab.is-active" <>
+               "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
+               "[aria-controls='member-section-panel-conversations']",
              "Conversations"
            )
 
     assert has_element?(
              view,
-             "#member-section-tab-members.section-tab[role='tab'][aria-selected='false']",
-              "Members"
-            )
+             "#member-section-tab-members.section-tab" <>
+               "[data-tab='members'][role='tab'][aria-selected='false']" <>
+               "[aria-controls='member-section-panel-members']",
+             "Members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
+           )
+
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
+           )
 
     assert has_element?(
              view,
@@ -99,6 +115,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
              "New message"
            )
+
+    refute has_element?(view, "#member-section-action-new-message[hidden]")
+    refute has_element?(view, "#member-section-action-new-message[data-action='members']")
   end
 
   test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
@@ -148,6 +167,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
+    assert has_element?(view, "#member-section-panel-members[hidden]")
 
     assert has_element?(
              view,
@@ -258,6 +278,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-section-tabs .section-tabs__action " <>
                "#member-section-action-invite-member.btn.btn-primary.btn-sm[data-action='members'][hidden][href='/members/invitations/new']",
              "Invite member"
+           )
+
+    refute has_element?(
+             admin_view,
+             "#member-section-action-invite-member[data-action='conversations']"
            )
 
     alice =

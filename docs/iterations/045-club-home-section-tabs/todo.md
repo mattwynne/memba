@@ -9,6 +9,6 @@
 - [x] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
 - [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
 - [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
-- [ ] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+- [x] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
 - [ ] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
 - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
