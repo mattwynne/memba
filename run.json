@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-05T04:49:58.403722754Z",
-  "last_event_at": "2026-07-05T04:53:07.773381227Z",
+  "last_event_at": "2026-07-05T04:53:12.454012180Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1064,70 +1064,196 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 113,
       "checkpoint": {
-        "timestamp": "2026-07-05T04:53:09.417797324Z",
-        "current_node": "synthesis_gate",
+        "timestamp": "2026-07-05T04:53:09.415879527Z",
+        "current_node": "synthesize",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize",
-          "synthesis_gate"
+          "synthesize"
         ],
         "node_retries": {},
         "context_values": {
-          "codex_review_confidence": "High",
-          "failure_signature": "",
-          "codex_review_decision": "READY",
-          "gemini_review_blocking_gap_count": 0,
-          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "last_stage": "synthesize",
-          "codex_review_blocking_gaps": "None",
-          "internal.retry_count.synthesize": 0,
-          "thread.synthesize.current_node": "synthesis_gate",
-          "gemini_review_decision": "READY",
-          "internal.retry_count.gemini_review": 0,
-          "plan_ready": true,
-          "internal.retry_count.synthesis_gate": 0,
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "gemini_review_required_edits": "None",
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "failure_class": "",
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "claude_review_decision": "READY",
-          "thread.codex_review.current_node": "synthesize",
-          "graph.default_fidelity": "summary:high",
-          "plan_needs_fix": false,
-          "plan_needs_human": false,
-          "internal.retry_count.claude_review": 0,
-          "claude_review_blocking_gaps": "None",
           "internal.retry_count.codex_review": 0,
-          "internal.node_visit_count": 1,
-          "thread.start.current_node": "gemini_review",
-          "internal.thread_id": "synthesize",
-          "gemini_review_confidence": "High",
-          "gemini_review_blocking_gaps": "None",
-          "outcome": "succeeded",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.start": 0,
-          "thread.gemini_review.current_node": "claude_review",
-          "internal.run_id": "01KWR9S3T0VHT244F19DPDAWJF",
-          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
           "claude_review_confidence": "High",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "codex_review_blocking_gaps": "None",
+          "last_stage": "synthesize",
+          "internal.work_dir": "/workspace/memba",
           "claude_review_required_edits": "None",
+          "codex_review_decision": "READY",
+          "internal.retry_count.start": 0,
+          "failure_class": "",
+          "gemini_review_confidence": "High",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.gemini_review.current_node": "claude_review",
+          "failure_signature": "",
           "codex_review_required_edits": "None",
-          "graph.rankdir": "LR",
-          "claude_review_blocking_gap_count": 0,
-          "codex_review_blocking_gap_count": 0,
+          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "internal.thread_id": "codex_review",
+          "current_node": "synthesize",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "gemini_review_blocking_gaps": "None",
+          "internal.node_visit_count": 1,
+          "gemini_review_required_edits": "None",
+          "internal.retry_count.claude_review": 0,
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "current_node": "synthesis_gate",
+          "plan_needs_human": false,
+          "claude_review_decision": "READY",
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "thread.claude_review.current_node": "codex_review",
+          "plan_ready": true,
+          "thread.codex_review.current_node": "synthesize",
+          "thread.start.current_node": "gemini_review",
+          "internal.run_id": "01KWR9S3T0VHT244F19DPDAWJF",
+          "codex_review_confidence": "High",
           "internal.fidelity": "summary:high",
-          "thread.claude_review.current_node": "codex_review"
+          "codex_review_blocking_gap_count": 0,
+          "internal.retry_count.synthesize": 0,
+          "plan_needs_fix": false,
+          "claude_review_blocking_gap_count": 0,
+          "gemini_review_decision": "READY",
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.gemini_review": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "claude_review_blocking_gaps": "None",
+          "graph.rankdir": "LR"
         },
         "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_blocking_gap_count": 0,
+              "last_response": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking ",
+              "last_stage": "claude_review",
+              "claude_review_decision": "READY",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "claude_review_required_edits": "None"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5091,
+                    "output_tokens": 1845,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4963,
+                    "cache_write_tokens": 6227
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6227,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 67787
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 47736,
+              "tool_time_ms": 40,
+              "active_time_ms": 47776
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvement",
+              "gemini_review_required_edits": "None",
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_blocking_gap_count": 0
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 45513,
+                    "output_tokens": 854,
+                    "reasoning_tokens": 944,
+                    "cache_read_tokens": 8704,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 285857
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 74595,
+              "tool_time_ms": 337,
+              "active_time_ms": 74932
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name ",
+              "codex_review_blocking_gap_count": 0,
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_required_edits": "None",
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17360,
+                    "output_tokens": 468,
+                    "reasoning_tokens": 626,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 119620
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43027,
+              "tool_time_ms": 96,
+              "active_time_ms": 43123
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1165,6 +1291,179 @@
               "inference_time_ms": 10211,
               "tool_time_ms": 0,
               "active_time_ms": 10211
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "d98ccefaf6af79e1d1faf712ff7a01074d67d5c2",
+        "node_visits": {
+          "start": 1,
+          "synthesize": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 121,
+      "checkpoint": {
+        "timestamp": "2026-07-05T04:53:12.453565200Z",
+        "current_node": "synthesis_gate",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "failure_signature": "",
+          "thread.codex_review.current_node": "synthesize",
+          "thread.gemini_review.current_node": "claude_review",
+          "claude_review_blocking_gap_count": 0,
+          "claude_review_blocking_gaps": "None",
+          "codex_review_decision": "READY",
+          "graph.default_fidelity": "summary:high",
+          "thread.claude_review.current_node": "codex_review",
+          "codex_review_required_edits": "None",
+          "internal.thread_id": "synthesize",
+          "gemini_review_blocking_gaps": "None",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "claude_review_required_edits": "None",
+          "gemini_review_required_edits": "None",
+          "internal.retry_count.synthesize": 0,
+          "internal.retry_count.codex_review": 0,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.fidelity": "summary:high",
+          "thread.start.current_node": "gemini_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "current_node": "synthesis_gate",
+          "outcome": "succeeded",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "claude_review_decision": "READY",
+          "internal.retry_count.start": 0,
+          "plan_ready": true,
+          "internal.run_id": "01KWR9S3T0VHT244F19DPDAWJF",
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.node_visit_count": 1,
+          "failure_class": "",
+          "claude_review_confidence": "High",
+          "last_stage": "synthesize",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "plan_needs_human": false,
+          "codex_review_confidence": "High",
+          "internal.retry_count.gemini_review": 0,
+          "codex_review_blocking_gaps": "None",
+          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "plan_needs_fix": false,
+          "gemini_review_decision": "READY",
+          "codex_review_blocking_gap_count": 0,
+          "gemini_review_confidence": "High",
+          "internal.retry_count.claude_review": 0,
+          "graph.rankdir": "LR",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name ",
+              "codex_review_blocking_gap_count": 0,
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_required_edits": "None",
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17360,
+                    "output_tokens": 468,
+                    "reasoning_tokens": 626,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 119620
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43027,
+              "tool_time_ms": 96,
+              "active_time_ms": 43123
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_blocking_gap_count": 0,
+              "last_response": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking ",
+              "last_stage": "claude_review",
+              "claude_review_decision": "READY",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "claude_review_required_edits": "None"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5091,
+                    "output_tokens": 1845,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4963,
+                    "cache_write_tokens": 6227
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6227,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 67787
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 47736,
+              "tool_time_ms": 40,
+              "active_time_ms": 47776
             }
           },
           "start": {
@@ -1212,24 +1511,17 @@
               "active_time_ms": 74932
             }
           },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "codex_review": {
+          "synthesize": {
             "status": "succeeded",
             "context_updates": {
-              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name ",
-              "codex_review_blocking_gap_count": 0,
-              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-              "codex_review_required_edits": "None",
-              "codex_review_confidence": "High",
-              "last_stage": "codex_review",
-              "codex_review_decision": "READY",
-              "codex_review_blocking_gaps": "None"
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false,
+              "plan_ready": true,
+              "plan_needs_human": false
             },
-            "notes": "Stage completed: codex_review",
+            "notes": "Stage completed: synthesize",
             "usage": {
               "input": {
                 "usage": {
@@ -1238,9 +1530,9 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 17360,
-                    "output_tokens": 468,
-                    "reasoning_tokens": 626,
+                    "input_tokens": 5005,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 161,
                     "cache_read_tokens": 0,
                     "cache_write_tokens": 0
                   }
@@ -1249,14 +1541,112 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 119620
+              "total_usd_micros": 30845
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 43027,
-              "tool_time_ms": 96,
-              "active_time_ms": 43123
+              "inference_time_ms": 10211,
+              "tool_time_ms": 0,
+              "active_time_ms": 10211
             }
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "e1ce2d78b20962e28bdf2a4fbc3cafca30c70cab",
+        "node_visits": {
+          "claude_review": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "codex_review": 1,
+          "gemini_review": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-05T04:53:14.331035022Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "codex_review_confidence": "High",
+          "failure_signature": "",
+          "codex_review_decision": "READY",
+          "gemini_review_blocking_gap_count": 0,
+          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide my assessment.\n\n---\n\n# Iteration Plan 044 Review — Shared App-Shell\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Member name fallback test clarity:** The implementation plan specifies \"When `member_name` is absent but `current_identity` is present, fall back to the email local-part for both the label and the initials.\" Consider explicitly mentioning this fallback scenario in the acceptance criteria or validation plan to ensure it's tested.\n\n2. **\"Powered by Memba\" footer location:** The acceptance criteria mention the footer is preserved, but it's not crystal clear whether it lives inside or outside the `app-card` frame. The implementation plan should specify where exactly the footer renders in relation to `app-card` (though the design wireframes likely show this).\n\n3. **Gallery-walk validation scope:** The validation plan mentions `./bin/dev gallery-walk` but doesn't specify which gallery screenshots should be reviewed. If this is a known command that captures all relevant surfaces, that's fine; otherwise, listing which surfaces should be visually checked would be helpful.\n\n## Smallest Viable Iteration\n\n**This IS the smallest viable iteration.** The plan correctly identifies the atomic unit: replacing the shared layout's header and content frame. You cannot ship part of the shell (e.g., app-bar without app-card) and have a coherent intermediate state. Splitting by surface (e.g., \"club home only, then conversation\") would duplicate the work instead of leveraging the shared layout. The out-of-scope items (tabs, conversation content, club switcher) are correctly deferred.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe specified validation approach is comprehensive and appropriate:\n\n1. **Automated verification:**\n   - LiveView/layout tests confirm app-bar structure (club name, identity dropdown gating, Sign out action)\n   - Tests verify app-card frame wraps content\n   - All six `club_site` surfaces render without error\n   - `dev check` green (existing feature files pass unchanged)\n\n2. **Visual verification:**\n   - Gallery-walk screenshots compared to design wireframes\n   - Pixel-fidelity check against `club-home.html` and `member-conversation.html`\n\n3. **Manual spot-check:**\n   - Signed-in surfaces show identity dropdown with working Sign out\n   - Public (signed-out) page shows app-bar without identity dropdown\n\n**Proof of success:** Every member-facing club surface renders inside the consistent app-shell (app-bar + app-card frame) matching the refreshed design wireframes, with all existing functionality (sign-out, identity gating, navigation) preserved.\n\n---\n\n## Review Analysis\n\n### 1. Goal Clarity ✅\n\n**Pass.** The goal is clear: \"Replace the plain shared club-site header with the app-like app-bar inside an app-card frame... so every member-facing club surface reads as one consistent application shell.\" The beneficiary (members viewing club surfaces) is clear, and the user outcome (consistent app-like experience) is stated, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Pass.** The scope is tightly focused on the shared layout shell transformation. The in-scope section is concrete (app-bar structure, app-card frame, CSS porting). The out-of-scope list is comprehensive (tabs, conversation content, club switcher, membership status, other layouts, behavior changes) and shows appropriate restraint. The iteration cannot be smaller—it's the atomic unit of replacing the shared layout chrome.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Pass.**\n\n- **Acceptance criteria:** Six concrete, testable criteria covering:\n  - Signed-in state (app-bar with club name, identity dropdown, Sign out action preservation)\n  - Signed-out state (app-bar without identity dropdown, preserving existing gating)\n  - Content frame (app-card wraps content, footer preserved)\n  - Coverage (all six `club_site` surfaces render)\n  - Explicit exclusion (no club dropdown/switcher/Memba mark)\n\n- **BDD classification:** Clearly classified as \"Technical / UI restructure (shared layout chrome)\" with explicit rationale: \"user-observable... but no new business rule.\"\n\n- **Feature file decision:** Explicit and well-justified: \"Not useful for this slice. No new business rule, permission, or lifecycle state... Sign-out and identity behaviour are unchanged and already covered... verified by LiveView/layout tests... No `.feature` files change; mainline stays green.\"\n\n- **Business decisions:** \"None known.\" The plan documents that the refreshed design resolved prior open questions (club dropdown removed, membership-status detail deferred).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Pass.** The implementation plan is concrete and ordered:\n\n1. **Files named:** `web/lib/memba_web/components/layouts.ex` → `club_site/1` function\n2. **Changes specified:** Replace header markup with app-bar, wrap `@inner_block` in app-card, preserve footer/flash, keep `@current_identity` gating\n3. **CSS porting detailed:** Port specific classes (`app-frame`, `app-card`, `app-bar`, `app-menu`, `app-foot`, identity-dropdown pieces) from `design-system/` into `web/assets/css/app.css`, maintaining 1:1 names\n4. **Data plumbing decided:** New optional `member_name` assign with email-local-part fallback, `initials/1` helper in `Layouts`\n5. **Test updates:** LiveView/layout tests for new header structure, identity gating, Sign out action, content frame, surface rendering\n\n**Technical decisions:** Both prior technical questions are explicitly documented as decided (CSS source approach, identity name/initials plumbing) with clear rationales.\n\n### 5. Expected Capability and Validation ✅\n\n**Pass.**\n\n- **New capability clearly stated:** \"A shared, app-like shell (app-bar + app-card) across every member surface — built once in the shared layout — so the club-home tabs and the aligned conversation page can be built inside a consistent frame.\"\n\n- **Stop condition clear:** All six `club_site` surfaces render in the new shell, matching design wireframes, with preserved functionality.\n\n- **Validation plan comprehensive:** Automated tests + visual gallery-walk comparison + manual spot-check (see detailed validation plan above).\n\n---\n\n## Summary\n\nThis plan is **ready for implementation**. It demonstrates:\n\n- Clear goal focused on user-observable outcome (consistent app-shell across member surfaces)\n- Tightly scoped, atomic unit of work leveraging shared layout\n- Concrete, testable acceptance criteria covering happy paths and edge cases (signed-in/signed-out states)\n- Appropriate BDD classification with explicit rationale for no feature-file changes\n- Specific implementation steps naming files, modules, helpers, and integration points\n- Resolved technical decisions with documented rationales\n- Clear new capability and comprehensive validation approach\n\nThe three non-blocking improvements noted above are minor polish items that don't prevent implementation from proceeding.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "last_stage": "synthesize",
+          "codex_review_blocking_gaps": "None",
+          "internal.retry_count.synthesize": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
+          "gemini_review_decision": "READY",
+          "internal.retry_count.gemini_review": 0,
+          "plan_ready": true,
+          "internal.retry_count.synthesis_gate": 0,
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "internal.retry_count.publish_ready": 0,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "gemini_review_required_edits": "None",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "failure_class": "",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "claude_review_decision": "READY",
+          "thread.codex_review.current_node": "synthesize",
+          "graph.default_fidelity": "summary:high",
+          "plan_needs_fix": false,
+          "command.output": "blob://sha256/846b14a76b7168fbd58770ef7c4c09fc43c8d3267989d22c9853547c82e5667a",
+          "plan_needs_human": false,
+          "internal.retry_count.claude_review": 0,
+          "claude_review_blocking_gaps": "None",
+          "internal.retry_count.codex_review": 0,
+          "internal.node_visit_count": 1,
+          "thread.start.current_node": "gemini_review",
+          "internal.thread_id": "synthesis_gate",
+          "gemini_review_confidence": "High",
+          "gemini_review_blocking_gaps": "None",
+          "outcome": "succeeded",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.start": 0,
+          "thread.gemini_review.current_node": "claude_review",
+          "internal.run_id": "01KWR9S3T0VHT244F19DPDAWJF",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "claude_review_confidence": "High",
+          "claude_review_required_edits": "None",
+          "codex_review_required_edits": "None",
+          "graph.rankdir": "LR",
+          "claude_review_blocking_gap_count": 0,
+          "codex_review_blocking_gap_count": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "current_node": "publish_ready",
+          "internal.fidelity": "summary:high",
+          "thread.claude_review.current_node": "codex_review"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "claude_review": {
             "status": "succeeded",
@@ -1300,15 +1690,151 @@
               "tool_time_ms": 40,
               "active_time_ms": 47776
             }
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/846b14a76b7168fbd58770ef7c4c09fc43c8d3267989d22c9853547c82e5667a"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1866,
+              "active_time_ms": 1866
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false,
+              "plan_ready": true,
+              "plan_needs_human": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5005,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 161,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 30845
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10211,
+              "tool_time_ms": 0,
+              "active_time_ms": 10211
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvement",
+              "gemini_review_required_edits": "None",
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/044-shared-app-shell/plan.md` lines 1–183.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording. The plan repeatedly says six surfaces but the listed examples read like five unless “conversation/message detail” represents two separate surfaces. Name all six explicitly to avoid test/implementation ambiguity.\n2. Consider adding a small accessibility validation note for the identity dropdown, e.g. keyboard/focus behavior and accessible label/trigger text, since this is user-visible chrome.\n3. The acceptance criteria could explicitly say the club name remains linked to `/` if that behavior is intended to be preserved from the existing header.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: replace only the shared `Layouts.club_site` chrome with the app-bar/app-card shell, port the required shell CSS, preserve existing sign-out/identity/footer behavior, and verify all existing `club_site` surfaces still render. Do not include tabs, conversation content alignment, club switching, membership status, or staff/marketing layouts.\n\n## Required plan edits\n\nNone required before implementation.\n\nOptional cleanup: explicitly enumerate the six `club_site` surfaces and, if intended, state that the club-name link target remains unchanged.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated layout/LiveView tests verifying:\n   - app-bar renders the club name;\n   - identity dropdown appears only when `current_identity` is present;\n   - Sign out still submits to `DELETE /auth`;\n   - page content is wrapped in the app-card frame;\n   - the “Powered by Memba” footer link remains;\n   - every `club_site` surface renders under the new shell.\n\n2. Full project validation:\n   - run `dev check` after implementation and require it to pass.\n\n3. Visual/manual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare club-home and conversation screenshots against the design-system wireframes for app-bar, app-card, and footer;\n   - manually confirm signed-in pages show the identity dropdown and Sign out works;\n   - manually confirm the public signed-out club page shows no identity dropdown.\n\nClear stop condition: the shared shell is present across all `club_site` pages, existing behavior is preserved, relevant tests pass, visual comparison matches the refreshed design, and `dev check` is green.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_blocking_gap_count": 0
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 45513,
+                    "output_tokens": 854,
+                    "reasoning_tokens": 944,
+                    "cache_read_tokens": 8704,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 285857
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 74595,
+              "tool_time_ms": 337,
+              "active_time_ms": 74932
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name ",
+              "codex_review_blocking_gap_count": 0,
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the “all six `club_site` surfaces” wording: the acceptance criteria list appears to name five items unless “conversation/message detail” represents two distinct surfaces.\n2. Optionally name likely test files/modules to update, but the current validation guidance is specific enough for implementation.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: update the shared `Layouts.club_site` shell once so all member-facing club pages inherit the app-bar, app-card frame, preserved footer, preserved sign-out behavior, and signed-in identity dropdown gating. Splitting CSS from markup would not deliver a useful user-visible outcome by itself.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Automated LiveView/layout coverage showing:\n   - app-bar renders the club name,\n   - identity dropdown appears only when `current_identity` is present,\n   - sign-out still posts to `DELETE /auth`,\n   - content is wrapped in the app-card frame,\n   - each `club_site` surface still renders.\n2. `dev check` passes.\n3. Visual comparison through `./bin/dev gallery-walk` against the refreshed `club-home.html` and `member-conversation.html` design-system wireframes.\n4. Manual smoke test:\n   - signed-in club home and conversation show the app-bar,\n   - identity dropdown opens,\n   - Sign out works,\n   - public club page shows the app-bar without identity dropdown.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_required_edits": "None",
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17360,
+                    "output_tokens": 468,
+                    "reasoning_tokens": 626,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 119620
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43027,
+              "tool_time_ms": 96,
+              "active_time_ms": 43123
+            }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "synthesis_gate": 1,
           "gemini_review": 1,
           "start": 1,
           "codex_review": 1,
           "claude_review": 1,
+          "publish_ready": 1,
           "synthesize": 1
         }
       },
@@ -1335,6 +1861,40 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "synthesis_gate@1": {
+      "first_event_seq": 116,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-07-05T04:53:09.417572849Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-05T04:53:09.417040353Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "gemini_review@1": {
       "first_event_seq": 22,
       "prompt": null,
@@ -2075,6 +2635,33 @@
         "warnings": []
       },
       "state": "succeeded"
+    },
+    "publish_ready@1": {
+      "first_event_seq": 124,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/044-shared-app-shell/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-05T04:53:12.453950979Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     }
   }
 }
