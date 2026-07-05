@@ -264,11 +264,12 @@ async function assertOnlyOneActiveMembership(world, personName, clubName) {
 async function assertSignedInToClub(world, personName, clubName) {
   const club = await ensureClub(world, clubName);
   const email = emailForPerson(world, personName);
+  const identityLabel = clubIdentityFallbackLabelFor(email);
 
   await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
     timeout: projectionTimeoutMs(world)
   });
-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(identityLabel);
 }
 
 async function leaveWithoutEnteringName(world) {
@@ -584,6 +585,10 @@ function personState(personName, email, personId) {
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function clubIdentityFallbackLabelFor(email) {
+  return String(email).split("@")[0].trim() || "Member";
 }
 
 function clubSlugFor(clubName) {

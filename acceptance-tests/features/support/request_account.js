@@ -461,6 +461,7 @@ async function followWelcomeLink(world, personName) {
 async function assertSignedInToClub(world, personName, clubName) {
   const club = world.clubs[clubName] || clubByName(clubName);
   const email = requestEmailFor(personName, world);
+  const identityLabel = clubIdentityFallbackLabelFor(email);
 
   assert.ok(club, `Expected ${clubName} to be known before asserting signed-in club access`);
   world.clubs[clubName] = { clubId: club.clubId, name: club.clubName || clubName, slug: club.clubSlug || club.slug };
@@ -468,7 +469,11 @@ async function assertSignedInToClub(world, personName, clubName) {
   await playwrightExpect(
     world.page.locator(`#member-club-home[data-club-id=${cssString(world.clubs[clubName].clubId)}]`)
   ).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(identityLabel);
+}
+
+function clubIdentityFallbackLabelFor(email) {
+  return String(email).split("@")[0].trim() || "Member";
 }
 
 async function openConversionPanel(world, clubName) {

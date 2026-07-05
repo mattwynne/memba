@@ -77,7 +77,9 @@ async function ensureSmokeMemberSignedIn(world) {
 
   await world.page.goto(clubSiteUrl(world.config, "/"));
   await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await expect(world.page.locator("body")).toContainText(`Signed in as ${world.config.member.email}`);
+  await expect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(
+    clubIdentityFallbackLabelFor(world.config.member.email)
+  );
 }
 
 async function openSmokeClubHome(world) {
@@ -136,6 +138,10 @@ function rewriteLocalhostMagicLink(config, link) {
 
 function cssStringValue(value) {
   return String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\a ");
+}
+
+function clubIdentityFallbackLabelFor(email) {
+  return String(email).split("@")[0].trim() || "Member";
 }
 
 module.exports = {

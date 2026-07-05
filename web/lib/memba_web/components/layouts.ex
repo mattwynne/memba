@@ -334,8 +334,12 @@ defmodule MembaWeb.Layouts do
                   aria-controls="club-site-identity-menu"
                   aria-label="Member identity menu"
                 >
-                  <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
-                  <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
+                  <span class="app-bar__avatar">
+                    {club_identity_initials(@member_name, @current_identity)}
+                  </span>
+                  <span class="app-bar__who">
+                    {club_identity_label(@member_name, @current_identity)}
+                  </span>
                 </button>
 
                 <div
@@ -382,17 +386,44 @@ defmodule MembaWeb.Layouts do
     """
   end
 
-  defp club_identity_label(%{email: email}) when is_binary(email), do: email
-  defp club_identity_label(_identity), do: "Member"
+  defp club_identity_label(member_name, identity) when is_binary(member_name) do
+    case String.trim(member_name) do
+      "" -> club_identity_label(nil, identity)
+      name -> name
+    end
+  end
 
-  defp club_identity_initials(%{email: email}) when is_binary(email) do
+  defp club_identity_label(_member_name, %{email: email}) when is_binary(email) do
+    email_local_part(email)
+  end
+
+  defp club_identity_label(_member_name, _identity), do: "Member"
+
+  defp club_identity_initials(member_name, identity) when is_binary(member_name) do
+    case String.trim(member_name) do
+      "" -> club_identity_initials(nil, identity)
+      name -> initials(name)
+    end
+  end
+
+  defp club_identity_initials(_member_name, %{email: email}) when is_binary(email) do
     email
-    |> String.split("@", parts: 2)
-    |> List.first()
+    |> email_local_part()
     |> initials()
   end
 
-  defp club_identity_initials(_identity), do: "M"
+  defp club_identity_initials(_member_name, _identity), do: "M"
+
+  defp email_local_part(email) do
+    email
+    |> String.split("@", parts: 2)
+    |> List.first()
+    |> String.trim()
+    |> case do
+      "" -> "Member"
+      local_part -> local_part
+    end
+  end
 
   defp initials(name) when is_binary(name) do
     name

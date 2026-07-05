@@ -154,7 +154,8 @@ defmodule MembaWeb.LayoutsTest do
     )
 
     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
-    assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+    assert_text(html, "#club-site-layout header .app-bar__who", "alice")
+    refute_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_selector(html, "#club-site-footer.app-foot")
     assert_text(html, "#club-site-footer", "Powered by Memba")
@@ -240,6 +241,8 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
     assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
+    assert_text(html, "#club-site-layout header .app-bar__who", "Élodie Durand")
+    refute_text(html, "#club-site-layout header .app-bar__who", "élodie.durand")
     assert_selector(html, "#club-site-layout-slot-with-member-name")
   end
 

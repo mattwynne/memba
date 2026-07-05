@@ -352,14 +352,18 @@ async function signOut(world) {
 async function assertSignedInOnClubPage(world, personName) {
   const person = personFromWorld(world, personName);
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await assertClubIdentityVisible(world, signedInEmailFor(world, personName, person));
+  await assertClubIdentityVisible(world, clubIdentityFallbackLabelFor(signedInEmailFor(world, personName, person)));
   await world.page.locator("#club-site-identity-menu-button").click();
   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
 }
 
-async function assertClubIdentityVisible(world, email) {
+async function assertClubIdentityVisible(world, label) {
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(email);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(label);
+}
+
+function clubIdentityFallbackLabelFor(email) {
+  return String(email).split("@")[0].trim() || "Member";
 }
 
 async function assertClubMarketingPage(world, clubName) {
