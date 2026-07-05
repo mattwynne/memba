@@ -11,6 +11,32 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
+  test "signed-in club shell falls back to email identity when the member name is blank", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Blank Name Shell Club", slug: "blank-name-shell")
+
+    member =
+      create_active_member(club,
+        email: "alice.no-name@example.com",
+        name: "   "
+      )
+
+    club_home_html =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> get(~p"/")
+      |> html_response(200)
+
+    assert_club_site_shell(
+      club_home_html,
+      "#member-club-home[data-club-id='#{club.club_id}']",
+      club.name,
+      member_name: "alice.no-name",
+      member_initials: "AN"
+    )
+  end
+
   test "every club_site surface renders inside the shared app shell", %{conn: conn} do
     club = insert_membership_club!(name: "Shared Shell Club", slug: "shared-shell")
 
@@ -114,6 +140,15 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
       {:ok, member_name} ->
         assert_selector(document, "#club-site-identity-menu-button")
         assert_text(document, "#club-site-identity-menu-button .app-bar__who", member_name)
+
+        if member_initials = Keyword.get(opts, :member_initials) do
+          assert_text(
+            document,
+            "#club-site-identity-menu-button .app-bar__avatar",
+            member_initials
+          )
+        end
+
         assert_selector(document, "#club-site-sign-out-form[action='/auth'][method='post']")
 
       :error ->

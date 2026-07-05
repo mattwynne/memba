@@ -30,7 +30,27 @@ defmodule MembaWeb.AppShellCssTest do
   end
 
   test "Phoenix app-shell CSS stays in sync with the design-system mirror source" do
-    assert member_app_shell_css(File.read!(@app_css)) == File.read!(@design_system_css)
+    assert member_app_shell_css(File.read!(@app_css)) ==
+             member_app_shell_css(File.read!(@design_system_css))
+  end
+
+  test "design-system app-shell CSS defines every token it consumes" do
+    css = File.read!(@design_system_css)
+
+    defined_tokens =
+      ~r/--[\w-]+(?=\s*:)/
+      |> Regex.scan(css)
+      |> List.flatten()
+      |> MapSet.new()
+
+    consumed_tokens =
+      ~r/var\((--[\w-]+)/
+      |> Regex.scan(css, capture: :all_but_first)
+      |> List.flatten()
+      |> MapSet.new()
+
+    assert MapSet.subset?(consumed_tokens, defined_tokens),
+           "Missing design-system token definitions: #{inspect(MapSet.difference(consumed_tokens, defined_tokens))}"
   end
 
   defp member_app_shell_css(css) do

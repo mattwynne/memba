@@ -248,6 +248,46 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "#club-site-layout-slot-with-member-name")
   end
 
+  test "club-site layout falls back to email local-part identity when member name is missing" do
+    assigns = %{
+      flash: %{},
+      current_identity: %{email: "alice.smith@example.com"},
+      nil_member_name: nil,
+      blank_member_name: "  "
+    }
+
+    nil_name_html =
+      rendered_to_string(~H"""
+      <Layouts.club_site
+        flash={@flash}
+        club_name="Riverside Tennis Club"
+        current_identity={@current_identity}
+        member_name={@nil_member_name}
+      >
+        <section id="club-site-layout-slot-with-nil-member-name">Club member page content</section>
+      </Layouts.club_site>
+      """)
+
+    blank_name_html =
+      rendered_to_string(~H"""
+      <Layouts.club_site
+        flash={@flash}
+        club_name="Riverside Tennis Club"
+        current_identity={@current_identity}
+        member_name={@blank_member_name}
+      >
+        <section id="club-site-layout-slot-with-blank-member-name">Club member page content</section>
+      </Layouts.club_site>
+      """)
+
+    for html <- [nil_name_html, blank_name_html] do
+      assert_selector(html, "#club-site-identity-menu-button")
+      assert_text(html, "#club-site-layout header .app-bar__avatar", "AS")
+      assert_text(html, "#club-site-layout header .app-bar__who", "alice.smith")
+      assert_selector(html, "#club-site-sign-out-button")
+    end
+  end
+
   test "root footer shows linked git commit when enabled" do
     System.put_env("MEMBA_GIT_SHA", @sha)
     Application.put_env(:memba, :show_git_commit_in_footer, true)
