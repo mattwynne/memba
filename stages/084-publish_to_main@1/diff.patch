@@ -1,0 +1,914 @@
+diff --git a/docs/iterations/044-shared-app-shell/plan.md b/docs/iterations/044-shared-app-shell/plan.md
+index 215f9d5..07063a9 100644
+--- a/docs/iterations/044-shared-app-shell/plan.md
++++ b/docs/iterations/044-shared-app-shell/plan.md
+@@ -1,7 +1,7 @@
+ # 044 — Shared member app-shell: app-bar + app-card frame
+ 
+ Date: 2026-07-04
+-Status: implementing
++Status: merged
+ 
+ > This plan **replaces** the earlier 044 draft (and is decided independently of the 044/045/046
+ > drafts). It is written against the **2026-07-04 refreshed** design mirror, in which the in-club
+diff --git a/docs/iterations/045-club-home-section-tabs/plan.md b/docs/iterations/045-club-home-section-tabs/plan.md
+new file mode 100644
+index 0000000..4bcb363
+--- /dev/null
++++ b/docs/iterations/045-club-home-section-tabs/plan.md
+@@ -0,0 +1,157 @@
++# 045 — Club home: Conversations / Members section tabs
++
++Date: 2026-07-04
++Status: validated
++
++> Independently decided (not bound to the prior 045/046 drafts). This repurposes the 045 slot —
++> which previously held the low-value "stop-following page header" tweak — so the club-home tabs
++> deliver as the next slice after the 044 app-shell. Written against the 2026-07-04 refreshed
++> `club-home.html`. Prior 045 content is in git history.
++
++## Goal
++
++Reorganise the member club home — inside the 044 app-shell — into an app-like **section-tab
++spine**: a **Conversations** tab (default) and a **Members** tab, with **one primary action per
++tab**. This matches the information architecture of the refreshed `design-system/wireframes/club-home.html`.
++
++## Background / Context
++
++The refreshed club home is an app-like tabbed screen; the running app
++(`page_html/club.html.heex` via `MemberDashboardLive`) is still a single scrolling column — a
++hero greeting, a "Send a message to the club?" affordance, a club-messages list, then a members
++section. Iteration 044 lands the shared **app-bar + app-card shell** around this content; this
++slice fills that shell with the tab spine.
++
++The design's third tab — **About** — shows a prose club description. **The app has no club
++description field** (a grep across the club/messaging domain finds none), so the About tab is
++**deferred** to a later slice that first adds a club-description capability. Because the app never
++had a description, 044 removing the old club dropdown lost no real data.
++
++## Related Problems
++
++- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
++  — **partially addresses.** Establishes the simple, app-like tabbed IA on the club home.
++- [`docs/problems/2026-06-07-club-homepage-no-cross-site-navigation.md`](../../problems/2026-06-07-club-homepage-no-cross-site-navigation.md)
++  — **leaves unresolved.** No club switcher; the design's app-bar switcher was already removed in 044.
++
++## Scope
++
++The member club home (`MemberDashboardLive` / `PageHTML.club`) only, rendered inside the 044 shell.
++
++### In scope
++
++- A **section-tab spine** with two tabs: **Conversations** (selected by default) and **Members**.
++- A per-tab **action slot** with one primary action each: **New message** on Conversations, and
++  **Invite member** on Members (shown only when the viewer can manage members — current gating).
++- **Conversations panel:** today's conversation rows and existing empty state, plus the preserved
++  "Prefer email? → everyone@<club>…" inbound-email affordance.
++- **Members panel:** today's members content (the avatar-stack card), unchanged.
++- Client-side tab switching (`Phoenix.LiveView.JS`, no server round-trip), accessible
++  (`role="tablist"`/`"tab"`, `aria-selected`), defaulting to Conversations.
++- Drop the single-scroll hero greeting ("Hello, {first name}.") — member/club identity now lives
++  in the 044 app-bar, matching the design (which has no in-card greeting).
++
++### Out of scope
++
++- The **About** tab (deferred — needs a club-description field the app does not yet have).
++- The app-bar / identity dropdown (delivered by 044).
++- Named member rows + role badges (the later member-roles slice; needs role read-model data).
++- Any change to conversation-row content, member content, compose behaviour, or permissions.
++- A mobile-specific redesign, and an Events tab (design keeps it commented as future).
++
++## Iteration Type
++
++**Technical / UI restructure (information architecture).** User-observable (content moves into
++tabs; one primary action per section), but **no new business rule**: same content, same actions,
++same permissions.
++
++## Acceptance Scenarios / Feature Files
++
++**BDD decision: Not useful for this slice.** No new business rule, permission, lifecycle, or
++eligibility is introduced — this is a presentational IA reorganisation of existing behaviour,
++already covered by existing shared scenarios (club messaging/replies; member invitations and
++manage-members gating). The tab reorganisation is verified by LiveView/controller tests, not by a
++new stakeholder-readable rule. No `.feature` files change; mainline stays green.
++
++## Designs
++
++**Design of record:** [`design-system/wireframes/club-home.html`](../../../design-system/wireframes/club-home.html)
++(refreshed 2026-07-04). This slice implements a **subset**: the `section-tabs` spine
++(Conversations / Members), the `section-tabs__action` per-tab action slot, and the two
++`section-panel`s reusing existing content. **Intentionally omitted:** the **About** tab (deferred)
++and named member rows + role badges (later slice). **No new design needed.**
++
++## Acceptance Criteria
++
++- The club home shows a tab spine with **Conversations** and **Members**; **Conversations is
++  selected by default**.
++- Selecting a tab shows that panel and hides the other **without a full page navigation**, and
++  updates the active-tab styling and `aria-selected`.
++- The **Conversations** tab shows a single primary **New message** action that opens the existing
++  compose flow (`member_compose_path`).
++- The **Conversations** panel shows today's conversation rows (or the existing empty state) and
++  preserves the **"Prefer email? → everyone@<club>…"** inbound-email affordance.
++- The **Members** tab shows a single primary **Invite member** action, **visible only when the
++  current member can manage members** (same gating as today), plus the existing members content.
++- **No change** to who receives a club message, who appears in the member list, or who can invite.
++- Tabs are keyboard- and screen-reader-operable (`role="tablist"`/`"tab"`, `aria-selected`).
++
++## Open Business Decisions
++
++None open. **About tab deferred** (confirmed — no club-description data yet). **Hero greeting
++dropped** (the 044 app-bar carries identity, matching the design).
++
++## Implementation Plan
++
++1. In `web/lib/memba_web/controllers/page_html/club.html.heex`, remove the `#member-dashboard-hero`
++   greeting section; club/member identity now lives in the 044 app-bar.
++2. Add a `section-tabs` spine with `role="tablist"` holding two `section-tab` controls:
++   Conversations (default, `is-active`, `aria-selected="true"`) and Members.
++3. Add a `section-tabs__action` slot with a per-tab primary **New message** action on Conversations,
++   linking to `member_compose_path(@selected_club, club_id_source)`.
++4. In the same action slot, add the **Invite member** action linking to `member_invitation_path`,
++   rendered only when `@current_member_can_manage_members?` (hidden otherwise).
++5. Wrap today's conversation list and its existing empty state in a Conversations `section-panel`
++   that is visible by default; keep the `@message_rows` rows unchanged.
++6. Move the "Prefer email? → `{inbound_email_address}`" note into the Conversations panel, keeping
++   its `mailto:` affordance and `data-inbound-address` hook.
++7. Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel`
++   that is hidden by default.
++8. Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from
++   `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
++9. Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle
++   `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
++10. Update the LiveView/controller test: both tab controls render; Conversations is the default
++    panel; the New message action is on Conversations; Invite member is on Members only when
++    manage-members is allowed; both panels' content renders.
++11. Run `./bin/dev gallery-walk` and compare `member-club-home` to
++    `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
++12. Run `dev check` and confirm it is green (no feature-file changes).
++
++## Open Technical Decisions
++
++- **Tab switching mechanism: decided — `Phoenix.LiveView.JS`** client commands (instant, stateless),
++  matching the design's client-side toggle. Fall back to a LiveView active-tab assign only if the
++  JS approach conflicts with existing hooks.
++
++## New Capability
++
++The club home presents its content as an app-like **tabbed interface** (Conversations / Members)
++with one primary action per section — the IA pattern the rest of the app-like redesign builds on.
++
++## Validation Plan
++
++- **Automated:** the LiveView/controller test above; `dev check` green (no feature-file changes).
++- **Visual:** `./bin/dev gallery-walk`, then compare the `member-club-home` screenshot to
++  `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
++- **Manual:** load the club home inside the 044 shell; toggle Conversations/Members; confirm the
++  New message / Invite member actions, the preserved email affordance, and keyboard/`aria` behaviour.
++
++## Risks / Follow-ups
++
++- Depends on **044** (the app-shell) being merged first — this slice renders inside it.
++- The Members panel shows the avatar-stack (not named rows/role badges) — intentional; reconciled
++  in the **member-roles** slice (needs role read-model data).
++- The **About** tab is deferred until a **club-description** capability exists (its own slice).
++- Follow-on sequencing (my own): 046 conversation-page alignment → 047 delivery-details page +
++  relocation → 048 member names + role badges.
+diff --git a/docs/iterations/045-stop-following-page-header/plan.md b/docs/iterations/045-stop-following-page-header/plan.md
+deleted file mode 100644
+index 4ef82ec..0000000
+--- a/docs/iterations/045-stop-following-page-header/plan.md
++++ /dev/null
+@@ -1,104 +0,0 @@
+-# 045 — Stop-following page: minimal header
+-
+-Date: 2026-06-23
+-Status: validated
+-
+-## Goal
+-
+-The conversation stop-following confirmation page (`GET /messages/conversations/stop-following/:token`)
+-uses a **minimal Memba-mark header** instead of the public marketing nav. A recipient
+-arriving from a "Stop following this conversation" email link should not be met with
+-`Sign in` / `Request access` marketing calls-to-action.
+-
+-## Background / Context
+-
+-`MembaWeb.ConversationFollowController` renders `stop_following.html.heex` inside
+-`<Layouts.app>`, whose header carries the marketing nav (`layouts.ex` ~lines 28–58:
+-`Sign in`, `Request access`). The replies-feature gap analysis (`docs/replies-wireframe-gaps.md`,
+-bucket D / E2) flagged this as the wrong chrome for an email-unsubscribe landing page. The
+-target design (`wireframes/conversation-stop-following.html`) uses a minimal Memba mark +
+-wordmark header with no nav.
+-
+-## Related Problems
+-
+-- [`docs/problems/2026-06-22-replies-feature-design-gaps.md`](../../problems/2026-06-22-replies-feature-design-gaps.md)
+-  — **resolves the last open bucket (D).** A (overview) shipped in 043, B (conversation
+-  page) in 044, C (emails) was reconciled in the app's favour with the designs updated.
+-  After this iteration the gap note is fully addressed.
+-
+-## Scope
+-
+-### In scope
+-
+-- The stop-following page header chrome only, for both the `:success` and `:failure`
+-  (invalid-link) states: replace the marketing nav with a minimal Memba mark + wordmark.
+-
+-### Out of scope
+-
+-- The unfollow behaviour, token verification, and copy of the page (unchanged).
+-- Every other page that uses `Layouts.app` (its marketing header stays as-is).
+-
+-## Iteration Type
+-
+-Presentational alignment — no new user-observable rule. The page does the same thing; only
+-its surrounding chrome changes. Comparable to the design-system alignment iterations.
+-
+-## Acceptance Scenarios / Feature Files
+-
+-BDD decision: **Not useful for this slice.** The stop-follow behaviour is already covered by
+-`acceptance-tests/features/club_message_replies.feature` (the reply-email stop-follow link
+-and tampered-link scenarios, iterations 040–041). This slice changes only the page chrome,
+-not the rule. No Gherkin is added or changed.
+-
+-## Designs
+-
+-- Target design exists and is synced: `wireframes/conversation-stop-following.html`
+-  (minimal Memba mark + wordmark header, no nav; success and invalid-link states).
+-- No new design work needed.
+-
+-## Acceptance Criteria
+-
+-- The stop-following page (success and invalid states) renders a minimal header showing the
+-  Memba sprig mark and the "Memba" wordmark.
+-- The page does **not** render the marketing nav links (`Sign in`, `Request access`).
+-- The page content (eyebrow, heading, copy, and the "View the conversation" / "Go to Memba"
+-  action) is unchanged.
+-
+-## Open Business Decisions
+-
+-None known.
+-
+-## Implementation Plan
+-
+-1. Add a minimal "brand-bar" layout to `MembaWeb.Layouts` (e.g. `Layouts.brand_bar/1`):
+-   a header with the existing `<.sprig>` mark + "Memba" wordmark and no nav, wrapping
+-   `inner_block`, plus the standard flash group. Keep it small and reusable for other
+-   email-landing pages.
+-2. Change `stop_following.html.heex` to wrap its content in `<Layouts.brand_bar>` instead of
+-   `<Layouts.app>`. No change to the `:success` / `:failure` content.
+-3. No controller, routing, command, or behaviour changes.
+-
+-## Open Technical Decisions
+-
+-None known. (Prefer a dedicated minimal layout over an attr-flag on `Layouts.app`, so the
+-marketing header stays single-purpose and the minimal chrome is reusable.)
+-
+-## New Capability
+-
+-Email-unsubscribe and similar one-click landing pages can present a calm, minimal Memba
+-header instead of marketing CTAs — starting with the stop-following confirmation.
+-
+-## Validation Plan
+-
+-- A controller/template test for `ConversationFollowController` (or the HTML module)
+-  asserting the success and failure renders include the Memba mark/wordmark and do **not**
+-  include `Sign in` / `Request access`.
+-- Existing `club_message_replies.feature` stop-follow scenarios stay green.
+-- A `bin/dev gallery-walk` screenshot of the `conversation-stop-following` scene confirming
+-  the minimal header.
+-
+-## Risks / Follow-ups
+-
+-- If `Layouts.brand_bar` is reused elsewhere later, keep it free of page-specific copy.
+-- This closes the replies-feature design-gaps note; remaining replies follow-ups (the
+-  unread/new-activity indication) are tracked in their own problem note.
+diff --git a/docs/iterations/046-club-home-section-tabs/plan.md b/docs/iterations/046-club-home-section-tabs/plan.md
+deleted file mode 100644
+index e798a5d..0000000
+--- a/docs/iterations/046-club-home-section-tabs/plan.md
++++ /dev/null
+@@ -1,175 +0,0 @@
+-# 046 — Club home: Conversations / Members section tabs
+-
+-Date: 2026-07-04
+-Status: draft
+-
+-> Draft pending Matt's confirmation of one open business decision (compose CTA + inbound-email
+-> note placement — see Open Business Decisions). Everything else is settled.
+-
+-## Goal
+-
+-Reorganise the member club home into an app-like **section-tab spine** — a **Conversations**
+-tab (default) and a **Members** tab — with **one primary action per tab**, matching the
+-information architecture of the refreshed design `wireframes/club-home.html`. This is the first
+-slice of the larger "app-like club home" direction; it establishes the tab pattern only.
+-
+-## Background / Context
+-
+-The refreshed design system moved the club home to an app-like tabbed interface (top app-bar
+-with a club switcher, a Conversations / Members tab spine, one primary action per section). The
+-running app is still a single scrolling page: hero greeting, a big "Send a message to the club?"
+-CTA card, a "Recent club messages" list, then a members card. See
+-`docs/design-gaps-2026-07-04.md` gap #1.
+-
+-Because the full design is several slices, this iteration takes only the **tab structure**:
+-reorganise today's existing content into two tabs with a per-tab action slot. It deliberately
+-defers the top app-bar/club-switcher and the named member rows + role badges to later slices.
+-
+-## Related Problems
+-
+-- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
+-  — **partially addresses.** Establishes the simple, app-like tabbed IA on the club home;
+-  mobile app-like treatment and the full desktop chrome remain future slices.
+-- [`docs/problems/2026-06-07-club-homepage-no-cross-site-navigation.md`](../../problems/2026-06-07-club-homepage-no-cross-site-navigation.md)
+-  — **leaves unresolved.** The design's top app-bar club-switcher (signed-in club switching) is
+-  explicitly deferred out of this slice.
+-- `docs/design-gaps-2026-07-04.md` gap #1 — **partially addresses** (tab structure only;
+-  app-bar/club-switcher and Members role badges deferred).
+-
+-## Scope
+-
+-### In scope
+-
+-The member club home (`MemberDashboardLive` / `PageHTML.club`) only:
+-
+-- A **section-tab spine** with two tabs: **Conversations** (selected by default) and **Members**.
+-- A consistent **action slot** with one primary action per tab: **New message** on Conversations,
+-  **Invite member** on Members (shown only when the viewer can manage members — current gating).
+-- **Conversations panel:** today's conversation rows and existing empty state, plus the preserved
+-  "Prefer email? → everyone@<club>…" inbound-email affordance.
+-- **Members panel:** today's members content (the avatar-stack card), unchanged.
+-- Client-side tab switching (no full page reload), accessible (`role="tablist"`/`"tab"`,
+-  `aria-selected`), defaulting to Conversations.
+-
+-### Out of scope
+-
+-- The top app-bar / club-switcher dropdown / member identity dropdown (later slice).
+-- Named member rows + role badges in the Members panel (member-roles slice; needs a role
+-  read-model join).
+-- Any change to conversation-row content, member content, compose behaviour, or permissions.
+-- A mobile-specific redesign (the mobile club-home design is itself stale — separate design-first
+-  work).
+-- An Events tab (the design keeps it commented out as future).
+-
+-## Iteration Type
+-
+-**Technical / UI restructure (information architecture).** The change is user-observable
+-(navigation moves to tabs; the members list now lives behind a Members tab; one primary action
+-per section), but it introduces **no new business rule**: the same content, the same actions,
+-and the same permissions. A club message still goes to all current members; the member list shows
+-the same people; invite is gated exactly as today.
+-
+-## Acceptance Scenarios / Feature Files
+-
+-**BDD decision: Not useful for this slice.** No new business rule, permission, lifecycle, or
+-eligibility is introduced — this is a presentational IA reorganisation of existing behaviour.
+-The underlying behaviours are unchanged and already covered by existing shared scenarios:
+-
+-- Sending a club message and replies — `club_message_replies.feature`,
+-  `member_message_deliverability.feature`.
+-- Inviting members and manage-members gating — `club_member_invitations.feature`,
+-  `club_membership_administration.feature`.
+-
+-The tab reorganisation (both tabs render, Conversations is the default panel, one action per tab,
+-invite-action gating, both panels' content present) is verified by LiveView/controller tests, not
+-by a new stakeholder-readable rule. No `.feature` files are added or changed, so the mainline
+-stays green.
+-
+-## Designs
+-
+-**Design of record:** [`design-system/wireframes/club-home.html`](../../../design-system/wireframes/club-home.html)
+-(refreshed 2026-07-04), which specifies the full tabbed shell. This slice implements a **subset**
+-of that final design:
+-
+-- Implemented now: the `section-tabs` spine (Conversations / Members), the `section-tabs__action`
+-  per-tab action slot, and the two `section-panel`s reusing existing content.
+-- **Intentionally omitted this slice** (later slices): the top app-bar with club-switcher +
+-  member identity dropdown, and the named member rows + role badges inside the Members panel.
+-
+-**No new design needed.** The final design already exists; this slice references it and omits the
+-deferred elements. Fast-follow: reconcile the club home to the full design once the app-bar and
+-member-roles slices land.
+-
+-## Acceptance Criteria
+-
+-- The member club home shows a tab spine with **Conversations** and **Members**; **Conversations
+-  is selected by default**.
+-- Selecting a tab shows that panel and hides the other **without a full page navigation**, and
+-  updates the active-tab styling and `aria-selected`.
+-- The **Conversations** tab shows a single primary **New message** action that opens the existing
+-  compose flow (`member_compose_path`).
+-- The **Conversations** panel shows today's conversation rows (or the existing empty state) and
+-  preserves the **"Prefer email? → everyone@<club>…"** inbound-email affordance.
+-- The **Members** tab shows a single primary **Invite member** action, **visible only when the
+-  current member can manage members** (same gating as today), plus the existing members content.
+-- **No change** to who receives a club message, who appears in the member list, or who can invite.
+-- Tabs are keyboard- and screen-reader-operable (`role="tablist"`/`"tab"`, `aria-selected`),
+-  matching the design's markup intent.
+-
+-## Open Business Decisions
+-
+-- **Compose CTA + inbound-email note (recommended default, pending Matt).** Replace the big green
+-  "Send a message to the club?" CTA card with the compact **New message** tab action, while
+-  **preserving** the "Prefer email? → everyone@<club>…" note on the Conversations panel — removing
+-  it would regress the intentional, tested send-by-email path (problem 2026-06-02). Alternatives:
+-  (b) drop the email note to match the design exactly, or (c) keep the full CTA card inside the
+-  Conversations panel.
+-- **Hero greeting.** Keep "Hello, {first name}." above the tabs for now (the app-bar that would
+-  otherwise carry identity is deferred), or drop it. Default: **keep**.
+-
+-## Implementation Plan
+-
+-- `web/lib/memba_web/controllers/page_html/club.html.heex`: wrap the body in a section-tab spine
+-  (tablist: Conversations / Members) + an action slot + two `section-panel`s. Move the conversation
+-  list into the Conversations panel and the members card into the Members panel. Replace the CTA
+-  card with the compact **New message** action and relocate the inbound-email note onto the
+-  Conversations panel.
+-- Tab switching: use `Phoenix.LiveView.JS` client commands (`JS.show`/`JS.hide`/`JS.set_attribute`
+-  for `aria-selected` + active styling) so switching is instant and requires no server round-trip
+-  or new LiveView state — matching the design's client-side toggle.
+-- Reuse existing bindings/helpers: `member_compose_path`, `member_invitation_path`,
+-  `@current_member_can_manage_members?`, `@message_rows`, `@members`, `inbound_email_address`,
+-  and the existing empty states.
+-- Add/adjust a LiveView/controller test asserting: both tab controls render; Conversations panel
+-  is the default; the **New message** action is present on Conversations; the **Invite member**
+-  action is present on Members only when manage-members is allowed; both panels' content renders.
+-- **No** presentation-module, schema, event, or command changes.
+-
+-## Open Technical Decisions
+-
+-- **Tab switching mechanism:** `Phoenix.LiveView.JS` client commands (recommended — instant,
+-  stateless) vs a server-side active-tab assign. Confirm the JS approach fits the app's existing
+-  hooks/JS conventions; fall back to a LiveView assign if not.
+-
+-## New Capability
+-
+-The club home presents its content as an app-like **tabbed interface** (Conversations / Members)
+-with one primary action per section — the IA pattern the rest of the app-like redesign builds on.
+-
+-## Validation Plan
+-
+-- **Automated:** the LiveView/controller test above (tab controls, default panel, per-tab actions,
+-  invite gating, panel content). `dev check` stays green (no feature-file changes).
+-- **Visual:** `./bin/dev gallery-walk`, then compare the `member-club-home` screenshot against
+-  `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+-- **Manual:** load the club home; toggle Conversations/Members; confirm **New message** /
+-  **Invite member** actions, the preserved email affordance, and keyboard/`aria` behaviour.
+-
+-## Risks / Follow-ups
+-
+-- The Members panel still shows the avatar-stack (not named rows/badges) — intentional; reconciled
+-  in the **member-roles** slice (gap #2).
+-- No app-bar/club-switcher yet — the hero greeting is a temporary stand-in for club/member
+-  identity; reconciled in the **app-bar** slice (and ties to the cross-site-navigation problem).
+-- Long member lists (e.g. 142 rows) are avoided for now by deferring named rows.
+-- Keep existing acceptance scenarios green (no feature changes).
+diff --git a/docs/iterations/046-conversation-page-alignment/plan.md b/docs/iterations/046-conversation-page-alignment/plan.md
+new file mode 100644
+index 0000000..5d3bf8e
+--- /dev/null
++++ b/docs/iterations/046-conversation-page-alignment/plan.md
+@@ -0,0 +1,144 @@
++# 046 — Conversation page: follow toggle, replies-first, message timestamps
++
++Date: 2026-07-04
++Status: validated
++
++> Finalised 2026-07-04. Written against the refreshed `member-conversation.html`; grounded in the
++> current `message.html.heex` and `member_message_detail.ex`. Delivers after 044 (shell) and 045
++> (tabs) in number order. Repurposes the 046 slot (previously a duplicate club-home-tabs draft,
++> superseded by 045).
++
++## Goal
++
++Align the member conversation page (`page_html/message.html.heex` / `MemberMessageDetailLive`) to
++the refreshed `design-system/wireframes/member-conversation.html` **interaction model**, without
++touching delivery: replace the follow card+buttons with a compact **toggle**, move the reply
++**composer below the replies** (replies-first reading order), add **timestamps** to the original
++message and each reply, and give messages the boxed **card** treatment.
++
++## Background / Context
++
++The refreshed conversation design changed the page's interaction model. Today's app shows: header
++→ follow card (heading + Follow/Stop buttons) → composer → replies → two heavy inline delivery
++sections. The design shows: subject with a compact follow **toggle** beside it → boxed original
++message with a timestamp → reply cards with timestamps → composer at the **bottom**.
++
++**Delivery is deliberately excluded from this slice.** The refreshed design also removes inline
++delivery entirely and relocates it to a per-message ⋮ → **Delivery details** page — a change that
++needs a **new page** and is its own slice (**047**). This slice leaves the existing inline delivery
++sections in place (interim) and changes only the follow control, ordering, timestamps, and card
++treatment.
++
++## Related Problems
++
++- [`docs/problems/2026-06-22-conversation-page-design-barer-than-app.md`](../../problems/2026-06-22-conversation-page-design-barer-than-app.md)
++  — **partially addresses** (card treatment + composer states already shipped; this aligns the
++  follow control, ordering, and timestamps).
++- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
++  — **partially addresses** (lighter follow control; replies-first reading).
++
++## Scope
++
++### In scope
++
++- Replace the follow **card + Follow/Stop-following buttons** with the compact follow **toggle**
++  beside the subject, preserving the existing follow/unfollow behaviour and the can-follow gating.
++- Move the reply **composer below the replies** (replies-first reading order), preserving the
++  composer, "Replying as {name}", and the posted / validation-error states.
++- Add a **timestamp** to the original message and to each reply card.
++- Apply the boxed **message-card** treatment (original + replies) per the design.
++
++### Out of scope
++
++- **Delivery relocation** — the per-message ⋮ → Delivery details page and removing the inline
++  delivery sections (its own slice, 047). Inline delivery stays as-is here.
++- Any change to follow/reply **behaviour**, permissions, or notification rules.
++- The club home (045) and member roles (048).
++
++## Iteration Type
++
++**Technical / UI restructure (presentation).** User-observable, but **no new business rule**:
++follow, reply, and delivery behaviour are unchanged.
++
++## Acceptance Scenarios / Feature Files
++
++**BDD decision: Not useful for this slice.** No new business rule, permission, or lifecycle state
++is introduced — follow and reply behaviour are unchanged and already covered by the existing
++conversation/replies scenarios. The presentation changes (follow toggle, composer position,
++timestamps, card treatment) are verified by LiveView tests. No `.feature` files change; mainline
++stays green.
++
++## Designs
++
++**Design of record:** [`design-system/wireframes/member-conversation.html`](../../../design-system/wireframes/member-conversation.html)
++(refreshed 2026-07-04) — compact follow toggle beside the title, boxed message cards with
++timestamps, composer below the replies. This slice omits the design's ⋮ → Delivery details menu
++and the removal of inline delivery (deferred to 047). **No new design needed.**
++
++## Acceptance Criteria
++
++- The follow control is a compact **toggle** beside the subject; toggling it follows / stops
++  following with the same behaviour and gating as today.
++- The reply **composer renders below the replies**; posting a reply and the posted / empty-reply
++  validation states still work.
++- The original message and each reply show a **timestamp**.
++- Original message and replies render as boxed **cards** matching the design.
++- Delivery behaviour and the existing delivery sections are unchanged (relocation is 047).
++
++## Open Business Decisions
++
++None known (delivery relocation split out to 047, confirmed intended).
++
++## Implementation Plan
++
++1. Add a private `format_message_time/1` helper (near `conversation_entry_card` in
++   `web/lib/memba_web/controllers/page_html.ex`) that formats a `%DateTime{}` like the design
++   ("3 Jun, 7:02am").
++2. In `conversation_entry_card` (`page_html.ex`), render `@entry.message.inserted_at` via that
++   helper in the card head, beside the sender name — a timestamp on the original and every reply.
++3. Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row
++   from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
++4. In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so
++   the follow control sits compactly beside the title.
++5. Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact
++   follow **toggle** (checkbox/switch) that reads as following/not-following from
++   `@following_conversation`.
++6. Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the
++   matching event from the toggle's change), unchanged server-side.
++7. Preserve the non-member state: when `!@can_follow_conversation`, show the existing
++   "Only current club members can follow…" explanation instead of an interactive toggle.
++8. Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies`
++   (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
++9. Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card`
++   so they match the design (`message` / `message--original`).
++10. Update `MemberMessageDetailLive` tests: follow toggle reflects and changes following state via the
++    existing events; the composer renders after the replies; original + replies show a timestamp.
++11. Run `./bin/dev gallery-walk` and compare the conversation screenshot to
++    `design-system/wireframes/member-conversation.html`.
++12. Run `dev check` and confirm it is green (no feature-file changes).
++
++## Open Technical Decisions
++
++None open. **Timestamp source: decided —** each conversation entry already carries the full message
++struct, and the `messaging_messages` projection has `timestamps(type: :utc_datetime_usec)`, so
++`@entry.message.inserted_at` is available directly; no presentation or projection change is needed,
++only a display-format helper. **Follow control: decided —** a compact toggle wired to the existing
++`follow_conversation` / `unfollow_conversation` events (no new events or server state).
++
++## New Capability
++
++The conversation page reads replies-first with a lightweight follow toggle and message timestamps —
++matching the refreshed app-like design.
++
++## Validation Plan
++
++- **Automated:** LiveView tests (toggle, ordering, timestamps); `dev check` green.
++- **Visual:** `./bin/dev gallery-walk`; compare the conversation screenshot to
++  `member-conversation.html`.
++- **Manual:** follow/unfollow via the toggle; post a reply; confirm replies-first order + timestamps.
++
++## Risks / Follow-ups
++
++- Depends on **044** (shell) and follows **045** (tabs) in the delivery order.
++- **047** relocates delivery to the ⋮ → Delivery details page and removes the inline delivery
++  sections this slice leaves in place.
+diff --git a/docs/iterations/047-conversation-delivery-details/plan.md b/docs/iterations/047-conversation-delivery-details/plan.md
+new file mode 100644
+index 0000000..aac4fbc
+--- /dev/null
++++ b/docs/iterations/047-conversation-delivery-details/plan.md
+@@ -0,0 +1,143 @@
++# 047 — Delivery details page + relocate delivery off the conversation
++
++Date: 2026-07-04
++Status: validated
++
++> Written 2026-07-04 against the refreshed `member-conversation.html` + `delivery-details.html`,
++> grounded in the current `message.html.heex` and `member_message_detail.ex`. Delivers after 044
++> (shell), 045 (tabs), 046 (conversation alignment) in number order.
++
++## Goal
++
++Complete the refreshed conversation design's **delivery relocation**: add a per-message
++**Delivery details** page (per `design-system/wireframes/delivery-details.html`), reached from a
++**⋮ menu** on each conversation message, and **remove the two inline delivery sections** from the
++conversation page.
++
++## Background / Context
++
++Today the conversation page (`page_html/message.html.heex`) carries two heavy inline delivery
++blocks — a "Message delivery" summary bar and a "Members by delivery status" grouped breakdown —
++plus a "sent to N members" meta line. The refreshed design moves all of this **off** the
++conversation onto a dedicated per-message Delivery details page, reached from a ⋮ menu on the
++original message and each reply. Iteration 046 aligned the conversation's follow control, ordering,
++and timestamps but deliberately left the inline delivery in place; **this slice relocates it**.
++
++The delivery data already exists: the conversation loader builds its receipt model with
++`Messaging.list_member_email_deliverys(message_id) |> MemberEmailDeliveryPresentation.present_receipts()`
++(summary, groups, receipts, total_count). This slice re-presents that same data on a new route.
++
++## Related Problems
++
++- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
++  — **partially addresses.** Declutters the conversation; delivery detail moves to its own page.
++
++## Scope
++
++### In scope
++
++- A new **member route** `/messages/:message_id/delivery` rendering a **Delivery details** page for
++  that message, with the **same authorization** as the conversation Show route.
++- The page matches `delivery-details.html`: message header (subject / sender / time), a summary bar
++  + legend, and grouped recipients — **problems expanded**, **delivered collapsed** — with bounce
++  reasons, plus a "Back to conversation" link.
++- A per-message **⋮ menu** on the original message and each reply (in `conversation_entry_card`)
++  linking to that message's delivery page.
++- **Remove** the inline `#member-receipt-summary` section and the "Members by delivery status"
++  grouped section from `message.html.heex`, and the "sent to N members" delivery meta line.
++
++### Out of scope
++
++- Any change to how delivery status is computed, or to delivery **statuses** themselves.
++- Staff delivery views (`/deliveries`, staff `MessagesLive`).
++- The conversation follow/reply/timestamp changes (046) and the club home (045).
++
++## Iteration Type
++
++**Technical / UI restructure (re-presentation + new read-only route).** User-observable (delivery
++moves to its own page), but **no new business rule**: the delivery data is unchanged and the new
++page shows the same information already visible inline today, under the same access.
++
++## Acceptance Scenarios / Feature Files
++
++**BDD decision: Not useful for this slice.** No new business rule or permission is introduced — the
++per-recipient delivery data is the same already shown inline and already covered by the deliverability
++scenarios; the new route carries the **same authorization** as the conversation page. This is a
++relocation/re-presentation, verified by LiveView/route tests. No `.feature` files change; mainline
++stays green.
++
++## Designs
++
++**Design of record:** [`design-system/wireframes/delivery-details.html`](../../../design-system/wireframes/delivery-details.html)
++(the Delivery details page) and [`design-system/wireframes/member-conversation.html`](../../../design-system/wireframes/member-conversation.html)
++(the per-message ⋮ → Delivery details menu, and a conversation with no inline delivery).
++**No new design needed.**
++
++## Acceptance Criteria
++
++- Each conversation message (original + every reply) shows a **⋮ menu** with a **Delivery details**
++  item linking to `/messages/:message_id/delivery` for that message.
++- The Delivery details page shows the message header, a summary bar + legend, and grouped recipients
++  with **problems expanded** and **delivered collapsed**, including bounce reasons, plus a
++  **Back to conversation** link.
++- The conversation page **no longer** renders the inline delivery summary, the "Members by delivery
++  status" breakdown, or the "sent to N members" meta line.
++- The delivery route enforces the **same authorization** as viewing the conversation.
++- Delivery **data and statuses are unchanged** — this only relocates the presentation.
++
++## Open Business Decisions
++
++None known.
++
++## Implementation Plan
++
++1. Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show`
++   in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
++2. Create `MemberMessageDeliveryLive.Show` that loads the target message and its receipt model via
++   `Messaging.list_member_email_deliverys/1 |> MemberEmailDeliveryPresentation.present_receipts/1`,
++   scoped to the member's active clubs (reuse the `member_message_detail` load pattern and authz).
++3. Build the delivery page template per `delivery-details.html`: header (subject / sender /
++   `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
++4. Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt
++   presentation fields; keep the delivered group collapsed with a count.
++5. Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`,
++   `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into
++   `web/assets/css/app.css`, names 1:1 with the mirror.
++6. Add a **Back to conversation** link on the delivery page returning to the message's conversation.
++7. Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details
++   item linking to `/messages/#{message_id}/delivery`.
++8. Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped
++   section from `message.html.heex`.
++9. Remove the "sent to N members" delivery meta line from the conversation subject header.
++10. Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the
++    same authz as the conversation; the conversation kebab links to it; the conversation no longer
++    renders the inline delivery sections.
++11. Run `./bin/dev gallery-walk` and compare the delivery page to `delivery-details.html` and the
++    conversation to `member-conversation.html`.
++12. Run `dev check` and confirm it is green (no feature-file changes).
++
++## Open Technical Decisions
++
++None open. **Route/module: decided —** `MemberMessageDeliveryLive.Show` at
++`/messages/:message_id/delivery`, in the member scope, reusing the conversation loader's receipt
++model and authorization. Replies are messages too, so each reply's ⋮ links to its own delivery page.
++
++## New Capability
++
++Members reach a focused **Delivery details** page per message, and the conversation page is
++decluttered of inline delivery — matching the refreshed design.
++
++## Validation Plan
++
++- **Automated:** LiveView/route tests (delivery page renders the breakdown; authz parity; kebab
++  link; inline sections removed); `dev check` green.
++- **Visual:** `./bin/dev gallery-walk`; compare to `delivery-details.html` and `member-conversation.html`.
++- **Manual:** open a conversation, use a message's ⋮ → Delivery details, see the breakdown, and
++  return via Back to conversation.
++
++## Risks / Follow-ups
++
++- **Reply receipts:** replies are emailed to followers, so a reply's delivery page shows its own
++  (smaller) recipient set; if a message has no receipts yet, the page shows an empty/none state.
++- Depends on 044 (shell); follows 045/046 in the delivery order. Builds directly on the 046 kebab-less
++  conversation (046 leaves inline delivery; 047 removes it).
+diff --git a/docs/iterations/048-named-member-rows/plan.md b/docs/iterations/048-named-member-rows/plan.md
+new file mode 100644
+index 0000000..e88a920
+--- /dev/null
++++ b/docs/iterations/048-named-member-rows/plan.md
+@@ -0,0 +1,120 @@
++# 048 — Club home Members: named member rows
++
++Date: 2026-07-04
++Status: validated
++
++> Written 2026-07-04 against the refreshed `club-home.html` Members panel. Delivers after 044–047 in
++> number order; builds inside the 045 Members tab.
++
++## Goal
++
++Replace the club-home Members panel's avatar-stack card with **named member rows** (avatar + name +
++meta, current member marked "You"), matching the Members tab in `design-system/wireframes/club-home.html`.
++Role badges are a separate slice (**049**) that needs a product decision on which roles display.
++
++## Background / Context
++
++Today the club home shows members as an avatar stack + count ("142 members"); names live only in
++avatar tooltips. The refreshed design's Members tab shows a `member-list` of named `member-row`s.
++Iteration 045 introduced the Members tab/panel; this slice fills it with named rows. The member
++names/initials already flow to the view via `MemberDashboardPresentation` (`@members`).
++
++The design's rows also carry **role badges** (Chair / Secretary / Treasurer / Trip organizer). The
++domain has a roles framework (`Membership.Roles`, role assignments, `membership_roles`), but the
++only seeded role today is the internal "Membership Administrator" permission role — so **which roles
++surface as public member badges is a product decision**, split out to **049**. This slice ships the
++named rows only.
++
++## Related Problems
++
++- [`docs/problems/2026-06-23-interface-too-fancy-for-simple-app-use.md`](../../problems/2026-06-23-interface-too-fancy-for-simple-app-use.md)
++  — **partially addresses.** The Members tab becomes a real, legible list ("people, not avatars").
++
++## Scope
++
++The club home Members panel (`page_html/club.html.heex` / `MemberDashboardPresentation`) only.
++
++### In scope
++
++- Replace the avatar-stack card with a **`member-list` of named `member-row`s** (avatar initials +
++  name + meta), matching the design.
++- Mark the **current member's** row (a "You" indicator in the meta).
++- Keep the existing **Invite member** action (from 045) and the members empty state.
++
++### Out of scope
++
++- **Role badges** (Chair / Secretary / … ) — the later **049** slice, pending the product decision
++  on which roles display.
++- A "member since {date}" meta value, unless that date already flows to the view (see Open
++  Technical Decisions).
++- Conversation/club-message content, permissions, and the other tabs.
++
++## Iteration Type
++
++**Technical / UI restructure (presentation).** User-observable (avatar stack → named rows), but
++**no new business rule**: same members, same data, same permissions.
++
++## Acceptance Scenarios / Feature Files
++
++**BDD decision: Not useful for this slice.** No new business rule or permission — this re-presents
++the existing member list, already covered by the membership/invitation scenarios. Verified by
++LiveView/controller tests. No `.feature` files change; mainline stays green.
++
++## Designs
++
++**Design of record:** [`design-system/wireframes/club-home.html`](../../../design-system/wireframes/club-home.html)
++Members panel (`member-list` / `member-row`). This slice implements the named rows and omits the
++**role badges** (deferred to 049). **No new design needed.**
++
++## Acceptance Criteria
++
++- The Members tab shows a **list of named member rows** (avatar initials + name), one per member,
++  instead of the avatar-stack card.
++- The **current member's** row is marked (e.g. "You" in the meta).
++- The **Invite member** action (gated as today) and the members empty state are preserved.
++- **No change** to who appears in the member list or who can invite.
++
++## Open Business Decisions
++
++None open. Role badges are deferred to 049 (which resolves which roles display).
++
++## Implementation Plan
++
++1. In the Members `section-panel` of `web/lib/memba_web/controllers/page_html/club.html.heex`
++   (added in 045), replace the avatar-stack card with a `member-list` container.
++2. Render each of `@members` as a `member-row`: avatar initials + the member's name.
++3. Add a meta line per row and mark the **current member** with a "You" indicator.
++4. Preserve the existing members **empty state** and the **Invite member** action from 045.
++5. Port the `member-list` and `member-row` CSS (and its children) from `design-system/`
++   (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1 with the mirror.
++6. Update the LiveView/controller test: members render as named rows; the current member's row is
++   marked "You"; the Invite action and empty state still behave as before.
++7. Run `./bin/dev gallery-walk` and compare the Members tab to `club-home.html` (named rows).
++8. Run `dev check` and confirm it is green (no feature-file changes).
++
++## Open Technical Decisions
++
++- **"Member since" date:** include the date in the row meta **only if** a membership-since date
++  already flows to `@members` via `MemberDashboardPresentation`; if it does not, omit the date this
++  slice (name + "You" marker only) rather than adding a new read-model field. Sourcing a
++  membership-since date is a separate concern.
++
++## New Capability
++
++The Members tab lists members by **name** (people, not avatars) — the base the role-badges slice
++(049) extends.
++
++## Validation Plan
++
++- **Automated:** LiveView/controller test (named rows; "You" marker; invite gating; empty state);
++  `dev check` green.
++- **Visual:** `./bin/dev gallery-walk`; compare the Members tab to `club-home.html`.
++- **Manual:** open the club home Members tab; see named rows with your own row marked "You".
++
++## Risks / Follow-ups
++
++- Depends on 044 (shell) and 045 (Members tab) being merged first.
++- **049 role badges** adds per-member role badges once the product decision on which roles display
++  is made (all assigned roles? committee roles only? exclude internal permission roles?).
++- Long member lists (e.g. 142 rows) render as a simple list; virtualisation/pagination is not in
++  scope and can be a later concern if needed.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index ded07b6..aaa86c5 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -53,9 +53,17 @@ green than before.
+ | 041 | 2026-06-19 | merged | Reply by email | [plan](041-reply-by-email-threading/plan.md) |
+ | 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
+ | 043 | 2026-06-22 | merged | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
++<<<<<<< HEAD
+ | 044 | 2026-07-04 | implementing | Shared member app-shell: app-bar + app-card frame (plan replaced 2026-07-04 against refreshed design) | [plan](044-shared-app-shell/plan.md) |
++| 045 | 2026-07-04 | validated | Club home: Conversations / Members section tabs (slot repurposed 2026-07-04; prior stop-following plan in git history) | [plan](045-club-home-section-tabs/plan.md) |
++| 046 | 2026-07-04 | validated | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
++| 047 | 2026-07-04 | validated | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
++| 048 | 2026-07-04 | validated | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
++=======
++| 044 | 2026-07-04 | merged | Shared member app-shell: app-bar + app-card frame (plan replaced 2026-07-04 against refreshed design) | [plan](044-shared-app-shell/plan.md) |
+ | 045 | 2026-06-23 | validated | Stop-following page: minimal header | [plan](045-stop-following-page-header/plan.md) |
+ | 046 | 2026-07-04 | draft | Club home: Conversations / Members section tabs | [plan](046-club-home-section-tabs/plan.md) |
++>>>>>>> 6b2e9a3 (iteration 044: 044 — Shared member app-shell: app-bar + app-card frame)
+ 
+ Status notes:
+ 
