@@ -1,7 +1,7 @@
 # 044 — Shared member app-shell: app-bar + app-card frame
 
 Date: 2026-07-04
-Status: validated
+Status: implementing
 
 > This plan **replaces** the earlier 044 draft (and is decided independently of the 044/045/046
 > drafts). It is written against the **2026-07-04 refreshed** design mirror, in which the in-club
