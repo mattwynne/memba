@@ -180,6 +180,15 @@ defmodule MembaWeb.LayoutsTest do
       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
     )
 
+    assert [csrf_token] =
+             attributes(
+               html,
+               "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_csrf_token'][type='hidden']",
+               "value"
+             )
+
+    assert String.trim(csrf_token) != ""
+
     assert_selector(
       html,
       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"

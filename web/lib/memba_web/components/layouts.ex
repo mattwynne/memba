@@ -398,20 +398,11 @@ defmodule MembaWeb.Layouts do
 
   defp club_identity_label(_member_name, _identity), do: "Member"
 
-  defp club_identity_initials(member_name, identity) when is_binary(member_name) do
-    case String.trim(member_name) do
-      "" -> club_identity_initials(nil, identity)
-      name -> initials(name)
-    end
-  end
-
-  defp club_identity_initials(_member_name, %{email: email}) when is_binary(email) do
-    email
-    |> email_local_part()
+  defp club_identity_initials(member_name, identity) do
+    member_name
+    |> club_identity_label(identity)
     |> initials()
   end
-
-  defp club_identity_initials(_member_name, _identity), do: "M"
 
   defp email_local_part(email) do
     email
