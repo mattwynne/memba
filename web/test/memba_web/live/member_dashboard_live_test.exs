@@ -90,7 +90,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-tab-members.section-tab[role='tab'][aria-selected='false']",
-             "Members"
+              "Members"
+            )
+
+    assert has_element?(
+             view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+             "New message"
            )
   end
 
