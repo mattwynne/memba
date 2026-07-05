@@ -101,6 +101,47 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard renders the members tab invite action only for members who can manage members",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, admin_view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/")
+
+    assert has_element?(
+             admin_view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm[data-action='members'][hidden][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers"
+      )
+
+    {:ok, member_view, _html} =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/")
+
+    refute has_element?(
+             member_view,
+             "#member-section-tabs .section-tabs__action #member-section-action-invite-member"
+           )
+  end
+
   test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
        %{conn: conn} do
     alice =
