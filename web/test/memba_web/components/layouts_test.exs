@@ -132,18 +132,31 @@ defmodule MembaWeb.LayoutsTest do
       </Layouts.club_site>
       """)
 
-    assert_selector(html, "#club-site-layout[data-surface='club-site']")
-    assert_selector(html, "#club-site-layout-slot")
-    assert_text(html, "#club-site-layout header", "Riverside Tennis Club")
-    assert_selector(html, "#club-site-layout header .app-bar")
-    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
+    assert_selector(html, "#club-site-layout.app-frame[data-surface='club-site']")
+    assert_selector(html, "#club-site-layout > .app-card")
+    assert_selector(html, "#club-site-layout > .app-card > main #club-site-layout-slot")
+    assert_text(html, "#club-site-layout .app-card > header", "Riverside Tennis Club")
+    assert_selector(html, "#club-site-layout .app-card > header .app-bar")
+
+    assert_text(
+      html,
+      "#club-site-layout header .app-bar__brand .app-bar__club",
+      "Riverside Tennis Club"
+    )
+
     refute_selector(html, "#club-site-layout header .app-bar__club[href]")
     refute_selector(html, "#club-site-layout header a[href='/']")
     assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
-    assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
+
+    assert_selector(
+      html,
+      "#club-site-layout header button#club-site-identity-menu-button.app-bar__me"
+    )
+
     assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
     assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
+    assert_selector(html, "#club-site-footer.app-foot")
     assert_text(html, "#club-site-footer", "Powered by Memba")
 
     assert_selector(
@@ -173,10 +186,7 @@ defmodule MembaWeb.LayoutsTest do
 
     refute_text(html, "#club-site-footer", "Commit")
 
-    assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
-    assert only_attribute(html, "#club-site-layout", "class") =~ "text-base-content"
-    assert only_attribute(html, "#club-site-layout header", "class") =~ "bg-base-100"
-    assert only_attribute(html, "#club-site-layout header", "class") =~ "border-base-300"
+    assert only_attribute(html, "#club-site-layout", "class") == "app-frame"
     refute html =~ "--club-site-"
     assert [] = attributes(html, "#club-site-layout", "style")
   end
@@ -192,7 +202,13 @@ defmodule MembaWeb.LayoutsTest do
       """)
 
     assert_selector(html, "#club-site-layout header .app-bar")
-    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
+
+    assert_text(
+      html,
+      "#club-site-layout header .app-bar__brand .app-bar__club",
+      "Riverside Tennis Club"
+    )
+
     refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
     refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
     refute_selector(html, "#club-site-layout header .app-bar__avatar")

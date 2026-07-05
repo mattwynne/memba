@@ -307,10 +307,10 @@ defmodule MembaWeb.Layouts do
     <div
       id="club-site-layout"
       data-surface="club-site"
-      class="min-h-screen bg-base-200 text-base-content"
+      class="app-frame"
     >
-      <header class="border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto max-w-7xl py-4">
+      <div class="app-card">
+        <header>
           <div class="app-bar">
             <div class="app-bar__brand">
               <span class="app-bar__club">{@club_name}</span>
@@ -352,28 +352,25 @@ defmodule MembaWeb.Layouts do
               </div>
             </nav>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        {render_slot(@inner_block)}
-      </main>
+        <main class="px-4 py-10 sm:px-6 lg:px-8">
+          {render_slot(@inner_block)}
+        </main>
+      </div>
 
       <footer
         id="club-site-footer"
-        class="border-t border-base-300 bg-base-100 px-4 py-6 sm:px-6 lg:px-8"
+        class="app-foot"
       >
-        <div class="mx-auto max-w-7xl text-sm font-medium text-ink-2">
-          Powered by
-          <a
-            id="club-site-footer-memba-home-link"
-            href={ClubSite.root_url()}
-            aria-label="Visit Memba home"
-            class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
-          >
-            Memba
-          </a>
-        </div>
+        Powered by
+        <a
+          id="club-site-footer-memba-home-link"
+          href={ClubSite.root_url()}
+          aria-label="Visit Memba home"
+        >
+          Memba
+        </a>
       </footer>
     </div>
 
