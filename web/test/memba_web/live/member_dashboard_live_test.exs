@@ -49,7 +49,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#club-site-identity-menu-button .app-bar__who",
-             "alice@example.com"
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__avatar",
+             "AA"
            )
 
     assert has_element?(view, "#member-message-#{message.message_id}")

@@ -7,7 +7,7 @@
 - [x] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
 - [x] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
 - [x] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
-- [ ] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+- [x] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
 - [ ] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
 - [ ] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
 - [ ] 011 Update LiveView/layout tests: app-bar renders `@club_name`; identity dropdown gated on `@current_identity`; Sign out posts to `DELETE /auth`; content sits in the app-card.

@@ -78,7 +78,7 @@ async function ensureSmokeMemberSignedIn(world) {
   await world.page.goto(clubSiteUrl(world.config, "/"));
   await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
   await expect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(
-    clubIdentityFallbackLabelFor(world.config.member.email)
+    clubIdentityLabelFor(world.config.member)
   );
 }
 
@@ -142,6 +142,11 @@ function cssStringValue(value) {
 
 function clubIdentityFallbackLabelFor(email) {
   return String(email).split("@")[0].trim() || "Member";
+}
+
+function clubIdentityLabelFor(member) {
+  const name = member && typeof member.name === "string" ? member.name.trim() : "";
+  return name || clubIdentityFallbackLabelFor(member && member.email);
 }
 
 module.exports = {
