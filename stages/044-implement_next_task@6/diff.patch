@@ -1,0 +1,42 @@
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 388fc71..7fc16c3 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+ - [x] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+ - [x] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
+-- [ ] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
++- [x] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
+ - [ ] 011 Update LiveView/layout tests: app-bar renders `@club_name`; identity dropdown gated on `@current_identity`; Sign out posts to `DELETE /auth`; content sits in the app-card.
+ - [ ] 012 Add/adjust a test that every `club_site` surface still renders under the new shell (club home, conversation, compose, invitation, public club page).
+ - [ ] 013 Run `./bin/dev gallery-walk` and compare the club-home and conversation screenshots to `design-system/wireframes/club-home.html` / `member-conversation.html`.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 8bccba3..9da6e93 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -158,6 +158,14 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+            |> Enum.any?()
+ 
++    assert html
++           |> LazyHTML.query("#club-site-layout header .app-bar__club")
++           |> LazyHTML.text() =~ "Kootenay Mountaineering Club"
++
++    refute html |> LazyHTML.query("#club-site-identity-menu-button") |> Enum.any?()
++    refute html |> LazyHTML.query("#club-site-sign-out-form") |> Enum.any?()
++    refute html |> LazyHTML.query("#club-site-layout header .app-bar__id") |> Enum.any?()
++
+     assert html
+            |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Visit Memba home"
+@@ -336,6 +344,9 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+            |> Enum.any?()
+ 
++    refute html |> LazyHTML.query("#club-site-identity-menu-button") |> Enum.any?()
++    refute html |> LazyHTML.query("#club-site-sign-out-form") |> Enum.any?()
++
+     refute response =~ "Send club message"
+   end
+ 
