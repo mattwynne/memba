@@ -1,0 +1,211 @@
+diff --git a/docs/iterations/045-club-home-section-tabs/todo.md b/docs/iterations/045-club-home-section-tabs/todo.md
+index 85e708c..40603ec 100644
+--- a/docs/iterations/045-club-home-section-tabs/todo.md
++++ b/docs/iterations/045-club-home-section-tabs/todo.md
+@@ -9,6 +9,6 @@
+ - [x] 007 Wrap today's members content (avatar stack + count, invite gating) in a Members `section-panel` that is hidden by default.
+ - [x] 008 Port the `section-tabs`, `section-tab`, `section-tabs__action`, and `section-panel` CSS from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1.
+ - [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
+-- [ ] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
++- [x] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
+ - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/test/memba_web/app_shell_css_test.exs b/web/test/memba_web/app_shell_css_test.exs
+index 4aa26ea..4ac1f58 100644
+--- a/web/test/memba_web/app_shell_css_test.exs
++++ b/web/test/memba_web/app_shell_css_test.exs
+@@ -4,6 +4,7 @@ defmodule MembaWeb.AppShellCssTest do
+   @app_css Path.expand("../../assets/css/app.css", __DIR__)
+   @design_system_css Path.expand("../../../styles.css", __DIR__)
+   @member_app_shell_marker "/* ============================================================\n   Member app shell components."
++  @club_home_section_tabs_marker "/* ============================================================\n   Club-home section tabs."
+ 
+   test "app stylesheet defines the shared member app shell classes" do
+     css = File.read!(@app_css)
+@@ -55,6 +56,34 @@ defmodule MembaWeb.AppShellCssTest do
+ 
+   defp member_app_shell_css(css) do
+     [_before, member_app_shell_css] = String.split(css, @member_app_shell_marker, parts: 2)
+-    @member_app_shell_marker <> member_app_shell_css
++
++    (@member_app_shell_marker <> member_app_shell_css)
++    |> strip_club_home_section_tabs()
++    |> strip_club_home_section_tab_media_rules()
++  end
++
++  defp strip_club_home_section_tabs(css) do
++    case String.split(css, @club_home_section_tabs_marker, parts: 2) do
++      [before, rest] ->
++        [_section_tabs_css, after_section_tabs_css] =
++          String.split(rest, "@media (max-width: 640px)", parts: 2)
++
++        before <> "@media (max-width: 640px)" <> after_section_tabs_css
++
++      [_css_without_section_tabs] ->
++        css
++    end
++  end
++
++  defp strip_club_home_section_tab_media_rules(css) do
++    css
++    |> String.replace(
++      ~r/\n\s*\.section-tabs \{\n\s*align-items: stretch;\n\s*flex-direction: column;\n\s*\}\n/,
++      "\n"
++    )
++    |> String.replace(
++      ~r/\n\s*\.section-tabs__action,\n\s*\.section-tabs__action \.btn \{\n\s*width: 100%;\n\s*\}\n/,
++      "\n"
++    )
+   end
+ end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 9da6e93..91d4b74 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -253,12 +253,22 @@ defmodule MembaWeb.PageControllerTest do
+     response = html_response(conn, 200)
+     html = LazyHTML.from_fragment(response)
+ 
+-    assert response =~ "Hello, Smoke."
++    refute response =~ "Hello, Smoke."
+     refute response =~ "Welcome to Smoke Test Club"
+ 
+     assert html
+            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+            |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
++           |> LazyHTML.text() =~ "Smoke Tester"
++
++    assert html
++           |> LazyHTML.query(
++             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
++           )
++           |> LazyHTML.text() =~ "Conversations"
+   end
+ 
+   test "GET / with a member club_id redirects active members to the club subdomain", %{conn: conn} do
+@@ -303,13 +313,23 @@ defmodule MembaWeb.PageControllerTest do
+     response = html_response(conn, 200)
+     html = LazyHTML.from_fragment(response)
+ 
+-    assert response =~ "Hello, Alice."
++    refute response =~ "Hello, Alice."
+     refute response =~ "Welcome to Kootenay Mountaineering Club"
+ 
+     assert html
+            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+            |> Enum.any?()
+ 
++    assert html
++           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
++           |> LazyHTML.text() =~ "Alice Adams"
++
++    assert html
++           |> LazyHTML.query(
++             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
++           )
++           |> LazyHTML.text() =~ "Conversations"
++
+     assert html
+            |> LazyHTML.query(
+              "#member-send-message-link.btn.btn-soft.btn-lg[href='/messages/new']"
+diff --git a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+index f1fe7b8..56e7b2a 100644
+--- a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
++++ b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+@@ -121,7 +121,8 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
+     |> click_button("Join Kootenay Mountaineering Club")
+     |> assert_path("/")
+     |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
+-    |> assert_has("#member-dashboard-hero", "Hello, Robin.")
++    |> assert_has("#club-site-identity-menu-button .app-bar__who", "Robin Example")
++    |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")
+ 
+     assert %{name: "Robin Example", email: "robin@example.com"} =
+              Membership.get_person_by_email("robin@example.com")
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 1872773..c0100df 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -83,15 +83,31 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-section-tab-conversations.section-tab.is-active[role='tab'][aria-selected='true']",
++             "#member-section-tab-conversations.section-tab.is-active" <>
++               "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
++               "[aria-controls='member-section-panel-conversations']",
+              "Conversations"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-section-tab-members.section-tab[role='tab'][aria-selected='false']",
+-              "Members"
+-            )
++             "#member-section-tab-members.section-tab" <>
++               "[data-tab='members'][role='tab'][aria-selected='false']" <>
++               "[aria-controls='member-section-panel-members']",
++             "Members"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
++           )
++
++    refute has_element?(view, "#member-section-panel-conversations[hidden]")
++
++    assert has_element?(
++             view,
++             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
++           )
+ 
+     assert has_element?(
+              view,
+@@ -99,6 +115,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+              "New message"
+            )
++
++    refute has_element?(view, "#member-section-action-new-message[hidden]")
++    refute has_element?(view, "#member-section-action-new-message[data-action='members']")
+   end
+ 
+   test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+@@ -148,6 +167,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+ 
+     refute has_element?(view, "#member-section-panel-conversations[hidden]")
++    assert has_element?(view, "#member-section-panel-members[hidden]")
+ 
+     assert has_element?(
+              view,
+@@ -260,6 +280,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "Invite member"
+            )
+ 
++    refute has_element?(
++             admin_view,
++             "#member-section-action-invite-member[data-action='conversations']"
++           )
++
+     alice =
+       create_active_member(
+         email: "alice@example.com",
+diff --git a/web/test/memba_web/live/member_invitation_live/send_test.exs b/web/test/memba_web/live/member_invitation_live/send_test.exs
+index 7e15bdc..dfe96fd 100644
+--- a/web/test/memba_web/live/member_invitation_live/send_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/send_test.exs
+@@ -90,7 +90,8 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     |> click_button("Join West Coast Paddlers")
+     |> assert_path("/")
+     |> assert_has("#member-club-home[data-club-id='#{robin.club_id}']")
+-    |> assert_has("#member-dashboard-hero", "Hello, Dana.")
++    |> assert_has("#club-site-identity-menu-button .app-bar__who", "Dana Example")
++    |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")
+ 
+     assert %{person_id: dana_person_id, name: "Dana Example", email: "dana@example.com"} =
+              Membership.get_person_by_email("dana@example.com")
