@@ -1,0 +1,183 @@
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index 222a799..bbec3d6 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -351,8 +351,9 @@ async function signOut(world) {
+ 
+ async function assertSignedInOnClubPage(world, personName) {
+   const person = personFromWorld(world, personName);
++  const email = signedInEmailFor(world, personName, person);
+   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+-  await assertClubIdentityVisible(world, clubIdentityFallbackLabelFor(signedInEmailFor(world, personName, person)));
++  await assertClubIdentityVisible(world, clubIdentityLabelFor(person, email));
+   await world.page.locator("#club-site-identity-menu-button").click();
+   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+ }
+@@ -366,6 +367,11 @@ function clubIdentityFallbackLabelFor(email) {
+   return String(email).split("@")[0].trim() || "Member";
+ }
+ 
++function clubIdentityLabelFor(person, email) {
++  const name = person && typeof person.name === "string" ? person.name.trim() : "";
++  return name || clubIdentityFallbackLabelFor(email);
++}
++
+ async function assertClubMarketingPage(world, clubName) {
+   const club = world.clubs[clubName];
+   assert.ok(club, `Expected ${clubName} to be known in the scenario`);
+diff --git a/acceptance-tests/features/support/club_member_invitations.js b/acceptance-tests/features/support/club_member_invitations.js
+index 8b4e109..3819797 100644
+--- a/acceptance-tests/features/support/club_member_invitations.js
++++ b/acceptance-tests/features/support/club_member_invitations.js
+@@ -264,7 +264,7 @@ async function assertOnlyOneActiveMembership(world, personName, clubName) {
+ async function assertSignedInToClub(world, personName, clubName) {
+   const club = await ensureClub(world, clubName);
+   const email = emailForPerson(world, personName);
+-  const identityLabel = clubIdentityFallbackLabelFor(email);
++  const identityLabel = clubIdentityLabelFor(world, personName, email);
+ 
+   await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
+     timeout: projectionTimeoutMs(world)
+@@ -591,6 +591,12 @@ function clubIdentityFallbackLabelFor(email) {
+   return String(email).split("@")[0].trim() || "Member";
+ }
+ 
++function clubIdentityLabelFor(world, personName, email) {
++  const person = world.people && world.people[personName];
++  const name = person && typeof person.name === "string" ? person.name.trim() : "";
++  return name || clubIdentityFallbackLabelFor(email);
++}
++
+ function clubSlugFor(clubName) {
+   return String(clubName || "")
+     .trim()
+diff --git a/acceptance-tests/features/support/request_account.js b/acceptance-tests/features/support/request_account.js
+index 9f6cd33..d49877d 100644
+--- a/acceptance-tests/features/support/request_account.js
++++ b/acceptance-tests/features/support/request_account.js
+@@ -461,7 +461,7 @@ async function followWelcomeLink(world, personName) {
+ async function assertSignedInToClub(world, personName, clubName) {
+   const club = world.clubs[clubName] || clubByName(clubName);
+   const email = requestEmailFor(personName, world);
+-  const identityLabel = clubIdentityFallbackLabelFor(email);
++  const identityLabel = clubIdentityLabelFor(world, personName, email);
+ 
+   assert.ok(club, `Expected ${clubName} to be known before asserting signed-in club access`);
+   world.clubs[clubName] = { clubId: club.clubId, name: club.clubName || clubName, slug: club.clubSlug || club.slug };
+@@ -476,6 +476,12 @@ function clubIdentityFallbackLabelFor(email) {
+   return String(email).split("@")[0].trim() || "Member";
+ }
+ 
++function clubIdentityLabelFor(world, personName, email) {
++  const person = world.people && world.people[personName];
++  const name = person && typeof person.name === "string" ? person.name.trim() : "";
++  return name || clubIdentityFallbackLabelFor(email);
++}
++
+ async function openConversionPanel(world, clubName) {
+   await openRequestsInbox(world);
+ 
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 03c7606..364e440 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+ - [x] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+ - [x] 007 Render the identity dropdown's avatar + label from `member_name`, falling back to the `current_identity` email local-part (label and initials) when `member_name` is `nil`.
+-- [ ] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
++- [x] 008 Pass `member_name` (current member display name) into `club_site` from `page_html/club.html.heex` and `page_html/message.html.heex`.
+ - [ ] 009 Pass `member_name` into `club_site` from `member_message_live/new.ex` (compose) and `member_invitation_live/new.ex` (invitation).
+ - [ ] 010 Leave `public_club_page_live.ex` passing neither `current_identity` nor `member_name`, so the signed-out public page keeps the identity dropdown gated off.
+ - [ ] 011 Update LiveView/layout tests: app-bar renders `@club_name`; identity dropdown gated on `@current_identity`; Sign out posts to `DELETE /auth`; content sits in the app-card.
+diff --git a/smoke-tests/lib/browser.js b/smoke-tests/lib/browser.js
+index 0f7de19..c97a5bf 100644
+--- a/smoke-tests/lib/browser.js
++++ b/smoke-tests/lib/browser.js
+@@ -78,7 +78,7 @@ async function ensureSmokeMemberSignedIn(world) {
+   await world.page.goto(clubSiteUrl(world.config, "/"));
+   await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+   await expect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(
+-    clubIdentityFallbackLabelFor(world.config.member.email)
++    clubIdentityLabelFor(world.config.member)
+   );
+ }
+ 
+@@ -144,6 +144,11 @@ function clubIdentityFallbackLabelFor(email) {
+   return String(email).split("@")[0].trim() || "Member";
+ }
+ 
++function clubIdentityLabelFor(member) {
++  const name = member && typeof member.name === "string" ? member.name.trim() : "";
++  return name || clubIdentityFallbackLabelFor(member && member.email);
++}
++
+ module.exports = {
+   assertMemberDoesNotSeeMessage,
+   assertMemberSeesMessage,
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 944c9ff..6dc1224 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -5,6 +5,7 @@
+   flash={@flash}
+   club_name={@selected_club.name}
+   current_identity={@current_identity}
++  member_name={@current_member && @current_member.name}
+ >
+   <div
+     id="member-club-home"
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index b47c4e2..5c343ef 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -2,6 +2,7 @@
+   flash={@flash}
+   club_name={@selected_club.name}
+   current_identity={@current_identity}
++  member_name={@current_member && @current_member.name}
+ >
+   <div
+     id="member-message-detail"
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index bce583b..c559305 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -49,7 +49,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#club-site-identity-menu-button .app-bar__who",
+-             "alice@example.com"
++             "Alice Adams"
++           )
++
++    assert has_element?(
++             view,
++             "#club-site-identity-menu-button .app-bar__avatar",
++             "AA"
+            )
+ 
+     assert has_element?(view, "#member-message-#{message.message_id}")
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 11817d9..d4f62c0 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -46,6 +46,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#club-site-identity-menu-button .app-bar__who",
++             "Alice Adams"
++           )
++
++    assert has_element?(
++             view,
++             "#club-site-identity-menu-button .app-bar__avatar",
++             "AA"
++           )
++
+     assert has_element?(view, "a#back-to-club-home-link[href='/']")
+   end
+ 
