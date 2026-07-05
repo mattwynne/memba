@@ -1,0 +1,106 @@
+diff --git a/docs/iterations/044-shared-app-shell/todo.md b/docs/iterations/044-shared-app-shell/todo.md
+index 1cf01fc..1f7a758 100644
+--- a/docs/iterations/044-shared-app-shell/todo.md
++++ b/docs/iterations/044-shared-app-shell/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Port the app-shell CSS classes (`app-frame`, `app-card`, `app-bar` and its children, `app-menu`, `app-foot`) verbatim from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the mirror (daisyUI `dropdown` already exists).
+ - [x] 002 In `Layouts.club_site/1` (`web/lib/memba_web/components/layouts.ex`), replace the header's left side with the app-bar showing the plain `@club_name`.
+-- [ ] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
++- [x] 003 In the same app-bar, add the right-side member identity dropdown (avatar initials + member name), gated with `:if={@current_identity}` so it only renders when signed in.
+ - [ ] 004 Make the identity dropdown open to a **Sign out** control that posts to the same `DELETE /auth` form/action as today (unchanged behaviour).
+ - [ ] 005 Wrap `@inner_block` in the `app-frame` / `app-card` frame; keep the existing "Powered by Memba" `app-foot` footer and the `flash_group`.
+ - [ ] 006 Add an optional `member_name` assign (default `nil`) to `club_site`, and a private `Layouts.initials/1` helper that derives avatar initials from a name.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 46ffcbc..8681023 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -321,6 +321,19 @@ defmodule MembaWeb.Layouts do
+               class="flex flex-wrap items-center gap-3 text-sm font-medium"
+               aria-label="Club member navigation"
+             >
++              <div class="dropdown dropdown-end app-bar__id">
++                <button
++                  id="club-site-identity-menu-button"
++                  type="button"
++                  class="app-bar__me"
++                  aria-haspopup="menu"
++                  aria-label="Member identity menu"
++                >
++                  <span class="app-bar__avatar">{club_identity_initials(@current_identity)}</span>
++                  <span class="app-bar__who">{club_identity_label(@current_identity)}</span>
++                </button>
++              </div>
++
+               <span id="club-site-current-identity" class="text-ink-2">
+                 Signed in as {@current_identity.email}
+               </span>
+@@ -365,6 +378,26 @@ defmodule MembaWeb.Layouts do
+     """
+   end
+ 
++  defp club_identity_label(%{email: email}) when is_binary(email), do: email
++  defp club_identity_label(_identity), do: "Member"
++
++  defp club_identity_initials(%{email: email}) when is_binary(email) do
++    email
++    |> String.split("@", parts: 2)
++    |> List.first()
++    |> String.split(~r/[^a-zA-Z0-9]+/, trim: true)
++    |> Enum.take(2)
++    |> Enum.map(&String.first/1)
++    |> Enum.join()
++    |> String.upcase()
++    |> case do
++      "" -> "M"
++      initials -> initials
++    end
++  end
++
++  defp club_identity_initials(_identity), do: "M"
++
+   @doc """
+   Shows the flash group with standard titles and content.
+ 
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 91642d0..48297aa 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -139,6 +139,10 @@ defmodule MembaWeb.LayoutsTest do
+     assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
+     refute_selector(html, "#club-site-layout header .app-bar__club[href]")
+     refute_selector(html, "#club-site-layout header a[href='/']")
++    assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
++    assert_selector(html, "#club-site-layout header button#club-site-identity-menu-button.app-bar__me")
++    assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
++    assert_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+     assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
+@@ -161,6 +165,26 @@ defmodule MembaWeb.LayoutsTest do
+     assert [] = attributes(html, "#club-site-layout", "style")
+   end
+ 
++  test "club-site layout gates the member identity dropdown when signed out" do
++    assigns = %{flash: %{}}
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club">
++        <section id="public-club-site-layout-slot">Public club page content</section>
++      </Layouts.club_site>
++      """)
++
++    assert_selector(html, "#club-site-layout header .app-bar")
++    assert_text(html, "#club-site-layout header .app-bar__brand .app-bar__club", "Riverside Tennis Club")
++    refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
++    refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
++    refute_selector(html, "#club-site-layout header .app-bar__avatar")
++    refute_selector(html, "#club-site-layout header .app-bar__who")
++    refute_text(html, "#club-site-layout header", "Signed in as")
++    assert_selector(html, "#public-club-site-layout-slot")
++  end
++
+   test "root footer shows linked git commit when enabled" do
+     System.put_env("MEMBA_GIT_SHA", @sha)
+     Application.put_env(:memba, :show_git_commit_in_footer, true)
