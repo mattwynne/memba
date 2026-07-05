@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-05T11:20:05.034481634Z",
-  "last_event_at": "2026-07-05T11:37:26.612453479Z",
+  "last_event_at": "2026-07-05T11:48:07.287212842Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2909,9 +2909,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 120,
       "checkpoint": {
-        "timestamp": "2026-07-05T11:37:26.780518752Z",
+        "timestamp": "2026-07-05T11:37:29.814295099Z",
         "current_node": "snapshot_before_review_repair",
         "completed_nodes": [
           "start",
@@ -2928,12 +2928,365 @@
         ],
         "node_retries": {},
         "context_values": {
+          "review_blockers": [
+            {
+              "id": "csrf-protect-club-site-sign-out",
+              "title": "Verify or add CSRF protection for club-site sign-out form",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "dedupe-member-display-name-fallback",
+              "title": "Extract duplicated club-site member display-name fallback",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.rankdir": "LR",
+          "implementation_accepted": false,
+          "internal.retry_count.gemini_review": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "outcome": "succeeded",
+          "response.claude_review": "# Iteration 044 Review Report: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nWould be High with direct access to ADR files governing UI/layout/CSS decisions and full JavaScript implementation evidence for dropdown behaviour.\n\n## ADR Conformance: PASS\n\nNo ADR violations detected in the implementation. The CSS porting approach (component classes from design-system rather than Tailwind utilities) is explicitly decided in the plan's \"Open Technical Decisions\" section and aligns with the README guidance that the design system is the source of truth. However, could not verify against all potentially relevant ADRs since none were explicitly cited in the plan.\n\n## ADR Violations\n\nNone found.\n\n## Blocking Issues\n\nNone found.\n\nThe implementation:\n- Follows the plan's stated goal and capability (shared app-shell layout for club-site surfaces)\n- Passes `dev check` with full test suite green\n- Implements all planned components (app-bar, app-card, identity dropdown, footer)\n- Provides comprehensive test coverage for layout structure, conditional rendering, and the initials helper\n- Leaves feature files unchanged (domain acceptance criteria preserved)\n\n## Bounded-Safe Fixes\n\nNone identified. The potential improvements below require human judgement about product intent or architectural direction.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Unused `@flash` assign** (files: `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`)\n   - **Smell:** The layout tests pass `flash={@flash}` but the implementation doesn't render flash messages anywhere in the component.\n   - **Why it needs judgement:** This could indicate (a) incomplete implementation if flash should be rendered in the app-shell, (b) intentional deferral if flash rendering is planned for a later iteration, or (c) vestigial code if flash is handled by a parent layout. Typical Phoenix root layouts render flash, and this appears to be a root layout for club sites (has full page structure from header to footer). However, the plan makes no mention of flash rendering, and the tests don't verify it, suggesting it's out of scope. A human should decide whether to remove the unused assign, add flash rendering, or document the deferral.\n\n2. **Member name/initials fallback duplication** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The expression `assigns[:member_name] || String.split(@member_identity, \"@\") |> hd()` appears twice (once for initials, once for display name).\n   - **Why it needs judgement:** Extracting this to a private helper like `member_display_name/1` would reduce duplication and make the fallback logic more explicit. However, with only two call sites and clear inline logic, the marginal benefit might not justify the abstraction. A human should weigh maintainability vs simplicity.\n\n3. **Dropdown JavaScript dependency** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The identity dropdown relies on `MembaWeb.CoreComponents.show(\"#club-site-identity-menu\")` for click handling, but the implementation evidence doesn't show the JavaScript side or tests verifying dynamic ARIA attribute updates (e.g., `aria-expanded` toggling when menu opens/closes).\n   - **Why it needs judgement:** Phoenix CoreComponents typically provide dropdown/modal functions, so this is likely correct. However, without seeing the JS implementation or tests, can't verify full accessibility compliance (dynamic ARIA updates) or that the dropdown interaction works as expected. If CoreComponents doesn't provide `show/1`, or if ARIA states aren't updated, this could be a usability/a11y gap. A human should verify the JS side exists and handles ARIA correctly, or flag for manual accessibility testing.\n\n## Suggested Fixes\n\nNone blocking. The implementation is solid as-is. The judgement-worthy items above are for potential future polish:\n\n- **If flash should be rendered:** Add `<.flash_group flash={@flash} />` in the layout and verify with tests.\n- **If flash is intentionally deferred:** Remove the unused `flash` assign from tests or add a comment documenting the deferral.\n- **If duplication bothers future maintainers:** Extract `member_display_name/1` helper for the name/identity fallback logic.\n- **For accessibility verification:** Manually test or add JavaScript tests confirming aria-expanded updates when dropdown toggles.\n\n## Validation Notes\n\n### Automated Coverage (Green)\n- **Layout structure tests:** App-bar, app-card, app-foot, club name, identity dropdown, Sign out form all verified via DOM selectors.\n- **Conditional rendering:** Identity dropdown correctly gated when signed out (no `member_identity` assign).\n- **Initials helper edge cases:** Full name, email, empty string, nil, whitespace, single word all covered.\n- **Sign-out form structure:** POST to `/auth` with `_method=delete` verified.\n- **CSS class naming:** Tests confirm app-frame, app-bar, app-card, app-menu, app-foot classes present; legacy `--club-site-` variables absent.\n\n### Dev Check (Passed)\n- Full test suite green (85 scenarios, 523 steps, 3m57s).\n- No feature file changes (domain acceptance criteria unchanged).\n- Elixir compilation clean.\n\n### Plan Fidelity\n- All 14 implementation steps addressed in the evidence.\n- CSS classes ported from design-system as decided (app-frame, app-bar, app-card, app-menu, app-foot, identity-dropdown pieces).\n- Identity dropdown with member name/initials implemented.\n- Signed-out public page correctly omits identity UI.\n- Tests added for all club-site surfaces rendering under new shell (per step 12).\n\n### Manual Validation Deferred\nThe plan calls for `./bin/dev gallery-walk` and screenshot comparison to design-system wireframes. This is manual validation outside the review scope, but the automated tests provide strong structural confidence.\n\n---\n\n**Summary:** This is a clean, plan-conforming implementation with solid test coverage and no blocking issues. The three non-blocking findings are minor code-health observations that may merit future attention but should not delay merge. The unused `@flash` assign is the only item worth brief human confirmation (intentional deferral vs oversight), but given the plan silence on flash rendering, it's likely out of scope. Recommend **accept and merge**.",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.review_gate": 0,
+          "internal.retry_count.start": 0,
+          "internal.fidelity": "summary:high",
+          "internal.run_id": "01KWS01J00N4Z7JM5CXD1JBK19",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"Verify or add CSRF protection for club-site sign-out form\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"dedupe-member-display-name-fallback\",\n        \"title\": \"Extract duplicated club-site member display-name fallback\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "response.gemini_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe plan-conformance gate, implementation evidence, and green `dev check` are strong. Confidence is not “High” only because the evidence shown here is partially truncated and no specific ADR files were cited in the plan excerpt.\n\n## ADR conformance: PASS\n\nNo ADR violations found.\n\nThe implementation appears to touch Phoenix layout/components, HEEx, CSS, routing/form structure, and tests. It does not appear to alter domain modeling, Commanded boundaries, aggregates, projections, event streams, read models, or CQRS/event-sourcing infrastructure.\n\nThe plan’s explicit technical decision to port the design-system app-shell classes 1:1 into `web/assets/css/app.css` appears to have been followed.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **`flash` is accepted/passed but not visibly rendered in the new shell**\n   - **Files:** `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`\n   - **Smell:** The layout tests pass `flash={@flash}`, but the evidence does not show the `club_site` shell rendering a flash group.\n   - **Why it may need human judgement:** This may be intentional if flash rendering is handled by an outer/root layout or deferred out of scope. If `club_site` is now the primary shell for these member/public club pages, missing flash rendering could eventually hide redirect or action feedback. The plan did not require flash work, so this should not block the iteration.\n\n2. **Member display-name fallback logic appears duplicated**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The fallback from optional `member_name` to the email local-part appears to be used both for displayed identity text and avatar initials.\n   - **Why it may need human judgement:** The duplication is small and readable today. Extracting a helper such as `member_display_name/1` would reduce repeated logic, but may be unnecessary abstraction until this identity presentation grows.\n\n3. **Identity dropdown behaviour is mostly structurally tested**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** The evidence shows strong DOM-shape tests for the dropdown and sign-out form, but does not show interaction-level coverage for opening/closing, escape/click-away handling, focus behaviour, or `aria-expanded` state changes.\n   - **Why it may need human judgement:** The iteration goal was a shared shell and identity dropdown presence, and the automated structural checks are appropriate for that scope. If this dropdown becomes a reusable app interaction pattern, it should receive explicit accessibility/interaction validation later.\n\n4. **Sign-out form is covered structurally, not end-to-end from the new menu**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** Tests assert the form posts to `/auth` with `_method=delete`, but the evidence does not show submitting the new dropdown sign-out form from a rendered club-site page.\n   - **Why it may need human judgement:** Existing auth/controller coverage likely verifies the route itself. Still, because this is a new sign-out entry point, a future test could assert the full rendered form includes the expected CSRF token and successfully signs out when submitted.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future polish:\n\n- If `club_site` owns user-facing flash display, render the project-standard flash component inside the shell and add a focused layout test.\n- If the identity fallback logic grows, extract a small helper for display-name derivation.\n- Add a lightweight interaction/manual-a11y check for the identity dropdown.\n- If not already covered elsewhere, add an assertion that the sign-out form generated in the shell includes CSRF protection.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed before review.\n- Acceptance suite passed: **85 scenarios, 523 steps**.\n- No feature-file changes were indicated.\n- Evidence shows coverage for:\n  - shared `club_site` app frame;\n  - app bar rendering club name;\n  - app-card wrapping inner content;\n  - identity dropdown gated by signed-in identity;\n  - signed-out public page omitting identity controls;\n  - sign-out form shape targeting `DELETE /auth` through POST + `_method=delete`;\n  - app-shell CSS class structure;\n  - all relevant `club_site` surfaces rendering under the new shell.\n- Plan fidelity appears good: the implementation delivers the shared app-like shell without obvious out-of-scope domain or architecture changes.",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "current_node": "snapshot_before_review_repair",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "internal.retry_count.read_plan": 0,
+          "thread.start.current_node": "read_plan",
+          "response.codex_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is limited mainly by the truncated implementation evidence and lack of direct ADR contents in the provided context. The available evidence, plan excerpt, and green `dev check` are strong enough to accept.\n\n## ADR conformance: PASS\n\nNo ADR violations were identified from the provided plan/evidence. The plan excerpt cites no specific ADRs, and the implementation appears limited to Phoenix layout/CSS/test work rather than domain modeling, Commanded, CQRS, event sourcing, projections, or read-model boundaries.\n\nThe implementation also appears to follow the plan’s explicit technical decision to port the design-system shell classes directly into the application stylesheet instead of re-expressing the shell with Tailwind utilities.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Unused `flash` assign in the shared layout**\n   - **Files:** `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`\n   - **Smell:** The layout accepts/passes `flash`, but the evidence does not show flash rendering inside the new `club_site` shell.\n   - **Why judgement is needed:** This may be intentional because flash handling is out of scope for this iteration, or because flash is rendered by another/root layout. If `club_site` is now the effective application shell for these pages, a future pass should decide whether flashes belong inside it.\n\n2. **Identity display-name fallback appears duplicated**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The member-name fallback logic appears to be repeated for display text and initials derivation.\n   - **Why judgement is needed:** Extracting a helper such as `member_display_name/1` would reduce duplication, but the current duplication is small and may not justify extra abstraction yet.\n\n3. **Dropdown behaviour/a11y may deserve a follow-up check**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The identity menu evidence verifies static DOM shape and the sign-out form, but does not demonstrate dynamic behaviour such as closing the menu, escape/click-away handling, focus management, or `aria-expanded` updates.\n   - **Why judgement is needed:** The current implementation likely satisfies the iteration’s structural shell goal, and Phoenix/JS helpers may already provide enough behaviour. However, if the identity dropdown becomes a reusable interaction pattern, it should eventually get explicit accessibility/interaction coverage.\n\n4. **Sign-out form coverage is structural rather than behavioural**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** Tests assert the form posts to `/auth` with `_method=delete`, but the evidence does not show a test submitting the new dropdown sign-out form from a club-site page.\n   - **Why judgement is needed:** Existing auth tests may already cover the controller route. Still, because this is a new sign-out entry point, a future test could assert the rendered form includes all required fields, especially CSRF protection if a raw `<form>` is used.\n\n## Suggested fixes\n\nNo merge-blocking fixes are recommended.\n\nPotential future polish:\n\n- If `club_site` should own flash rendering, add the project-standard flash component to the shell and test it.\n- If the identity label logic grows, extract a small helper for member display-name fallback.\n- Consider adding an interaction-level test or manual accessibility checklist for the identity dropdown.\n- If not already covered elsewhere, add a small assertion that the sign-out form includes CSRF protection or use the project-standard form helper.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed successfully.\n- Acceptance suite passed: **85 scenarios, 523 steps**.\n- No feature-file changes were indicated.\n- Evidence shows tests for:\n  - shared `club_site` app frame;\n  - app bar rendering the club name;\n  - app card/content wrapping;\n  - identity dropdown gated by signed-in identity;\n  - signed-out public page omitting identity UI;\n  - sign-out form shape using `POST /auth` plus `_method=delete`;\n  - app-shell CSS class structure;\n  - all relevant `club_site` surfaces rendering under the new shell.\n- Plan fidelity appears good: the implementation delivers the shared app-like shell and avoids obvious out-of-scope domain or architecture changes.",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "failure_signature": "",
+          "thread.claude_review.current_node": "codex_review",
+          "failure_class": "",
+          "internal.retry_count.preflight_sandbox": 0,
+          "last_stage": "synthesize_review",
+          "review_fixes_available": true,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"V",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.node_visit_count": 1,
+          "internal.thread_id": "review_gate",
+          "thread.synthesize_review.current_node": "review_gate",
+          "graph.default_fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e818075f119e9a73e5a09f15d6ce0928e6202b370559e9fc07efc79c5f70ded2"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'c8b1a4e95361504e41a1984cfacef631a1b56784'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe plan-conformance gate, implementation evidence, and green `dev check` are strong. Confidence is not “High”",
+              "response.gemini_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe plan-conformance gate, implementation evidence, and green `dev check` are strong. Confidence is not “High” only because the evidence shown here is partially truncated and no specific ADR files were cited in the plan excerpt.\n\n## ADR conformance: PASS\n\nNo ADR violations found.\n\nThe implementation appears to touch Phoenix layout/components, HEEx, CSS, routing/form structure, and tests. It does not appear to alter domain modeling, Commanded boundaries, aggregates, projections, event streams, read models, or CQRS/event-sourcing infrastructure.\n\nThe plan’s explicit technical decision to port the design-system app-shell classes 1:1 into `web/assets/css/app.css` appears to have been followed.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **`flash` is accepted/passed but not visibly rendered in the new shell**\n   - **Files:** `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`\n   - **Smell:** The layout tests pass `flash={@flash}`, but the evidence does not show the `club_site` shell rendering a flash group.\n   - **Why it may need human judgement:** This may be intentional if flash rendering is handled by an outer/root layout or deferred out of scope. If `club_site` is now the primary shell for these member/public club pages, missing flash rendering could eventually hide redirect or action feedback. The plan did not require flash work, so this should not block the iteration.\n\n2. **Member display-name fallback logic appears duplicated**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The fallback from optional `member_name` to the email local-part appears to be used both for displayed identity text and avatar initials.\n   - **Why it may need human judgement:** The duplication is small and readable today. Extracting a helper such as `member_display_name/1` would reduce repeated logic, but may be unnecessary abstraction until this identity presentation grows.\n\n3. **Identity dropdown behaviour is mostly structurally tested**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** The evidence shows strong DOM-shape tests for the dropdown and sign-out form, but does not show interaction-level coverage for opening/closing, escape/click-away handling, focus behaviour, or `aria-expanded` state changes.\n   - **Why it may need human judgement:** The iteration goal was a shared shell and identity dropdown presence, and the automated structural checks are appropriate for that scope. If this dropdown becomes a reusable app interaction pattern, it should receive explicit accessibility/interaction validation later.\n\n4. **Sign-out form is covered structurally, not end-to-end from the new menu**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** Tests assert the form posts to `/auth` with `_method=delete`, but the evidence does not show submitting the new dropdown sign-out form from a rendered club-site page.\n   - **Why it may need human judgement:** Existing auth/controller coverage likely verifies the route itself. Still, because this is a new sign-out entry point, a future test could assert the full rendered form includes the expected CSRF token and successfully signs out when submitted.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future polish:\n\n- If `club_site` owns user-facing flash display, render the project-standard flash component inside the shell and add a focused layout test.\n- If the identity fallback logic grows, extract a small helper for display-name derivation.\n- Add a lightweight interaction/manual-a11y check for the identity dropdown.\n- If not already covered elsewhere, add an assertion that the sign-out form generated in the shell includes CSRF protection.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed before review.\n- Acceptance suite passed: **85 scenarios, 523 steps**.\n- No feature-file changes were indicated.\n- Evidence shows coverage for:\n  - shared `club_site` app frame;\n  - app bar rendering club name;\n  - app-card wrapping inner content;\n  - identity dropdown gated by signed-in identity;\n  - signed-out public page omitting identity controls;\n  - sign-out form shape targeting `DELETE /auth` through POST + `_method=delete`;\n  - app-shell CSS class structure;\n  - all relevant `club_site` surfaces rendering under the new shell.\n- Plan fidelity appears good: the implementation delivers the shared app-like shell without obvious out-of-scope domain or architecture changes.",
+              "last_stage": "gemini_review"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7261,
+                    "output_tokens": 987,
+                    "reasoning_tokens": 1552,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 112475
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 92420,
+              "tool_time_ms": 0,
+              "active_time_ms": 92420
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fedabed9851491de7403373cf21ab918fc272229a3c451e999a04c3d0540c655"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 145752,
+              "active_time_ms": 145752
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 044 Review Report: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nWould be High with direct access to ADR files governing UI/layout/CSS decisions and full JavaScript impleme",
+              "response.claude_review": "# Iteration 044 Review Report: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nWould be High with direct access to ADR files governing UI/layout/CSS decisions and full JavaScript implementation evidence for dropdown behaviour.\n\n## ADR Conformance: PASS\n\nNo ADR violations detected in the implementation. The CSS porting approach (component classes from design-system rather than Tailwind utilities) is explicitly decided in the plan's \"Open Technical Decisions\" section and aligns with the README guidance that the design system is the source of truth. However, could not verify against all potentially relevant ADRs since none were explicitly cited in the plan.\n\n## ADR Violations\n\nNone found.\n\n## Blocking Issues\n\nNone found.\n\nThe implementation:\n- Follows the plan's stated goal and capability (shared app-shell layout for club-site surfaces)\n- Passes `dev check` with full test suite green\n- Implements all planned components (app-bar, app-card, identity dropdown, footer)\n- Provides comprehensive test coverage for layout structure, conditional rendering, and the initials helper\n- Leaves feature files unchanged (domain acceptance criteria preserved)\n\n## Bounded-Safe Fixes\n\nNone identified. The potential improvements below require human judgement about product intent or architectural direction.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Unused `@flash` assign** (files: `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`)\n   - **Smell:** The layout tests pass `flash={@flash}` but the implementation doesn't render flash messages anywhere in the component.\n   - **Why it needs judgement:** This could indicate (a) incomplete implementation if flash should be rendered in the app-shell, (b) intentional deferral if flash rendering is planned for a later iteration, or (c) vestigial code if flash is handled by a parent layout. Typical Phoenix root layouts render flash, and this appears to be a root layout for club sites (has full page structure from header to footer). However, the plan makes no mention of flash rendering, and the tests don't verify it, suggesting it's out of scope. A human should decide whether to remove the unused assign, add flash rendering, or document the deferral.\n\n2. **Member name/initials fallback duplication** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The expression `assigns[:member_name] || String.split(@member_identity, \"@\") |> hd()` appears twice (once for initials, once for display name).\n   - **Why it needs judgement:** Extracting this to a private helper like `member_display_name/1` would reduce duplication and make the fallback logic more explicit. However, with only two call sites and clear inline logic, the marginal benefit might not justify the abstraction. A human should weigh maintainability vs simplicity.\n\n3. **Dropdown JavaScript dependency** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The identity dropdown relies on `MembaWeb.CoreComponents.show(\"#club-site-identity-menu\")` for click handling, but the implementation evidence doesn't show the JavaScript side or tests verifying dynamic ARIA attribute updates (e.g., `aria-expanded` toggling when menu opens/closes).\n   - **Why it needs judgement:** Phoenix CoreComponents typically provide dropdown/modal functions, so this is likely correct. However, without seeing the JS implementation or tests, can't verify full accessibility compliance (dynamic ARIA updates) or that the dropdown interaction works as expected. If CoreComponents doesn't provide `show/1`, or if ARIA states aren't updated, this could be a usability/a11y gap. A human should verify the JS side exists and handles ARIA correctly, or flag for manual accessibility testing.\n\n## Suggested Fixes\n\nNone blocking. The implementation is solid as-is. The judgement-worthy items above are for potential future polish:\n\n- **If flash should be rendered:** Add `<.flash_group flash={@flash} />` in the layout and verify with tests.\n- **If flash is intentionally deferred:** Remove the unused `flash` assign from tests or add a comment documenting the deferral.\n- **If duplication bothers future maintainers:** Extract `member_display_name/1` helper for the name/identity fallback logic.\n- **For accessibility verification:** Manually test or add JavaScript tests confirming aria-expanded updates when dropdown toggles.\n\n## Validation Notes\n\n### Automated Coverage (Green)\n- **Layout structure tests:** App-bar, app-card, app-foot, club name, identity dropdown, Sign out form all verified via DOM selectors.\n- **Conditional rendering:** Identity dropdown correctly gated when signed out (no `member_identity` assign).\n- **Initials helper edge cases:** Full name, email, empty string, nil, whitespace, single word all covered.\n- **Sign-out form structure:** POST to `/auth` with `_method=delete` verified.\n- **CSS class naming:** Tests confirm app-frame, app-bar, app-card, app-menu, app-foot classes present; legacy `--club-site-` variables absent.\n\n### Dev Check (Passed)\n- Full test suite green (85 scenarios, 523 steps, 3m57s).\n- No feature file changes (domain acceptance criteria unchanged).\n- Elixir compilation clean.\n\n### Plan Fidelity\n- All 14 implementation steps addressed in the evidence.\n- CSS classes ported from design-system as decided (app-frame, app-bar, app-card, app-menu, app-foot, identity-dropdown pieces).\n- Identity dropdown with member name/initials implemented.\n- Signed-out public page correctly omits identity UI.\n- Tests added for all club-site surfaces rendering under new shell (per step 12).\n\n### Manual Validation Deferred\nThe plan calls for `./bin/dev gallery-walk` and screenshot comparison to design-system wireframes. This is manual validation outside the review scope, but the automated tests provide strong structural confidence.\n\n---\n\n**Summary:** This is a clean, plan-conforming implementation with solid test coverage and no blocking issues. The three non-blocking findings are minor code-health observations that may merit future attention but should not delay merge. The unused `@flash` assign is the only item worth brief human confirmation (intentional deferral vs oversight), but given the plan silence on flash rendering, it's likely out of scope. Recommend **accept and merge**.",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5739,
+                    "output_tokens": 7714,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 132927
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 167173,
+              "tool_time_ms": 0,
+              "active_time_ms": 167173
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7fbfd517895e2b5f635f0fbe601db50aa0a00f7d0c1f4ed615896fc34ab2729d"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/044-shared-app-shell/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 190,
+              "active_time_ms": 190
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize_review",
+              "implementation_accepted": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"V",
+              "review_blockers": [
+                {
+                  "id": "csrf-protect-club-site-sign-out",
+                  "title": "Verify or add CSRF protection for club-site sign-out form",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "dedupe-member-display-name-fallback",
+                  "title": "Extract duplicated club-site member display-name fallback",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"Verify or add CSRF protection for club-site sign-out form\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"dedupe-member-display-name-fallback\",\n        \"title\": \"Extract duplicated club-site member display-name fallback\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "review_fixes_available": true
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8677,
+                    "output_tokens": 166,
+                    "reasoning_tokens": 2588,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 126005
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 100121,
+              "tool_time_ms": 0,
+              "active_time_ms": 100121
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is limited mainly by the truncated implementation evidence and lack of direct ADR contents in the provided context. The available evidence, plan excerpt, and green `dev check` are strong enough to accept.\n\n## ADR conformance: PASS\n\nNo ADR violations were identified from the provided plan/evidence. The plan excerpt cites no specific ADRs, and the implementation appears limited to Phoenix layout/CSS/test work rather than domain modeling, Commanded, CQRS, event sourcing, projections, or read-model boundaries.\n\nThe implementation also appears to follow the plan’s explicit technical decision to port the design-system shell classes directly into the application stylesheet instead of re-expressing the shell with Tailwind utilities.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Unused `flash` assign in the shared layout**\n   - **Files:** `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`\n   - **Smell:** The layout accepts/passes `flash`, but the evidence does not show flash rendering inside the new `club_site` shell.\n   - **Why judgement is needed:** This may be intentional because flash handling is out of scope for this iteration, or because flash is rendered by another/root layout. If `club_site` is now the effective application shell for these pages, a future pass should decide whether flashes belong inside it.\n\n2. **Identity display-name fallback appears duplicated**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The member-name fallback logic appears to be repeated for display text and initials derivation.\n   - **Why judgement is needed:** Extracting a helper such as `member_display_name/1` would reduce duplication, but the current duplication is small and may not justify extra abstraction yet.\n\n3. **Dropdown behaviour/a11y may deserve a follow-up check**\n   - **File:** `lib/memba_web/components/layouts.ex`\n   - **Smell:** The identity menu evidence verifies static DOM shape and the sign-out form, but does not demonstrate dynamic behaviour such as closing the menu, escape/click-away handling, focus management, or `aria-expanded` updates.\n   - **Why judgement is needed:** The current implementation likely satisfies the iteration’s structural shell goal, and Phoenix/JS helpers may already provide enough behaviour. However, if the identity dropdown becomes a reusable interaction pattern, it should eventually get explicit accessibility/interaction coverage.\n\n4. **Sign-out form coverage is structural rather than behavioural**\n   - **Files:** `lib/memba_web/components/layouts.ex`, layout/component tests\n   - **Smell:** Tests assert the form posts to `/auth` with `_method=delete`, but the evidence does not show a test submitting the new dropdown sign-out form from a club-site page.\n   - **Why judgement is needed:** Existing auth tests may already cover the controller route. Still, because this is a new sign-out entry point, a future test could assert the rendered form includes all required fields, especially CSRF protection if a raw `<form>` is used.\n\n## Suggested fixes\n\nNo merge-blocking fixes are recommended.\n\nPotential future polish:\n\n- If `club_site` should own flash rendering, add the project-standard flash component to the shell and test it.\n- If the identity label logic grows, extract a small helper for member display-name fallback.\n- Consider adding an interaction-level test or manual accessibility checklist for the identity dropdown.\n- If not already covered elsewhere, add a small assertion that the sign-out form includes CSRF protection or use the project-standard form helper.\n\n## Validation notes\n\n- `dev check` / `dev ci` passed successfully.\n- Acceptance suite passed: **85 scenarios, 523 steps**.\n- No feature-file changes were indicated.\n- Evidence shows tests for:\n  - shared `club_site` app frame;\n  - app bar rendering the club name;\n  - app card/content wrapping;\n  - identity dropdown gated by signed-in identity;\n  - signed-out public page omitting identity UI;\n  - sign-out form shape using `POST /auth` plus `_method=delete`;\n  - app-shell CSS class structure;\n  - all relevant `club_site` surfaces rendering under the new shell.\n- Plan fidelity appears good: the implementation delivers the shared app-like shell and avoids obvious out-of-scope domain or architecture changes.",
+              "last_stage": "codex_review",
+              "last_response": "# Iteration 044 Review: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is limited mainly by the truncated implementation evidence and lack of direct ADR contents in the provi"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6108,
+                    "output_tokens": 937,
+                    "reasoning_tokens": 2070,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 120750
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 109671,
+              "tool_time_ms": 0,
+              "active_time_ms": 109671
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/56cd021c3ae16198a9b13ed8a71ad17970784aa8b3cfe191ecb1ee81901cac2c"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 395496,
+              "active_time_ms": 395496
+            }
+          }
+        },
+        "next_node_id": "apply_review_fixes",
+        "git_commit_sha": "31820a4af35d96555caad501e95c1c6587ac9fe6",
+        "node_visits": {
+          "start": 1,
+          "snapshot_before_review_repair": 1,
+          "synthesize_review": 1,
+          "codex_review": 1,
+          "read_plan": 1,
+          "dev_check": 1,
+          "collect_implementation_evidence": 1,
+          "gemini_review": 1,
+          "preflight_sandbox": 1,
+          "review_gate": 1,
+          "claude_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-05T11:49:04.662892248Z",
+        "current_node": "apply_review_fixes",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.codex_review": 0,
           "thread.review_gate.current_node": "snapshot_before_review_repair",
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"Verify or add CSRF protection for club-site sign-out form\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"dedupe-member-display-name-fallback\",\n        \"title\": \"Extract duplicated club-site member display-name fallback\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
           "thread.synthesize_review.current_node": "review_gate",
+          "internal.retry_count.apply_review_fixes": 0,
           "internal.retry_count.gemini_review": 0,
           "thread.start.current_node": "read_plan",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
           "graph.rankdir": "LR",
           "internal.node_visit_count": 1,
           "thread.codex_review.current_node": "gemini_review",
@@ -2949,7 +3302,7 @@
           "internal.retry_count.read_plan": 0,
           "failure_signature": "",
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"csrf-protect-club-site-sign-out\",\n        \"title\": \"V",
+          "last_response": "Implemented the bounded repair pass for the two review-gate issues.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix | Files |\n|---|---|---|\n| `csrf-protect-club-site-sign-out` | Verified the club-site ",
           "internal.fidelity": "summary:high",
           "failure_class": "",
           "review_blockers": [
@@ -2972,17 +3325,18 @@
           "internal.retry_count.collect_implementation_evidence": 0,
           "response.claude_review": "# Iteration 044 Review Report: Shared App Shell\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nWould be High with direct access to ADR files governing UI/layout/CSS decisions and full JavaScript implementation evidence for dropdown behaviour.\n\n## ADR Conformance: PASS\n\nNo ADR violations detected in the implementation. The CSS porting approach (component classes from design-system rather than Tailwind utilities) is explicitly decided in the plan's \"Open Technical Decisions\" section and aligns with the README guidance that the design system is the source of truth. However, could not verify against all potentially relevant ADRs since none were explicitly cited in the plan.\n\n## ADR Violations\n\nNone found.\n\n## Blocking Issues\n\nNone found.\n\nThe implementation:\n- Follows the plan's stated goal and capability (shared app-shell layout for club-site surfaces)\n- Passes `dev check` with full test suite green\n- Implements all planned components (app-bar, app-card, identity dropdown, footer)\n- Provides comprehensive test coverage for layout structure, conditional rendering, and the initials helper\n- Leaves feature files unchanged (domain acceptance criteria preserved)\n\n## Bounded-Safe Fixes\n\nNone identified. The potential improvements below require human judgement about product intent or architectural direction.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Unused `@flash` assign** (files: `lib/memba_web/components/layouts.ex`, `test/memba_web/components/layouts_test.exs`)\n   - **Smell:** The layout tests pass `flash={@flash}` but the implementation doesn't render flash messages anywhere in the component.\n   - **Why it needs judgement:** This could indicate (a) incomplete implementation if flash should be rendered in the app-shell, (b) intentional deferral if flash rendering is planned for a later iteration, or (c) vestigial code if flash is handled by a parent layout. Typical Phoenix root layouts render flash, and this appears to be a root layout for club sites (has full page structure from header to footer). However, the plan makes no mention of flash rendering, and the tests don't verify it, suggesting it's out of scope. A human should decide whether to remove the unused assign, add flash rendering, or document the deferral.\n\n2. **Member name/initials fallback duplication** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The expression `assigns[:member_name] || String.split(@member_identity, \"@\") |> hd()` appears twice (once for initials, once for display name).\n   - **Why it needs judgement:** Extracting this to a private helper like `member_display_name/1` would reduce duplication and make the fallback logic more explicit. However, with only two call sites and clear inline logic, the marginal benefit might not justify the abstraction. A human should weigh maintainability vs simplicity.\n\n3. **Dropdown JavaScript dependency** (file: `lib/memba_web/components/layouts.ex`)\n   - **Smell:** The identity dropdown relies on `MembaWeb.CoreComponents.show(\"#club-site-identity-menu\")` for click handling, but the implementation evidence doesn't show the JavaScript side or tests verifying dynamic ARIA attribute updates (e.g., `aria-expanded` toggling when menu opens/closes).\n   - **Why it needs judgement:** Phoenix CoreComponents typically provide dropdown/modal functions, so this is likely correct. However, without seeing the JS implementation or tests, can't verify full accessibility compliance (dynamic ARIA updates) or that the dropdown interaction works as expected. If CoreComponents doesn't provide `show/1`, or if ARIA states aren't updated, this could be a usability/a11y gap. A human should verify the JS side exists and handles ARIA correctly, or flag for manual accessibility testing.\n\n## Suggested Fixes\n\nNone blocking. The implementation is solid as-is. The judgement-worthy items above are for potential future polish:\n\n- **If flash should be rendered:** Add `<.flash_group flash={@flash} />` in the layout and verify with tests.\n- **If flash is intentionally deferred:** Remove the unused `flash` assign from tests or add a comment documenting the deferral.\n- **If duplication bothers future maintainers:** Extract `member_display_name/1` helper for the name/identity fallback logic.\n- **For accessibility verification:** Manually test or add JavaScript tests confirming aria-expanded updates when dropdown toggles.\n\n## Validation Notes\n\n### Automated Coverage (Green)\n- **Layout structure tests:** App-bar, app-card, app-foot, club name, identity dropdown, Sign out form all verified via DOM selectors.\n- **Conditional rendering:** Identity dropdown correctly gated when signed out (no `member_identity` assign).\n- **Initials helper edge cases:** Full name, email, empty string, nil, whitespace, single word all covered.\n- **Sign-out form structure:** POST to `/auth` with `_method=delete` verified.\n- **CSS class naming:** Tests confirm app-frame, app-bar, app-card, app-menu, app-foot classes present; legacy `--club-site-` variables absent.\n\n### Dev Check (Passed)\n- Full test suite green (85 scenarios, 523 steps, 3m57s).\n- No feature file changes (domain acceptance criteria unchanged).\n- Elixir compilation clean.\n\n### Plan Fidelity\n- All 14 implementation steps addressed in the evidence.\n- CSS classes ported from design-system as decided (app-frame, app-bar, app-card, app-menu, app-foot, identity-dropdown pieces).\n- Identity dropdown with member name/initials implemented.\n- Signed-out public page correctly omits identity UI.\n- Tests added for all club-site surfaces rendering under new shell (per step 12).\n\n### Manual Validation Deferred\nThe plan calls for `./bin/dev gallery-walk` and screenshot comparison to design-system wireframes. This is manual validation outside the review scope, but the automated tests provide strong structural confidence.\n\n---\n\n**Summary:** This is a clean, plan-conforming implementation with solid test coverage and no blocking issues. The three non-blocking findings are minor code-health observations that may merit future attention but should not delay merge. The unused `@flash` assign is the only item worth brief human confirmation (intentional deferral vs oversight), but given the plan silence on flash rendering, it's likely out of scope. Recommend **accept and merge**.",
           "internal.retry_count.review_gate": 0,
+          "response.apply_review_fixes": "Implemented the bounded repair pass for the two review-gate issues.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix | Files |\n|---|---|---|\n| `csrf-protect-club-site-sign-out` | Verified the club-site sign-out form includes a non-empty Phoenix CSRF hidden token. The implementation already used `<.form ... method=\"delete\">`, so no product-code change was needed for CSRF protection; the test now proves it. | `web/test/memba_web/components/layouts_test.exs` |\n| `dedupe-member-display-name-fallback` | Refactored club-site identity initials to derive from `club_identity_label/2`, so the member-name/email-local-part fallback logic has one source of truth. | `web/lib/memba_web/components/layouts.ex` |\n\n## Concrete changes made\n\n### 1. CSRF protection verification\n\nAdded an assertion that `#club-site-sign-out-form` renders:\n\n- `input[name=\"_csrf_token\"]`\n- `type=\"hidden\"`\n- a non-empty `value`\n\nThis hardens the existing structural test without changing product behaviour.\n\n### 2. Member display-name fallback deduplication\n\nChanged:\n\n```elixir\nclub_identity_initials/2\n```\n\nto delegate through:\n\n```elixir\nclub_identity_label/2\n```\n\nbefore calling `initials/1`.\n\nThis preserves existing behaviour while removing duplicated member-name trimming and email-local-part fallback logic.\n\n## Files changed\n\n- `web/lib/memba_web/components/layouts.ex`\n- `web/test/memba_web/components/layouts_test.exs`\n\nNo acceptance feature files were edited.\n\n## Tests / checks run\n\n- `cd web && mix format lib/memba_web/components/layouts.ex test/memba_web/components/layouts_test.exs` — passed.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed.\n  - Acceptance suite: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n\nI also initially tried `cd web && mix test test/memba_web/components/layouts_test.exs`, but it failed because Postgres was not running at `/tmp/devenv/postgres/.s.PGSQL.15432`. The required `dev check` subsequently ran with the proper dev environment/services and passed.\n\n## Remaining gaps / human questions\n\nNone for the two selected repair issues. The working tree still has the pre-existing untracked `.fabro/tmp/` review artifact directory from the pipeline; I left it untouched.",
           "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
           "internal.retry_count.preflight_sandbox": 0,
           "outcome": "succeeded",
-          "last_stage": "synthesize_review",
+          "last_stage": "apply_review_fixes",
           "graph.default_fidelity": "summary:high",
-          "current_node": "snapshot_before_review_repair",
+          "current_node": "apply_review_fixes",
           "internal.retry_count.synthesize_review": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
           "thread.preflight_sandbox.current_node": "dev_check",
           "internal.retry_count.start": 0,
-          "internal.thread_id": "review_gate",
+          "internal.thread_id": "snapshot_before_review_repair",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "review_fixes_available": true,
           "graph.max_node_visits": "160",
@@ -3219,6 +3573,42 @@
               "active_time_ms": 156
             }
           },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "apply_review_fixes",
+              "last_response": "Implemented the bounded repair pass for the two review-gate issues.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix | Files |\n|---|---|---|\n| `csrf-protect-club-site-sign-out` | Verified the club-site ",
+              "response.apply_review_fixes": "Implemented the bounded repair pass for the two review-gate issues.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix | Files |\n|---|---|---|\n| `csrf-protect-club-site-sign-out` | Verified the club-site sign-out form includes a non-empty Phoenix CSRF hidden token. The implementation already used `<.form ... method=\"delete\">`, so no product-code change was needed for CSRF protection; the test now proves it. | `web/test/memba_web/components/layouts_test.exs` |\n| `dedupe-member-display-name-fallback` | Refactored club-site identity initials to derive from `club_identity_label/2`, so the member-name/email-local-part fallback logic has one source of truth. | `web/lib/memba_web/components/layouts.ex` |\n\n## Concrete changes made\n\n### 1. CSRF protection verification\n\nAdded an assertion that `#club-site-sign-out-form` renders:\n\n- `input[name=\"_csrf_token\"]`\n- `type=\"hidden\"`\n- a non-empty `value`\n\nThis hardens the existing structural test without changing product behaviour.\n\n### 2. Member display-name fallback deduplication\n\nChanged:\n\n```elixir\nclub_identity_initials/2\n```\n\nto delegate through:\n\n```elixir\nclub_identity_label/2\n```\n\nbefore calling `initials/1`.\n\nThis preserves existing behaviour while removing duplicated member-name trimming and email-local-part fallback logic.\n\n## Files changed\n\n- `web/lib/memba_web/components/layouts.ex`\n- `web/test/memba_web/components/layouts_test.exs`\n\nNo acceptance feature files were edited.\n\n## Tests / checks run\n\n- `cd web && mix format lib/memba_web/components/layouts.ex test/memba_web/components/layouts_test.exs` — passed.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed.\n  - Acceptance suite: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n\nI also initially tried `cd web && mix test test/memba_web/components/layouts_test.exs`, but it failed because Postgres was not running at `/tmp/devenv/postgres/.s.PGSQL.15432`. The required `dev check` subsequently ran with the proper dev environment/services and passed.\n\n## Remaining gaps / human questions\n\nNone for the two selected repair issues. The working tree still has the pre-existing untracked `.fabro/tmp/` review artifact directory from the pipeline; I left it untouched."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 348393,
+                    "output_tokens": 2620,
+                    "reasoning_tokens": 2553,
+                    "cache_read_tokens": 246784,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2020547
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 222484,
+              "tool_time_ms": 471940,
+              "active_time_ms": 694424
+            }
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -3234,9 +3624,10 @@
             }
           }
         },
-        "next_node_id": "apply_review_fixes",
+        "next_node_id": "verify_review_repair",
         "node_visits": {
           "snapshot_before_review_repair": 1,
+          "apply_review_fixes": 1,
           "preflight_sandbox": 1,
           "collect_implementation_evidence": 1,
           "synthesize_review": 1,
@@ -3681,7 +4072,12 @@
       "first_event_seq": 113,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+        "failure_reason": null,
+        "timestamp": "2026-07-05T11:37:26.779990351Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -3689,11 +4085,27 @@
         "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+        "exit_code": 0,
+        "duration_ms": 156,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-07-05T11:37:26.611131994Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 168,
+        "inference_time_ms": 0,
+        "tool_time_ms": 156,
+        "active_time_ms": 156
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -3701,6 +4113,206 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "apply_review_fixes@1": {
+      "first_event_seq": 123,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-05T11:37:29.841091673Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 338231,
+        "output_tokens": 2103,
+        "total_tokens": 551778,
+        "reasoning_tokens": 1524,
+        "cache_read_tokens": 209920,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 46254,
+        "usage_percent": 17.00514705882353,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-07-05T11:48:07.185967141Z",
+        "event_seq": 227,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1077,
+            "usage_percent": 0.39595588235294116
+          },
+          {
+            "category": "tools",
+            "tokens": 1522,
+            "usage_percent": 0.5595588235294118
+          },
+          {
+            "category": "memory",
+            "tokens": 409,
+            "usage_percent": 0.15036764705882352
+          },
+          {
+            "category": "conversation",
+            "tokens": 43240,
+            "usage_percent": 15.897058823529411
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
       },
       "state": "running"
     },
