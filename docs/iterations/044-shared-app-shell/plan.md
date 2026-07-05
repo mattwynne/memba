@@ -117,25 +117,32 @@ detail deferred).
 
 ## Implementation Plan
 
-- `web/lib/memba_web/components/layouts.ex` → `club_site/1`: replace the header markup with the
-  app-bar (plain `@club_name` + member identity dropdown containing Sign out) and wrap
-  `@inner_block` in the app-card frame, using the ported app-shell classes — mirroring
-  `club-home.html` / `member-conversation.html`. Keep the footer (`Powered by Memba`) and
-  `flash_group`. Preserve the `:if={@current_identity}` gating for the identity dropdown.
-- Port the app-shell component classes (`app-frame`, `app-card`, `app-bar` and its children,
-  `app-menu`, `app-foot`, and the identity-dropdown pieces) from `design-system/` (`memba.css` /
-  `styles.css`) into `web/assets/css/app.css`, keeping names 1:1 with the design so the mirror
-  stays authoritative.
-- Source the identity dropdown's **member name + initials** via a new **optional** `member_name`
-  assign on `club_site` (default `nil`). The four signed-in member surfaces (club home,
-  conversation, compose, invitation) pass the current member's display name; the layout derives
-  the avatar initials from it. When `member_name` is absent but `current_identity` is present, fall
-  back to the email local-part for both the label and the initials. The public (signed-out) club
-  page passes neither `current_identity` nor `member_name`, so the identity dropdown is gated off
-  and no member data is required there. Add a small private `initials/1` helper in `Layouts`.
-- Update LiveView/layout tests for the new header structure: app-bar shows the club name; the
-  identity dropdown is gated on `@current_identity`; the Sign out control still posts to
-  `DELETE /auth`; content sits in the app-card; each `club_site` surface renders.
+1. Port the app-shell component CSS classes (`app-frame`, `app-card`, `app-bar` and its children,
+   `app-menu`, `app-foot`, and the identity-dropdown pieces) verbatim from `design-system/`
+   (`memba.css` / `styles.css`) into `web/assets/css/app.css`, keeping class names 1:1 with the
+   design mirror so it stays authoritative. daisyUI `dropdown` is already available in the app.
+2. Rewrite `Layouts.club_site/1` in `web/lib/memba_web/components/layouts.ex`: replace the header
+   with the app-bar — the plain `@club_name` on the left and a member identity dropdown (avatar
+   initials + member name → **Sign out**) on the right — and wrap `@inner_block` in the
+   `app-frame` / `app-card` frame, mirroring `club-home.html` / `member-conversation.html`. Keep
+   the "Powered by Memba" `app-foot` footer and `flash_group`. Preserve the
+   `:if={@current_identity}` gating so the identity dropdown only renders when signed in.
+3. Add an optional `member_name` assign (default `nil`) to `club_site` plus a private
+   `initials/1` helper in `Layouts`; render the avatar initials + name from `member_name`, falling
+   back to the `current_identity` email local-part (for both label and initials) when `member_name`
+   is absent.
+4. Pass `member_name` (the current member's display name) from the four signed-in member surfaces —
+   `page_html/club.html.heex`, the conversation/message-detail surface (`page_html/message.html.heex`
+   / `member_message_live/show.ex`), `member_message_live/new.ex` (compose), and
+   `member_invitation_live/new.ex` (invitation). Leave the public club page
+   (`public_club_page_live.ex`) passing neither `current_identity` nor `member_name`.
+5. Update LiveView/layout tests for the new shell: the app-bar renders the club name; the identity
+   dropdown is gated on `@current_identity`; the Sign out control still posts to `DELETE /auth`;
+   content renders inside the app-card; and every `club_site` surface renders.
+6. Run `./bin/dev gallery-walk` and compare the club-home and conversation screenshots against
+   `design-system/wireframes/club-home.html` / `member-conversation.html` (app-bar + app-card +
+   "Powered by Memba" foot).
+7. Run `dev check` and confirm it is green (no feature-file changes).
 
 ## Open Technical Decisions
 
