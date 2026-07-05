@@ -54,7 +54,7 @@ green than before.
 | 042 | 2026-06-21 | merged | Club email subdomains | [plan](042-club-email-subdomains/plan.md) |
 | 043 | 2026-06-22 | merged | Conversations overview: group replies with a reply count | [plan](043-conversations-overview-grouping/plan.md) |
 | 044 | 2026-07-04 | implementing | Shared member app-shell: app-bar + app-card frame (plan replaced 2026-07-04 against refreshed design) | [plan](044-shared-app-shell/plan.md) |
-| 045 | 2026-07-04 | draft | Club home: Conversations / Members section tabs (slot repurposed 2026-07-04; prior stop-following plan in git history) | [plan](045-club-home-section-tabs/plan.md) |
+| 045 | 2026-07-04 | validated | Club home: Conversations / Members section tabs (slot repurposed 2026-07-04; prior stop-following plan in git history) | [plan](045-club-home-section-tabs/plan.md) |
 | 046 | 2026-07-04 | draft | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
 
 Status notes:
