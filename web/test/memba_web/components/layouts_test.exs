@@ -132,11 +132,32 @@ defmodule MembaWeb.LayoutsTest do
       </Layouts.club_site>
       """)
 
-    assert_selector(html, "#club-site-layout[data-surface='club-site']")
-    assert_selector(html, "#club-site-layout-slot")
-    assert_text(html, "#club-site-layout header", "Riverside Tennis Club")
-    assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
+    assert_selector(html, "#club-site-layout.app-frame[data-surface='club-site']")
+    assert_selector(html, "#club-site-layout > .app-card")
+    assert_selector(html, "#club-site-layout > .app-card > main > #club-site-layout-slot")
+    assert_text(html, "#club-site-layout .app-card > header", "Riverside Tennis Club")
+    assert_selector(html, "#club-site-layout > .app-card > header > .app-bar")
+
+    assert_text(
+      html,
+      "#club-site-layout header .app-bar__brand .app-bar__club",
+      "Riverside Tennis Club"
+    )
+
+    refute_selector(html, "#club-site-layout header .app-bar__club[href]")
+    refute_selector(html, "#club-site-layout header a[href='/']")
+    assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
+
+    assert_selector(
+      html,
+      "#club-site-layout header button#club-site-identity-menu-button.app-bar__me"
+    )
+
+    assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
+    assert_text(html, "#club-site-layout header .app-bar__who", "alice")
+    refute_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
+    assert_selector(html, "#club-site-footer.app-foot")
     assert_text(html, "#club-site-footer", "Powered by Memba")
 
     assert_selector(
@@ -144,17 +165,87 @@ defmodule MembaWeb.LayoutsTest do
       "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
     )
 
-    assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
-    assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
-    assert_selector(html, "button#club-site-sign-out-button.btn.btn-soft.btn-sm[type='submit']")
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[tabindex='0']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
+    )
+
+    assert_text(html, "#club-site-sign-out-button", "Sign out")
+
     refute_text(html, "#club-site-footer", "Commit")
 
-    assert only_attribute(html, "#club-site-layout", "class") =~ "bg-base-200"
-    assert only_attribute(html, "#club-site-layout", "class") =~ "text-base-content"
-    assert only_attribute(html, "#club-site-layout header", "class") =~ "bg-base-100"
-    assert only_attribute(html, "#club-site-layout header", "class") =~ "border-base-300"
+    assert only_attribute(html, "#club-site-layout", "class") == "app-frame"
     refute html =~ "--club-site-"
     assert [] = attributes(html, "#club-site-layout", "style")
+  end
+
+  test "club-site layout gates the member identity dropdown when signed out" do
+    assigns = %{flash: %{}}
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club">
+        <section id="public-club-site-layout-slot">Public club page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout header .app-bar")
+
+    assert_text(
+      html,
+      "#club-site-layout header .app-bar__brand .app-bar__club",
+      "Riverside Tennis Club"
+    )
+
+    refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+    refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
+    refute_selector(html, "#club-site-layout header .app-bar__avatar")
+    refute_selector(html, "#club-site-layout header .app-bar__who")
+    refute_selector(html, "#club-site-layout header .app-menu")
+    refute_selector(html, "#club-site-layout header #club-site-sign-out-form")
+    refute_text(html, "#club-site-layout header", "Signed in as")
+    assert_selector(html, "#public-club-site-layout-slot")
+  end
+
+  test "club-site layout accepts optional member names and derives name-like initials" do
+    assigns = %{
+      flash: %{},
+      current_identity: %{email: "élodie.durand@example.com"},
+      member_name: "Élodie Durand"
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site
+        flash={@flash}
+        club_name="Riverside Tennis Club"
+        current_identity={@current_identity}
+        member_name={@member_name}
+      >
+        <section id="club-site-layout-slot-with-member-name">Club member page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
+    assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
+    assert_text(html, "#club-site-layout header .app-bar__who", "Élodie Durand")
+    refute_text(html, "#club-site-layout header .app-bar__who", "élodie.durand")
+    assert_selector(html, "#club-site-layout-slot-with-member-name")
   end
 
   test "root footer shows linked git commit when enabled" do

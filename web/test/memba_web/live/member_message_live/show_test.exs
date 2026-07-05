@@ -46,6 +46,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
            )
 
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__who",
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#club-site-identity-menu-button .app-bar__avatar",
+             "AA"
+           )
+
     assert has_element?(view, "a#back-to-club-home-link[href='/']")
   end
 
