@@ -11,4 +11,4 @@
 - [x] 009 Wire client-side tab switching with `Phoenix.LiveView.JS` (`JS.show`/`JS.hide` panels; toggle `is-active` and `aria-selected`), defaulting to Conversations, with no server round-trip.
 - [x] 010 Update the LiveView/controller test: both tab controls render; Conversations is the default panel; the New message action is on Conversations; Invite member is on Members only when manage-members is allowed; both panels' content renders.
 - [x] 011 Run `./bin/dev gallery-walk` and compare `member-club-home` to `design-system/wireframes/club-home.html` (tab spine + per-tab action + panels).
-- [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+- [x] 012 Run `dev check` and confirm it is green (no feature-file changes).
