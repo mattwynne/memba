@@ -13,6 +13,8 @@ defmodule MembaWeb.PageHTML do
   embed_templates "page_html/*"
 
   attr :entry, :map, required: true
+  attr :selected_club, :map, required: true
+  attr :club_id_source, :string, default: nil
 
   defp conversation_entry_card(assigns) do
     ~H"""
@@ -53,12 +55,52 @@ defmodule MembaWeb.PageHTML do
                 {format_message_time(@entry.message.inserted_at)}
               </time>
             </div>
-            <span
-              data-testid="member-conversation-entry-label"
-              class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
-            >
-              {conversation_entry_label(@entry.kind)}
-            </span>
+            <div class="flex items-center gap-2">
+              <span
+                data-testid="member-conversation-entry-label"
+                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+              >
+                {conversation_entry_label(@entry.kind)}
+              </span>
+              <div
+                id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+                data-testid="member-conversation-entry-menu"
+                class="message__menu dropdown dropdown-end"
+              >
+                <button
+                  id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
+                  type="button"
+                  tabindex="0"
+                  role="button"
+                  aria-haspopup="menu"
+                  aria-label="Message options"
+                  class="message__kebab btn btn-ghost btn-sm btn-square rounded-full text-ink-2 hover:bg-base-200 hover:text-base-content"
+                >
+                  <.icon name="hero-ellipsis-vertical" class="size-5" />
+                </button>
+                <div
+                  tabindex="0"
+                  role="menu"
+                  class="dropdown-content message-menu z-20 mt-2 min-w-48 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-lg"
+                >
+                  <.link
+                    id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
+                    data-testid="member-conversation-entry-delivery-link"
+                    href={
+                      member_message_delivery_path(
+                        @entry.message.message_id,
+                        @selected_club,
+                        @club_id_source
+                      )
+                    }
+                    role="menuitem"
+                    class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-base-content transition duration-150 hover:bg-base-200"
+                  >
+                    <.icon name="hero-envelope" class="size-4 text-primary" /> Delivery details
+                  </.link>
+                </div>
+              </div>
+            </div>
           </div>
           <p
             id={conversation_entry_body_id(@entry)}
@@ -164,6 +206,12 @@ defmodule MembaWeb.PageHTML do
 
   defp member_message_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+
+  defp member_message_delivery_path(message_id, _selected_club, "host"),
+    do: ~p"/messages/#{message_id}/delivery"
+
+  defp member_message_delivery_path(message_id, selected_club, _source),
+    do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
 
   defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
   defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)

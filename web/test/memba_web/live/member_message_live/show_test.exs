@@ -445,6 +445,70 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "#member-message-reply-subject-input")
   end
 
+  test "each conversation entry has a delivery details menu link for that message", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I'll bring snacks."
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    for entry_message <- [message, reply] do
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "#member-conversation-entry-menu-#{entry_message.message_id}.message__menu"
+             )
+
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
+                 ".message__kebab[aria-label='Message options']"
+             )
+
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "a#member-conversation-entry-delivery-link-#{entry_message.message_id}" <>
+                 "[data-testid='member-conversation-entry-delivery-link']" <>
+                 "[href='/messages/#{entry_message.message_id}/delivery']",
+               "Delivery details"
+             )
+    end
+  end
+
   test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
     alice =
       create_active_member(
