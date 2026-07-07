@@ -2,6 +2,37 @@
 
 Judgement-worthy, non-blocking review findings that were intentionally allowed to merge. Clean reviews and silently auto-fixed issues are not recorded here.
 
+## 2026-07-07 — ADR 0023 architectural review: URL-addressable LiveView state
+
+ADRs: `docs/adr/0015-use-liveview-for-member-application-pages.md`, `docs/adr/0023-use-url-addressable-liveview-state.md`
+
+Note: after iteration 045 changed the club-home Conversations/Members tabs to LiveView patch routes (`/conversations` and `/members`), an ensemble architectural review checked whether the rest of the codebase follows ADR 0015 and ADR 0023. Codex and Gemini completed independent reports and both returned **PASS WITH FINDINGS**. Claude could not run because the Anthropic API key was unavailable. The findings below record agreed or high-signal follow-ups; transient menus, dropdowns, and form validation feedback are not treated as ADR 0023 violations.
+
+1. **Member message receipt-group expansion is visible state that is not URL-addressable.**
+   - Evidence: `web/lib/memba_web/live/member_message_live/show.ex` stores `:expanded_receipt_groups` in LiveView assigns and toggles it through `handle_event("toggle_receipt_group", ...)`; `web/lib/memba_web/controllers/page_html/message.html.heex` renders receipt-group controls with `phx-click="toggle_receipt_group"`, `aria-expanded`, and conditional recipient rows; `web/test/memba_web/live/member_message_live/show_test.exs` expands groups with `render_click()` rather than asserting a patch URL.
+   - Risk: a member can reveal a delivery-status group, but refresh, share, and browser Back/Forward lose that visible state. This conflicts with ADR 0023's rule that expandable modes users may expect to bookmark, share, refresh, or navigate back to should be represented in the URL where practical.
+   - Suggested next action: add `handle_params/3` to `MemberMessageLive.Show`, encode expanded receipt groups in query params (for example `?receipts=delivered,sent` or `?receipt_group=delivered`), replace the toggle event with LiveView patch links or `push_patch/2`, and add tests for direct URLs, refresh-equivalent render state, and `assert_patch`.
+
+2. **Club invitation profile completion remains a controller-rendered interactive member-facing form.**
+   - Evidence: `web/lib/memba_web/controllers/club_member_invitation_controller.ex` renders and submits the invited-member profile completion flow through controller actions; the route remains outside the club-member LiveView session.
+   - Risk: the flow is identity/member-facing and form-based, so it may drift from ADR 0015's default that member application pages should be LiveViews. The current controller may be acceptable as a pre-member invitation boundary, but that exception is not explicit.
+   - Suggested next action: either document this as a deliberate pre-member/controller exception, or migrate the profile completion flow to LiveView before adding richer interaction or validation.
+
+3. **The public get-started request flow is an interactive controller flow.**
+   - Evidence: `web/lib/memba_web/controllers/page_controller.ex` handles `get_started/2`, `submit_get_started/2`, signed-out verification, and signed-in request submission as controller actions.
+   - Risk: this is not an authenticated club-member app page, so ADR 0015 applies less directly than it does to club-member surfaces. Still, it is a multi-step user-facing form with visible states, and it may become a source of controller/LiveView inconsistency as onboarding grows.
+   - Suggested next action: consider a later LiveView migration for the get-started flow if it gains more interactive state; otherwise document it as a public onboarding exception to the member-app LiveView default.
+
+4. **Compose success state may deserve a URL-backed destination.**
+   - Evidence: `web/lib/memba_web/live/member_message_live/new.ex` keeps `:compose_state`, `:sent_message_id`, and failure/success feedback in assigns at `/messages/new` after submit.
+   - Risk: post-submit success is visible and useful, but refresh loses it. This is probably transient form feedback, not a strict ADR 0023 violation, yet it sits near the boundary because the success state names a durable message.
+   - Suggested next action: decide whether successful compose should navigate to `/messages/:message_id` after send. Leave validation errors and retryable failure feedback as transient form state unless users need share/refresh semantics.
+
+5. **Admin request rejection state is server-only while conversion state is URL-backed.**
+   - Evidence: `web/lib/memba_web/live/admin/requests_live/index.ex` uses URL-backed patch state for request conversion but uses `phx-click` / assigns for starting and cancelling rejection.
+   - Risk: ADR 0023 is focused on member application pages, so this is not a member-surface violation. However, the same principle would make staff workflows more refresh-safe and testable if rejection panels become meaningful page modes.
+   - Suggested next action: leave as-is unless staff operators need Back/Forward/share semantics for rejection state; if they do, align rejection with the existing conversion patch pattern.
+
 ## 2026-06-19 — Iteration 037: Design-system catch-up onboarding requests and refresh
 
 Plan: `docs/iterations/037-ds-catchup-onboarding-requests-and-refresh/plan.md`
