@@ -1,7 +1,7 @@
 # 048 — Club home Members: named member rows
 
 Date: 2026-07-04
-Status: validated
+Status: implementing
 
 > Written 2026-07-04 against the refreshed `club-home.html` Members panel. Delivers after 044–047 in
 > number order; builds inside the 045 Members tab.
