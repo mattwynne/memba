@@ -144,6 +144,141 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
   end
 
+  test "club template renders named member rows with current marker and preserved members actions" do
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
+
+    members = [
+      %{id: alice_id, name: "Alice Adams", initials: "AA"},
+      %{id: bob_id, name: "Bob Builder", initials: "BB"}
+    ]
+
+    html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: true,
+        members: members,
+        active_member_count: 2
+      })
+
+    refute html_has_selector?(html, "#member-section-panel-members[hidden]")
+
+    assert html_has_selector?(
+             html,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm" <>
+               "[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#active-members-list.member-list[data-active-member-count='2']" <>
+               "[data-active-members-state='active-members']"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-testid='club-member-row']" <>
+               "[data-member-id='#{alice_id}'][data-member-name='Alice Adams'] " <>
+               ".member-row__avatar",
+             "AA"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__name",
+             "Alice Adams"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row[data-testid='club-member-row']" <>
+               "[data-member-id='#{bob_id}'][data-member-name='Bob Builder'] " <>
+               ".member-row__avatar",
+             "BB"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row[data-current-member='false'] " <>
+               ".member-row__name",
+             "Bob Builder"
+           )
+
+    refute html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']"
+           )
+
+    refute html_has_selector?(html, "#active-members-empty-state")
+    refute html_has_selector?(html, "#active-members-avatar-stack")
+
+    first_member_html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: true,
+        members: [hd(members)],
+        active_member_count: 1
+      })
+
+    assert html_has_selector?(
+             first_member_html,
+             "#active-members-list.member-list[data-active-member-count='1']" <>
+               "[data-active-members-state='first-member'] #active-members-empty-state",
+             "You’re the first member listed"
+           )
+
+    assert html_has_selector?(
+             first_member_html,
+             "#active-members-empty-state",
+             "As members are added, you’ll see them here."
+           )
+
+    assert html_has_selector?(
+             first_member_html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    ordinary_member_html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: false,
+        members: [hd(members)],
+        active_member_count: 1
+      })
+
+    refute html_has_selector?(ordinary_member_html, "#member-section-action-invite-member")
+    refute html_has_selector?(ordinary_member_html, "#club-members #member-invite-member-link")
+
+    assert html_has_selector?(
+             ordinary_member_html,
+             "#active-members-empty-state",
+             "You’re the first member listed"
+           )
+  end
+
   test "dashboard patching to members selects the members URL state", %{conn: conn} do
     alice =
       create_active_member(
@@ -1313,5 +1448,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.any?()
+  end
+
+  defp html_has_selector?(html, selector, text) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
+    |> String.contains?(text)
   end
 end
