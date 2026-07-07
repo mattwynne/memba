@@ -1,0 +1,236 @@
+diff --git a/docs/iterations/046-conversation-page-alignment/todo.md b/docs/iterations/046-conversation-page-alignment/todo.md
+index 9c80d19..a6781fa 100644
+--- a/docs/iterations/046-conversation-page-alignment/todo.md
++++ b/docs/iterations/046-conversation-page-alignment/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 In `conversation_entry_card` (`page_html.ex`), render `@entry.message.inserted_at` via that helper in the card head, beside the sender name — a timestamp on the original and every reply.
+ - [x] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [x] 004 In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so the follow control sits compactly beside the title.
+-- [ ] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
++- [x] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
+ - [ ] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
+ - [ ] 007 Preserve the non-member state: when `!@can_follow_conversation`, show the existing "Only current club members can follow…" explanation instead of an interactive toggle.
+ - [ ] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 58bb9fa..1c28cb7 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -34,84 +34,29 @@
+           </h1>
+         </div>
+ 
+-        <section
++        <label
+           id="member-conversation-follow-control"
+           data-following={to_string(@following_conversation)}
+           data-can-follow={to_string(@can_follow_conversation)}
+-          class="w-full shrink-0 rounded-3xl border border-sage-200 bg-sage-50/80 p-5 shadow-sm sm:w-auto sm:max-w-sm sm:p-6"
++          class="follow-toggle"
+         >
+-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+-            <div class="flex min-w-0 items-start gap-3">
+-              <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-base-100 text-sage-700 ring-1 ring-inset ring-sage-200">
+-                <.icon
+-                  name={
+-                    if(@following_conversation,
+-                      do: "hero-bell-alert",
+-                      else: "hero-bell"
+-                    )
+-                  }
+-                  class="size-5"
+-                />
+-              </span>
+-              <div>
+-                <%= cond do %>
+-                  <% !@can_follow_conversation -> %>
+-                    <h2 class="text-base font-semibold text-base-content">
+-                      Follow this conversation
+-                    </h2>
+-                    <p
+-                      id="member-conversation-follow-copy"
+-                      class="mt-1 text-sm leading-6 text-ink-2"
+-                    >
+-                      Only current club members can follow this conversation in Memba.
+-                    </p>
+-                  <% @following_conversation -> %>
+-                    <h2 class="text-base font-semibold text-base-content">
+-                      You’re following this conversation
+-                    </h2>
+-                    <p
+-                      id="member-conversation-follow-copy"
+-                      class="mt-1 text-sm leading-6 text-ink-2"
+-                    >
+-                      You’ll receive any new replies by email. You can stop following at any time.
+-                    </p>
+-                  <% true -> %>
+-                    <h2 class="text-base font-semibold text-base-content">
+-                      Follow this conversation
+-                    </h2>
+-                    <p
+-                      id="member-conversation-follow-copy"
+-                      class="mt-1 text-sm leading-6 text-ink-2"
+-                    >
+-                      Follow this conversation to receive any new replies by email.
+-                    </p>
+-                <% end %>
+-              </div>
+-            </div>
+-
+-            <.button
+-              :if={@can_follow_conversation and !@following_conversation}
+-              id="member-conversation-follow-button"
+-              type="button"
+-              phx-click="follow_conversation"
+-              variant="primary"
+-              class="w-full shrink-0 sm:w-auto"
+-            >
+-              <.icon name="hero-bell" class="size-4" /> Follow conversation
+-            </.button>
+-
+-            <.button
+-              :if={@can_follow_conversation and @following_conversation}
+-              id="member-conversation-unfollow-button"
+-              type="button"
+-              phx-click="unfollow_conversation"
+-              variant="secondary"
+-              class="w-full shrink-0 sm:w-auto"
+-            >
+-              <.icon name="hero-bell-slash" class="size-4" /> Stop following
+-            </.button>
+-          </div>
+-        </section>
++          <input
++            id="member-conversation-follow-toggle"
++            type="checkbox"
++            class="toggle toggle-primary toggle-sm"
++            checked={@following_conversation}
++            aria-label="Follow this conversation"
++          />
++          <span class="follow-toggle__text">
++            <strong>{if(@following_conversation, do: "Following", else: "Not following")}</strong>
++            <span>
++              {if(@following_conversation,
++                do: "Emailed on new replies",
++                else: "Not emailed on replies"
++              )}
++            </span>
++          </span>
++        </label>
+       </div>
+       <p id="member-message-meta" class="mt-4 text-sm leading-6 text-ink-2">
+         From <span class="font-semibold text-base-content">{@sender_name}</span>
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+index 45b3723..ddda8c7 100644
+--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -75,10 +75,13 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
+-             "You’re following this conversation"
++             "#member-conversation-follow-control.follow-toggle" <>
++               "[data-following='true'][data-can-follow='true']",
++             "Following"
+            )
+ 
++    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox'][checked]")
++
+     assert has_element?(
+              view,
+              "#member-conversation-replies " <>
+@@ -89,7 +92,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+            )
+   end
+ 
+-  test "current member can follow and unfollow a conversation from message detail", %{conn: conn} do
++  test "current member sees a compact follow toggle reflecting follow state", %{conn: conn} do
+     club_id = Memba.ID.generate(:club)
+     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+@@ -116,40 +119,42 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']",
+-             "Follow this conversation to receive any new replies"
++             "#member-conversation-follow-control.follow-toggle" <>
++               "[data-following='false'][data-can-follow='true']",
++             "Not following"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
++    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
++    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
++    refute has_element?(view, "#member-conversation-follow-button")
+     refute has_element?(view, "#member-conversation-unfollow-button")
+ 
+-    view
+-    |> element("#member-conversation-follow-button")
+-    |> render_click()
++    assert :ok =
++             Messaging.follow_conversation_as_current_member(
++               %{
++                 club_id: club_id,
++                 conversation_id: message.message_id,
++                 member_id: bob.person_id
++               },
++               consistency: :strong
++             )
+ 
+     assert Messaging.following_conversation?(message.message_id, bob.person_id)
+ 
+-    assert has_element?(
+-             view,
+-             "#member-conversation-follow-control[data-following='true'][data-can-follow='true']",
+-             "You’re following this conversation"
+-           )
+-
+-    assert has_element?(view, "#member-conversation-unfollow-button", "Stop following")
+-    refute has_element?(view, "#member-conversation-follow-button")
+-
+-    view
+-    |> element("#member-conversation-unfollow-button")
+-    |> render_click()
+-
+-    refute Messaging.following_conversation?(message.message_id, bob.person_id)
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
++      |> live(~p"/messages/#{message.message_id}")
+ 
+     assert has_element?(
+              view,
+-             "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
++             "#member-conversation-follow-control.follow-toggle" <>
++               "[data-following='true'][data-can-follow='true']",
++             "Following"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-button", "Follow conversation")
++    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox'][checked]")
++    refute has_element?(view, "#member-conversation-follow-button")
+     refute has_element?(view, "#member-conversation-unfollow-button")
+   end
+ 
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 0338e79..9474022 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -127,8 +127,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(
+              view,
+              "#member-message-heading-row.detail-head > " <>
+-               "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
++               "#member-conversation-follow-control.follow-toggle" <>
++               "[data-following='false'][data-can-follow='true']",
++             "Not following"
+            )
++
++    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
++    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
++    refute has_element?(view, "#member-conversation-follow-button")
++    refute has_element?(view, "#member-conversation-unfollow-button")
+   end
+ 
+   test "routed message detail renders the conversation and inline reply composer", %{
