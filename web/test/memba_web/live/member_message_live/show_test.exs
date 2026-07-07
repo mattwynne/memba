@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+  alias MembaWeb.MemberMessageDetail
 
   test "isolated message detail without route params fails instead of rendering stale shell", %{
     conn: conn
@@ -136,6 +137,66 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "#member-conversation-follow-toggle[checked]")
     refute has_element?(view, "#member-conversation-follow-button")
     refute has_element?(view, "#member-conversation-unfollow-button")
+  end
+
+  test "message detail shows the current-member follow explanation instead of a toggle when following is not allowed" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    selected_club = Memba.Membership.get_club(alice.club_id)
+
+    assert {:ok, detail_assigns} =
+             MemberMessageDetail.load(
+               %{"club_id" => alice.club_id, "message_id" => message.message_id},
+               [selected_club],
+               %{email: "guest@example.com"}
+             )
+
+    html =
+      detail_assigns
+      |> render_message_detail()
+      |> LazyHTML.from_fragment()
+
+    assert html
+           |> LazyHTML.query(
+             "#member-message-heading-row.detail-head > " <>
+               "#member-conversation-follow-control" <>
+               "[data-following='false'][data-can-follow='false']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-conversation-follow-copy")
+           |> LazyHTML.text() =~
+             "Only current club members can follow this conversation in Memba."
+
+    refute html
+           |> LazyHTML.query("#member-conversation-follow-toggle")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("[phx-change='follow_conversation']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("#member-conversation-follow-button")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("#member-conversation-unfollow-button")
+           |> Enum.any?()
   end
 
   test "routed message detail renders the conversation and inline reply composer", %{
@@ -718,6 +779,23 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     club = Memba.Membership.get_club(club.club_id) || club
     %{host: host} = URI.parse(ClubSite.url(club))
     Map.put(conn, :host, host)
+  end
+
+  defp render_message_detail(detail_assigns) do
+    detail_assigns
+    |> Map.merge(%{
+      current_identity: %{email: "guest@example.com"},
+      expanded_receipt_groups: MapSet.new(),
+      flash: %{},
+      reply_body_error: nil,
+      reply_error: nil,
+      reply_form: Phoenix.Component.to_form(%{}, as: :reply),
+      reply_state: :composing,
+      route_params: %{"club_id_source" => "host"}
+    })
+    |> MembaWeb.PageHTML.message()
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
   end
 
   defp create_active_member(attrs) do
