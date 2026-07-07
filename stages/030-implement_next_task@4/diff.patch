@@ -1,0 +1,74 @@
+diff --git a/docs/iterations/048-named-member-rows/todo.md b/docs/iterations/048-named-member-rows/todo.md
+index e77da92..e219413 100644
+--- a/docs/iterations/048-named-member-rows/todo.md
++++ b/docs/iterations/048-named-member-rows/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 In the Members `section-panel` of `web/lib/memba_web/controllers/page_html/club.html.heex` (added in 045), replace the avatar-stack card with a `member-list` container.
+ - [x] 002 Render each of `@members` as a `member-row`: avatar initials + the member's name.
+ - [x] 003 Add a meta line per row and mark the **current member** with a "You" indicator.
+-- [ ] 004 Preserve the existing members **empty state** and the **Invite member** action from 045.
++- [x] 004 Preserve the existing members **empty state** and the **Invite member** action from 045.
+ - [ ] 005 Port the `member-list` and `member-row` CSS (and its children) from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [ ] 006 Update the LiveView/controller test: members render as named rows; the current member's row is marked "You"; the Invite action and empty state still behave as before.
+ - [ ] 007 Run `./bin/dev gallery-walk` and compare the Members tab to `club-home.html` (named rows).
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 3e0ce39..d67b17b 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -619,6 +619,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#club-members #member-invite-member-link")
+   end
+ 
++  test "dashboard preserves the members empty state and invite actions for first-member admins",
++       %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("robin@example.com", robin)
++      |> live(~p"/members")
++
++    refute has_element?(view, "#member-section-panel-members[hidden]")
++
++    assert has_element?(
++             view,
++             "#member-section-tabs .section-tabs__action " <>
++               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
++               "[data-section-action='members'][href='/members/invitations/new']",
++             "Invite member"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-members #club-members " <>
++               "#member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
++             "Invite member"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-members " <>
++               "#active-members-list.member-list[data-active-member-count='1']" <>
++               "[data-active-members-state='first-member'] #active-members-empty-state",
++             "You’re the first member listed"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-members #active-members-list " <>
++               "#club-member-#{robin.person_id}.member-row[data-testid='club-member-row'] " <>
++               ".member-row__name",
++             "Robin Rivers"
++           )
++  end
++
+   test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
+        %{conn: conn} do
+     _alice =
