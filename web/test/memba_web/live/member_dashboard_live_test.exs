@@ -185,48 +185,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "[data-active-members-state='active-members']"
            )
 
-    assert html_has_selector?(
-             html,
-             "#club-member-#{alice_id}.member-row[data-testid='club-member-row']" <>
-               "[data-member-id='#{alice_id}'][data-member-name='Alice Adams'] " <>
-               ".member-row__avatar",
-             "AA"
-           )
+    refute html_has_selector?(html, "#active-members-list [data-member-name]")
 
-    assert html_has_selector?(
-             html,
-             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
-               ".member-row__name",
-             "Alice Adams"
-           )
+    assert_rendered_member_row(html, alice_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
 
-    assert html_has_selector?(
-             html,
-             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
-               ".member-row__meta [data-testid='club-member-current-indicator']",
-             "You"
-           )
-
-    assert html_has_selector?(
-             html,
-             "#club-member-#{bob_id}.member-row[data-testid='club-member-row']" <>
-               "[data-member-id='#{bob_id}'][data-member-name='Bob Builder'] " <>
-               ".member-row__avatar",
-             "BB"
-           )
-
-    assert html_has_selector?(
-             html,
-             "#club-member-#{bob_id}.member-row[data-current-member='false'] " <>
-               ".member-row__name",
-             "Bob Builder"
-           )
-
-    refute html_has_selector?(
-             html,
-             "#club-member-#{bob_id}.member-row " <>
-               ".member-row__meta [data-testid='club-member-current-indicator']"
-           )
+    assert_rendered_member_row(html, bob_id,
+      name: "Bob Builder",
+      initials: "BB",
+      current?: false
+    )
 
     refute html_has_selector?(html, "#active-members-empty-state")
     refute html_has_selector?(html, "#active-members-avatar-stack")
@@ -253,12 +224,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "As members are added, you’ll see them here."
            )
 
-    assert html_has_selector?(
-             first_member_html,
-             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
-               ".member-row__meta [data-testid='club-member-current-indicator']",
-             "You"
-           )
+    refute html_has_selector?(first_member_html, "#active-members-list [data-member-name]")
+
+    assert_rendered_member_row(first_member_html, alice_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
 
     ordinary_member_html =
       dashboard_html(%{
@@ -431,57 +403,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     refute has_element?(view, "#member-section-panel-members #active-members-card")
 
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
-               ".member-row__avatar",
-             "AA"
-           )
+    assert_live_member_row(view, alice.person_id,
+      scope: "#member-section-panel-members #active-members-list",
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
 
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{alice.person_id}.member-row .member-row__name",
-             "Alice Adams"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{alice.person_id}.member-row[data-current-member='true'] " <>
-               ".member-row__meta [data-testid='club-member-current-indicator']",
-             "You"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{bob.person_id}.member-row[data-testid='club-member-row'][data-member-name='Bob Builder'] " <>
-               ".member-row__avatar",
-             "BB"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{bob.person_id}.member-row .member-row__name",
-             "Bob Builder"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{bob.person_id}.member-row[data-current-member='false'] " <>
-               ".member-row__meta"
-           )
-
-    refute has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{bob.person_id}.member-row " <>
-               ".member-row__meta [data-testid='club-member-current-indicator']"
-           )
+    assert_live_member_row(view, bob.person_id,
+      scope: "#member-section-panel-members #active-members-list",
+      name: "Bob Builder",
+      initials: "BB",
+      current?: false
+    )
   end
 
   test "dashboard renders the members tab invite action only for members who can manage members",
@@ -634,18 +568,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#active-members-list[data-active-members-state='active-members']")
     refute has_element?(view, "#active-members-empty-state", "You’re the first member listed")
 
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
-               ".member-row__avatar",
-             "AA"
-           )
-
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{alice.person_id}.member-row .member-row__name",
-             "Alice Adams"
-           )
+    assert_live_member_row(view, alice.person_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
   end
 
   test "dashboard renders larger member lists as named member rows without overflow",
@@ -676,12 +603,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(view, "#active-members-list.member-list[data-active-member-count='8']")
 
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{last_member.person_id}.member-row[data-testid='club-member-row'][data-member-name='Member 8'] " <>
-               ".member-row__name",
-             "Member 8"
-           )
+    assert_live_member_row(view, last_member.person_id,
+      name: "Member 8",
+      current?: false
+    )
 
     refute has_element?(view, "#active-members-avatar-stack")
     refute has_element?(view, "#active-members-overflow-avatar")
@@ -1045,15 +970,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "[data-testid='club-message-link'][href='/messages/#{message.message_id}']"
            )
 
-    assert has_element?(
-             view,
-             "[data-testid='club-member-row'][data-member-id='#{alice.person_id}'][data-member-name='Alice Adams']"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='club-member-row'][data-member-id='#{bob.person_id}'][data-member-name='Bob Builder']"
-           )
+    assert_live_member_row(view, alice.person_id, name: "Alice Adams", current?: true)
+    assert_live_member_row(view, bob.person_id, name: "Bob Builder", current?: false)
   end
 
   test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
@@ -1189,18 +1107,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "As members are added, you’ll see them here."
            )
 
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
-               ".member-row__avatar",
-             "AA"
-           )
-
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{alice.person_id}.member-row .member-row__name",
-             "Alice Adams"
-           )
+    assert_live_member_row(view, alice.person_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
 
     refute has_element?(
              view,
@@ -1240,19 +1151,16 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#active-members-list.member-list[data-active-member-count='7'][data-active-members-state='active-members']"
            )
 
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'] " <>
-               ".member-row__avatar",
-             "AA"
-           )
+    assert_live_member_row(view, alice.person_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
 
-    assert has_element?(
-             view,
-             "#active-members-list #club-member-#{last_member.person_id}.member-row[data-testid='club-member-row'][data-member-name='Member 7'] " <>
-               ".member-row__name",
-             "Member 7"
-           )
+    assert_live_member_row(view, last_member.person_id,
+      name: "Member 7",
+      current?: false
+    )
 
     refute has_element?(view, "#active-members-avatar-stack")
     refute has_element?(view, "#active-members-overflow-avatar")
@@ -1441,6 +1349,94 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> Map.merge(assigns)
     |> MembaWeb.PageHTML.club()
     |> rendered_to_string()
+  end
+
+  defp assert_rendered_member_row(html, member_id, opts) do
+    name = Keyword.fetch!(opts, :name)
+    selector = member_row_selector(member_id)
+
+    assert html_has_selector?(html, "#{selector} .member-row__name", name)
+    refute html_has_selector?(html, "#{selector}[data-member-name]")
+
+    case Keyword.fetch(opts, :initials) do
+      {:ok, initials} ->
+        assert html_has_selector?(html, "#{selector} .member-row__avatar", initials)
+
+      :error ->
+        :ok
+    end
+
+    case Keyword.fetch(opts, :current?) do
+      {:ok, current?} -> assert_rendered_current_member_state(html, selector, current?)
+      :error -> :ok
+    end
+  end
+
+  defp assert_rendered_current_member_state(html, selector, current?) do
+    assert html_has_selector?(html, "#{selector}[data-current-member='#{to_string(current?)}']")
+
+    if current? do
+      assert html_has_selector?(
+               html,
+               "#{selector} .member-row__meta [data-testid='club-member-current-indicator']",
+               "You"
+             )
+    else
+      assert html_has_selector?(html, "#{selector} .member-row__meta")
+
+      refute html_has_selector?(
+               html,
+               "#{selector} .member-row__meta [data-testid='club-member-current-indicator']"
+             )
+    end
+  end
+
+  defp assert_live_member_row(view, member_id, opts) do
+    name = Keyword.fetch!(opts, :name)
+    selector = scoped_member_row_selector(Keyword.get(opts, :scope), member_id)
+
+    assert has_element?(view, "#{selector} .member-row__name", name)
+    refute has_element?(view, "#{selector}[data-member-name]")
+
+    case Keyword.fetch(opts, :initials) do
+      {:ok, initials} -> assert has_element?(view, "#{selector} .member-row__avatar", initials)
+      :error -> :ok
+    end
+
+    case Keyword.fetch(opts, :current?) do
+      {:ok, current?} -> assert_live_current_member_state(view, selector, current?)
+      :error -> :ok
+    end
+  end
+
+  defp assert_live_current_member_state(view, selector, current?) do
+    assert has_element?(view, "#{selector}[data-current-member='#{to_string(current?)}']")
+
+    if current? do
+      assert has_element?(
+               view,
+               "#{selector} .member-row__meta [data-testid='club-member-current-indicator']",
+               "You"
+             )
+    else
+      assert has_element?(view, "#{selector} .member-row__meta")
+
+      refute has_element?(
+               view,
+               "#{selector} .member-row__meta [data-testid='club-member-current-indicator']"
+             )
+    end
+  end
+
+  defp scoped_member_row_selector(nil, member_id), do: member_row_selector(member_id)
+
+  defp scoped_member_row_selector(scope, member_id) do
+    "#{scope} #{member_row_selector(member_id)}"
+  end
+
+  defp member_row_selector(member_id) do
+    "#club-member-#{member_id}.member-row[data-testid='club-member-row']" <>
+      "[data-member-id='#{member_id}']"
   end
 
   defp html_has_selector?(html, selector) do
