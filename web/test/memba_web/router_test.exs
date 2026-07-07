@@ -134,6 +134,23 @@ defmodule MembaWeb.RouterTest do
                  "localhost"
                )
     end
+
+    test "routes /messages/:message_id/delivery through the required club member pipeline to the member message delivery LiveView" do
+      assert %{
+               path_params: %{"message_id" => "message-123"},
+               pipe_through: [:browser, :club_member_required],
+               phoenix_live_view: {MembaWeb.MemberMessageDeliveryLive.Show, nil, _opts, _live_session},
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: nil,
+               route: "/messages/:message_id/delivery"
+             } =
+               Phoenix.Router.route_info(
+                 MembaWeb.Router,
+                 "GET",
+                 "/messages/message-123/delivery",
+                 "localhost"
+               )
+    end
   end
 
   describe "member invitation routes" do

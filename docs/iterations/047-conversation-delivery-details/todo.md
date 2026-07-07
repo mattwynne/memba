@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show` in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
+- [x] 001 Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show` in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
 - [ ] 002 Create `MemberMessageDeliveryLive.Show` that loads the target message and its receipt model via `Messaging.list_member_email_deliverys/1 |> MemberEmailDeliveryPresentation.present_receipts/1`, scoped to the member's active clubs (reuse the `member_message_detail` load pattern and authz).
 - [ ] 003 Build the delivery page template per `delivery-details.html`: header (subject / sender / `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
 - [ ] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
