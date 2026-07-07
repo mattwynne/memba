@@ -95,6 +95,42 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
+  test "routed message detail places the follow control beside the subject in the detail head", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-message-heading-row.detail-head > .detail-head__main " <>
+               "h1#member-message-subject",
+             "Trip planning night"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-heading-row.detail-head > " <>
+               "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
+           )
+  end
+
   test "routed message detail renders the conversation and inline reply composer", %{
     conn: conn
   } do
