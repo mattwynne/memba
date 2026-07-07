@@ -85,8 +85,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
     end
   end
 
-  describe "member-facing email delivery presentation on message detail" do
-    test "renders every member email delivery status with its member-facing label and Heroicon",
+  describe "member-facing delivery relocation on message detail" do
+    test "does not render the inline delivery presentation on the message detail",
          %{
            conn: conn
          } do
@@ -120,12 +120,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
           subject: "Status check"
         )
 
-      receipt_cases = [
-        {alice, "sent", "Sending", "hero-clock"},
-        {bob, "delivered", "Delivered", "hero-check-circle"},
-        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"}
-      ]
-
       seeded_receipt_cases = [
         {alice, "sent"},
         {bob, "delivered"},
@@ -150,49 +144,23 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       html = LazyHTML.from_fragment(response)
 
-      assert_selector_exists(
-        html,
-        "#member-receipts-summary[data-receipt-count='3']"
-      )
+      refute html |> LazyHTML.query("#member-receipt-summary") |> Enum.any?()
+      refute html |> LazyHTML.query("#member-receipts-section") |> Enum.any?()
+      refute html |> LazyHTML.query("#member-receipts") |> Enum.any?()
 
-      for {status, bg_class} <- [
-            {"delivered", "bg-sage-600"},
-            {"sent", "bg-warning"},
-            {"delivery problem", "bg-error"}
-          ] do
-        assert_selector_exists(
-          html,
-          "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='#{status}'].#{bg_class}"
-        )
-      end
+      refute html
+             |> LazyHTML.query("[data-testid='member-receipt-summary-status']")
+             |> Enum.any?()
 
-      Enum.each(receipt_cases, fn {member, status, label, icon} ->
-        group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
-        status_slug = String.replace(status, " ", "-")
+      refute html
+             |> LazyHTML.query("[data-testid='member-receipt-summary-bar-segment']")
+             |> Enum.any?()
 
-        assert_selector_exists(html, group_selector)
+      refute html
+             |> LazyHTML.query("[data-testid='member-receipt-group']")
+             |> Enum.any?()
 
-        assert_selector_exists(
-          html,
-          "#{group_selector} #member-receipt-group-toggle-#{status_slug}[aria-expanded='false']"
-        )
-
-        assert_text_in(html, "#{group_selector} h3", label)
-
-        assert_exact_text(
-          html,
-          "#{group_selector} [data-testid='receipt-group-count']",
-          "1"
-        )
-
-        assert_selector_exists(html, "#{group_selector} .#{icon}")
-
-        refute html
-               |> LazyHTML.query(
-                 "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
-               )
-               |> Enum.any?()
-      end)
+      refute response =~ "Members by delivery status"
     end
 
     test "does not expose Memba-staff-only delivery fields on member message detail", %{
@@ -252,11 +220,9 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       html = LazyHTML.from_fragment(response)
 
-      assert_text_in(
-        html,
-        "[data-testid='member-receipt-group'][data-receipt-status='delivery problem'] h3",
-        "Delivery problem"
-      )
+      refute html |> LazyHTML.query("#member-receipt-summary") |> Enum.any?()
+      refute html |> LazyHTML.query("#member-receipts-section") |> Enum.any?()
+      refute html |> LazyHTML.query("[data-testid='member-receipt-group']") |> Enum.any?()
 
       refute response =~ delivery_id
       refute response =~ "bob-private@example.invalid"
@@ -346,28 +312,5 @@ defmodule MembaWeb.MemberMessageDetailTest do
       status: Keyword.fetch!(attrs, :status),
       reason: Keyword.fetch!(attrs, :reason)
     })
-  end
-
-  defp assert_selector_exists(html, selector) do
-    assert html |> LazyHTML.query(selector) |> Enum.any?(), "Expected selector #{selector}"
-  end
-
-  defp assert_exact_text(html, selector, expected_text) do
-    actual_text =
-      html
-      |> LazyHTML.query(selector)
-      |> LazyHTML.text()
-      |> String.trim()
-
-    assert actual_text == expected_text
-  end
-
-  defp assert_text_in(html, selector, expected_text) do
-    actual_text =
-      html
-      |> LazyHTML.query(selector)
-      |> LazyHTML.text()
-
-    assert actual_text =~ expected_text
   end
 end

@@ -8,7 +8,6 @@ defmodule MembaWeb.PageHTML do
 
   alias Memba.ClubInboundEmailAddress
   alias MembaWeb.ClubSite
-  alias MembaWeb.MemberEmailDeliveryPresentation
 
   embed_templates "page_html/*"
 
@@ -133,30 +132,6 @@ defmodule MembaWeb.PageHTML do
     active_member_section?(active_section, section) |> to_string()
   end
 
-  defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
-  defp status_slug(_status), do: "unknown"
-
-  defp receipt_bar_width(%{percentage: percentage}) when is_integer(percentage) do
-    "width: #{max(percentage, 0)}%;"
-  end
-
-  defp receipt_bar_width(_status), do: "width: 0%;"
-
-  defp receipt_recipient_initial(name) when is_binary(name) do
-    case String.first(name) do
-      nil -> "?"
-      initial -> String.upcase(initial)
-    end
-  end
-
-  defp receipt_recipient_initial(_name), do: "?"
-
-  defp receipt_group_expanded?(%MapSet{} = expanded_groups, status) when is_binary(status) do
-    MapSet.member?(expanded_groups, status)
-  end
-
-  defp receipt_group_expanded?(_expanded_groups, _status), do: false
-
   defp split_conversation_entries(entries) when is_list(entries) do
     Enum.split_with(entries, &(&1.kind == :original))
   end
@@ -212,8 +187,4 @@ defmodule MembaWeb.PageHTML do
 
   defp member_message_delivery_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
-
-  defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
-  defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
-  defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
 end

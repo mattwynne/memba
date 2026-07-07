@@ -254,6 +254,11 @@ function memberMessageUrl(world, message) {
   return clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}`);
 }
 
+function memberMessageDeliveryUrl(world, message) {
+  const club = clubById(world, message.clubId) || { slug: message.clubSlug || "kootenay-mountaineering-club" };
+  return clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}/delivery`);
+}
+
 async function rowAttributeValues(rows, attributeName) {
   return rows.evaluateAll(
     (elements, attr) =>
@@ -579,6 +584,26 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
     world,
     world.page.getByRole("heading", { name: subject }),
     `member message heading for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+}
+
+async function openMemberMessageDelivery(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+  assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
+
+  await gotoUnlessCurrent(
+    world,
+    memberMessageDeliveryUrl(world, message),
+    `visit member message delivery page for ${JSON.stringify(subject)}`
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.locator(`#member-message-delivery-detail[data-message-id=${cssString(message.messageId)}]`),
+    `member message delivery detail for ${JSON.stringify(subject)}`,
     { expect, timeoutMs }
   );
 }
@@ -1867,11 +1892,10 @@ async function assertMemberMessageAddressedTo(
   subject = world.lastMessageSubject,
   { expect = playwrightExpect } = {}
 ) {
-  await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
+  await openMemberMessageDelivery(world, subject, { expect });
 
-  const rows = allRows(world.page, "member-receipts", "member-receipt");
-  await waitForExpandedMemberEmailDeliveryCount(
+  const rows = allRows(world.page, "member-delivery-receipt-groups", "member-delivery-receipt");
+  await waitForProjectedCount(
     world,
     rows,
     expectedNames.length,
@@ -1900,10 +1924,9 @@ async function assertMemberMessageNotAddressedTo(
   subject = world.lastMessageSubject,
   { expect = playwrightExpect } = {}
 ) {
-  await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
+  await openMemberMessageDelivery(world, subject, { expect });
 
-  const rows = allRows(world.page, "member-receipts", "member-receipt");
+  const rows = allRows(world.page, "member-delivery-receipt-groups", "member-delivery-receipt");
   const actualNames = await rowDatasetValues(rows, "recipientName");
   assertFinalBrowserState(`member-facing recipients should not include ${excludedName}`, () =>
     assert.ok(
@@ -2300,8 +2323,7 @@ async function assertEveryAddressedMemberEmailDeliveryStatus(
     "Expected addressed members to be asserted before checking every member email delivery status"
   );
 
-  await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
+  await openMemberMessageDelivery(world, subject, { expect });
 
   for (const recipientName of addressedMemberNames) {
     await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
@@ -2317,8 +2339,7 @@ async function assertMemberEmailDeliveryStatus(
   expectedLabel,
   { expect = playwrightExpect } = {}
 ) {
-  await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
+  await openMemberMessageDelivery(world, subject, { expect });
   await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
 
   return world;
@@ -2331,33 +2352,20 @@ async function assertMemberEmailDeliveryStatusOnCurrentPage(
   expectedLabel,
   { expect = playwrightExpect } = {}
 ) {
-  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
-  await waitForProjectedVisible(
+  const row = rowByData(world.page, "member-delivery-receipt", "data-recipient-name", recipientName);
+  await waitForProjectedCount(
     world,
     row,
+    1,
     `${recipientName}'s member-facing email delivery row for ${JSON.stringify(subject)}`,
     { expect }
   );
-  await waitForProjectedText(
-    world,
-    row.locator("[data-testid=\"receipt-status\"]"),
-    expectedLabel,
-    `${recipientName}'s member-facing status label for ${JSON.stringify(subject)}`,
-    { expect }
-  );
 
-  const expectedIcon = memberReceiptIconForLabel(expectedLabel);
-  const icon = row.locator("[data-testid=\"receipt-status-icon\"]");
-  await waitForProjectedVisible(
-    world,
-    icon,
-    `${recipientName}'s member-facing status icon for ${JSON.stringify(subject)}`,
-    { expect }
-  );
+  const expectedStatus = memberReceiptStatusForLabel(expectedLabel);
+  const actualStatus = await row.getAttribute("data-receipt-status");
 
-  const actualIcon = await icon.getAttribute("data-icon-name");
-  assertFinalBrowserState(`${recipientName}'s member-facing email delivery icon for ${JSON.stringify(subject)}`, () =>
-    assert.equal(actualIcon, expectedIcon)
+  assertFinalBrowserState(`${recipientName}'s member-facing email delivery status for ${JSON.stringify(subject)}`, () =>
+    assert.equal(actualStatus, expectedStatus)
   );
 
   return world;
@@ -2495,6 +2503,22 @@ function memberReceiptIconForLabel(label) {
 
     case "Delivery problem":
       return "hero-exclamation-triangle";
+
+    default:
+      throw new Error(`Unsupported member-facing email delivery label: ${label}`);
+  }
+}
+
+function memberReceiptStatusForLabel(label) {
+  switch (label) {
+    case "Sending":
+      return "sent";
+
+    case "Delivered":
+      return "delivered";
+
+    case "Delivery problem":
+      return "delivery problem";
 
     default:
       throw new Error(`Unsupported member-facing email delivery label: ${label}`);
@@ -3372,11 +3396,13 @@ module.exports = {
   kootenayClubName,
   makeClubMessageSendingUnavailable,
   memberReceiptIconForLabel,
+  memberReceiptStatusForLabel,
   memberReceiptStatusForEventType,
   nelsonClubName,
   openMemberComposeFromClubHome,
   openMemberClubHome,
   openMemberMessage,
+  openMemberMessageDelivery,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
   postResendInboundWebhook,
