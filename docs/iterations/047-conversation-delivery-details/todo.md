@@ -11,4 +11,4 @@
 - [x] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
 - [x] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
 - [x] 011 Run `./bin/dev gallery-walk` and compare the delivery page to `delivery-details.html` and the conversation to `member-conversation.html`.
-- [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+- [x] 012 Run `dev check` and confirm it is green (no feature-file changes).
