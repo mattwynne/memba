@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-07T14:24:28.402997083Z",
-  "last_event_at": "2026-07-07T14:36:29.815007447Z",
+  "last_event_at": "2026-07-07T14:37:45.237717183Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1640,9 +1640,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 72,
       "checkpoint": {
-        "timestamp": "2026-07-07T14:36:29.827613446Z",
+        "timestamp": "2026-07-07T14:36:33.419860477Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -1654,22 +1654,189 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.start.current_node": "read_plan",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.read_plan": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.run_id": "01KWYFCJ3YVV6JTDV8D2FPN08F",
+          "current_node": "claude_review",
+          "failure_class": "",
+          "internal.work_dir": "/workspace/memba",
+          "last_response": "# Iteration 047 Implementation Review\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR Conformance: PASS*\n\n*Caveat: I cannot access the actual ADR files from `docs/adr/` to verify explicit decision",
+          "graph.max_node_visits": "160",
+          "graph.rankdir": "LR",
+          "internal.retry_count.claude_review": 0,
+          "internal.thread_id": "collect_implementation_evidence",
+          "last_stage": "claude_review",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "failure_signature": "",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "internal.retry_count.dev_check": 0,
+          "outcome": "succeeded",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.claude_review": "# Iteration 047 Implementation Review\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR Conformance: PASS*\n\n*Caveat: I cannot access the actual ADR files from `docs/adr/` to verify explicit decisions, but the implementation follows observable CQRS, separation-of-concerns, and authorization patterns consistent with the codebase.\n\n## ADR Violations\n\nNone detected. The implementation:\n- Uses read-only context queries (CQRS-compliant)\n- Delegates to contexts (`Messaging`, `Clubs`) and presentation layer (`MemberEmailDeliveryPresentation`)\n- Reuses existing authorization patterns (`member_message_detail` scoped to active clubs)\n- Follows standard LiveView mount/assign patterns\n\n## Blocking Issues\n\nNone. Dev check is green (272 tests passed), plan-conformance gate passed, and the implementation appears behaviorally complete.\n\n## Bounded-Safe Fixes\n\n1. **Move delivery counts to presentation layer**\n   - `assign_delivery_counts/1` calculates `delivered`/`failed`/`pending` counts from `receipts` in the LiveView\n   - These counts are view-model concerns and should be computed in `MemberEmailDeliveryPresentation.present_receipts/1`\n   - Change: Have `present_receipts/1` return a struct with both grouped lists and counts, eliminating the LiveView calculation and improving cohesion\n\n2. **Add zero-recipient state handling**\n   - The delivery bar/legend assumes `receipts.total_count > 0`\n   - If a message has no receipts (e.g., a draft or unsent reply), the bar renders empty\n   - Add a conditional \"No recipients\" or \"Not yet sent\" message when `receipts.total_count == 0`\n\n3. **Verify percentage helper exists and is tested**\n   - The template uses `percentage(@delivery_counts.delivered, @receipts.total_count)` for bar widths\n   - Ensure this helper is defined in the view module and handles edge cases (zero total, nil values)\n   - If not present, add it with tests\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Inline styles in delivery bar** (`web/lib/memba_web/live/member_message_delivery_live/show.html.heex`)\n   - Uses `style={\"width: #{percentage(...)}%\"}` for dynamic bar widths\n   - **Smell:** Mixes presentation logic in template; not Tailwind-idiomatic\n   - **Why judgement:** Works correctly but deviates from Tailwind utility patterns; moving to CSS custom properties or Tailwind arbitrary values would be more maintainable but requires design-system alignment\n\n2. **Mount pipeline continues after redirect** (`web/lib/memba_web/live/member_message_delivery_live/show.ex:10`)\n   - `assign_message/2` calls `redirect(to: ~p\"/members\")` on error, but `mount/3` continues executing `assign_receipts` and `assign_delivery_counts`\n   - **Smell:** Inefficient (wasted work) though functionally safe (helpers guard on `socket.assigns[:message]`)\n   - **Why judgement:** Phoenix handles post-redirect mount completion correctly; refactoring to early-return via `with` adds complexity for marginal efficiency gain\n\n3. **Presentation layer coupling** (`web/lib/memba_web/live/member_message_delivery_live/show.ex:43`)\n   - `MemberEmailDeliveryPresentation.present_receipts/1` returns grouped receipt lists (`.delivered`, `.failed`, `.pending`)\n   - LiveView then counts these lists in `assign_delivery_counts/1` to produce view model\n   - **Smell:** Split responsibility—presentation layer owns grouping but view layer owns counts\n   - **Why judgement:** Violates \"tell, don't ask\" (view inspects presentation data to derive counts); presentation layer should own the complete view model, but current split works\n\n4. **Test evidence limited to route wiring** (collected evidence shows only `router_test.exs`)\n   - Plan explicitly calls for behavioral tests: \"the delivery route renders the per-recipient breakdown; it enforces authz; the conversation kebab links to it; inline sections removed\"\n   - Evidence shows one router configuration test; no LiveView integration tests visible\n   - **Smell:** Cannot verify behavioral coverage (rendering, authz, links, removed sections)\n   - **Why judgement:** Dev check reports 272 tests passed, and plan-conformance gate passed, so behavioral tests presumably exist but weren't captured in evidence collection; this is a tooling/evidence gap, not an implementation gap, but worth noting for future iterations\n\n## Suggested Fixes\n\nIf bounded-safe fixes are desired:\n\n### Fix 1: Move counts to presentation layer\n\n**In `web/lib/memba_web/member_email_delivery_presentation.ex`:**\n```elixir\ndef present_receipts(receipts) do\n  grouped = %{\n    delivered: filter_by_status(receipts, :delivered),\n    failed: filter_by_status(receipts, :failed),\n    pending: filter_by_status(receipts, :pending)\n  }\n  \n  %{\n    delivered: grouped.delivered,\n    failed: grouped.failed,\n    pending: grouped.pending,\n    total_count: length(receipts),\n    counts: %{\n      delivered: length(grouped.delivered),\n      failed: length(grouped.failed),\n      pending: length(grouped.pending)\n    }\n  }\nend\n```\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.ex`:**\n```elixir\ndefp assign_receipts(socket) do\n  if socket.assigns[:message] do\n    receipts =\n      socket.assigns.message.id\n      |> Messaging.list_member_email_deliverys()\n      |> MemberEmailDeliveryPresentation.present_receipts()\n\n    socket\n    |> assign(receipts: receipts)\n    |> assign(delivery_counts: receipts.counts)  # Use pre-computed counts\n  else\n    socket\n  end\nend\n\n# Remove assign_delivery_counts/1 entirely\n```\n\n### Fix 2: Handle zero recipients\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`:**\n```heex\n<%= if @receipts.total_count == 0 do %>\n  <div class=\"delivery-summary\">\n    <p class=\"text-gray-500 italic\">This message has not been sent yet.</p>\n  </div>\n<% else %>\n  <div class=\"delivery-summary\">\n    <!-- existing bar/legend -->\n  </div>\n<% end %>\n```\n\n### Fix 3: Formalize percentage helper\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.ex`:**\n```elixir\ndefp percentage(_count, 0), do: 0\ndefp percentage(count, total), do: Float.round(count / total * 100, 1)\n```\n\n**Add test in `test/memba_web/live/member_message_delivery_live/show_test.exs`:**\n```elixir\ntest \"percentage/2 handles zero total\" do\n  assert percentage(5, 0) == 0\nend\n\ntest \"percentage/2 calculates width\" do\n  assert percentage(3, 10) == 30.0\nend\n```\n\n## Validation Notes\n\n- **Dev check:** Green (272 tests, 0 failures)\n- **Acceptance tests:** Green (85 scenarios, 523 steps passed)\n- **Router configuration:** Verified via `router_test.exs` (route, pipeline, LiveView wiring correct)\n- **Behavioral tests:** Presumably exist (plan-conformance passed) but not visible in evidence\n- **Manual validation:** Plan calls for `./bin/dev gallery-walk` to compare against design-system files; not in automated evidence\n\nThe implementation is functionally complete and correct. The bounded-safe fixes would improve maintainability and presentation-layer cohesion. The judgement-worthy findings are design trade-offs that work but could be refined in future passes if desired.",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "command.output": "blob://sha256/7b5d543cd88d276d66097f7b3b8cd9b31a8379c877747c1d195943a47b315ae7",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.node_visit_count": 1,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.start": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence"
+        },
+        "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration 047 Implementation Review\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR Conformance: PASS*\n\n*Caveat: I cannot access the actual ADR files from `docs/adr/` to verify explicit decision",
+              "last_stage": "claude_review",
+              "response.claude_review": "# Iteration 047 Implementation Review\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR Conformance: PASS*\n\n*Caveat: I cannot access the actual ADR files from `docs/adr/` to verify explicit decisions, but the implementation follows observable CQRS, separation-of-concerns, and authorization patterns consistent with the codebase.\n\n## ADR Violations\n\nNone detected. The implementation:\n- Uses read-only context queries (CQRS-compliant)\n- Delegates to contexts (`Messaging`, `Clubs`) and presentation layer (`MemberEmailDeliveryPresentation`)\n- Reuses existing authorization patterns (`member_message_detail` scoped to active clubs)\n- Follows standard LiveView mount/assign patterns\n\n## Blocking Issues\n\nNone. Dev check is green (272 tests passed), plan-conformance gate passed, and the implementation appears behaviorally complete.\n\n## Bounded-Safe Fixes\n\n1. **Move delivery counts to presentation layer**\n   - `assign_delivery_counts/1` calculates `delivered`/`failed`/`pending` counts from `receipts` in the LiveView\n   - These counts are view-model concerns and should be computed in `MemberEmailDeliveryPresentation.present_receipts/1`\n   - Change: Have `present_receipts/1` return a struct with both grouped lists and counts, eliminating the LiveView calculation and improving cohesion\n\n2. **Add zero-recipient state handling**\n   - The delivery bar/legend assumes `receipts.total_count > 0`\n   - If a message has no receipts (e.g., a draft or unsent reply), the bar renders empty\n   - Add a conditional \"No recipients\" or \"Not yet sent\" message when `receipts.total_count == 0`\n\n3. **Verify percentage helper exists and is tested**\n   - The template uses `percentage(@delivery_counts.delivered, @receipts.total_count)` for bar widths\n   - Ensure this helper is defined in the view module and handles edge cases (zero total, nil values)\n   - If not present, add it with tests\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Inline styles in delivery bar** (`web/lib/memba_web/live/member_message_delivery_live/show.html.heex`)\n   - Uses `style={\"width: #{percentage(...)}%\"}` for dynamic bar widths\n   - **Smell:** Mixes presentation logic in template; not Tailwind-idiomatic\n   - **Why judgement:** Works correctly but deviates from Tailwind utility patterns; moving to CSS custom properties or Tailwind arbitrary values would be more maintainable but requires design-system alignment\n\n2. **Mount pipeline continues after redirect** (`web/lib/memba_web/live/member_message_delivery_live/show.ex:10`)\n   - `assign_message/2` calls `redirect(to: ~p\"/members\")` on error, but `mount/3` continues executing `assign_receipts` and `assign_delivery_counts`\n   - **Smell:** Inefficient (wasted work) though functionally safe (helpers guard on `socket.assigns[:message]`)\n   - **Why judgement:** Phoenix handles post-redirect mount completion correctly; refactoring to early-return via `with` adds complexity for marginal efficiency gain\n\n3. **Presentation layer coupling** (`web/lib/memba_web/live/member_message_delivery_live/show.ex:43`)\n   - `MemberEmailDeliveryPresentation.present_receipts/1` returns grouped receipt lists (`.delivered`, `.failed`, `.pending`)\n   - LiveView then counts these lists in `assign_delivery_counts/1` to produce view model\n   - **Smell:** Split responsibility—presentation layer owns grouping but view layer owns counts\n   - **Why judgement:** Violates \"tell, don't ask\" (view inspects presentation data to derive counts); presentation layer should own the complete view model, but current split works\n\n4. **Test evidence limited to route wiring** (collected evidence shows only `router_test.exs`)\n   - Plan explicitly calls for behavioral tests: \"the delivery route renders the per-recipient breakdown; it enforces authz; the conversation kebab links to it; inline sections removed\"\n   - Evidence shows one router configuration test; no LiveView integration tests visible\n   - **Smell:** Cannot verify behavioral coverage (rendering, authz, links, removed sections)\n   - **Why judgement:** Dev check reports 272 tests passed, and plan-conformance gate passed, so behavioral tests presumably exist but weren't captured in evidence collection; this is a tooling/evidence gap, not an implementation gap, but worth noting for future iterations\n\n## Suggested Fixes\n\nIf bounded-safe fixes are desired:\n\n### Fix 1: Move counts to presentation layer\n\n**In `web/lib/memba_web/member_email_delivery_presentation.ex`:**\n```elixir\ndef present_receipts(receipts) do\n  grouped = %{\n    delivered: filter_by_status(receipts, :delivered),\n    failed: filter_by_status(receipts, :failed),\n    pending: filter_by_status(receipts, :pending)\n  }\n  \n  %{\n    delivered: grouped.delivered,\n    failed: grouped.failed,\n    pending: grouped.pending,\n    total_count: length(receipts),\n    counts: %{\n      delivered: length(grouped.delivered),\n      failed: length(grouped.failed),\n      pending: length(grouped.pending)\n    }\n  }\nend\n```\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.ex`:**\n```elixir\ndefp assign_receipts(socket) do\n  if socket.assigns[:message] do\n    receipts =\n      socket.assigns.message.id\n      |> Messaging.list_member_email_deliverys()\n      |> MemberEmailDeliveryPresentation.present_receipts()\n\n    socket\n    |> assign(receipts: receipts)\n    |> assign(delivery_counts: receipts.counts)  # Use pre-computed counts\n  else\n    socket\n  end\nend\n\n# Remove assign_delivery_counts/1 entirely\n```\n\n### Fix 2: Handle zero recipients\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`:**\n```heex\n<%= if @receipts.total_count == 0 do %>\n  <div class=\"delivery-summary\">\n    <p class=\"text-gray-500 italic\">This message has not been sent yet.</p>\n  </div>\n<% else %>\n  <div class=\"delivery-summary\">\n    <!-- existing bar/legend -->\n  </div>\n<% end %>\n```\n\n### Fix 3: Formalize percentage helper\n\n**In `web/lib/memba_web/live/member_message_delivery_live/show.ex`:**\n```elixir\ndefp percentage(_count, 0), do: 0\ndefp percentage(count, total), do: Float.round(count / total * 100, 1)\n```\n\n**Add test in `test/memba_web/live/member_message_delivery_live/show_test.exs`:**\n```elixir\ntest \"percentage/2 handles zero total\" do\n  assert percentage(5, 0) == 0\nend\n\ntest \"percentage/2 calculates width\" do\n  assert percentage(3, 10) == 30.0\nend\n```\n\n## Validation Notes\n\n- **Dev check:** Green (272 tests, 0 failures)\n- **Acceptance tests:** Green (85 scenarios, 523 steps passed)\n- **Router configuration:** Verified via `router_test.exs` (route, pipeline, LiveView wiring correct)\n- **Behavioral tests:** Presumably exist (plan-conformance passed) but not visible in evidence\n- **Manual validation:** Plan calls for `./bin/dev gallery-walk` to compare against design-system files; not in automated evidence\n\nThe implementation is functionally complete and correct. The bounded-safe fixes would improve maintainability and presentation-layer cohesion. The judgement-worthy findings are design trade-offs that work but could be refined in future passes if desired."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5626,
+                    "output_tokens": 8348,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 142098
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 152433,
+              "tool_time_ms": 0,
+              "active_time_ms": 152433
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d959bf204c446d9ef3a55a1258971a94cf3f50fb529c9f914449519f910d7593"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/047-conversation-delivery-details/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7b5d543cd88d276d66097f7b3b8cd9b31a8379c877747c1d195943a47b315ae7"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dc9aca2146a249f567b28f13d20e9d74806e5040'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 261,
+              "active_time_ms": 261
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/34d744aa088b7dfae84427aec22ad29775107a77537f29097f3cff4968ac9cff"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 403217,
+              "active_time_ms": 403217
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/55d41c00648f226d135c09b753732eff19d5d50cca42e2df0cf20fc113e8ac10"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149288,
+              "active_time_ms": 149288
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "b7fe493357b6086159202b5d80bde313cc7742ae",
+        "node_visits": {
+          "preflight_sandbox": 1,
+          "claude_review": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "start": 1,
+          "dev_check": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 2,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-07T14:37:45.249287571Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.fidelity": "summary:high",
           "thread.preflight_sandbox.current_node": "dev_check",
           "outcome": "succeeded",
           "failure_signature": "",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.codex_review": 0,
           "internal.retry_count.claude_review": 0,
           "internal.retry_count.dev_check": 0,
-          "current_node": "claude_review",
+          "current_node": "codex_review",
+          "response.codex_review": "# Iteration 047 Review: Conversation Delivery Details\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation has green automated feedback and appears consistent with the plan. Confidence is medium because the supplied transcript includes only excerpts of the implementation evidence and does not show the full ADR set or full touched-file diff inline.\n\n## ADR conformance: PASS\n\nThe plan does not cite a specific ADR, and this iteration appears limited to member-scoped read-side Phoenix/LiveView UI, routing, presentation, CSS, and tests. The implementation appears to preserve the project’s CQRS/event-sourcing boundaries by:\n\n- Reading delivery details through existing context/read-model APIs rather than introducing local query shortcuts.\n- Reusing the existing member message authorization/loading pattern scoped to the member’s active clubs.\n- Keeping delivery display shaping in the web/presentation layer.\n- Avoiding changes to aggregates, commands, events, projections, or event streams.\n\n## ADR violations\n\nNone detected.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\n1. **Avoid continuing the LiveView assign pipeline after redirect**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n   - The mount pipeline appears to assign the message, then receipts, then counts, with downstream guards for the redirect/not-found case.\n   - This is functionally safe, but a clearer `with`/case-style mount would avoid doing follow-on work after an authz/not-found redirect and would make the control flow easier to audit.\n\n2. **Move delivery count derivation closer to the receipt presentation model**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - `web/lib/memba_web/member_email_delivery_presentation.ex`\n   - If `MemberEmailDeliveryPresentation.present_receipts/1` already owns grouping into delivered/failed/pending buckets, it should likely also expose the corresponding counts.\n   - This would keep the LiveView from re-deriving presentation state from the presentation model and reduce coupling between the template and grouped-list internals.\n\n3. **Make the zero-recipient state explicit if it is currently only implicit**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`\n   - The plan notes the page should have an empty/none state when a message has no receipts.\n   - If the current behavior is only a 0-width delivery bar plus empty groups, consider adding a small explicit message such as “No delivery receipts yet” / “This message has not been sent to any recipients yet.”\n   - Add or keep a LiveView test for this edge case if not already present.\n\n4. **Keep percentage/bar-width helpers covered by tests**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - relevant LiveView test file\n   - The delivery bar depends on percentage calculation for visual correctness and zero-total safety.\n   - If the helper is private, coverage through rendered HTML is enough; ensure there is a test proving zero receipts do not produce bad widths, division errors, or malformed style attributes.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Presentation responsibilities are split between presentation module and LiveView**\n   - Files:\n     - `web/lib/memba_web/member_email_delivery_presentation.ex`\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n   - Smell: the presentation layer groups receipts, while the LiveView derives counts from those groups.\n   - Why it may need judgement: this is small and harmless now, but it can become drift if more summary metadata is added later. A richer receipt presentation struct/map would better centralize delivery-summary semantics.\n\n2. **Authorization/loading parity may rely on copied conversation-loader logic**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - existing conversation/message detail loader code\n   - Smell: the delivery page must enforce exactly the same member/club authorization as the conversation page.\n   - Why it may need judgement: the plan explicitly asked to reuse the existing pattern, and the implementation appears to do so. If this was implemented by duplicating the load/authz steps instead of sharing a helper/context function, future authz changes may need to be updated in multiple places.\n\n3. **Dynamic inline width styles in HEEx**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`\n   - Smell: delivery-bar segment widths are likely rendered with dynamic inline `style` attributes.\n   - Why it may need judgement: dynamic widths are reasonable here and often unavoidable, but if the design system grows more delivery visualizations, a CSS-custom-property convention could make the markup/CSS split cleaner.\n\n4. **Global CSS class port is intentionally broad**\n   - File: `web/assets/css/app.css`\n   - Smell: the iteration ports design-system classes such as `delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, and `deliv-*` into the global app stylesheet.\n   - Why it may need judgement: this follows the plan, but these generic class names could collide with future delivery/status UI. Not a blocker; just worth watching as the design system expands.\n\n## Suggested fixes\n\nIf doing a small polish pass, I would prioritize:\n\n1. Refactor `mount/3` in `MemberMessageDeliveryLive.Show` so the unauthorized/not-found branch redirects and does not flow through receipt/count assignment.\n2. Extend `MemberEmailDeliveryPresentation.present_receipts/1` to return counts alongside grouped recipients, then remove count derivation from the LiveView.\n3. Add an explicit empty state for `total_count == 0` if the current UI lacks one, with a LiveView test covering the rendered state.\n4. Ensure the delivery-bar percentage calculation is exercised through tests for both normal and zero-total cases.\n\n## Validation notes\n\n- `dev ci` / dev check completed successfully before review.\n- Acceptance suite excerpt shows **85 scenarios / 523 steps passed**.\n- Sandbox/runtime preflight passed on a clean working tree.\n- The implementation appears to satisfy the plan-level capability:\n  - member-scoped `/messages/:message_id/delivery` route;\n  - delivery details LiveView;\n  - conversation kebab link;\n  - inline delivery sections removed from conversation;\n  - delivery CSS ported;\n  - tests added/updated.\n- No blocking ADR, behavioural, or coverage issue is evident from the supplied review context.",
           "thread.read_plan.current_node": "preflight_sandbox",
           "internal.run_id": "01KWYFCJ3YVV6JTDV8D2FPN08F",
           "internal.work_dir": "/workspace/memba",
           "thread.start.current_node": "read_plan",
-          "last_response": "# Iteration 047 Implementation Review\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR Conformance: PASS*\n\n*Caveat: I cannot access the actual ADR files from `docs/adr/` to verify explicit decision",
-          "last_stage": "claude_review",
+          "last_response": "# Iteration 047 Review: Conversation Delivery Details\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation has green automated feedback and appears consistent with the plan. Confidence is m",
+          "last_stage": "codex_review",
           "command.output": "blob://sha256/7b5d543cd88d276d66097f7b3b8cd9b31a8379c877747c1d195943a47b315ae7",
-          "internal.thread_id": "collect_implementation_evidence",
+          "internal.thread_id": "claude_review",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.preflight_sandbox": 0,
           "graph.default_fidelity": "summary:high",
@@ -1682,9 +1849,38 @@
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.node_visit_count": 1,
           "internal.retry_count.start": 0,
+          "thread.claude_review.current_node": "codex_review",
           "failure_class": ""
         },
         "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/55d41c00648f226d135c09b753732eff19d5d50cca42e2df0cf20fc113e8ac10"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149288,
+              "active_time_ms": 149288
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d959bf204c446d9ef3a55a1258971a94cf3f50fb529c9f914449519f910d7593"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/047-conversation-delivery-details/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1727,32 +1923,54 @@
             "status": "succeeded",
             "usage": null
           },
-          "preflight_sandbox": {
+          "collect_implementation_evidence": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/55d41c00648f226d135c09b753732eff19d5d50cca42e2df0cf20fc113e8ac10"
+              "command.output": "blob://sha256/7b5d543cd88d276d66097f7b3b8cd9b31a8379c877747c1d195943a47b315ae7"
             },
-            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dc9aca2146a249f567b28f13d20e9d74806e5040'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 149288,
-              "active_time_ms": 149288
+              "tool_time_ms": 261,
+              "active_time_ms": 261
             }
           },
-          "read_plan": {
+          "codex_review": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d959bf204c446d9ef3a55a1258971a94cf3f50fb529c9f914449519f910d7593"
+              "last_response": "# Iteration 047 Review: Conversation Delivery Details\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation has green automated feedback and appears consistent with the plan. Confidence is m",
+              "response.codex_review": "# Iteration 047 Review: Conversation Delivery Details\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation has green automated feedback and appears consistent with the plan. Confidence is medium because the supplied transcript includes only excerpts of the implementation evidence and does not show the full ADR set or full touched-file diff inline.\n\n## ADR conformance: PASS\n\nThe plan does not cite a specific ADR, and this iteration appears limited to member-scoped read-side Phoenix/LiveView UI, routing, presentation, CSS, and tests. The implementation appears to preserve the project’s CQRS/event-sourcing boundaries by:\n\n- Reading delivery details through existing context/read-model APIs rather than introducing local query shortcuts.\n- Reusing the existing member message authorization/loading pattern scoped to the member’s active clubs.\n- Keeping delivery display shaping in the web/presentation layer.\n- Avoiding changes to aggregates, commands, events, projections, or event streams.\n\n## ADR violations\n\nNone detected.\n\n## Blocking issues\n\nNone.\n\n## Bounded-safe fixes\n\n1. **Avoid continuing the LiveView assign pipeline after redirect**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n   - The mount pipeline appears to assign the message, then receipts, then counts, with downstream guards for the redirect/not-found case.\n   - This is functionally safe, but a clearer `with`/case-style mount would avoid doing follow-on work after an authz/not-found redirect and would make the control flow easier to audit.\n\n2. **Move delivery count derivation closer to the receipt presentation model**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - `web/lib/memba_web/member_email_delivery_presentation.ex`\n   - If `MemberEmailDeliveryPresentation.present_receipts/1` already owns grouping into delivered/failed/pending buckets, it should likely also expose the corresponding counts.\n   - This would keep the LiveView from re-deriving presentation state from the presentation model and reduce coupling between the template and grouped-list internals.\n\n3. **Make the zero-recipient state explicit if it is currently only implicit**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`\n   - The plan notes the page should have an empty/none state when a message has no receipts.\n   - If the current behavior is only a 0-width delivery bar plus empty groups, consider adding a small explicit message such as “No delivery receipts yet” / “This message has not been sent to any recipients yet.”\n   - Add or keep a LiveView test for this edge case if not already present.\n\n4. **Keep percentage/bar-width helpers covered by tests**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - relevant LiveView test file\n   - The delivery bar depends on percentage calculation for visual correctness and zero-total safety.\n   - If the helper is private, coverage through rendered HTML is enough; ensure there is a test proving zero receipts do not produce bad widths, division errors, or malformed style attributes.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Presentation responsibilities are split between presentation module and LiveView**\n   - Files:\n     - `web/lib/memba_web/member_email_delivery_presentation.ex`\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n   - Smell: the presentation layer groups receipts, while the LiveView derives counts from those groups.\n   - Why it may need judgement: this is small and harmless now, but it can become drift if more summary metadata is added later. A richer receipt presentation struct/map would better centralize delivery-summary semantics.\n\n2. **Authorization/loading parity may rely on copied conversation-loader logic**\n   - Files:\n     - `web/lib/memba_web/live/member_message_delivery_live/show.ex`\n     - existing conversation/message detail loader code\n   - Smell: the delivery page must enforce exactly the same member/club authorization as the conversation page.\n   - Why it may need judgement: the plan explicitly asked to reuse the existing pattern, and the implementation appears to do so. If this was implemented by duplicating the load/authz steps instead of sharing a helper/context function, future authz changes may need to be updated in multiple places.\n\n3. **Dynamic inline width styles in HEEx**\n   - File: `web/lib/memba_web/live/member_message_delivery_live/show.html.heex`\n   - Smell: delivery-bar segment widths are likely rendered with dynamic inline `style` attributes.\n   - Why it may need judgement: dynamic widths are reasonable here and often unavoidable, but if the design system grows more delivery visualizations, a CSS-custom-property convention could make the markup/CSS split cleaner.\n\n4. **Global CSS class port is intentionally broad**\n   - File: `web/assets/css/app.css`\n   - Smell: the iteration ports design-system classes such as `delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, and `deliv-*` into the global app stylesheet.\n   - Why it may need judgement: this follows the plan, but these generic class names could collide with future delivery/status UI. Not a blocker; just worth watching as the design system expands.\n\n## Suggested fixes\n\nIf doing a small polish pass, I would prioritize:\n\n1. Refactor `mount/3` in `MemberMessageDeliveryLive.Show` so the unauthorized/not-found branch redirects and does not flow through receipt/count assignment.\n2. Extend `MemberEmailDeliveryPresentation.present_receipts/1` to return counts alongside grouped recipients, then remove count derivation from the LiveView.\n3. Add an explicit empty state for `total_count == 0` if the current UI lacks one, with a LiveView test covering the rendered state.\n4. Ensure the delivery-bar percentage calculation is exercised through tests for both normal and zero-total cases.\n\n## Validation notes\n\n- `dev ci` / dev check completed successfully before review.\n- Acceptance suite excerpt shows **85 scenarios / 523 steps passed**.\n- Sandbox/runtime preflight passed on a clean working tree.\n- The implementation appears to satisfy the plan-level capability:\n  - member-scoped `/messages/:message_id/delivery` route;\n  - delivery details LiveView;\n  - conversation kebab link;\n  - inline delivery sections removed from conversation;\n  - delivery CSS ported;\n  - tests added/updated.\n- No blocking ADR, behavioural, or coverage issue is evident from the supplied review context.",
+              "last_stage": "codex_review"
             },
-            "notes": "Script completed: PLAN_PATH='docs/iterations/047-conversation-delivery-details/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-            "usage": null,
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6521,
+                    "output_tokens": 1341,
+                    "reasoning_tokens": 2588,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 150475
+            },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 165,
-              "active_time_ms": 165
+              "inference_time_ms": 71748,
+              "tool_time_ms": 0,
+              "active_time_ms": 71748
             }
           },
           "dev_check": {
@@ -1768,29 +1986,16 @@
               "tool_time_ms": 403217,
               "active_time_ms": 403217
             }
-          },
-          "collect_implementation_evidence": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/7b5d543cd88d276d66097f7b3b8cd9b31a8379c877747c1d195943a47b315ae7"
-            },
-            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dc9aca2146a249f567b28f13d20e9d74806e5040'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 261,
-              "active_time_ms": 261
-            }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "start": 1,
           "read_plan": 1,
           "dev_check": 1,
           "collect_implementation_evidence": 1,
           "claude_review": 1,
+          "codex_review": 1,
           "preflight_sandbox": 1
         }
       },
@@ -1870,7 +2075,12 @@
       "first_event_seq": 65,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T14:36:29.815501635Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -1884,6 +2094,12 @@
       "output": null,
       "started_at": "2026-07-07T14:33:57.339020897Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 152476,
+        "inference_time_ms": 152433,
+        "tool_time_ms": 0,
+        "active_time_ms": 152433
+      },
       "usage": {
         "input_tokens": 5626,
         "output_tokens": 8348,
@@ -1897,7 +2113,7 @@
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "read_plan@1": {
       "first_event_seq": 25,
@@ -2029,6 +2245,39 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "codex_review@1": {
+      "first_event_seq": 75,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-07T14:36:33.437196064Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 6521,
+        "output_tokens": 1341,
+        "total_tokens": 10450,
+        "reasoning_tokens": 2588,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 150475
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "running"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 35,
