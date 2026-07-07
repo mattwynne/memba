@@ -23,7 +23,8 @@ defmodule MembaWeb.PageHTML do
       data-message-id={@entry.message.message_id}
       data-sender-id={@entry.message.sender_id}
       class={[
-        "rounded-3xl border bg-base-100 p-5 shadow-sm sm:p-6",
+        "message rounded-3xl border bg-base-100 p-5 shadow-sm sm:p-6",
+        @entry.kind == :original && "message--original",
         if(@entry.kind == :original,
           do: "border-primary/25 ring-1 ring-primary/10",
           else: "border-base-300"
@@ -32,7 +33,7 @@ defmodule MembaWeb.PageHTML do
     >
       <div class="flex items-start gap-3">
         <span class={[
-          "grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 ring-inset",
+          "message__avatar grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 ring-inset",
           if(@entry.kind == :original,
             do: "bg-sage-100 text-sage-800 ring-primary/20",
             else: "bg-base-200 text-base-content ring-base-300"
@@ -40,9 +41,18 @@ defmodule MembaWeb.PageHTML do
         ]}>
           {conversation_sender_initial(@entry.sender_name)}
         </span>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p class="font-semibold text-base-content">{@entry.sender_name}</p>
+        <div class="message__body min-w-0 flex-1">
+          <div class="message__head flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <p class="message__name font-semibold text-base-content">{@entry.sender_name}</p>
+              <time
+                data-testid="member-conversation-entry-time"
+                datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
+                class="message__time text-sm font-medium text-ink-2"
+              >
+                {format_message_time(@entry.message.inserted_at)}
+              </time>
+            </div>
             <span
               data-testid="member-conversation-entry-label"
               class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
@@ -52,7 +62,7 @@ defmodule MembaWeb.PageHTML do
           </div>
           <p
             id={conversation_entry_body_id(@entry)}
-            class="mt-3 whitespace-pre-wrap text-base leading-8 text-ink-2"
+            class="message__text mt-3 whitespace-pre-wrap text-base leading-8 text-ink-2"
           >
             {@entry.message.body}
           </p>
@@ -60,6 +70,10 @@ defmodule MembaWeb.PageHTML do
       </div>
     </article>
     """
+  end
+
+  defp format_message_time(%DateTime{} = inserted_at) do
+    Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
   end
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)

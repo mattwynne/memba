@@ -1,5 +1,5 @@
 defmodule MembaWeb.MemberMessageLive.ShowTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
@@ -8,9 +8,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+  alias Memba.Messaging
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+  alias MembaWeb.MemberMessageDetail
 
   test "isolated message detail without route params fails instead of rendering stale shell", %{
     conn: conn
@@ -95,6 +97,195 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
+  test "routed message detail places the follow control beside the subject in the detail head", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-message-heading-row.detail-head > .detail-head__main " <>
+               "h1#member-message-subject",
+             "Trip planning night"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-heading-row.detail-head > " <>
+               "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='false'][data-can-follow='true']",
+             "Not following"
+           )
+
+    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
+    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+    refute has_element?(view, "#member-conversation-follow-button")
+    refute has_element?(view, "#member-conversation-unfollow-button")
+  end
+
+  test "current member changes follow state with the compact follow toggle", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='false'][data-can-follow='true']",
+             "Not following"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
+           )
+
+    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+
+    view
+    |> element("#member-conversation-follow-toggle")
+    |> render_change()
+
+    assert Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='true'][data-can-follow='true']",
+             "Following"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][checked]" <>
+               "[phx-change='unfollow_conversation']"
+           )
+
+    view
+    |> element("#member-conversation-follow-toggle")
+    |> render_change()
+
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='false'][data-can-follow='true']",
+             "Not following"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
+           )
+
+    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+    refute has_element?(view, "#member-conversation-follow-button")
+    refute has_element?(view, "#member-conversation-unfollow-button")
+  end
+
+  test "message detail shows the current-member follow explanation instead of a toggle when following is not allowed" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    selected_club = Memba.Membership.get_club(alice.club_id)
+
+    assert {:ok, detail_assigns} =
+             MemberMessageDetail.load(
+               %{"club_id" => alice.club_id, "message_id" => message.message_id},
+               [selected_club],
+               %{email: "guest@example.com"}
+             )
+
+    html =
+      detail_assigns
+      |> render_message_detail()
+      |> LazyHTML.from_fragment()
+
+    assert html
+           |> LazyHTML.query(
+             "#member-message-heading-row.detail-head > " <>
+               "#member-conversation-follow-control" <>
+               "[data-following='false'][data-can-follow='false']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-conversation-follow-copy")
+           |> LazyHTML.text() =~
+             "Only current club members can follow this conversation in Memba."
+
+    refute html
+           |> LazyHTML.query("#member-conversation-follow-toggle")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("[phx-change='follow_conversation']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("#member-conversation-follow-button")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("#member-conversation-unfollow-button")
+           |> Enum.any?()
+  end
+
   test "routed message detail renders the conversation and inline reply composer", %{
     conn: conn
   } do
@@ -126,7 +317,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         club_id: alice.club_id,
         sender_id: alice.person_id,
         subject: "Trip planning night",
-        body: "Bring your maps."
+        body: "Bring your maps.",
+        inserted_at: ~U[2026-06-03 07:02:00.000000Z]
       )
 
     first_reply =
@@ -136,7 +328,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I'll bring snacks."
+        body: "I'll bring snacks.",
+        inserted_at: ~U[2026-06-03 08:15:00.000000Z]
       )
 
     second_reply =
@@ -146,7 +339,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I can drive."
+        body: "I can drive.",
+        inserted_at: ~U[2026-06-03 09:30:00.000000Z]
       )
 
     {:ok, view, _html} =
@@ -160,6 +354,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "#member-conversation-original " <>
                "#member-conversation-entry-#{message.message_id}" <>
+               ".message.message--original" <>
                "[data-conversation-kind='original']" <>
                "[data-sender-id='#{alice.person_id}']",
              "Bring your maps."
@@ -167,21 +362,77 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
+             "#member-conversation-entry-#{message.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T07:02:00.000000Z']",
+             "3 Jun, 7:02am"
+           )
+
+    assert has_element?(
+             view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{first_reply.message_id}" <>
+               ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{bob.person_id}']",
              "I'll bring snacks."
+           )
+
+    refute has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{first_reply.message_id}.message--original"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{first_reply.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T08:15:00.000000Z']",
+             "3 Jun, 8:15am"
            )
 
     assert has_element?(
              view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{second_reply.message_id}" <>
+               ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{carol.person_id}']",
              "I can drive."
            )
+
+    refute has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{second_reply.message_id}.message--original"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{second_reply.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T09:30:00.000000Z']",
+             "3 Jun, 9:30am"
+           )
+
+    html =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    conversation_child_ids =
+      html
+      |> LazyHTML.query("#member-conversation > *")
+      |> LazyHTML.attribute("id")
+
+    replies_index =
+      Enum.find_index(conversation_child_ids, &(&1 == "member-conversation-replies"))
+
+    composer_index =
+      Enum.find_index(conversation_child_ids, &(&1 == "member-message-reply-composer"))
+
+    assert replies_index < composer_index
 
     assert has_element?(
              view,
@@ -650,6 +901,23 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     Map.put(conn, :host, host)
   end
 
+  defp render_message_detail(detail_assigns) do
+    detail_assigns
+    |> Map.merge(%{
+      current_identity: %{email: "guest@example.com"},
+      expanded_receipt_groups: MapSet.new(),
+      flash: %{},
+      reply_body_error: nil,
+      reply_error: nil,
+      reply_form: Phoenix.Component.to_form(%{}, as: :reply),
+      reply_state: :composing,
+      route_params: %{"club_id_source" => "host"}
+    })
+    |> MembaWeb.PageHTML.message()
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
@@ -699,7 +967,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       conversation_id: Keyword.get(attrs, :conversation_id, message_id),
       reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body")
+      body: Keyword.get(attrs, :body, "Message body"),
+      inserted_at: Keyword.get(attrs, :inserted_at),
+      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
     })
   end
 
