@@ -1,0 +1,97 @@
+diff --git a/docs/iterations/048-named-member-rows/todo.md b/docs/iterations/048-named-member-rows/todo.md
+index d8928c8..e77da92 100644
+--- a/docs/iterations/048-named-member-rows/todo.md
++++ b/docs/iterations/048-named-member-rows/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 In the Members `section-panel` of `web/lib/memba_web/controllers/page_html/club.html.heex` (added in 045), replace the avatar-stack card with a `member-list` container.
+ - [x] 002 Render each of `@members` as a `member-row`: avatar initials + the member's name.
+-- [ ] 003 Add a meta line per row and mark the **current member** with a "You" indicator.
++- [x] 003 Add a meta line per row and mark the **current member** with a "You" indicator.
+ - [ ] 004 Preserve the existing members **empty state** and the **Invite member** action from 045.
+ - [ ] 005 Port the `member-list` and `member-row` CSS (and its children) from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [ ] 006 Update the LiveView/controller test: members render as named rows; the current member's row is marked "You"; the Invite action and empty state still behave as before.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 4a3eaf4..3079fcc 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -129,6 +129,12 @@ defmodule MembaWeb.PageHTML do
+     active_member_section?(active_section, section) |> to_string()
+   end
+ 
++  defp current_dashboard_member?(%{id: member_id}, %{id: current_member_id}) do
++    member_id == current_member_id
++  end
++
++  defp current_dashboard_member?(_member, _current_member), do: false
++
+   defp split_conversation_entries(entries) when is_list(entries) do
+     Enum.split_with(entries, &(&1.kind == :original))
+   end
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 33b78bc..5d548b5 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -266,6 +266,7 @@
+             data-testid="club-member-row"
+             data-member-id={member.id}
+             data-member-name={member.name}
++            data-current-member={to_string(current_dashboard_member?(member, @current_member))}
+             class="member-row"
+           >
+             <div class="member-row__avatar" aria-hidden="true">
+@@ -276,6 +277,14 @@
+               <div class="member-row__name">
+                 {member.name}
+               </div>
++              <div class="member-row__meta">
++                <span
++                  :if={current_dashboard_member?(member, @current_member)}
++                  data-testid="club-member-current-indicator"
++                >
++                  You
++                </span>
++              </div>
+             </div>
+           </div>
+         </div>
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 05949e2..3e0ce39 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -311,6 +311,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "Alice Adams"
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-section-panel-members #active-members-list " <>
++               "#club-member-#{alice.person_id}.member-row[data-current-member='true'] " <>
++               ".member-row__meta [data-testid='club-member-current-indicator']",
++             "You"
++           )
++
+     assert has_element?(
+              view,
+              "#member-section-panel-members #active-members-list " <>
+@@ -325,6 +333,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+                "#club-member-#{bob.person_id}.member-row .member-row__name",
+              "Bob Builder"
+            )
++
++    assert has_element?(
++             view,
++             "#member-section-panel-members #active-members-list " <>
++               "#club-member-#{bob.person_id}.member-row[data-current-member='false'] " <>
++               ".member-row__meta"
++           )
++
++    refute has_element?(
++             view,
++             "#member-section-panel-members #active-members-list " <>
++               "#club-member-#{bob.person_id}.member-row " <>
++               ".member-row__meta [data-testid='club-member-current-indicator']"
++           )
+   end
+ 
+   test "dashboard renders the members tab invite action only for members who can manage members",
