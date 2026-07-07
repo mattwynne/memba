@@ -10,5 +10,5 @@
 - [x] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
 - [x] 009 Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card` so they match the design (`message` / `message--original`).
 - [x] 010 Update `MemberMessageDetailLive` tests: follow toggle reflects and changes following state via the existing events; the composer renders after the replies; original + replies show a timestamp.
-- [ ] 011 Run `./bin/dev gallery-walk` and compare the conversation screenshot to `design-system/wireframes/member-conversation.html`.
+- [x] 011 Run `./bin/dev gallery-walk` and compare the conversation screenshot to `design-system/wireframes/member-conversation.html`.
 - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
