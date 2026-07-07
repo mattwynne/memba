@@ -1,0 +1,201 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index ec046ed..63bb1e9 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
+ - [x] 005 Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [x] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+-- [ ] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
++- [x] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+ - [ ] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
+ - [ ] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
+ - [ ] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index a962d1b..e65ba1a 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -13,6 +13,8 @@ defmodule MembaWeb.PageHTML do
+   embed_templates "page_html/*"
+ 
+   attr :entry, :map, required: true
++  attr :selected_club, :map, required: true
++  attr :club_id_source, :string, default: nil
+ 
+   defp conversation_entry_card(assigns) do
+     ~H"""
+@@ -53,12 +55,52 @@ defmodule MembaWeb.PageHTML do
+                 {format_message_time(@entry.message.inserted_at)}
+               </time>
+             </div>
+-            <span
+-              data-testid="member-conversation-entry-label"
+-              class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+-            >
+-              {conversation_entry_label(@entry.kind)}
+-            </span>
++            <div class="flex items-center gap-2">
++              <span
++                data-testid="member-conversation-entry-label"
++                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
++              >
++                {conversation_entry_label(@entry.kind)}
++              </span>
++              <div
++                id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
++                data-testid="member-conversation-entry-menu"
++                class="message__menu dropdown dropdown-end"
++              >
++                <button
++                  id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
++                  type="button"
++                  tabindex="0"
++                  role="button"
++                  aria-haspopup="menu"
++                  aria-label="Message options"
++                  class="message__kebab btn btn-ghost btn-sm btn-square rounded-full text-ink-2 hover:bg-base-200 hover:text-base-content"
++                >
++                  <.icon name="hero-ellipsis-vertical" class="size-5" />
++                </button>
++                <div
++                  tabindex="0"
++                  role="menu"
++                  class="dropdown-content message-menu z-20 mt-2 min-w-48 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-lg"
++                >
++                  <.link
++                    id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
++                    data-testid="member-conversation-entry-delivery-link"
++                    href={
++                      member_message_delivery_path(
++                        @entry.message.message_id,
++                        @selected_club,
++                        @club_id_source
++                      )
++                    }
++                    role="menuitem"
++                    class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-base-content transition duration-150 hover:bg-base-200"
++                  >
++                    <.icon name="hero-envelope" class="size-4 text-primary" /> Delivery details
++                  </.link>
++                </div>
++              </div>
++            </div>
+           </div>
+           <p
+             id={conversation_entry_body_id(@entry)}
+@@ -165,6 +207,12 @@ defmodule MembaWeb.PageHTML do
+   defp member_message_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+ 
++  defp member_message_delivery_path(message_id, _selected_club, "host"),
++    do: ~p"/messages/#{message_id}/delivery"
++
++  defp member_message_delivery_path(message_id, selected_club, _source),
++    do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
++
+   defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
+   defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
+   defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index b62edbf..d81c574 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -100,11 +100,21 @@
+       <% {original_entries, reply_entries} = split_conversation_entries(@conversation_entries) %>
+ 
+       <div id="member-conversation-original" class="space-y-4">
+-        <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
++        <.conversation_entry_card
++          :for={entry <- original_entries}
++          entry={entry}
++          selected_club={@selected_club}
++          club_id_source={Map.get(@route_params, "club_id_source")}
++        />
+       </div>
+ 
+       <div id="member-conversation-replies" class="space-y-4">
+-        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
++        <.conversation_entry_card
++          :for={entry <- reply_entries}
++          entry={entry}
++          selected_club={@selected_club}
++          club_id_source={Map.get(@route_params, "club_id_source")}
++        />
+       </div>
+ 
+       <section
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 0933b1c..9e8f2e5 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -445,6 +445,70 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, "#member-message-reply-subject-input")
+   end
+ 
++  test "each conversation entry has a delivery details menu link for that message", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        conversation_id: message.message_id,
++        reply_to_message_id: message.message_id,
++        subject: "Trip planning night",
++        body: "I'll bring snacks."
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("bob@example.com", bob)
++      |> live(~p"/messages/#{message.message_id}")
++
++    for entry_message <- [message, reply] do
++      assert has_element?(
++               view,
++               "#member-conversation-entry-#{entry_message.message_id} " <>
++                 "#member-conversation-entry-menu-#{entry_message.message_id}.message__menu"
++             )
++
++      assert has_element?(
++               view,
++               "#member-conversation-entry-#{entry_message.message_id} " <>
++                 "#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
++                 ".message__kebab[aria-label='Message options']"
++             )
++
++      assert has_element?(
++               view,
++               "#member-conversation-entry-#{entry_message.message_id} " <>
++                 "a#member-conversation-entry-delivery-link-#{entry_message.message_id}" <>
++                 "[data-testid='member-conversation-entry-delivery-link']" <>
++                 "[href='/messages/#{entry_message.message_id}/delivery']",
++               "Delivery details"
++             )
++    end
++  end
++
+   test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
+     alice =
+       create_active_member(
