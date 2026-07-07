@@ -70,6 +70,7 @@ defmodule MembaWeb.Router do
       live "/members", MemberDashboardLive, :members
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
+      live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show
       live "/members/invitations/new", MemberInvitationLive.New, :new
     end
   end

@@ -83,6 +83,21 @@ const scenes = [
     }
   },
   {
+    id: "member-message-delivery",
+    area: "app",
+    label: "Member message delivery",
+    auth: "member",
+    async navigate(page, ctx) {
+      await page.goto(
+        clubUrl(ctx, clubs.kootenay, `/messages/${encodeURIComponent(messages.saturdayRidgeWalk.messageId)}/delivery`),
+        { waitUntil: "domcontentloaded" }
+      );
+      await page.locator(`#member-message-delivery-detail[data-message-id="${messages.saturdayRidgeWalk.messageId}"]`).waitFor();
+      await page.getByRole("heading", { name: "Message delivery" }).waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
     id: "member-message-compose",
     area: "app",
     label: "Member message compose",

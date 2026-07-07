@@ -344,6 +344,7 @@ function rowsForSelector(rows, selector) {
   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
   if (selector.includes("#member-receipts")) return visibleMemberReceiptRows(rows);
+  if (selector.includes("#member-delivery-receipt-groups")) return rows.memberReceipts;
   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
   if (selector.includes('data-test-id^="delivery-row-"')) {
     return filterRows(rows.operatorDeliveries, selector);
@@ -355,6 +356,7 @@ function rowsForSelector(rows, selector) {
     return filterRows(rows.memberReceiptGroupToggles, selector);
   }
   if (selector.includes('data-testid="member-receipt"')) return filterRows(visibleMemberReceiptRows(rows), selector);
+  if (selector.includes('data-testid="member-delivery-receipt"')) return filterRows(rows.memberReceipts, selector);
 
   return [];
 }
@@ -729,10 +731,9 @@ test("member failed-send flow stays on compose failure state with support guidan
   assert.ok(
     expectations.some(
       (expectation) =>
-        expectation[0] === "text" &&
+        expectation[0] === "visible" &&
         typeof expectation[1] === "string" &&
-        expectation[1].includes("#member-compose-error-summary") &&
-        expectation[2].includes("contact Memba")
+        expectation[1].includes("#member-compose-see-receipts-link")
     )
   );
 });
@@ -851,7 +852,7 @@ test("message assertions read addressed recipients, delivery records, email chan
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
 });
 
-test("member assertions read member-facing recipient rows, labels, and Heroicon names", async () => {
+test("member assertions read member-facing delivery detail recipient rows and statuses", async () => {
   const page = new FakePage();
   page.rows.clubMessages.push(
     rowWithAttrs({
@@ -862,18 +863,15 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
   page.rows.memberReceipts.push(
     rowWithAttrs({
       "data-recipient-name": "Alice",
-      receiptIconName: "hero-clock",
-      receiptStatusLabel: "Sending"
+      "data-receipt-status": "sent"
     }),
     rowWithAttrs({
       "data-recipient-name": "Bob",
-      receiptIconName: "hero-check-circle",
-      receiptStatusLabel: "Delivered"
+      "data-receipt-status": "delivered"
     }),
     rowWithAttrs({
       "data-recipient-name": "Carol",
-      receiptIconName: "hero-exclamation-triangle",
-      receiptStatusLabel: "Delivery problem"
+      "data-receipt-status": "delivery problem"
     })
   );
   const expectations = [];
@@ -908,10 +906,8 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
     expect: fakeExpect(expectations)
   });
 
-  page.rows.memberReceipts[1].attrs.receiptStatusLabel = "Sending";
-  page.rows.memberReceipts[1].attrs.receiptIconName = "hero-clock";
-  page.rows.memberReceipts[2].attrs.receiptStatusLabel = "Sending";
-  page.rows.memberReceipts[2].attrs.receiptIconName = "hero-clock";
+  page.rows.memberReceipts[1].attrs["data-receipt-status"] = "sent";
+  page.rows.memberReceipts[2].attrs["data-receipt-status"] = "sent";
 
   await assertEveryAddressedMemberReceiptStatus(world, "Trip planning night", "Sending", {
     expect: fakeExpect(expectations)
@@ -922,29 +918,22 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
     page.actions.filter((action) => action[0] === "goto"),
     [
       ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
-      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1/delivery"]
     ]
   );
   assert.ok(
     expectations.some(
       (expectation) =>
-        expectation[0] === "text" &&
+        expectation[0] === "count" &&
         typeof expectation[1] === "string" &&
-        expectation[1].includes('data-testid="receipt-status"') &&
-        expectation[2] === "Delivered"
-    )
-  );
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "visible" &&
-        typeof expectation[1] === "string" &&
-        expectation[1].includes('data-testid="receipt-status-icon"')
+        expectation[1].includes('data-testid="member-delivery-receipt"') &&
+        expectation[1].includes('data-recipient-name="Bob"') &&
+        expectation[2] === 1
     )
   );
 });
 
-test("member receipt assertions expand collapsed visible groups before inspecting rows", async () => {
+test("member receipt assertions read delivery detail rows without expanding conversation groups", async () => {
   const page = new FakePage();
   page.rows.memberReceiptGroupToggles.push(
     rowWithAttrs({
@@ -955,8 +944,7 @@ test("member receipt assertions expand collapsed visible groups before inspectin
   page.rows.memberReceipts.push(
     rowWithAttrs({
       "data-recipient-name": "Bob",
-      receiptIconName: "hero-check-circle",
-      receiptStatusLabel: "Delivered"
+      "data-receipt-status": "delivered"
     })
   );
   const expectations = [];
@@ -970,27 +958,19 @@ test("member receipt assertions expand collapsed visible groups before inspectin
     expect: fakeExpect(expectations)
   });
 
-  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "true");
+  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "false");
   assert.ok(
-    page.actions.some(
+    !page.actions.some(
       (action) =>
         action[0] === "click" &&
-        action[1] === "locator" &&
+        typeof action[2] === "string" &&
         action[2].includes('member-receipt-group-toggle-')
     )
   );
-  assert.ok(
-    expectations.some(
-      (expectation) =>
-        expectation[0] === "visible" &&
-        typeof expectation[1] === "string" &&
-        expectation[1].includes('[id="member-receipt-group-toggle-delivered"][aria-expanded="true"]')
-    )
-  );
-  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
+  assert.ok(expectations.some((expectation) => expectation[0] === "count" && expectation[2] === 1));
 });
 
-test("member receipt assertions can expand all visible receipt groups", async () => {
+test("member receipt assertions ignore legacy collapsed receipt groups after delivery relocation", async () => {
   const page = new FakePage();
   page.rows.memberReceiptGroupToggles.push(
     rowWithAttrs({
@@ -1009,8 +989,7 @@ test("member receipt assertions can expand all visible receipt groups", async ()
   page.rows.memberReceipts.push(
     rowWithAttrs({
       "data-recipient-name": "Bob",
-      receiptIconName: "hero-check-circle",
-      receiptStatusLabel: "Delivered"
+      "data-receipt-status": "delivered"
     })
   );
   const world = worldWithPage(page);
@@ -1025,12 +1004,17 @@ test("member receipt assertions can expand all visible receipt groups", async ()
 
   assert.deepEqual(
     page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
-    ["true", "true", "true"]
+    ["false", "false", "false"]
   );
   assert.equal(
-    page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
+    page.actions.filter(
+      (action) =>
+        action[0] === "click" &&
+        typeof action[2] === "string" &&
+        action[2].includes("member-receipt-group-toggle-")
+    )
       .length,
-    3
+    0
   );
 });
 

@@ -14,6 +14,7 @@ defmodule Memba.Messaging.Projections.MemberEmailDelivery do
     field :recipient_id, :string
     field :recipient_name, :string
     field :status, :string
+    field :reason, :string, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end

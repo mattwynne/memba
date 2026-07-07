@@ -56,7 +56,7 @@ green than before.
 | 044 | 2026-07-04 | merged | Shared member app-shell: app-bar + app-card frame (plan replaced 2026-07-04 against refreshed design) | [plan](044-shared-app-shell/plan.md) |
 | 045 | 2026-07-04 | merged | Club home: Conversations / Members section tabs (slot repurposed 2026-07-04; prior stop-following plan in git history) | [plan](045-club-home-section-tabs/plan.md) |
 | 046 | 2026-07-04 | merged | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
-| 047 | 2026-07-04 | implementing | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
+| 047 | 2026-07-04 | merged | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
 | 048 | 2026-07-04 | validated | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
 
 Status notes:

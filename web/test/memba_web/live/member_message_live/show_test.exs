@@ -7,7 +7,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Messaging
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -445,6 +444,70 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "#member-message-reply-subject-input")
   end
 
+  test "each conversation entry has a delivery details menu link for that message", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I'll bring snacks."
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    for entry_message <- [message, reply] do
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "#member-conversation-entry-menu-#{entry_message.message_id}.message__menu"
+             )
+
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
+                 ".message__kebab[aria-label='Message options']"
+             )
+
+      assert has_element?(
+               view,
+               "#member-conversation-entry-#{entry_message.message_id} " <>
+                 "a#member-conversation-entry-delivery-link-#{entry_message.message_id}" <>
+                 "[data-testid='member-conversation-entry-delivery-link']" <>
+                 "[href='/messages/#{entry_message.message_id}/delivery']",
+               "Delivery details"
+             )
+    end
+  end
+
   test "blank reply body validation keeps the inline composer and does not post", %{conn: conn} do
     alice =
       create_active_member(
@@ -492,7 +555,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            ]
   end
 
-  test "routed message detail renders the delivery summary and polished group headers", %{
+  test "routed message detail omits inline delivery summary and delivery status groups", %{
     conn: conn
   } do
     alice =
@@ -552,341 +615,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/messages/#{message.message_id}")
 
-    assert has_element?(view, "#member-receipt-summary", "Message delivery")
-    assert has_element?(view, "#member-receipt-summary-bar")
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
-             "Email delivered"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='sent'][data-receipt-count='1'][data-receipt-percentage='33']",
-             "Email still sending"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivery problem'][data-receipt-count='0'][data-receipt-percentage='0']",
-             "Email not delivered"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivered'].bg-sage-600"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='sent'].bg-warning"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivery problem'].bg-error"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
-             "67%"
-           )
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-group'][data-receipt-status='sent']",
-             "Sending"
-           )
-
-    refute has_element?(
-             view,
-             "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
-           )
-  end
-
-  test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    carol =
-      create_active_member(
-        email: "carol@example.com",
-        name: "Carol Clark",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    message =
-      create_message(
-        club_id: alice.club_id,
-        sender_id: alice.person_id,
-        subject: "Trip planning night"
-      )
-
-    create_member_email_delivery(
-      message_id: message.message_id,
-      recipient_id: bob.person_id,
-      recipient_name: "Bob Builder",
-      status: "delivered"
-    )
-
-    create_member_email_delivery(
-      message_id: message.message_id,
-      recipient_id: carol.person_id,
-      recipient_name: "Carol Clark",
-      status: "delivered"
-    )
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/messages/#{message.message_id}")
-
-    delivered_toggle = "#member-receipt-group-toggle-delivered"
-    delivered_rows = "#member-receipts-delivered"
-
-    delivered_recipient =
-      "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
-
-    assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
-    refute has_element?(view, delivered_rows)
-    refute has_element?(view, delivered_recipient)
-
-    view
-    |> element(delivered_toggle)
-    |> render_click()
-
-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='true']")
-    assert has_element?(view, delivered_rows)
-    assert has_element?(view, delivered_recipient, "Bob Builder")
-
-    assert has_element?(
-             view,
-             "#{delivered_rows} [data-testid='receipt-status'][data-receipt-status='delivered'].badge.badge-soft.badge-success",
-             "Delivered"
-           )
-
-    view
-    |> element(delivered_toggle)
-    |> render_click()
-
-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
-    refute has_element?(view, delivered_rows)
-    refute has_element?(view, delivered_recipient)
-  end
-
-  test "zero-count statuses render in the summary only and not as empty groups", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    message =
-      create_message(
-        club_id: alice.club_id,
-        sender_id: alice.person_id,
-        subject: "Trip planning night"
-      )
-
-    create_member_email_delivery(
-      message_id: message.message_id,
-      recipient_id: alice.person_id,
-      recipient_name: "Alice Adams",
-      status: "delivered"
-    )
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/messages/#{message.message_id}")
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-summary-status']" <>
-               "[data-receipt-status='delivered']" <>
-               "[data-receipt-count='1']" <>
-               "[data-receipt-percentage='100']",
-             "Delivered"
-           )
-
-    for {status, label} <- [{"sent", "Sending"}, {"delivery problem", "Delivery problem"}] do
-      assert has_element?(
-               view,
-               "[data-testid='member-receipt-summary-status']" <>
-                 "[data-receipt-status='#{status}']" <>
-                 "[data-receipt-count='0']" <>
-                 "[data-receipt-percentage='0']",
-               label
-             )
-
-      status_slug = String.replace(status, " ", "-")
-
-      refute has_element?(
-               view,
-               "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
-             )
-
-      refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
-    end
-
-    assert has_element?(
-             view,
-             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
-               "#member-receipt-group-toggle-delivered[aria-expanded='false']",
-             "100%"
-           )
-  end
-
-  test "expanded recipient rows preserve stable browser-test attributes", %{conn: conn} do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    message =
-      create_message(
-        club_id: alice.club_id,
-        sender_id: alice.person_id,
-        subject: "Trip planning night"
-      )
-
-    create_member_email_delivery(
-      message_id: message.message_id,
-      recipient_id: bob.person_id,
-      recipient_name: "Bob Builder",
-      status: "delivered"
-    )
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/messages/#{message.message_id}")
-
-    view
-    |> element("#member-receipt-group-toggle-delivered")
-    |> render_click()
-
-    assert has_element?(
-             view,
-             "#member-receipts-delivered " <>
-               "#member-receipt-#{bob.person_id}" <>
-               "[data-testid='member-receipt']" <>
-               "[data-recipient-id='#{bob.person_id}']" <>
-               "[data-recipient-name='Bob Builder']" <>
-               "[data-receipt-status='delivered']",
-             "Bob Builder"
-           )
-  end
-
-  test "expanded member email delivery rows do not expose Memba-staff-only delivery fields", %{
-    conn: conn
-  } do
-    alice =
-      create_active_member(
-        email: "alice@example.com",
-        name: "Alice Adams",
-        club_name: "Alpine Club"
-      )
-
-    bob =
-      create_active_member(
-        email: "bob@example.com",
-        name: "Bob Builder",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-
-    message =
-      create_message(
-        club_id: alice.club_id,
-        sender_id: alice.person_id,
-        subject: "Provider details stay private"
-      )
-
-    delivery_id = Memba.ID.generate(:delivery)
-    provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
-
-    create_member_email_delivery(
-      delivery_id: delivery_id,
-      message_id: message.message_id,
-      recipient_id: bob.person_id,
-      recipient_name: "Bob Builder",
-      status: "delivery problem"
-    )
-
-    create_memba_staff_email_delivery(
-      delivery_id: delivery_id,
-      message_id: message.message_id,
-      recipient_id: bob.person_id,
-      recipient_name: "Bob Builder",
-      recipient_address: "bob-private@example.invalid",
-      channel: "postmark-email",
-      status: "spam complaint",
-      reason: provider_reason
-    )
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/messages/#{message.message_id}")
-
-    html =
-      view
-      |> element("#member-receipt-group-toggle-delivery-problem")
-      |> render_click()
-
-    assert has_element?(
-             view,
-             "#member-receipts-delivery-problem " <>
-               "[data-testid='member-receipt']" <>
-               "[data-recipient-name='Bob Builder']" <>
-               "[data-receipt-status='delivery problem']",
-             "Delivery problem"
-           )
-
-    assert has_element?(
-             view,
-             "#member-receipts-delivery-problem " <>
-               "[data-testid='receipt-status'][data-receipt-status='delivery problem']" <>
-               ".badge.badge-soft.badge-error",
-             "Delivery problem"
-           )
-
-    refute html =~ delivery_id
-    refute html =~ "bob-private@example.invalid"
-    refute html =~ "postmark-email"
-    refute html =~ "spam complaint"
-    refute html =~ provider_reason
-    refute html =~ "Postmark webhook"
-    refute html =~ "Provider reason"
-    refute html =~ "Email deliveries"
-    refute html =~ ~s(href="/admin/)
+    refute has_element?(view, "#member-receipt-summary")
+    refute has_element?(view, "#member-receipts-section")
+    refute has_element?(view, "#member-receipts")
+    refute has_element?(view, "[data-testid='member-receipt-summary-status']")
+    refute has_element?(view, "[data-testid='member-receipt-summary-bar-segment']")
+    refute has_element?(view, "[data-testid='member-receipt-group']")
+    refute render(view) =~ ~r/sent to[\s\S]*3[\s\S]*members/
+    refute render(view) =~ "Members by delivery status"
   end
 
   defp signed_in_club_host(conn, email, club) do
@@ -980,19 +716,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
-    })
-  end
-
-  defp create_memba_staff_email_delivery(attrs) do
-    Repo.insert!(%MembaStaffEmailDelivery{
-      delivery_id: Keyword.fetch!(attrs, :delivery_id),
-      message_id: Keyword.fetch!(attrs, :message_id),
-      recipient_id: Keyword.fetch!(attrs, :recipient_id),
-      recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      recipient_address: Keyword.fetch!(attrs, :recipient_address),
-      channel: Keyword.fetch!(attrs, :channel),
-      status: Keyword.fetch!(attrs, :status),
-      reason: Keyword.fetch!(attrs, :reason)
     })
   end
 end

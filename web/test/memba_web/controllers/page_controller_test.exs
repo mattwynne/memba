@@ -560,36 +560,28 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
            |> Enum.any?()
 
-    assert html
-           |> LazyHTML.query("#member-receipts-summary[data-receipt-count='2']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query(
-             "[data-testid='member-receipt-group'][data-receipt-status='sent'] [data-testid='receipt-group-count']"
-           )
-           |> LazyHTML.text() =~ "1"
-
-    assert html
-           |> LazyHTML.query(
-             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] [data-testid='receipt-group-count']"
-           )
-           |> LazyHTML.text() =~ "1"
-
-    assert html
-           |> LazyHTML.query("#member-receipt-group-toggle-sent[aria-expanded='false']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#member-receipt-group-toggle-delivered[aria-expanded='false']")
+    refute html
+           |> LazyHTML.query("#member-receipt-summary")
            |> Enum.any?()
 
     refute html
-           |> LazyHTML.query("[data-testid='member-receipt']")
+           |> LazyHTML.query("#member-receipts-section")
            |> Enum.any?()
 
-    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
-    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
+    refute html
+           |> LazyHTML.query("#member-receipts")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("[data-testid='member-receipt-summary-status']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("[data-testid='member-receipt-group']")
+           |> Enum.any?()
+
+    refute response =~ ~r/sent to[\s\S]*2[\s\S]*members/
+    refute response =~ "Members by delivery status"
 
     refute response =~ alice_receipt.delivery_id
     refute response =~ bob_receipt.delivery_id
