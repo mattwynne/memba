@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-07T17:06:48.425434935Z",
-  "last_event_at": "2026-07-07T17:41:33.853755149Z",
+  "last_event_at": "2026-07-07T17:41:37.445789206Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -4066,9 +4066,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 349,
       "checkpoint": {
-        "timestamp": "2026-07-07T17:41:33.866608235Z",
+        "timestamp": "2026-07-07T17:41:37.404844220Z",
         "current_node": "dev_check",
         "completed_nodes": [
           "start",
@@ -4088,12 +4088,430 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "internal.fidelity": "summary:high",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "review_fixes_available": true,
+          "internal.work_dir": "/workspace/memba",
+          "internal.thread_id": "verify_review_repair",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "graph.max_node_visits": "160",
+          "graph.rankdir": "LR",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.verify_review_repair": 0,
+          "outcome": "succeeded",
+          "response.codex_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration appears to be a presentation-layer change limited to the club Members tab: HEEx markup, CSS, and controller/view tests. The plan does not cite any ADRs, and the collected evidence does not show changes to domain modeling, aggregates, commands, projections, event streams, read models, routing architecture, or infrastructure.\n\nNo ADR-mandated architecture appears to have been bypassed or replaced.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- Members tab renders named member rows instead of the prior avatar-stack card.\n- Each row includes avatar initials and member name.\n- The current member row is marked with a “You” indicator.\n- Invite action remains present and gated as before.\n- Empty state remains covered.\n- No evidence of out-of-scope domain or permission changes.\n- `dev check` / `dev ci` passed: 85 scenarios, 523 steps.\n\n## Bounded-safe fixes\n\n1. **Reduce selector duplication in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows many long selector assertions repeated for each member row, e.g. checking row id, classes, data attributes, avatar, name, current-member marker, and invite link.\n\n   This is not incorrect, but it is verbose and will be expensive to maintain if row markup evolves. A small private helper such as `assert_member_row/4` or `assert_current_member_row/4` would keep the same coverage while making the test intent clearer.\n\n2. **Avoid testing too many styling/class details where behaviour is the concern**\n\n   Assertions currently appear to couple behaviour to exact CSS classes such as `.member-row`, `.member-row__avatar`, `.member-row__name`, and `.member-row__meta`.\n\n   Some class assertions are useful because the plan explicitly required porting `member-list` / `member-row` design-system classes. However, tests that combine ids, classes, data attributes, and descendant structure may become brittle. Consider keeping one or two structural/class assertions for design-system conformance, and using `data-testid` / semantic text assertions for behavioural expectations.\n\n3. **Consider removing or minimizing `data-member-name` if it is only test scaffolding**\n\n   Evidence shows rows carrying `data-member-name='Alice Adams'` / similar. If this attribute is only present to support tests, it may be unnecessary because the visible `.member-row__name` already exposes the name.\n\n   Keeping names in data attributes is not a blocker, but it duplicates user-visible content and can create escaping/special-character test fragility for names containing quotes or unusual characters.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — View logic depends on `initials(member.name)`**\n\n   **Smell:** The implementation uses generated initials for member avatars. The evidence proves common two-word names such as “Alice Adams” and “Bob Builder”, but does not show coverage for one-word names, blank/edge-case names, non-ASCII names, apostrophes, hyphenated names, or multi-part names.\n\n   **Why judgement may be needed:** This is acceptable for the current iteration because the plan only asks for avatar initials + name, and tests pass. However, real member names can be messy. If initials are user-facing across the product, the project may want a shared, well-tested presentation helper with explicit name-handling rules.\n\n2. **File: `test/memba_web/controllers/page_controller_test.exs` — White-box DOM assertions**\n\n   **Smell:** The tests appear highly specific about DOM shape, ids, data attributes, classes, and nested descendants.\n\n   **Why judgement may be needed:** This gives strong confidence that the design-system row markup was adopted, which is valuable for this slice. The trade-off is that future visual refactors may require test rewrites even when user behaviour is unchanged. A human may want to decide whether Members tab tests should be primarily structural/design-system assertions or primarily user-visible behaviour assertions.\n\n3. **File: `web/assets/css/app.css` — Design-system CSS copied into application bundle**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into `web/assets/css/app.css` with 1:1 names. That is plan-conforming, but it continues the duplication between the design-system mirror and app CSS.\n\n   **Why judgement may be needed:** If this pattern repeats, the app may accumulate manually ported CSS fragments that drift from the design-system source. This is not a defect in this iteration, but it may warrant a later discussion about a single source of truth or tooling for design-system CSS synchronization.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`, presentation/read-model boundary — Member metadata remains minimal**\n\n   **Smell:** The plan’s open technical decision says to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to omit it and only shows the “You” marker.\n\n   **Why judgement may be needed:** This is correct for the slice. Future iterations adding role badges or membership metadata may need to revisit the read model/presentation shape. The current implementation should not be expanded now, but this is a likely future seam.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, I would prioritize:\n\n1. Extract test helpers in `test/memba_web/controllers/page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: boolean)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep one assertion that verifies `.member-list` / `.member-row` design-system classes are present, but avoid repeating full structural selectors for every row unless the structure itself is the behaviour under test.\n\n3. Reconsider whether `data-member-name` is needed in production markup. If not needed for behaviour, accessibility, analytics, or tests, prefer asserting the visible name text instead.\n\n## Validation notes\n\n- `dev ci` / `dev check` passed successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - Named member rows.\n  - Avatar initials.\n  - Current member marked with “You”.\n  - Non-current member not marked as current.\n  - Members list container state/count attributes.\n  - Invite member action preservation.\n  - Empty state behaviour.\n- No acceptance feature-file changes were indicated.\n- Manual/gallery validation was part of the plan, but the supplied review output does not include a `./bin/dev gallery-walk` transcript. I am not treating that as blocking because the implementation is otherwise plan-conforming and automated checks are green, but visual parity should still be confirmed if it has not already been done.",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "response.gemini_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan does not cite any ADRs, and the implementation evidence shows a presentation-layer change limited to the club Members tab markup, CSS, and controller/view tests. There is no evidence of changes to domain modeling, Commanded/CQRS flows, aggregates, event streams, projections, read models, routing architecture, or infrastructure.\n\nNo accepted ADR-governed architecture appears to have been replaced or bypassed.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- The Members tab now renders named member rows instead of an avatar-stack card.\n- Rows include avatar initials and visible member names.\n- The current member row is marked with a “You” indicator.\n- The Invite member action is preserved.\n- The empty state remains covered.\n- There is no evidence of out-of-scope permission, domain, or read-model changes.\n- The automated check stage passed.\n\n## Bounded-safe fixes\n\n1. **Extract member-row assertion helpers in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows repeated long selectors for each row, combining ids, classes, data attributes, descendants, and expected text. This is valid but verbose.\n\n   A private helper such as `assert_member_row/4` or `assert_current_member_row/4` would preserve coverage while making the test easier to read and maintain.\n\n2. **Reduce repeated white-box selector coupling where possible**\n\n   Some `.member-list` / `.member-row` class assertions are valuable because the plan explicitly required porting design-system class names. However, every row assertion does not necessarily need to repeat the full structural selector.\n\n   A bounded cleanup could keep one or two structural/design-system assertions, then use row ids, `data-testid`, and visible text for most behaviour checks.\n\n3. **Audit whether `data-member-name` is needed in production markup**\n\n   Evidence shows rows include `data-member-name`. If this exists only to make tests easier, the visible `.member-row__name` text may be sufficient.\n\n   This is not a correctness issue, but removing duplicate name data could reduce escaping/special-character fragility and avoid unnecessary user data duplication in attributes. Only do this after confirming no CSS, JS, analytics, tests, or acceptance helpers depend on it.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `test/memba_web/controllers/page_controller_test.exs` — highly structural DOM assertions**\n\n   **Smell:** The tests appear to assert exact DOM structure, CSS classes, data attributes, and descendant relationships for multiple rows.\n\n   **Why it may need human judgement:** This gives strong confidence that the design-system row markup was adopted, which matters for this slice. The trade-off is brittleness: future purely visual refactors may require test rewrites even if user-visible behaviour remains correct. The team may want to decide whether these tests should primarily protect design-system structure or user-observable behaviour.\n\n2. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — initials generation edge cases**\n\n   **Smell:** The view renders avatar initials via `initials(member.name)`. The evidence covers normal two-word names like “Alice Adams” and “Bob Builder,” but does not show edge-case coverage for single names, multi-part names, apostrophes, hyphenated names, non-ASCII names, or blank/unusual values.\n\n   **Why it may need human judgement:** This is acceptable for the current iteration, but member names are user-facing and can be messy. If initials are or will become a shared UI convention, the project may want explicit presentation rules and dedicated tests around initials generation.\n\n3. **File: `web/assets/css/app.css` — copied design-system CSS fragments**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into the app bundle with matching names. That is plan-conforming, but it continues a manual-copy pattern between the design mirror and app CSS.\n\n   **Why it may need human judgement:** If many future slices copy CSS from the design system into `app.css`, drift may become likely. This does not block the iteration, but a later tooling or ownership decision may be useful if duplication grows.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`; presentation/read-model boundary — minimal row metadata**\n\n   **Smell:** The plan said to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to correctly omit it and only render the “You” marker.\n\n   **Why it may need human judgement:** This is the right slice boundary now. Future iterations adding role badges or membership metadata may need to revisit the presentation/read-model shape rather than continuing to layer conditional view-only metadata.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, prioritize:\n\n1. Add private test helpers in `page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: false)`\n   - `assert_current_member_indicator(html, member_id)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep targeted assertions proving `.member-list` and `.member-row` design-system classes exist, but avoid repeating full nested CSS selectors for every behavioural assertion.\n\n3. Audit `data-member-name`; remove it only if it is confirmed to be test-only and unused elsewhere.\n\n## Validation notes\n\n- The review pipeline started from a clean working tree.\n- Sandbox runtime check passed.\n- The dev check stage ran `dev ci` successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - named member rows,\n  - avatar initials,\n  - visible member names,\n  - current member marked with “You,”\n  - non-current member not marked current,\n  - invite action preservation,\n  - active-members list state/count attributes,\n  - empty state behaviour.\n- No acceptance feature-file changes were required by the plan.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, is not shown in the supplied review transcript. I do not treat that as blocking given the green automated checks and plan-conforming evidence, but visual parity should still be confirmed if it has not already been done.",
+          "review_blockers": [
+            {
+              "id": "test-member-row-helper",
+              "title": "Refactor member-row controller test assertions into bounded helpers",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "audit-data-member-name",
+              "title": "Audit and remove test-only data-member-name duplication if unused",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "internal.retry_count.apply_review_fixes": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.review_gate": 0,
+          "internal.retry_count.start": 0,
+          "last_stage": "apply_review_fixes",
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.start.current_node": "read_plan",
+          "implementation_accepted": false,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "command.output": "blob://sha256/9b7cd41eb984bef3b6f9e9c41a658eb9e03212b7f4f435750e79b81486bfc63f",
+          "current_node": "dev_check",
+          "internal.node_visit_count": 2,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "internal.run_id": "01KWYRNTS3Y0CVZ4ZWF1E57HCQ",
+          "last_response": "Implemented the review-gate repair items for iteration 048.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix applied | Files |\n|---|---|---|\n| `test-member-row-helper` — Refactor member-row test asser",
+          "failure_class": "",
+          "internal.retry_count.codex_review": 0,
+          "response.apply_review_fixes": "Implemented the review-gate repair items for iteration 048.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix applied | Files |\n|---|---|---|\n| `test-member-row-helper` — Refactor member-row test assertions into bounded helpers | Replaced repeated long member-row selectors with focused helpers: `assert_rendered_member_row/3`, `assert_live_member_row/3`, and current-member state helpers. Helpers still verify row identity, design-system classes, visible name, initials, and “You” marker behavior. | `web/test/memba_web/live/member_dashboard_live_test.exs` |\n| `audit-data-member-name` — Audit/remove test-only `data-member-name` duplication if unused | Audited usages and removed `data-member-name` from the club Members-tab markup where visible text and `data-member-id` already prove the intended behavior. Updated tests to assert visible names and explicitly refute `data-member-name` on active member rows/list. | `web/lib/memba_web/controllers/page_html/club.html.heex`, `web/test/memba_web/live/member_dashboard_live_test.exs` |\n\n## Concrete changes\n\n### `web/lib/memba_web/controllers/page_html/club.html.heex`\n- Removed duplicate `data-member-name={member.name}` from:\n  - the first-member empty-state avatar\n  - each named member row\n- Kept stable row identifiers:\n  - `id=\"club-member-...\"`\n  - `data-testid=\"club-member-row\"`\n  - `data-member-id`\n  - `data-current-member`\n\n### `web/test/memba_web/live/member_dashboard_live_test.exs`\n- Added member-row assertion helpers to reduce brittle repetition.\n- Updated member-row assertions to use visible `.member-row__name` text instead of `data-member-name`.\n- Added negative assertions proving `data-member-name` is no longer emitted in the active members list/rows.\n- Preserved coverage for:\n  - named rows\n  - initials avatars\n  - current member “You” marker\n  - non-current member not marked “You”\n  - member-list state/count attributes\n  - invite action preservation\n  - empty state preservation\n\n## Tests run\n\n- `cd web && mix format lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_live_test.exs` — passed.\n- `cd web && mix test test/memba_web/live/member_dashboard_live_test.exs` — failed because Postgres was not running at `/tmp/devenv/postgres/.s.PGSQL.15432`; no code changes were made for that runtime issue.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs` — passed: `27 tests, 0 failures`.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed: `85 scenarios, 523 steps`.\n\n## Remaining gaps / human questions\n\n- No remaining repair gaps for the selected review issues.\n- `dev check` output included existing dependency advisory notices, but the quality gate exited successfully.\n- Working tree has the intended source/test modifications plus pre-existing untracked `.fabro/tmp/`; no commits were made.",
+          "failure_signature": "",
+          "response.claude_review": "# Iteration Review Report: 048-named-member-rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited in the plan. This is a presentation-layer-only change (replacing avatar-stack markup with named member rows) that does not touch domain modeling, CQRS, event sourcing, aggregates, or command/query infrastructure. The implementation follows standard Phoenix/LiveView/HEEx conventions appropriate for view-layer changes. No ADR-governed architecture or infrastructure was altered.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Faithfully executes the iteration plan (avatar-stack → named member rows with \"You\" marker)\n- Preserves invite action and empty state as required\n- Passed dev check (85 scenarios, 523 steps all green)\n- Has comprehensive test coverage for all key behaviors\n- Made no out-of-scope changes\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Test assertion verbosity** (`test/memba_web/controllers/page_controller_test.exs`):\n   The test has ~15 repetitive assertions with long chained selectors like:\n   ```elixir\n   assert html_has_selector?(\n     html,\n     \"#club-member-#{alice_id}.member-row[data-current-member='true'] \" <>\n       \".member-row__meta [data-testid='club-member-current-indicator']\",\n     \"You\"\n   )\n   ```\n   Could extract a helper like `assert_member_row(html, member_id, name: \"Alice\", current: true, avatar: \"AA\")` to reduce duplication and improve maintainability. This is low-risk refactoring with no behaviour change.\n\n2. **CSS custom properties** (`web/assets/css/app.css`):\n   The `.member-row` CSS uses inline values (e.g., `gap: 0.75rem`, `padding: 0.75rem 1rem`). These could reference design-system spacing tokens if available, but the current use of `theme()` functions is already consistent with Tailwind conventions. This is optional polish, not a defect.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Test brittleness vs. specificity trade-off** (`test/memba_web/controllers/page_controller_test.exs`):\n   - Tests use highly specific selectors chaining multiple data attributes, classes, and element structure (e.g., `#club-member-X.member-row[data-member-id='X'][data-member-name='Alice'] .member-row__avatar`).\n   - **Smell**: This ensures correctness but makes tests brittle to DOM structure changes. A lighter approach (testing via `data-testid` only) would be less brittle but less comprehensive.\n   - **Why judgement-worthy**: The project might prefer explicit DOM structure verification over test maintainability, or vice versa. This is a testing philosophy question (white-box vs. black-box, fragile-vs-loose) worth human input if test maintenance becomes a problem.\n\n2. **Missing initials helper evidence** (`web/lib/memba_web/controllers/page_html/club.html.heex`):\n   - Template calls `<%= initials(member.name) %>` but the helper implementation isn't shown in the collected evidence.\n   - **Smell**: Assuming it exists (tests pass), but edge cases (Unicode, single names, empty names, hyphenated names) might not be tested.\n   - **Why judgement-worthy**: If `initials/1` is naive (e.g., just takes first char of first/last word), it might misbehave with real-world names. Not blocking now (tests green), but consider acceptance testing with diverse member names.\n\n3. **Deferred \"Member since\" date** (from plan's Open Technical Decision):\n   - Plan explicitly deferred including a membership-since date in the row meta because it's not yet available in `@members`.\n   - Implementation correctly omitted it (only shows \"You\" marker, no date).\n   - **Smell**: Future iteration adding the date will need to modify both the read model and this view. If the date is a common need, sourcing it now might reduce future churn.\n   - **Why judgement-worthy**: This was a plan decision, not an implementation defect. But it's worth noting that role-badges iteration (049) or other member-metadata iterations might revisit this. If \"member since\" is a frequent request, consider prioritizing it.\n\n4. **Avatar styling simplicity** (`web/assets/css/app.css`):\n   - `.member-row__avatar` just shows initials in a colored circle. The design system might have more sophisticated avatar handling (images, gradient backgrounds, etc.).\n   - **Smell**: This is a minimal viable implementation. If the design system expects richer avatars, future iterations will need to enhance this.\n   - **Why judgement-worthy**: Not a defect—plan says \"avatar initials + name\"—but if the design system shows profile images or more styling, this might be a delta worth flagging.\n\n---\n\n## Suggested Fixes\n\nNone required for acceptance (no blocking issues).\n\n**If bounded-safe fixes are desired**, consider:\n1. Extract a `assert_member_row/3` helper in `page_controller_test.exs` to reduce test verbosity:\n   ```elixir\n   defp assert_member_row(html, member_id, opts) do\n     name = Keyword.fetch!(opts, :name)\n     avatar = Keyword.fetch!(opts, :avatar)\n     current = Keyword.get(opts, :current, false)\n\n     assert html_has_selector?(\n       html,\n       \"#club-member-#{member_id}.member-row[data-member-name='#{name}'] .member-row__avatar\",\n       avatar\n     )\n     assert html_has_selector?(\n       html,\n       \"#club-member-#{member_id}.member-row .member-row__name\",\n       name\n     )\n     if current do\n       assert html_has_selector?(\n         html,\n         \"#club-member-#{member_id}.member-row[data-current-member='true'] .member-row__meta\",\n         \"You\"\n       )\n     end\n   end\n   ```\n\n---\n\n## Validation Notes\n\n- **Dev check**: Passed (85 scenarios, 523 steps all green, 4m04s runtime).\n- **Test coverage**: Comprehensive. Tests verify:\n  - Member-list container with correct data attributes\n  - Each member-row structure (avatar, name, meta)\n  - Current member marking with \"You\" indicator (`data-current-member='true'`)\n  - Invite action preservation (`#member-invite-member-link`)\n  - Empty state behaviour (`data-active-members-state='no-active-members'`)\n- **Manual validation**: Plan instructs `./bin/dev gallery-walk` and comparing Members tab to `club-home.html`. Assuming this was done (not captured in automated output).\n- **Plan conformance**: Implementation matches all plan steps:\n  1. ✅ Replaced avatar-stack with member-list\n  2. ✅ Rendered member-rows with avatar + name\n  3. ✅ Added \"You\" marker for current member\n  4. ✅ Preserved invite action and empty state\n  5. ✅ Ported CSS from design system\n  6. ✅ Updated tests\n  7. ✅ Gallery-walk (assumed manual)\n  8. ✅ Dev check green\n\n---\n\n## Summary\n\nThis is a clean, well-tested implementation that faithfully executes the iteration plan. The code follows Phoenix/LiveView conventions, CSS uses Tailwind patterns correctly, and tests comprehensively cover the new behavior. No ADR violations, no blocking issues, and only minor refactoring opportunities (test verbosity) that don't impact correctness.\n\nThe judgement-worthy findings are all \"nice-to-have\" considerations for future work (test philosophy, initials edge cases, deferred member-since date, avatar styling). None warrant blocking this merge.\n\n**Recommendation**: Merge as-is. Consider the bounded-safe test refactoring in a follow-up kaizen if test maintenance becomes a pain point.",
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.claude_review.current_node": "codex_review",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"test-member-row-helper\",\n        \"title\": \"Refactor member-row controller test assertions into bounded helpers\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"audit-data-member-name\",\n        \"title\": \"Audit and remove test-only data-member-name duplication if unused\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.preflight_sandbox.current_node": "dev_check"
+        },
+        "node_outcomes": {
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "review_blockers": [
+                {
+                  "id": "test-member-row-helper",
+                  "title": "Refactor member-row controller test assertions into bounded helpers",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "audit-data-member-name",
+                  "title": "Audit and remove test-only data-member-name duplication if unused",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"test-member-row-helper\",\n        \"title\": \"Refactor member-row controller test assertions into bounded helpers\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"audit-data-member-name\",\n        \"title\": \"Audit and remove test-only data-member-name duplication if unused\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"test-member-row-helper\",\n        \"title\": \"Refactor m",
+              "last_stage": "synthesize_review",
+              "implementation_accepted": false,
+              "review_fixes_available": true
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10034,
+                    "output_tokens": 160,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 85990
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 22463,
+              "tool_time_ms": 0,
+              "active_time_ms": 22463
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.claude_review": "# Iteration Review Report: 048-named-member-rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited in the plan. This is a presentation-layer-only change (replacing avatar-stack markup with named member rows) that does not touch domain modeling, CQRS, event sourcing, aggregates, or command/query infrastructure. The implementation follows standard Phoenix/LiveView/HEEx conventions appropriate for view-layer changes. No ADR-governed architecture or infrastructure was altered.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Faithfully executes the iteration plan (avatar-stack → named member rows with \"You\" marker)\n- Preserves invite action and empty state as required\n- Passed dev check (85 scenarios, 523 steps all green)\n- Has comprehensive test coverage for all key behaviors\n- Made no out-of-scope changes\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Test assertion verbosity** (`test/memba_web/controllers/page_controller_test.exs`):\n   The test has ~15 repetitive assertions with long chained selectors like:\n   ```elixir\n   assert html_has_selector?(\n     html,\n     \"#club-member-#{alice_id}.member-row[data-current-member='true'] \" <>\n       \".member-row__meta [data-testid='club-member-current-indicator']\",\n     \"You\"\n   )\n   ```\n   Could extract a helper like `assert_member_row(html, member_id, name: \"Alice\", current: true, avatar: \"AA\")` to reduce duplication and improve maintainability. This is low-risk refactoring with no behaviour change.\n\n2. **CSS custom properties** (`web/assets/css/app.css`):\n   The `.member-row` CSS uses inline values (e.g., `gap: 0.75rem`, `padding: 0.75rem 1rem`). These could reference design-system spacing tokens if available, but the current use of `theme()` functions is already consistent with Tailwind conventions. This is optional polish, not a defect.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Test brittleness vs. specificity trade-off** (`test/memba_web/controllers/page_controller_test.exs`):\n   - Tests use highly specific selectors chaining multiple data attributes, classes, and element structure (e.g., `#club-member-X.member-row[data-member-id='X'][data-member-name='Alice'] .member-row__avatar`).\n   - **Smell**: This ensures correctness but makes tests brittle to DOM structure changes. A lighter approach (testing via `data-testid` only) would be less brittle but less comprehensive.\n   - **Why judgement-worthy**: The project might prefer explicit DOM structure verification over test maintainability, or vice versa. This is a testing philosophy question (white-box vs. black-box, fragile-vs-loose) worth human input if test maintenance becomes a problem.\n\n2. **Missing initials helper evidence** (`web/lib/memba_web/controllers/page_html/club.html.heex`):\n   - Template calls `<%= initials(member.name) %>` but the helper implementation isn't shown in the collected evidence.\n   - **Smell**: Assuming it exists (tests pass), but edge cases (Unicode, single names, empty names, hyphenated names) might not be tested.\n   - **Why judgement-worthy**: If `initials/1` is naive (e.g., just takes first char of first/last word), it might misbehave with real-world names. Not blocking now (tests green), but consider acceptance testing with diverse member names.\n\n3. **Deferred \"Member since\" date** (from plan's Open Technical Decision):\n   - Plan explicitly deferred including a membership-since date in the row meta because it's not yet available in `@members`.\n   - Implementation correctly omitted it (only shows \"You\" marker, no date).\n   - **Smell**: Future iteration adding the date will need to modify both the read model and this view. If the date is a common need, sourcing it now might reduce future churn.\n   - **Why judgement-worthy**: This was a plan decision, not an implementation defect. But it's worth noting that role-badges iteration (049) or other member-metadata iterations might revisit this. If \"member since\" is a frequent request, consider prioritizing it.\n\n4. **Avatar styling simplicity** (`web/assets/css/app.css`):\n   - `.member-row__avatar` just shows initials in a colored circle. The design system might have more sophisticated avatar handling (images, gradient backgrounds, etc.).\n   - **Smell**: This is a minimal viable implementation. If the design system expects richer avatars, future iterations will need to enhance this.\n   - **Why judgement-worthy**: Not a defect—plan says \"avatar initials + name\"—but if the design system shows profile images or more styling, this might be a delta worth flagging.\n\n---\n\n## Suggested Fixes\n\nNone required for acceptance (no blocking issues).\n\n**If bounded-safe fixes are desired**, consider:\n1. Extract a `assert_member_row/3` helper in `page_controller_test.exs` to reduce test verbosity:\n   ```elixir\n   defp assert_member_row(html, member_id, opts) do\n     name = Keyword.fetch!(opts, :name)\n     avatar = Keyword.fetch!(opts, :avatar)\n     current = Keyword.get(opts, :current, false)\n\n     assert html_has_selector?(\n       html,\n       \"#club-member-#{member_id}.member-row[data-member-name='#{name}'] .member-row__avatar\",\n       avatar\n     )\n     assert html_has_selector?(\n       html,\n       \"#club-member-#{member_id}.member-row .member-row__name\",\n       name\n     )\n     if current do\n       assert html_has_selector?(\n         html,\n         \"#club-member-#{member_id}.member-row[data-current-member='true'] .member-row__meta\",\n         \"You\"\n       )\n     end\n   end\n   ```\n\n---\n\n## Validation Notes\n\n- **Dev check**: Passed (85 scenarios, 523 steps all green, 4m04s runtime).\n- **Test coverage**: Comprehensive. Tests verify:\n  - Member-list container with correct data attributes\n  - Each member-row structure (avatar, name, meta)\n  - Current member marking with \"You\" indicator (`data-current-member='true'`)\n  - Invite action preservation (`#member-invite-member-link`)\n  - Empty state behaviour (`data-active-members-state='no-active-members'`)\n- **Manual validation**: Plan instructs `./bin/dev gallery-walk` and comparing Members tab to `club-home.html`. Assuming this was done (not captured in automated output).\n- **Plan conformance**: Implementation matches all plan steps:\n  1. ✅ Replaced avatar-stack with member-list\n  2. ✅ Rendered member-rows with avatar + name\n  3. ✅ Added \"You\" marker for current member\n  4. ✅ Preserved invite action and empty state\n  5. ✅ Ported CSS from design system\n  6. ✅ Updated tests\n  7. ✅ Gallery-walk (assumed manual)\n  8. ✅ Dev check green\n\n---\n\n## Summary\n\nThis is a clean, well-tested implementation that faithfully executes the iteration plan. The code follows Phoenix/LiveView conventions, CSS uses Tailwind patterns correctly, and tests comprehensively cover the new behavior. No ADR violations, no blocking issues, and only minor refactoring opportunities (test verbosity) that don't impact correctness.\n\nThe judgement-worthy findings are all \"nice-to-have\" considerations for future work (test philosophy, initials edge cases, deferred member-since date, avatar styling). None warrant blocking this merge.\n\n**Recommendation**: Merge as-is. Consider the bounded-safe test refactoring in a follow-up kaizen if test maintenance becomes a pain point.",
+              "last_response": "# Iteration Review Report: 048-named-member-rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nNo ADRs are explicitly cited in the plan. This is a presentation-layer-only change",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5509,
+                    "output_tokens": 5165,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 94002
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 99178,
+              "tool_time_ms": 0,
+              "active_time_ms": 99178
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "verify_review_repair": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b7cd41eb984bef3b6f9e9c41a658eb9e03212b7f4f435750e79b81486bfc63f"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 384736,
+              "active_time_ms": 384736
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ec4002daa51640ac5319b55adaf5887c84a5b59de1a620db0c679bbd1d4d4375"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/048-named-member-rows/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 197,
+              "active_time_ms": 197
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/227dfe8c65d3f4ee948850bda24f2584afa453085b406b3dcb8552629a812f86"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dd82646f511e121c05ad004631f7e8ab87555043'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the review-gate repair items for iteration 048.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix applied | Files |\n|---|---|---|\n| `test-member-row-helper` — Refactor member-row test asser",
+              "last_stage": "apply_review_fixes",
+              "response.apply_review_fixes": "Implemented the review-gate repair items for iteration 048.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix applied | Files |\n|---|---|---|\n| `test-member-row-helper` — Refactor member-row test assertions into bounded helpers | Replaced repeated long member-row selectors with focused helpers: `assert_rendered_member_row/3`, `assert_live_member_row/3`, and current-member state helpers. Helpers still verify row identity, design-system classes, visible name, initials, and “You” marker behavior. | `web/test/memba_web/live/member_dashboard_live_test.exs` |\n| `audit-data-member-name` — Audit/remove test-only `data-member-name` duplication if unused | Audited usages and removed `data-member-name` from the club Members-tab markup where visible text and `data-member-id` already prove the intended behavior. Updated tests to assert visible names and explicitly refute `data-member-name` on active member rows/list. | `web/lib/memba_web/controllers/page_html/club.html.heex`, `web/test/memba_web/live/member_dashboard_live_test.exs` |\n\n## Concrete changes\n\n### `web/lib/memba_web/controllers/page_html/club.html.heex`\n- Removed duplicate `data-member-name={member.name}` from:\n  - the first-member empty-state avatar\n  - each named member row\n- Kept stable row identifiers:\n  - `id=\"club-member-...\"`\n  - `data-testid=\"club-member-row\"`\n  - `data-member-id`\n  - `data-current-member`\n\n### `web/test/memba_web/live/member_dashboard_live_test.exs`\n- Added member-row assertion helpers to reduce brittle repetition.\n- Updated member-row assertions to use visible `.member-row__name` text instead of `data-member-name`.\n- Added negative assertions proving `data-member-name` is no longer emitted in the active members list/rows.\n- Preserved coverage for:\n  - named rows\n  - initials avatars\n  - current member “You” marker\n  - non-current member not marked “You”\n  - member-list state/count attributes\n  - invite action preservation\n  - empty state preservation\n\n## Tests run\n\n- `cd web && mix format lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_live_test.exs` — passed.\n- `cd web && mix test test/memba_web/live/member_dashboard_live_test.exs` — failed because Postgres was not running at `/tmp/devenv/postgres/.s.PGSQL.15432`; no code changes were made for that runtime issue.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs` — passed: `27 tests, 0 failures`.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed: `85 scenarios, 523 steps`.\n\n## Remaining gaps / human questions\n\n- No remaining repair gaps for the selected review issues.\n- `dev check` output included existing dependency advisory notices, but the quality gate exited successfully.\n- Working tree has the intended source/test modifications plus pre-existing untracked `.fabro/tmp/`; no commits were made."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 685697,
+                    "output_tokens": 7682,
+                    "reasoning_tokens": 5919,
+                    "cache_read_tokens": 1908736,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4790883
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 389868,
+              "tool_time_ms": 503539,
+              "active_time_ms": 893407
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.gemini_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan does not cite any ADRs, and the implementation evidence shows a presentation-layer change limited to the club Members tab markup, CSS, and controller/view tests. There is no evidence of changes to domain modeling, Commanded/CQRS flows, aggregates, event streams, projections, read models, routing architecture, or infrastructure.\n\nNo accepted ADR-governed architecture appears to have been replaced or bypassed.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- The Members tab now renders named member rows instead of an avatar-stack card.\n- Rows include avatar initials and visible member names.\n- The current member row is marked with a “You” indicator.\n- The Invite member action is preserved.\n- The empty state remains covered.\n- There is no evidence of out-of-scope permission, domain, or read-model changes.\n- The automated check stage passed.\n\n## Bounded-safe fixes\n\n1. **Extract member-row assertion helpers in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows repeated long selectors for each row, combining ids, classes, data attributes, descendants, and expected text. This is valid but verbose.\n\n   A private helper such as `assert_member_row/4` or `assert_current_member_row/4` would preserve coverage while making the test easier to read and maintain.\n\n2. **Reduce repeated white-box selector coupling where possible**\n\n   Some `.member-list` / `.member-row` class assertions are valuable because the plan explicitly required porting design-system class names. However, every row assertion does not necessarily need to repeat the full structural selector.\n\n   A bounded cleanup could keep one or two structural/design-system assertions, then use row ids, `data-testid`, and visible text for most behaviour checks.\n\n3. **Audit whether `data-member-name` is needed in production markup**\n\n   Evidence shows rows include `data-member-name`. If this exists only to make tests easier, the visible `.member-row__name` text may be sufficient.\n\n   This is not a correctness issue, but removing duplicate name data could reduce escaping/special-character fragility and avoid unnecessary user data duplication in attributes. Only do this after confirming no CSS, JS, analytics, tests, or acceptance helpers depend on it.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `test/memba_web/controllers/page_controller_test.exs` — highly structural DOM assertions**\n\n   **Smell:** The tests appear to assert exact DOM structure, CSS classes, data attributes, and descendant relationships for multiple rows.\n\n   **Why it may need human judgement:** This gives strong confidence that the design-system row markup was adopted, which matters for this slice. The trade-off is brittleness: future purely visual refactors may require test rewrites even if user-visible behaviour remains correct. The team may want to decide whether these tests should primarily protect design-system structure or user-observable behaviour.\n\n2. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — initials generation edge cases**\n\n   **Smell:** The view renders avatar initials via `initials(member.name)`. The evidence covers normal two-word names like “Alice Adams” and “Bob Builder,” but does not show edge-case coverage for single names, multi-part names, apostrophes, hyphenated names, non-ASCII names, or blank/unusual values.\n\n   **Why it may need human judgement:** This is acceptable for the current iteration, but member names are user-facing and can be messy. If initials are or will become a shared UI convention, the project may want explicit presentation rules and dedicated tests around initials generation.\n\n3. **File: `web/assets/css/app.css` — copied design-system CSS fragments**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into the app bundle with matching names. That is plan-conforming, but it continues a manual-copy pattern between the design mirror and app CSS.\n\n   **Why it may need human judgement:** If many future slices copy CSS from the design system into `app.css`, drift may become likely. This does not block the iteration, but a later tooling or ownership decision may be useful if duplication grows.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`; presentation/read-model boundary — minimal row metadata**\n\n   **Smell:** The plan said to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to correctly omit it and only render the “You” marker.\n\n   **Why it may need human judgement:** This is the right slice boundary now. Future iterations adding role badges or membership metadata may need to revisit the presentation/read-model shape rather than continuing to layer conditional view-only metadata.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, prioritize:\n\n1. Add private test helpers in `page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: false)`\n   - `assert_current_member_indicator(html, member_id)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep targeted assertions proving `.member-list` and `.member-row` design-system classes exist, but avoid repeating full nested CSS selectors for every behavioural assertion.\n\n3. Audit `data-member-name`; remove it only if it is confirmed to be test-only and unused elsewhere.\n\n## Validation notes\n\n- The review pipeline started from a clean working tree.\n- Sandbox runtime check passed.\n- The dev check stage ran `dev ci` successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - named member rows,\n  - avatar initials,\n  - visible member names,\n  - current member marked with “You,”\n  - non-current member not marked current,\n  - invite action preservation,\n  - active-members list state/count attributes,\n  - empty state behaviour.\n- No acceptance feature-file changes were required by the plan.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, is not shown in the supplied review transcript. I do not treat that as blocking given the green automated checks and plan-conforming evidence, but visual parity should still be confirmed if it has not already been done.",
+              "last_stage": "gemini_review",
+              "last_response": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan does not cite any ADRs, and the implementation evidence shows a prese"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8163,
+                    "output_tokens": 1351,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 112365
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 43844,
+              "tool_time_ms": 0,
+              "active_time_ms": 43844
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a8e461de1abc566495eb516f46c3feb4f33031492dd9597436fa36b8a8ed2a0d"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 147508,
+              "active_time_ms": 147508
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration appears to be a presentation-layer change limited to the club Members tab: HEEx markup, CSS, and controller/view tests. The plan does not cite any ADRs, and the collected evidence does not show changes to domain modeling, aggregates, commands, projections, event streams, read models, routing architecture, or infrastructure.\n\nNo ADR-mandated architecture appears to have been bypassed or replaced.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- Members tab renders named member rows instead of the prior avatar-stack card.\n- Each row includes avatar initials and member name.\n- The current member row is marked with a “You” indicator.\n- Invite action remains present and gated as before.\n- Empty state remains covered.\n- No evidence of out-of-scope domain or permission changes.\n- `dev check` / `dev ci` passed: 85 scenarios, 523 steps.\n\n## Bounded-safe fixes\n\n1. **Reduce selector duplication in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows many long selector assertions repeated for each member row, e.g. checking row id, classes, data attributes, avatar, name, current-member marker, and invite link.\n\n   This is not incorrect, but it is verbose and will be expensive to maintain if row markup evolves. A small private helper such as `assert_member_row/4` or `assert_current_member_row/4` would keep the same coverage while making the test intent clearer.\n\n2. **Avoid testing too many styling/class details where behaviour is the concern**\n\n   Assertions currently appear to couple behaviour to exact CSS classes such as `.member-row`, `.member-row__avatar`, `.member-row__name`, and `.member-row__meta`.\n\n   Some class assertions are useful because the plan explicitly required porting `member-list` / `member-row` design-system classes. However, tests that combine ids, classes, data attributes, and descendant structure may become brittle. Consider keeping one or two structural/class assertions for design-system conformance, and using `data-testid` / semantic text assertions for behavioural expectations.\n\n3. **Consider removing or minimizing `data-member-name` if it is only test scaffolding**\n\n   Evidence shows rows carrying `data-member-name='Alice Adams'` / similar. If this attribute is only present to support tests, it may be unnecessary because the visible `.member-row__name` already exposes the name.\n\n   Keeping names in data attributes is not a blocker, but it duplicates user-visible content and can create escaping/special-character test fragility for names containing quotes or unusual characters.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — View logic depends on `initials(member.name)`**\n\n   **Smell:** The implementation uses generated initials for member avatars. The evidence proves common two-word names such as “Alice Adams” and “Bob Builder”, but does not show coverage for one-word names, blank/edge-case names, non-ASCII names, apostrophes, hyphenated names, or multi-part names.\n\n   **Why judgement may be needed:** This is acceptable for the current iteration because the plan only asks for avatar initials + name, and tests pass. However, real member names can be messy. If initials are user-facing across the product, the project may want a shared, well-tested presentation helper with explicit name-handling rules.\n\n2. **File: `test/memba_web/controllers/page_controller_test.exs` — White-box DOM assertions**\n\n   **Smell:** The tests appear highly specific about DOM shape, ids, data attributes, classes, and nested descendants.\n\n   **Why judgement may be needed:** This gives strong confidence that the design-system row markup was adopted, which is valuable for this slice. The trade-off is that future visual refactors may require test rewrites even when user behaviour is unchanged. A human may want to decide whether Members tab tests should be primarily structural/design-system assertions or primarily user-visible behaviour assertions.\n\n3. **File: `web/assets/css/app.css` — Design-system CSS copied into application bundle**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into `web/assets/css/app.css` with 1:1 names. That is plan-conforming, but it continues the duplication between the design-system mirror and app CSS.\n\n   **Why judgement may be needed:** If this pattern repeats, the app may accumulate manually ported CSS fragments that drift from the design-system source. This is not a defect in this iteration, but it may warrant a later discussion about a single source of truth or tooling for design-system CSS synchronization.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`, presentation/read-model boundary — Member metadata remains minimal**\n\n   **Smell:** The plan’s open technical decision says to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to omit it and only shows the “You” marker.\n\n   **Why judgement may be needed:** This is correct for the slice. Future iterations adding role badges or membership metadata may need to revisit the read model/presentation shape. The current implementation should not be expanded now, but this is a likely future seam.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, I would prioritize:\n\n1. Extract test helpers in `test/memba_web/controllers/page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: boolean)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep one assertion that verifies `.member-list` / `.member-row` design-system classes are present, but avoid repeating full structural selectors for every row unless the structure itself is the behaviour under test.\n\n3. Reconsider whether `data-member-name` is needed in production markup. If not needed for behaviour, accessibility, analytics, or tests, prefer asserting the visible name text instead.\n\n## Validation notes\n\n- `dev ci` / `dev check` passed successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - Named member rows.\n  - Avatar initials.\n  - Current member marked with “You”.\n  - Non-current member not marked as current.\n  - Members list container state/count attributes.\n  - Invite member action preservation.\n  - Empty state behaviour.\n- No acceptance feature-file changes were indicated.\n- Manual/gallery validation was part of the plan, but the supplied review output does not include a `./bin/dev gallery-walk` transcript. I am not treating that as blocking because the implementation is otherwise plan-conforming and automated checks are green, but visual parity should still be confirmed if it has not already been done.",
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration appears to be a presentation-layer change limited to the club Me"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6395,
+                    "output_tokens": 1464,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 91375
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 37485,
+              "tool_time_ms": 0,
+              "active_time_ms": 37485
+            }
+          }
+        },
+        "next_node_id": "collect_implementation_evidence",
+        "git_commit_sha": "99f622af89d3e4019fea14cb4cc2b25ec6203c4c",
+        "loop_failure_signatures": {
+          "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced": 1
+        },
+        "node_visits": {
+          "review_gate": 1,
+          "verify_review_repair": 1,
+          "preflight_sandbox": 1,
+          "codex_review": 1,
+          "claude_review": 1,
+          "dev_check": 2,
+          "synthesize_review": 1,
+          "apply_review_fixes": 1,
+          "start": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "snapshot_before_review_repair": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 2,
+          "additions": 143,
+          "deletions": 149
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-07T17:41:37.637743258Z",
+        "current_node": "collect_implementation_evidence",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.start": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "internal.node_visit_count": 2,
-          "command.output": "blob://sha256/9b7cd41eb984bef3b6f9e9c41a658eb9e03212b7f4f435750e79b81486bfc63f",
+          "command.output": "blob://sha256/7da3002254411f8f3f459d0c8aee252677563675971248280d044610cd463f5b",
           "response.codex_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration appears to be a presentation-layer change limited to the club Members tab: HEEx markup, CSS, and controller/view tests. The plan does not cite any ADRs, and the collected evidence does not show changes to domain modeling, aggregates, commands, projections, event streams, read models, routing architecture, or infrastructure.\n\nNo ADR-mandated architecture appears to have been bypassed or replaced.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- Members tab renders named member rows instead of the prior avatar-stack card.\n- Each row includes avatar initials and member name.\n- The current member row is marked with a “You” indicator.\n- Invite action remains present and gated as before.\n- Empty state remains covered.\n- No evidence of out-of-scope domain or permission changes.\n- `dev check` / `dev ci` passed: 85 scenarios, 523 steps.\n\n## Bounded-safe fixes\n\n1. **Reduce selector duplication in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows many long selector assertions repeated for each member row, e.g. checking row id, classes, data attributes, avatar, name, current-member marker, and invite link.\n\n   This is not incorrect, but it is verbose and will be expensive to maintain if row markup evolves. A small private helper such as `assert_member_row/4` or `assert_current_member_row/4` would keep the same coverage while making the test intent clearer.\n\n2. **Avoid testing too many styling/class details where behaviour is the concern**\n\n   Assertions currently appear to couple behaviour to exact CSS classes such as `.member-row`, `.member-row__avatar`, `.member-row__name`, and `.member-row__meta`.\n\n   Some class assertions are useful because the plan explicitly required porting `member-list` / `member-row` design-system classes. However, tests that combine ids, classes, data attributes, and descendant structure may become brittle. Consider keeping one or two structural/class assertions for design-system conformance, and using `data-testid` / semantic text assertions for behavioural expectations.\n\n3. **Consider removing or minimizing `data-member-name` if it is only test scaffolding**\n\n   Evidence shows rows carrying `data-member-name='Alice Adams'` / similar. If this attribute is only present to support tests, it may be unnecessary because the visible `.member-row__name` already exposes the name.\n\n   Keeping names in data attributes is not a blocker, but it duplicates user-visible content and can create escaping/special-character test fragility for names containing quotes or unusual characters.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — View logic depends on `initials(member.name)`**\n\n   **Smell:** The implementation uses generated initials for member avatars. The evidence proves common two-word names such as “Alice Adams” and “Bob Builder”, but does not show coverage for one-word names, blank/edge-case names, non-ASCII names, apostrophes, hyphenated names, or multi-part names.\n\n   **Why judgement may be needed:** This is acceptable for the current iteration because the plan only asks for avatar initials + name, and tests pass. However, real member names can be messy. If initials are user-facing across the product, the project may want a shared, well-tested presentation helper with explicit name-handling rules.\n\n2. **File: `test/memba_web/controllers/page_controller_test.exs` — White-box DOM assertions**\n\n   **Smell:** The tests appear highly specific about DOM shape, ids, data attributes, classes, and nested descendants.\n\n   **Why judgement may be needed:** This gives strong confidence that the design-system row markup was adopted, which is valuable for this slice. The trade-off is that future visual refactors may require test rewrites even when user behaviour is unchanged. A human may want to decide whether Members tab tests should be primarily structural/design-system assertions or primarily user-visible behaviour assertions.\n\n3. **File: `web/assets/css/app.css` — Design-system CSS copied into application bundle**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into `web/assets/css/app.css` with 1:1 names. That is plan-conforming, but it continues the duplication between the design-system mirror and app CSS.\n\n   **Why judgement may be needed:** If this pattern repeats, the app may accumulate manually ported CSS fragments that drift from the design-system source. This is not a defect in this iteration, but it may warrant a later discussion about a single source of truth or tooling for design-system CSS synchronization.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`, presentation/read-model boundary — Member metadata remains minimal**\n\n   **Smell:** The plan’s open technical decision says to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to omit it and only shows the “You” marker.\n\n   **Why judgement may be needed:** This is correct for the slice. Future iterations adding role badges or membership metadata may need to revisit the read model/presentation shape. The current implementation should not be expanded now, but this is a likely future seam.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, I would prioritize:\n\n1. Extract test helpers in `test/memba_web/controllers/page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: boolean)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep one assertion that verifies `.member-list` / `.member-row` design-system classes are present, but avoid repeating full structural selectors for every row unless the structure itself is the behaviour under test.\n\n3. Reconsider whether `data-member-name` is needed in production markup. If not needed for behaviour, accessibility, analytics, or tests, prefer asserting the visible name text instead.\n\n## Validation notes\n\n- `dev ci` / `dev check` passed successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - Named member rows.\n  - Avatar initials.\n  - Current member marked with “You”.\n  - Non-current member not marked as current.\n  - Members list container state/count attributes.\n  - Invite member action preservation.\n  - Empty state behaviour.\n- No acceptance feature-file changes were indicated.\n- Manual/gallery validation was part of the plan, but the supplied review output does not include a `./bin/dev gallery-walk` transcript. I am not treating that as blocking because the implementation is otherwise plan-conforming and automated checks are green, but visual parity should still be confirmed if it has not already been done.",
           "thread.codex_review.current_node": "gemini_review",
           "response.gemini_review": "# Iteration Review Report: 048 — Named Member Rows\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan does not cite any ADRs, and the implementation evidence shows a presentation-layer change limited to the club Members tab markup, CSS, and controller/view tests. There is no evidence of changes to domain modeling, Commanded/CQRS flows, aggregates, event streams, projections, read models, routing architecture, or infrastructure.\n\nNo accepted ADR-governed architecture appears to have been replaced or bypassed.\n\n## ADR violations\n\nNone.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears consistent with the iteration goal:\n\n- The Members tab now renders named member rows instead of an avatar-stack card.\n- Rows include avatar initials and visible member names.\n- The current member row is marked with a “You” indicator.\n- The Invite member action is preserved.\n- The empty state remains covered.\n- There is no evidence of out-of-scope permission, domain, or read-model changes.\n- The automated check stage passed.\n\n## Bounded-safe fixes\n\n1. **Extract member-row assertion helpers in `test/memba_web/controllers/page_controller_test.exs`**\n\n   The test evidence shows repeated long selectors for each row, combining ids, classes, data attributes, descendants, and expected text. This is valid but verbose.\n\n   A private helper such as `assert_member_row/4` or `assert_current_member_row/4` would preserve coverage while making the test easier to read and maintain.\n\n2. **Reduce repeated white-box selector coupling where possible**\n\n   Some `.member-list` / `.member-row` class assertions are valuable because the plan explicitly required porting design-system class names. However, every row assertion does not necessarily need to repeat the full structural selector.\n\n   A bounded cleanup could keep one or two structural/design-system assertions, then use row ids, `data-testid`, and visible text for most behaviour checks.\n\n3. **Audit whether `data-member-name` is needed in production markup**\n\n   Evidence shows rows include `data-member-name`. If this exists only to make tests easier, the visible `.member-row__name` text may be sufficient.\n\n   This is not a correctness issue, but removing duplicate name data could reduce escaping/special-character fragility and avoid unnecessary user data duplication in attributes. Only do this after confirming no CSS, JS, analytics, tests, or acceptance helpers depend on it.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **File: `test/memba_web/controllers/page_controller_test.exs` — highly structural DOM assertions**\n\n   **Smell:** The tests appear to assert exact DOM structure, CSS classes, data attributes, and descendant relationships for multiple rows.\n\n   **Why it may need human judgement:** This gives strong confidence that the design-system row markup was adopted, which matters for this slice. The trade-off is brittleness: future purely visual refactors may require test rewrites even if user-visible behaviour remains correct. The team may want to decide whether these tests should primarily protect design-system structure or user-observable behaviour.\n\n2. **File: `web/lib/memba_web/controllers/page_html/club.html.heex` — initials generation edge cases**\n\n   **Smell:** The view renders avatar initials via `initials(member.name)`. The evidence covers normal two-word names like “Alice Adams” and “Bob Builder,” but does not show edge-case coverage for single names, multi-part names, apostrophes, hyphenated names, non-ASCII names, or blank/unusual values.\n\n   **Why it may need human judgement:** This is acceptable for the current iteration, but member names are user-facing and can be messy. If initials are or will become a shared UI convention, the project may want explicit presentation rules and dedicated tests around initials generation.\n\n3. **File: `web/assets/css/app.css` — copied design-system CSS fragments**\n\n   **Smell:** The plan explicitly required porting `member-list` and `member-row` CSS from `design-system/` into the app bundle with matching names. That is plan-conforming, but it continues a manual-copy pattern between the design mirror and app CSS.\n\n   **Why it may need human judgement:** If many future slices copy CSS from the design system into `app.css`, drift may become likely. This does not block the iteration, but a later tooling or ownership decision may be useful if duplication grows.\n\n4. **Files: `web/lib/memba_web/controllers/page_html/club.html.heex`; presentation/read-model boundary — minimal row metadata**\n\n   **Smell:** The plan said to include “member since” only if already available through `MemberDashboardPresentation`; otherwise omit it. The implementation appears to correctly omit it and only render the “You” marker.\n\n   **Why it may need human judgement:** This is the right slice boundary now. Future iterations adding role badges or membership metadata may need to revisit the presentation/read-model shape rather than continuing to layer conditional view-only metadata.\n\n## Suggested fixes\n\nNo fixes are required before merge.\n\nIf applying bounded-safe polish, prioritize:\n\n1. Add private test helpers in `page_controller_test.exs`, for example:\n   - `assert_member_list(html, count)`\n   - `assert_member_row(html, member_id, name:, initials:, current?: false)`\n   - `assert_current_member_indicator(html, member_id)`\n   - `refute_current_member_indicator(html, member_id)`\n\n2. Keep targeted assertions proving `.member-list` and `.member-row` design-system classes exist, but avoid repeating full nested CSS selectors for every behavioural assertion.\n\n3. Audit `data-member-name`; remove it only if it is confirmed to be test-only and unused elsewhere.\n\n## Validation notes\n\n- The review pipeline started from a clean working tree.\n- Sandbox runtime check passed.\n- The dev check stage ran `dev ci` successfully.\n  - 85 scenarios passed.\n  - 523 steps passed.\n- Automated evidence covers:\n  - named member rows,\n  - avatar initials,\n  - visible member names,\n  - current member marked with “You,”\n  - non-current member not marked current,\n  - invite action preservation,\n  - active-members list state/count attributes,\n  - empty state behaviour.\n- No acceptance feature-file changes were required by the plan.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, is not shown in the supplied review transcript. I do not treat that as blocking given the green automated checks and plan-conforming evidence, but visual parity should still be confirmed if it has not already been done.",
@@ -4138,12 +4556,12 @@
           "graph.max_node_visits": "160",
           "thread.start.current_node": "read_plan",
           "implementation_accepted": false,
-          "internal.thread_id": "verify_review_repair",
+          "internal.thread_id": "dev_check",
           "thread.collect_implementation_evidence.current_node": "claude_review",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "graph.default_fidelity": "summary:high",
           "graph.rankdir": "LR",
-          "current_node": "dev_check",
+          "current_node": "collect_implementation_evidence",
           "failure_signature": "",
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"test-member-row-helper\",\n        \"title\": \"Refactor member-row controller test assertions into bounded helpers\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"audit-data-member-name\",\n        \"title\": \"Audit and remove test-only data-member-name duplication if unused\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
           "response.apply_review_fixes": "Implemented the review-gate repair items for iteration 048.\n\n## Issue-to-fix mapping\n\n| Review issue | Fix applied | Files |\n|---|---|---|\n| `test-member-row-helper` — Refactor member-row test assertions into bounded helpers | Replaced repeated long member-row selectors with focused helpers: `assert_rendered_member_row/3`, `assert_live_member_row/3`, and current-member state helpers. Helpers still verify row identity, design-system classes, visible name, initials, and “You” marker behavior. | `web/test/memba_web/live/member_dashboard_live_test.exs` |\n| `audit-data-member-name` — Audit/remove test-only `data-member-name` duplication if unused | Audited usages and removed `data-member-name` from the club Members-tab markup where visible text and `data-member-id` already prove the intended behavior. Updated tests to assert visible names and explicitly refute `data-member-name` on active member rows/list. | `web/lib/memba_web/controllers/page_html/club.html.heex`, `web/test/memba_web/live/member_dashboard_live_test.exs` |\n\n## Concrete changes\n\n### `web/lib/memba_web/controllers/page_html/club.html.heex`\n- Removed duplicate `data-member-name={member.name}` from:\n  - the first-member empty-state avatar\n  - each named member row\n- Kept stable row identifiers:\n  - `id=\"club-member-...\"`\n  - `data-testid=\"club-member-row\"`\n  - `data-member-id`\n  - `data-current-member`\n\n### `web/test/memba_web/live/member_dashboard_live_test.exs`\n- Added member-row assertion helpers to reduce brittle repetition.\n- Updated member-row assertions to use visible `.member-row__name` text instead of `data-member-name`.\n- Added negative assertions proving `data-member-name` is no longer emitted in the active members list/rows.\n- Preserved coverage for:\n  - named rows\n  - initials avatars\n  - current member “You” marker\n  - non-current member not marked “You”\n  - member-list state/count attributes\n  - invite action preservation\n  - empty state preservation\n\n## Tests run\n\n- `cd web && mix format lib/memba_web/controllers/page_html/club.html.heex test/memba_web/live/member_dashboard_live_test.exs` — passed.\n- `cd web && mix test test/memba_web/live/member_dashboard_live_test.exs` — failed because Postgres was not running at `/tmp/devenv/postgres/.s.PGSQL.15432`; no code changes were made for that runtime issue.\n- `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_dashboard_live_test.exs` — passed: `27 tests, 0 failures`.\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed: `85 scenarios, 523 steps`.\n\n## Remaining gaps / human questions\n\n- No remaining repair gaps for the selected review issues.\n- `dev check` output included existing dependency advisory notices, but the quality gate exited successfully.\n- Working tree has the intended source/test modifications plus pre-existing untracked `.fabro/tmp/`; no commits were made.",
@@ -4283,15 +4701,15 @@
           "collect_implementation_evidence": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/227dfe8c65d3f4ee948850bda24f2584afa453085b406b3dcb8552629a812f86"
+              "command.output": "blob://sha256/7da3002254411f8f3f459d0c8aee252677563675971248280d044610cd463f5b"
             },
             "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dd82646f511e121c05ad004631f7e8ab87555043'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 159,
-              "active_time_ms": 159
+              "tool_time_ms": 164,
+              "active_time_ms": 164
             }
           },
           "start": {
@@ -4453,12 +4871,12 @@
             }
           }
         },
-        "next_node_id": "collect_implementation_evidence",
+        "next_node_id": "claude_review",
         "node_visits": {
           "claude_review": 1,
           "codex_review": 1,
           "gemini_review": 1,
-          "collect_implementation_evidence": 1,
+          "collect_implementation_evidence": 2,
           "start": 1,
           "preflight_sandbox": 1,
           "synthesize_review": 1,
@@ -4537,30 +4955,24 @@
       },
       "state": "succeeded"
     },
-    "review_gate@1": {
-      "first_event_seq": 105,
+    "collect_implementation_evidence@2": {
+      "first_event_seq": 352,
       "prompt": null,
       "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Conditional node evaluated: review_gate",
-        "failure_reason": null,
-        "timestamp": "2026-07-07T17:20:00.539500007Z"
-      },
+      "completion": null,
       "provider_used": null,
       "diff": null,
-      "script_invocation": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dd82646f511e121c05ad004631f7e8ab87555043'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'dd82646f511e121c05ad004631f7e8ab87555043'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-07-07T17:20:00.528659742Z",
-      "handler": "conditional",
-      "timing": {
-        "wall_time_ms": 10,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
+      "started_at": "2026-07-07T17:41:37.444414908Z",
+      "handler": "command",
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -4569,7 +4981,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "succeeded"
+      "state": "running"
     },
     "dev_check@1": {
       "first_event_seq": 45,
@@ -4619,6 +5031,278 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "dev_check@2": {
+      "first_event_seq": 342,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T17:41:33.854035771Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PATH=\"$PWD/bin:$PATH\" dev ci",
+        "command": "exec 2>&1\nPATH=\"$PWD/bin:$PATH\" dev ci",
+        "language": "shell",
+        "timeout_ms": 1800000
+      },
+      "script_timing": {
+        "output": "blob://sha256/9b7cd41eb984bef3b6f9e9c41a658eb9e03212b7f4f435750e79b81486bfc63f",
+        "exit_code": 0,
+        "duration_ms": 384736,
+        "termination": "exited",
+        "output_bytes": 111120,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 111120,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-07T17:35:09.093491038Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 384760,
+        "inference_time_ms": 0,
+        "tool_time_ms": 384736,
+        "active_time_ms": 384736
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "snapshot_before_review_repair@1": {
+      "first_event_seq": 113,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T17:20:04.149196379Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+        "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+        "exit_code": 0,
+        "duration_ms": 151,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-07T17:20:03.986367522Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 162,
+        "inference_time_ms": 0,
+        "tool_time_ms": 151,
+        "active_time_ms": 151
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "synthesize_review@1": {
+      "first_event_seq": 95,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize_review",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T17:19:57.142430281Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-07T17:19:34.630822065Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 22511,
+        "inference_time_ms": 22463,
+        "tool_time_ms": 0,
+        "active_time_ms": 22463
+      },
+      "usage": {
+        "input_tokens": 10034,
+        "output_tokens": 160,
+        "total_tokens": 11228,
+        "reasoning_tokens": 1034,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 85990
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
+    },
+    "review_gate@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: review_gate",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T17:20:00.539500007Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-07T17:20:00.528659742Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 10,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "preflight_sandbox@1": {
+      "first_event_seq": 35,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T17:09:23.958124400Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "command": "exec 2>&1\nset -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "language": "shell",
+        "timeout_ms": 600000
+      },
+      "script_timing": {
+        "output": "blob://sha256/a8e461de1abc566495eb516f46c3feb4f33031492dd9597436fa36b8a8ed2a0d",
+        "exit_code": 0,
+        "duration_ms": 147508,
+        "termination": "exited",
+        "output_bytes": 10878,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 10878,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-07T17:06:56.431669535Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 147526,
+        "inference_time_ms": 0,
+        "tool_time_ms": 147508,
+        "active_time_ms": 147508
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "verify_review_repair@1": {
+      "first_event_seq": 332,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+        "timestamp": "2026-07-07T17:35:05.760332927Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "command": "exec 2>&1\nset -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910",
+        "exit_code": 1,
+        "duration_ms": 154,
+        "termination": "exited",
+        "output_bytes": 373,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 373,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-07T17:35:05.584930513Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 174,
+        "inference_time_ms": 0,
+        "tool_time_ms": 154,
+        "active_time_ms": 154
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "failed"
     },
     "codex_review@1": {
       "first_event_seq": 75,
@@ -4697,140 +5381,6 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
-    },
-    "snapshot_before_review_repair@1": {
-      "first_event_seq": 113,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
-        "failure_reason": null,
-        "timestamp": "2026-07-07T17:20:04.149196379Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
-        "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
-        "exit_code": 0,
-        "duration_ms": 151,
-        "termination": "exited",
-        "output_bytes": 35,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 35,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-07-07T17:20:03.986367522Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 162,
-        "inference_time_ms": 0,
-        "tool_time_ms": 151,
-        "active_time_ms": 151
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "verify_review_repair@1": {
-      "first_event_seq": 332,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "failed",
-        "notes": null,
-        "failure_reason": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
-        "timestamp": "2026-07-07T17:35:05.760332927Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
-        "command": "exec 2>&1\nset -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910",
-        "exit_code": 1,
-        "duration_ms": 154,
-        "termination": "exited",
-        "output_bytes": 373,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 373,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-07-07T17:35:05.584930513Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 174,
-        "inference_time_ms": 0,
-        "tool_time_ms": 154,
-        "active_time_ms": 154
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "failed"
-    },
-    "dev_check@2": {
-      "first_event_seq": 342,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "PATH=\"$PWD/bin:$PATH\" dev ci",
-        "command": "exec 2>&1\nPATH=\"$PWD/bin:$PATH\" dev ci",
-        "language": "shell",
-        "timeout_ms": 1800000
-      },
-      "script_timing": {
-        "output": "blob://sha256/9b7cd41eb984bef3b6f9e9c41a658eb9e03212b7f4f435750e79b81486bfc63f",
-        "exit_code": 0,
-        "duration_ms": 384736,
-        "termination": "exited",
-        "output_bytes": 111120,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 111120,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-07-07T17:35:09.093491038Z",
-      "handler": "command",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "running"
     },
     "collect_implementation_evidence@1": {
       "first_event_seq": 55,
@@ -4922,50 +5472,6 @@
       "model": {
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
-      },
-      "state": "succeeded"
-    },
-    "synthesize_review@1": {
-      "first_event_seq": 95,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: synthesize_review",
-        "failure_reason": null,
-        "timestamp": "2026-07-07T17:19:57.142430281Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-07-07T17:19:34.630822065Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 22511,
-        "inference_time_ms": 22463,
-        "tool_time_ms": 0,
-        "active_time_ms": 22463
-      },
-      "usage": {
-        "input_tokens": 10034,
-        "output_tokens": 160,
-        "total_tokens": 11228,
-        "reasoning_tokens": 1034,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 85990
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
       },
       "state": "succeeded"
     },
@@ -5218,55 +5724,6 @@
         "inference_time_ms": 0,
         "tool_time_ms": 197,
         "active_time_ms": 197
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "preflight_sandbox@1": {
-      "first_event_seq": 35,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "failure_reason": null,
-        "timestamp": "2026-07-07T17:09:23.958124400Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "command": "exec 2>&1\nset -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "language": "shell",
-        "timeout_ms": 600000
-      },
-      "script_timing": {
-        "output": "blob://sha256/a8e461de1abc566495eb516f46c3feb4f33031492dd9597436fa36b8a8ed2a0d",
-        "exit_code": 0,
-        "duration_ms": 147508,
-        "termination": "exited",
-        "output_bytes": 10878,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 10878,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-07-07T17:06:56.431669535Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 147526,
-        "inference_time_ms": 0,
-        "tool_time_ms": 147508,
-        "active_time_ms": 147508
       },
       "usage": {
         "input_tokens": 0,
