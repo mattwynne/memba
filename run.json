@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-07T10:34:02.782520777Z",
-  "last_event_at": "2026-07-07T10:57:37.288984995Z",
+  "last_event_at": "2026-07-07T10:57:40.600181512Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -4802,9 +4802,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 239,
       "checkpoint": {
-        "timestamp": "2026-07-07T10:57:37.301113902Z",
+        "timestamp": "2026-07-07T10:57:40.555676329Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -4826,6 +4826,412 @@
         ],
         "node_retries": {},
         "context_values": {
+          "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "graph.rankdir": "LR",
+          "internal.retry_count.apply_review_fixes": 0,
+          "failure_class": "",
+          "internal.node_visit_count": 2,
+          "internal.retry_count.start": 0,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "internal.work_dir": "/workspace/memba",
+          "review_fixes_available": true,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "thread.synthesize_review.current_node": "review_gate",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.verify_review_repair": 0,
+          "internal.retry_count.review_gate": 0,
+          "internal.retry_count.claude_review": 0,
+          "last_stage": "claude_review",
+          "response.apply_review_fixes": "## Repair result\n\nNo code changes were needed.\n\nThe single review-gate issue was already resolved in the current worktree/HEAD.\n\n### 1. Review issue: `simplify-timestamp-formatting`\n\n**Gate issue:** Simplify conversation timestamp formatting helper.\n\n**Finding:** Current code already uses the intended single `Calendar.strftime/2` format string:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis is in:\n\n- `web/lib/memba_web/controllers/page_html.ex`\n\nI also checked for the manual implementation pattern described by the reviews (`String.pad_leading`, manual `am`/`pm`, etc.) and found no remaining instance.\n\n## Issue-to-fix mapping\n\n| Review issue | Status | Files/modules/tests |\n|---|---:|---|\n| `simplify-timestamp-formatting` | Already fixed; no patch applied | `web/lib/memba_web/controllers/page_html.ex` already uses `Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")` |\n\n## Files changed\n\nNone.\n\nOnly the pre-existing untracked `.fabro/tmp/` review artifacts remain in `git status`.\n\n## Tests run\n\nI attempted the focused LiveView test file covering the conversation timestamp rendering:\n\n```sh\ncd web && mix test test/memba_web/live/member_message_live/show_test.exs\n```\n\nResult: **blocked by sandbox/runtime database availability**, not by code failure.\n\nError excerpt:\n\n```text\nPostgrex.Protocol failed to connect:\ntcp connect (/tmp/devenv/postgres/.s.PGSQL.15432): no such file or directory - :enoent\n```\n\nBecause no code/config/test changes were made, I did not run `dev check`. The supplied pipeline evidence already shows `dev ci` passed before this repair stage.\n\n## Remaining gaps / human questions\n\nNone for the selected repair issue.\n\nThe only validation gap is environmental: rerunning tests locally requires the expected Postgres/devenv service to be running.",
+          "response.gemini_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears ADR-conformant from the supplied plan and implementation evidence. The changes stay in the presentation/LiveView layer, use existing `Messaging` context behaviour for follow/unfollow, and do not introduce new commands, events, aggregates, projections, migrations, or local substitutes for CQRS/event-sourced infrastructure.\n\nThe timestamp display uses existing read-model data (`@entry.message.inserted_at`) exactly as the plan decided, rather than changing projection shape or domain behaviour.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, `dev ci`/dev check passed, and the evidence shows automated coverage for the key behaviours requested by the plan.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe current helper appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual `am`/`pm` calculation. That is correct, but it can be simplified to one standard format string without changing behaviour.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis should preserve the intended output:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and the format is already covered by LiveView assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone policy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nmessaging message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. The plan states the projection uses UTC timestamps, so users may see UTC times without a UTC label or viewer-local conversion.\n\n**Why it may need human judgement:**  \nThis implementation correctly follows the plan, but future timestamp UI may need a product decision:\n\n- display UTC as-is,\n- label timestamps as UTC,\n- convert to club timezone,\n- convert to viewer timezone,\n- or use relative timestamps.\n\nNot blocking for this iteration, but worth deciding before timestamp formatting spreads across more screens.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference assets\n\n**Smell:**  \nThe iteration explicitly asked to port `.follow-toggle`, its children, and `.detail-head` styles from the design-system mirror into production CSS. That creates manual duplication.\n\n**Why it may need human judgement:**  \nThis may be intentional while the design system remains a reference artifact. As more styles are ported, drift risk increases. The project may eventually want a documented sync convention, a drift check, or a shared source of truth.\n\nNot blocking because the implementation followed the plan.\n\n---\n\n### 3. Generic helper name encodes one specific timestamp format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \n`format_timestamp/1` is a broad name, while the output is specifically the compact conversation/message timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nThe plan explicitly requested this helper name, so this is not a defect. If additional timestamp formats appear later, the project may want a clearer naming or formatting strategy, such as `format_message_timestamp/1` or a shared helper with named formats.\n\n---\n\n## Suggested fixes\n\nApply the bounded-safe timestamp simplification if polishing before merge:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, domain, schema, route, acceptance-feature, or server-side event changes are recommended.\n\n---\n\n## Validation notes\n\n- Dev check completed successfully via `dev ci`.\n- Acceptance evidence shows `85 scenarios` / `523 steps` passing.\n- Feature files appear unchanged, preserving existing domain acceptance criteria.\n- Implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow through existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer rendering after replies,\n  - timestamps on original and reply entries.\n- No migrations, projection changes, new domain events, or new commands were introduced.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, was not included in the supplied command output. If that check was not already performed by the implementation workflow, it should be confirmed separately, but this does not affect the code-review decision given the stated plan-conformance gate and green automated checks.",
+          "response.claude_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation operates entirely in the presentation layer (LiveView, HEEx templates, CSS) and correctly delegates to existing Messaging context capabilities. No new commands, events, aggregates, projections, or event streams were introduced. The follow/unfollow behavior uses existing `Messaging.follow_conversation/2` and `Messaging.unfollow_conversation/2` functions without bypassing CQRS/event-sourcing infrastructure. Timestamp display uses existing read-model data (`@entry.message.inserted_at`) from the messaging projection without modifying domain behavior or projection shape.\n\n---\n\n## ADR violations\n\nNone.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed twice (before and after repair attempt), and all requested behaviors are covered by automated tests.\n\n---\n\n## Bounded-safe fixes\n\nNone required.\n\n**Note on timestamp helper:** The implementation already uses the optimal `Calendar.strftime/2` approach. The function is correctly named `format_message_time/1` (more specific than generic `format_timestamp/1`), is appropriately private (`defp`), and uses the single-call format string:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThe repair verification failure occurred because no changes were needed—the code was already in the desired state. This is a workflow artifact, not a code quality issue.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timezone display strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex` (format_message_time/1)  \nMessaging projection timestamps (UTC `DateTime`)\n\n**Smell:**  \nThe UI displays timestamps in UTC without labeling them as UTC or converting to user/club timezone. Users in different timezones may see confusing times.\n\n**Why it may need human judgement:**  \nThe implementation correctly formats the `DateTime` it receives, but the broader timezone UX strategy needs a product decision:\n- Display UTC as-is (current approach)\n- Add \"UTC\" label to timestamps\n- Convert to club timezone\n- Convert to viewer's local timezone\n- Use relative timestamps (\"2 hours ago\")\n\nNot blocking because the plan explicitly scoped this as timestamp formatting only, but worth deciding before timestamp UI spreads to other screens.\n\n---\n\n### 2. Design-system CSS manually duplicated into production\n\n**Files:**  \n`web/assets/css/app.css` (`.follow-toggle`, `.detail-head`)  \n`design-system/` reference CSS\n\n**Smell:**  \nThe plan directed porting CSS from `design-system/` into `app.css` verbatim, creating manual duplication. If design-system styles evolve, they require manual sync.\n\n**Why it may need human judgement:**  \nThis may be intentional (design-system as read-only reference during MVP), but as more styles are ported, drift risk increases. Consider:\n- Documented sync convention/checklist\n- Automated drift detection (diff-check between design-system and app.css)\n- Shared source-of-truth strategy (import at build time)\n\nNot blocking because the implementation followed the plan's explicit instruction.\n\n---\n\n### 3. Specific timestamp format helper has generic potential\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex` (format_message_time/1)\n\n**Smell:**  \nThe helper encodes one specific format (`\"3 Jun, 7:02am\"`) for conversation/message timestamps. If other contexts need different formats (relative time, full datetime, ISO), multiple similar helpers may emerge.\n\n**Why it may need human judgement:**  \nCurrent naming (`format_message_time/1`) is appropriately specific. If timestamp formatting recurs across screens with different formats, consider:\n- A unified helper with format atoms (`:short`, `:full`, `:relative`)\n- Per-context helpers with clear naming (current approach, acceptable if formats don't proliferate)\n\nNot blocking because no other timestamp formats are currently needed, and the specific name prevents inappropriate reuse.\n\n---\n\n## Suggested fixes\n\nNone. The implementation is already in the optimal state.\n\nThe single review issue (\"simplify-timestamp-formatting\") was a false positive—the code already uses the simplified `Calendar.strftime/2` approach. The repair verification failed correctly because no changes were needed.\n\n---\n\n## Validation notes\n\n- **Dev check:** Passed twice (before review, after repair attempt). Full suite: 85 scenarios, 523 steps, all passing.\n- **Feature files:** Unchanged. Domain acceptance criteria remain stable.\n- **LiveView tests:** Comprehensive coverage in `web/test/memba_web/live/member_message_live/show_test.exs`:\n  - Follow toggle initial state (not following)\n  - Follow action via checkbox `phx-change` event\n  - Persisted following state via `Messaging.following_conversation?/2`\n  - Unfollow action and state reversion\n  - Non-member explanation when `!@can_follow_conversation`\n  - Composer placement after replies\n  - Timestamps present on original message and reply entries\n- **No schema/migration changes:** Pure UI iteration.\n- **No new domain events/commands:** Uses existing Messaging context capabilities.\n- **Visual validation:** Plan calls for `./bin/dev gallery-walk` comparison to `design-system/wireframes/member-conversation.html`. This manual step is not reflected in automated pipeline output but should be confirmed if not already performed.\n\nThe implementation is production-ready. No code changes recommended.",
+          "internal.retry_count.dev_check": 0,
+          "internal.thread_id": "collect_implementation_evidence",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "graph.default_fidelity": "summary:high",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.gemini_review": 0,
+          "thread.verify_review_repair.current_node": "dev_check",
+          "thread.codex_review.current_node": "gemini_review",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.fidelity": "summary:high",
+          "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to stay within the existing architecture:\n\n- No new domain concepts, commands, events, projections, or event streams were introduced for follow/unfollow.\n- The follow toggle uses the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context behaviour.\n- The timestamp work is presentation-only and uses the existing `@entry.message.inserted_at` projection data.\n- No evidence of bypassing CQRS/event-sourcing boundaries or replacing ADR-mandated infrastructure with local shortcuts.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed, and the covered behaviours match the requested capability: compact follow toggle, message timestamps, boxed message cards, and composer placement after replies.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe timestamp helper currently appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual am/pm calculation.\n\nThat is correct, but it can be reduced to a single stdlib format string without changing output.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis preserves examples like:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and already covered indirectly by LiveView timestamp assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nconversation/message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. Since the projection timestamps are UTC, users may see UTC-local times without any UTC label or user-local conversion.\n\n**Why it may need human judgement:**  \nThe implementation matches the plan, but the product-level timezone policy is still unclear. Future decisions may be needed around whether timestamps should be:\n\n- shown in UTC,\n- labelled as UTC,\n- converted to a club timezone,\n- converted to a viewer/user timezone,\n- or rendered relatively.\n\nThis should not block this iteration, but it is worth tracking before timestamp display spreads further.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference files\n\n**Smell:**  \nThe plan explicitly asked to port `.follow-toggle`, child styles, and `.detail-head` from the design-system mirror into the app stylesheet. That creates manual duplication between the design reference and production CSS.\n\n**Why it may need human judgement:**  \nThis may be intentional for now, but as more design-system styles are ported, drift becomes likely. The project may eventually want either:\n\n- a documented copy/sync convention,\n- automated drift checks,\n- or a shared source of truth for design-system styles.\n\nNot blocking because this implementation followed the iteration instructions.\n\n---\n\n### 3. `format_timestamp/1` is generic but currently encodes one conversation-specific format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \nThe helper name is broad, while the format is specifically the conversation-detail short timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nIf more timestamp formats appear elsewhere, this could lead to several one-off helpers or ambiguous reuse. A future pass may want a more explicit name such as `format_message_timestamp/1`, or a shared presentation helper with named formats.\n\nNot blocking because the plan explicitly requested a `format_timestamp/1` helper in this area.\n\n---\n\n## Suggested fixes\n\nIf polishing before merge, apply the bounded-safe timestamp simplification:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, schema, routing, acceptance-feature, or domain changes are recommended.\n\n---\n\n## Validation notes\n\n- The workflow’s dev-check stage passed successfully.\n- Acceptance suite evidence shows `85 scenarios` / `523 steps` passing.\n- The implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow transitions through the existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer placement after replies,\n  - timestamps on original and reply entries.\n- No feature-file changes were indicated.\n- No migrations or projection changes were needed.\n- Manual visual validation via `./bin/dev gallery-walk` was part of the plan; it was not included in the provided command output, so any required screenshot comparison should be confirmed separately if not already done by the implementation workflow.",
+          "outcome": "succeeded",
+          "implementation_accepted": false,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.start.current_node": "read_plan",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "current_node": "claude_review",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"simplify-timestamp-formatting\",\n        \"title\": \"Simplify conversation timestamp formatting helper\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.retry_count.codex_review": 0,
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "review_blockers": [
+            {
+              "id": "simplify-timestamp-formatting",
+              "title": "Simplify conversation timestamp formatting helper",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "command.output": "blob://sha256/5f967e67819fdff5dbc9655a1436cac095979571cdc7c02bfdb383fa13982ce5",
+          "internal.run_id": "01KWY26JXREE5WQ95DRFRXY8H7",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.synthesize_review": 0
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b0c2e3a821b64ed4108e2570826f5a29e59c46d43171daef0a4100f37bf6025a"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151572,
+              "active_time_ms": 151572
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "review_fixes_available": true,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"simplify-timestamp-formatting\",\n        \"title\": \"Sim",
+              "implementation_accepted": false,
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"simplify-timestamp-formatting\",\n        \"title\": \"Simplify conversation timestamp formatting helper\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "last_stage": "synthesize_review",
+              "review_blockers": [
+                {
+                  "id": "simplify-timestamp-formatting",
+                  "title": "Simplify conversation timestamp formatting helper",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ]
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9637,
+                    "output_tokens": 100,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 66665
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 12365,
+              "tool_time_ms": 0,
+              "active_time_ms": 12365
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "apply_review_fixes",
+              "response.apply_review_fixes": "## Repair result\n\nNo code changes were needed.\n\nThe single review-gate issue was already resolved in the current worktree/HEAD.\n\n### 1. Review issue: `simplify-timestamp-formatting`\n\n**Gate issue:** Simplify conversation timestamp formatting helper.\n\n**Finding:** Current code already uses the intended single `Calendar.strftime/2` format string:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis is in:\n\n- `web/lib/memba_web/controllers/page_html.ex`\n\nI also checked for the manual implementation pattern described by the reviews (`String.pad_leading`, manual `am`/`pm`, etc.) and found no remaining instance.\n\n## Issue-to-fix mapping\n\n| Review issue | Status | Files/modules/tests |\n|---|---:|---|\n| `simplify-timestamp-formatting` | Already fixed; no patch applied | `web/lib/memba_web/controllers/page_html.ex` already uses `Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")` |\n\n## Files changed\n\nNone.\n\nOnly the pre-existing untracked `.fabro/tmp/` review artifacts remain in `git status`.\n\n## Tests run\n\nI attempted the focused LiveView test file covering the conversation timestamp rendering:\n\n```sh\ncd web && mix test test/memba_web/live/member_message_live/show_test.exs\n```\n\nResult: **blocked by sandbox/runtime database availability**, not by code failure.\n\nError excerpt:\n\n```text\nPostgrex.Protocol failed to connect:\ntcp connect (/tmp/devenv/postgres/.s.PGSQL.15432): no such file or directory - :enoent\n```\n\nBecause no code/config/test changes were made, I did not run `dev check`. The supplied pipeline evidence already shows `dev ci` passed before this repair stage.\n\n## Remaining gaps / human questions\n\nNone for the selected repair issue.\n\nThe only validation gap is environmental: rerunning tests locally requires the expected Postgres/devenv service to be running.",
+              "last_response": "## Repair result\n\nNo code changes were needed.\n\nThe single review-gate issue was already resolved in the current worktree/HEAD.\n\n### 1. Review issue: `simplify-timestamp-formatting`\n\n**Gate issue:** S"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 147878,
+                    "output_tokens": 1612,
+                    "reasoning_tokens": 1130,
+                    "cache_read_tokens": 133632,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 888466
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 85778,
+              "tool_time_ms": 4540,
+              "active_time_ms": 90318
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to stay within the existing architecture:\n\n- No new domain concepts, commands, events, projections, or event streams were introduced for follow/unfollow.\n- The follow toggle uses the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context behaviour.\n- The timestamp work is presentation-only and uses the existing `@entry.message.inserted_at` projection data.\n- No evidence of bypassing CQRS/event-sourcing boundaries or replacing ADR-mandated infrastructure with local shortcuts.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed, and the covered behaviours match the requested capability: compact follow toggle, message timestamps, boxed message cards, and composer placement after replies.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe timestamp helper currently appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual am/pm calculation.\n\nThat is correct, but it can be reduced to a single stdlib format string without changing output.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis preserves examples like:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and already covered indirectly by LiveView timestamp assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nconversation/message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. Since the projection timestamps are UTC, users may see UTC-local times without any UTC label or user-local conversion.\n\n**Why it may need human judgement:**  \nThe implementation matches the plan, but the product-level timezone policy is still unclear. Future decisions may be needed around whether timestamps should be:\n\n- shown in UTC,\n- labelled as UTC,\n- converted to a club timezone,\n- converted to a viewer/user timezone,\n- or rendered relatively.\n\nThis should not block this iteration, but it is worth tracking before timestamp display spreads further.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference files\n\n**Smell:**  \nThe plan explicitly asked to port `.follow-toggle`, child styles, and `.detail-head` from the design-system mirror into the app stylesheet. That creates manual duplication between the design reference and production CSS.\n\n**Why it may need human judgement:**  \nThis may be intentional for now, but as more design-system styles are ported, drift becomes likely. The project may eventually want either:\n\n- a documented copy/sync convention,\n- automated drift checks,\n- or a shared source of truth for design-system styles.\n\nNot blocking because this implementation followed the iteration instructions.\n\n---\n\n### 3. `format_timestamp/1` is generic but currently encodes one conversation-specific format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \nThe helper name is broad, while the format is specifically the conversation-detail short timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nIf more timestamp formats appear elsewhere, this could lead to several one-off helpers or ambiguous reuse. A future pass may want a more explicit name such as `format_message_timestamp/1`, or a shared presentation helper with named formats.\n\nNot blocking because the plan explicitly requested a `format_timestamp/1` helper in this area.\n\n---\n\n## Suggested fixes\n\nIf polishing before merge, apply the bounded-safe timestamp simplification:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, schema, routing, acceptance-feature, or domain changes are recommended.\n\n---\n\n## Validation notes\n\n- The workflow’s dev-check stage passed successfully.\n- Acceptance suite evidence shows `85 scenarios` / `523 steps` passing.\n- The implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow transitions through the existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer placement after replies,\n  - timestamps on original and reply entries.\n- No feature-file changes were indicated.\n- No migrations or projection changes were needed.\n- Manual visual validation via `./bin/dev gallery-walk` was part of the plan; it was not included in the provided command output, so any required screenshot comparison should be confirmed separately if not already done by the implementation workflow.",
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6374,
+                    "output_tokens": 1163,
+                    "reasoning_tokens": 2517,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 142270
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 67030,
+              "tool_time_ms": 0,
+              "active_time_ms": 67030
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ab1773cd2c5316cea850891cb8b94e827b6f1be7f516fe4aef2ada0dcbbacc9a"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 385296,
+              "active_time_ms": 385296
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c4b584ee5dfdc5f1ccf8a35d1acfe5f0c8155ef4b04f7f96d79cf88d97726399"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 172,
+              "active_time_ms": 172
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation operates entirely in the presentation layer (LiveView, HEEx templates, CSS) and correctly delegates to existing Messaging context capabilities. No new commands, events, aggregates, projections, or event streams were introduced. The follow/unfollow behavior uses existing `Messaging.follow_conversation/2` and `Messaging.unfollow_conversation/2` functions without bypassing CQRS/event-sourcing infrastructure. Timestamp display uses existing read-model data (`@entry.message.inserted_at`) from the messaging projection without modifying domain behavior or projection shape.\n\n---\n\n## ADR violations\n\nNone.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed twice (before and after repair attempt), and all requested behaviors are covered by automated tests.\n\n---\n\n## Bounded-safe fixes\n\nNone required.\n\n**Note on timestamp helper:** The implementation already uses the optimal `Calendar.strftime/2` approach. The function is correctly named `format_message_time/1` (more specific than generic `format_timestamp/1`), is appropriately private (`defp`), and uses the single-call format string:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThe repair verification failure occurred because no changes were needed—the code was already in the desired state. This is a workflow artifact, not a code quality issue.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timezone display strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex` (format_message_time/1)  \nMessaging projection timestamps (UTC `DateTime`)\n\n**Smell:**  \nThe UI displays timestamps in UTC without labeling them as UTC or converting to user/club timezone. Users in different timezones may see confusing times.\n\n**Why it may need human judgement:**  \nThe implementation correctly formats the `DateTime` it receives, but the broader timezone UX strategy needs a product decision:\n- Display UTC as-is (current approach)\n- Add \"UTC\" label to timestamps\n- Convert to club timezone\n- Convert to viewer's local timezone\n- Use relative timestamps (\"2 hours ago\")\n\nNot blocking because the plan explicitly scoped this as timestamp formatting only, but worth deciding before timestamp UI spreads to other screens.\n\n---\n\n### 2. Design-system CSS manually duplicated into production\n\n**Files:**  \n`web/assets/css/app.css` (`.follow-toggle`, `.detail-head`)  \n`design-system/` reference CSS\n\n**Smell:**  \nThe plan directed porting CSS from `design-system/` into `app.css` verbatim, creating manual duplication. If design-system styles evolve, they require manual sync.\n\n**Why it may need human judgement:**  \nThis may be intentional (design-system as read-only reference during MVP), but as more styles are ported, drift risk increases. Consider:\n- Documented sync convention/checklist\n- Automated drift detection (diff-check between design-system and app.css)\n- Shared source-of-truth strategy (import at build time)\n\nNot blocking because the implementation followed the plan's explicit instruction.\n\n---\n\n### 3. Specific timestamp format helper has generic potential\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex` (format_message_time/1)\n\n**Smell:**  \nThe helper encodes one specific format (`\"3 Jun, 7:02am\"`) for conversation/message timestamps. If other contexts need different formats (relative time, full datetime, ISO), multiple similar helpers may emerge.\n\n**Why it may need human judgement:**  \nCurrent naming (`format_message_time/1`) is appropriately specific. If timestamp formatting recurs across screens with different formats, consider:\n- A unified helper with format atoms (`:short`, `:full`, `:relative`)\n- Per-context helpers with clear naming (current approach, acceptable if formats don't proliferate)\n\nNot blocking because no other timestamp formats are currently needed, and the specific name prevents inappropriate reuse.\n\n---\n\n## Suggested fixes\n\nNone. The implementation is already in the optimal state.\n\nThe single review issue (\"simplify-timestamp-formatting\") was a false positive—the code already uses the simplified `Calendar.strftime/2` approach. The repair verification failed correctly because no changes were needed.\n\n---\n\n## Validation notes\n\n- **Dev check:** Passed twice (before review, after repair attempt). Full suite: 85 scenarios, 523 steps, all passing.\n- **Feature files:** Unchanged. Domain acceptance criteria remain stable.\n- **LiveView tests:** Comprehensive coverage in `web/test/memba_web/live/member_message_live/show_test.exs`:\n  - Follow toggle initial state (not following)\n  - Follow action via checkbox `phx-change` event\n  - Persisted following state via `Messaging.following_conversation?/2`\n  - Unfollow action and state reversion\n  - Non-member explanation when `!@can_follow_conversation`\n  - Composer placement after replies\n  - Timestamps present on original message and reply entries\n- **No schema/migration changes:** Pure UI iteration.\n- **No new domain events/commands:** Uses existing Messaging context capabilities.\n- **Visual validation:** Plan calls for `./bin/dev gallery-walk` comparison to `design-system/wireframes/member-conversation.html`. This manual step is not reflected in automated pipeline output but should be confirmed if not already performed.\n\nThe implementation is production-ready. No code changes recommended.",
+              "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 14645,
+                    "output_tokens": 3387,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 94740
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 75079,
+              "tool_time_ms": 0,
+              "active_time_ms": 75079
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5f967e67819fdff5dbc9655a1436cac095979571cdc7c02bfdb383fa13982ce5"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '2c6de7809569245ce816c79f5ac012d020b8e2ae'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149,
+              "active_time_ms": 149
+            }
+          },
+          "verify_review_repair": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c",
+              "response.gemini_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears ADR-conformant from the supplied plan and implementation evidence. The changes stay in the presentation/LiveView layer, use existing `Messaging` context behaviour for follow/unfollow, and do not introduce new commands, events, aggregates, projections, migrations, or local substitutes for CQRS/event-sourced infrastructure.\n\nThe timestamp display uses existing read-model data (`@entry.message.inserted_at`) exactly as the plan decided, rather than changing projection shape or domain behaviour.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, `dev ci`/dev check passed, and the evidence shows automated coverage for the key behaviours requested by the plan.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe current helper appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual `am`/`pm` calculation. That is correct, but it can be simplified to one standard format string without changing behaviour.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis should preserve the intended output:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and the format is already covered by LiveView assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone policy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nmessaging message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. The plan states the projection uses UTC timestamps, so users may see UTC times without a UTC label or viewer-local conversion.\n\n**Why it may need human judgement:**  \nThis implementation correctly follows the plan, but future timestamp UI may need a product decision:\n\n- display UTC as-is,\n- label timestamps as UTC,\n- convert to club timezone,\n- convert to viewer timezone,\n- or use relative timestamps.\n\nNot blocking for this iteration, but worth deciding before timestamp formatting spreads across more screens.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference assets\n\n**Smell:**  \nThe iteration explicitly asked to port `.follow-toggle`, its children, and `.detail-head` styles from the design-system mirror into production CSS. That creates manual duplication.\n\n**Why it may need human judgement:**  \nThis may be intentional while the design system remains a reference artifact. As more styles are ported, drift risk increases. The project may eventually want a documented sync convention, a drift check, or a shared source of truth.\n\nNot blocking because the implementation followed the plan.\n\n---\n\n### 3. Generic helper name encodes one specific timestamp format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \n`format_timestamp/1` is a broad name, while the output is specifically the compact conversation/message timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nThe plan explicitly requested this helper name, so this is not a defect. If additional timestamp formats appear later, the project may want a clearer naming or formatting strategy, such as `format_message_timestamp/1` or a shared helper with named formats.\n\n---\n\n## Suggested fixes\n\nApply the bounded-safe timestamp simplification if polishing before merge:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, domain, schema, route, acceptance-feature, or server-side event changes are recommended.\n\n---\n\n## Validation notes\n\n- Dev check completed successfully via `dev ci`.\n- Acceptance evidence shows `85 scenarios` / `523 steps` passing.\n- Feature files appear unchanged, preserving existing domain acceptance criteria.\n- Implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow through existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer rendering after replies,\n  - timestamps on original and reply entries.\n- No migrations, projection changes, new domain events, or new commands were introduced.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, was not included in the supplied command output. If that check was not already performed by the implementation workflow, it should be confirmed separately, but this does not affect the code-review decision given the stated plan-conformance gate and green automated checks."
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7927,
+                    "output_tokens": 1138,
+                    "reasoning_tokens": 1552,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 120335
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 49420,
+              "tool_time_ms": 0,
+              "active_time_ms": 49420
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "793abe3447ccde63ec0dfa7acb3364cc9062d146",
+        "loop_failure_signatures": {
+          "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced": 1
+        },
+        "node_visits": {
+          "dev_check": 2,
+          "read_plan": 1,
+          "claude_review": 2,
+          "review_gate": 1,
+          "snapshot_before_review_repair": 1,
+          "synthesize_review": 1,
+          "codex_review": 1,
+          "start": 1,
+          "verify_review_repair": 1,
+          "apply_review_fixes": 1,
+          "collect_implementation_evidence": 2,
+          "gemini_review": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-07T10:58:09.724259018Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
           "outcome": "succeeded",
           "graph.max_node_visits": "160",
           "review_blockers": [
@@ -4842,7 +5248,7 @@
           "thread.start.current_node": "read_plan",
           "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c",
           "thread.read_plan.current_node": "preflight_sandbox",
-          "internal.thread_id": "collect_implementation_evidence",
+          "internal.thread_id": "claude_review",
           "review_fixes_available": true,
           "internal.retry_count.verify_review_repair": 0,
           "internal.retry_count.start": 0,
@@ -4858,13 +5264,13 @@
           "graph.rankdir": "LR",
           "failure_class": "",
           "thread.collect_implementation_evidence.current_node": "claude_review",
-          "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to stay within the existing architecture:\n\n- No new domain concepts, commands, events, projections, or event streams were introduced for follow/unfollow.\n- The follow toggle uses the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context behaviour.\n- The timestamp work is presentation-only and uses the existing `@entry.message.inserted_at` projection data.\n- No evidence of bypassing CQRS/event-sourcing boundaries or replacing ADR-mandated infrastructure with local shortcuts.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed, and the covered behaviours match the requested capability: compact follow toggle, message timestamps, boxed message cards, and composer placement after replies.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe timestamp helper currently appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual am/pm calculation.\n\nThat is correct, but it can be reduced to a single stdlib format string without changing output.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis preserves examples like:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and already covered indirectly by LiveView timestamp assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nconversation/message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. Since the projection timestamps are UTC, users may see UTC-local times without any UTC label or user-local conversion.\n\n**Why it may need human judgement:**  \nThe implementation matches the plan, but the product-level timezone policy is still unclear. Future decisions may be needed around whether timestamps should be:\n\n- shown in UTC,\n- labelled as UTC,\n- converted to a club timezone,\n- converted to a viewer/user timezone,\n- or rendered relatively.\n\nThis should not block this iteration, but it is worth tracking before timestamp display spreads further.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference files\n\n**Smell:**  \nThe plan explicitly asked to port `.follow-toggle`, child styles, and `.detail-head` from the design-system mirror into the app stylesheet. That creates manual duplication between the design reference and production CSS.\n\n**Why it may need human judgement:**  \nThis may be intentional for now, but as more design-system styles are ported, drift becomes likely. The project may eventually want either:\n\n- a documented copy/sync convention,\n- automated drift checks,\n- or a shared source of truth for design-system styles.\n\nNot blocking because this implementation followed the iteration instructions.\n\n---\n\n### 3. `format_timestamp/1` is generic but currently encodes one conversation-specific format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \nThe helper name is broad, while the format is specifically the conversation-detail short timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nIf more timestamp formats appear elsewhere, this could lead to several one-off helpers or ambiguous reuse. A future pass may want a more explicit name such as `format_message_timestamp/1`, or a shared presentation helper with named formats.\n\nNot blocking because the plan explicitly requested a `format_timestamp/1` helper in this area.\n\n---\n\n## Suggested fixes\n\nIf polishing before merge, apply the bounded-safe timestamp simplification:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, schema, routing, acceptance-feature, or domain changes are recommended.\n\n---\n\n## Validation notes\n\n- The workflow’s dev-check stage passed successfully.\n- Acceptance suite evidence shows `85 scenarios` / `523 steps` passing.\n- The implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow transitions through the existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer placement after replies,\n  - timestamps on original and reply entries.\n- No feature-file changes were indicated.\n- No migrations or projection changes were needed.\n- Manual visual validation via `./bin/dev gallery-walk` was part of the plan; it was not included in the provided command output, so any required screenshot comparison should be confirmed separately if not already done by the implementation workflow.",
+          "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation stays within the existing presentation/LiveView boundary for this iteration:\n\n- No new commands, events, aggregates, projections, schemas, migrations, or event streams were introduced.\n- Follow/unfollow behaviour continues to use the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context capabilities.\n- Timestamp rendering uses the already-available read-model value, `@entry.message.inserted_at`, without changing projection shape or domain behaviour.\n- The changes are UI/CSS/template/test focused and do not replace ADR-mandated CQRS/event-sourced infrastructure with local shortcuts.\n\nThe earlier synthesized blocker, `simplify-timestamp-formatting`, appears to be a false positive: the implementation already uses the desired single `Calendar.strftime/2` format string in `format_message_time/1`.\n\n---\n\n## ADR violations\n\nNone.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, avoids obvious out-of-scope work, and the successful `dev ci` run provides the required behavioural feedback loop.\n\n---\n\n## Bounded-safe fixes\n\nNone required.\n\nThe timestamp formatting helper is already in the low-risk, maintainable form reviewers requested:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo additional code polish is necessary before merge.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone policy remains implicit\n\n**Files:**\n\n- `web/lib/memba_web/controllers/page_html.ex`\n- Messaging message read-model usage via `@entry.message.inserted_at`\n\n**Smell:**\n\nThe UI formats the stored `%DateTime{}` directly. The projection timestamps are UTC, so the displayed time is effectively UTC but is not labelled as UTC or converted to a viewer/club-local timezone.\n\n**Why it may need human judgement:**\n\nThis is not a defect in this iteration; the plan explicitly scoped timestamp display to formatting existing data. However, before timestamp UI spreads further, the product may need a consistent policy:\n\n- display UTC as-is,\n- label timestamps as UTC,\n- convert to club timezone,\n- convert to viewer timezone,\n- or use relative timestamps.\n\nThis should not block merge.\n\n---\n\n### 2. Design-system CSS is manually duplicated into production CSS\n\n**Files:**\n\n- `web/assets/css/app.css`\n- `design-system/` reference styles / wireframes\n\n**Smell:**\n\nThe plan explicitly asked to port `.follow-toggle`, its children, and `.detail-head` from the design-system mirror into `app.css`. That creates manual duplication between the design reference and app implementation.\n\n**Why it may need human judgement:**\n\nThis may be intentional while the design system is a reference artifact, but drift risk increases as more styles are ported. Future options could include:\n\n- documenting a copy/sync convention,\n- adding a lightweight drift check,\n- or establishing a shared source of truth for reusable design-system styles.\n\nThis is not blocking because the implementation followed the iteration plan.\n\n---\n\n### 3. Conversation timestamp helper is intentionally specific\n\n**File:**\n\n- `web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**\n\n`format_message_time/1` encodes one compact timestamp format: `\"3 Jun, 7:02am\"`. If more timestamp formats appear, helper proliferation or inconsistent display could follow.\n\n**Why it may need human judgement:**\n\nThe current name is appropriately specific and preferable to an over-generic helper. No change is needed now. If timestamp display expands across the app, consider a shared presentation policy or named timestamp formats.\n\n---\n\n## Suggested fixes\n\nNone.\n\nNo behavioural, domain, schema, route, acceptance-feature, or server-side event changes are recommended.\n\n---\n\n## Validation notes\n\n- `dev ci` / dev check passed successfully.\n- Acceptance evidence shows `85 scenarios` / `523 steps` passing.\n- Acceptance feature files appear unchanged.\n- Automated LiveView evidence covers the important behaviours from the plan:\n  - follow toggle initial state,\n  - follow action through existing event wiring,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - unfollow action and state reversion,\n  - non-member explanation instead of interactive toggle,\n  - composer rendering after replies,\n  - timestamps on original and reply entries.\n- No migrations, projection changes, domain events, commands, or aggregates were added.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, is not shown in the provided review-stage output. Given the stated plan-conformance gate and green automated checks, this does not change the code-review decision, but it should be considered confirmed separately if the release process requires explicit visual sign-off.",
           "command.output": "blob://sha256/5f967e67819fdff5dbc9655a1436cac095979571cdc7c02bfdb383fa13982ce5",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.dev_check": 0,
           "thread.codex_review.current_node": "gemini_review",
           "internal.fidelity": "summary:high",
-          "current_node": "claude_review",
+          "current_node": "codex_review",
           "response.gemini_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears ADR-conformant from the supplied plan and implementation evidence. The changes stay in the presentation/LiveView layer, use existing `Messaging` context behaviour for follow/unfollow, and do not introduce new commands, events, aggregates, projections, migrations, or local substitutes for CQRS/event-sourced infrastructure.\n\nThe timestamp display uses existing read-model data (`@entry.message.inserted_at`) exactly as the plan decided, rather than changing projection shape or domain behaviour.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, `dev ci`/dev check passed, and the evidence shows automated coverage for the key behaviours requested by the plan.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe current helper appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual `am`/`pm` calculation. That is correct, but it can be simplified to one standard format string without changing behaviour.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis should preserve the intended output:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and the format is already covered by LiveView assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone policy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nmessaging message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. The plan states the projection uses UTC timestamps, so users may see UTC times without a UTC label or viewer-local conversion.\n\n**Why it may need human judgement:**  \nThis implementation correctly follows the plan, but future timestamp UI may need a product decision:\n\n- display UTC as-is,\n- label timestamps as UTC,\n- convert to club timezone,\n- convert to viewer timezone,\n- or use relative timestamps.\n\nNot blocking for this iteration, but worth deciding before timestamp formatting spreads across more screens.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference assets\n\n**Smell:**  \nThe iteration explicitly asked to port `.follow-toggle`, its children, and `.detail-head` styles from the design-system mirror into production CSS. That creates manual duplication.\n\n**Why it may need human judgement:**  \nThis may be intentional while the design system remains a reference artifact. As more styles are ported, drift risk increases. The project may eventually want a documented sync convention, a drift check, or a shared source of truth.\n\nNot blocking because the implementation followed the plan.\n\n---\n\n### 3. Generic helper name encodes one specific timestamp format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \n`format_timestamp/1` is a broad name, while the output is specifically the compact conversation/message timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nThe plan explicitly requested this helper name, so this is not a defect. If additional timestamp formats appear later, the project may want a clearer naming or formatting strategy, such as `format_message_timestamp/1` or a shared helper with named formats.\n\n---\n\n## Suggested fixes\n\nApply the bounded-safe timestamp simplification if polishing before merge:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, domain, schema, route, acceptance-feature, or server-side event changes are recommended.\n\n---\n\n## Validation notes\n\n- Dev check completed successfully via `dev ci`.\n- Acceptance evidence shows `85 scenarios` / `523 steps` passing.\n- Feature files appear unchanged, preserving existing domain acceptance criteria.\n- Implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow through existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer rendering after replies,\n  - timestamps on original and reply entries.\n- No migrations, projection changes, new domain events, or new commands were introduced.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, was not included in the supplied command output. If that check was not already performed by the implementation workflow, it should be confirmed separately, but this does not affect the code-review decision given the stated plan-conformance gate and green automated checks.",
           "internal.retry_count.gemini_review": 0,
           "internal.retry_count.read_plan": 0,
@@ -4875,7 +5281,7 @@
           "thread.apply_review_fixes.current_node": "verify_review_repair",
           "internal.node_visit_count": 2,
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "last_stage": "claude_review",
+          "last_stage": "codex_review",
           "internal.retry_count.codex_review": 0,
           "internal.retry_count.collect_implementation_evidence": 0,
           "internal.work_dir": "/workspace/memba",
@@ -5093,7 +5499,7 @@
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
-              "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation appears to stay within the existing architecture:\n\n- No new domain concepts, commands, events, projections, or event streams were introduced for follow/unfollow.\n- The follow toggle uses the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context behaviour.\n- The timestamp work is presentation-only and uses the existing `@entry.message.inserted_at` projection data.\n- No evidence of bypassing CQRS/event-sourcing boundaries or replacing ADR-mandated infrastructure with local shortcuts.\n\n---\n\n## ADR violations\n\nNone found.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation is plan-conforming, dev check passed, and the covered behaviours match the requested capability: compact follow toggle, message timestamps, boxed message cards, and composer placement after replies.\n\n---\n\n## Bounded-safe fixes\n\n### 1. Simplify `format_timestamp/1`\n\n**File:** `web/lib/memba_web/controllers/page_html.ex`\n\nThe timestamp helper currently appears to manually combine `Calendar.strftime/2`, `dt.day`, manual minute padding, and manual am/pm calculation.\n\nThat is correct, but it can be reduced to a single stdlib format string without changing output.\n\nSuggested replacement:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nThis preserves examples like:\n\n- `~U[2024-06-03 07:02:00Z]` → `\"3 Jun, 7:02am\"`\n- `~U[2024-06-03 12:30:00Z]` → `\"3 Jun, 12:30pm\"`\n- `~U[2024-06-03 00:15:00Z]` → `\"3 Jun, 12:15am\"`\n\nRisk is low because this is presentation-only and already covered indirectly by LiveView timestamp assertions.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone strategy remains implicit\n\n**Files:**  \n`web/lib/memba_web/controllers/page_html.ex`  \nconversation/message read-model usage\n\n**Smell:**  \nThe UI formats the stored `%DateTime{}` directly. Since the projection timestamps are UTC, users may see UTC-local times without any UTC label or user-local conversion.\n\n**Why it may need human judgement:**  \nThe implementation matches the plan, but the product-level timezone policy is still unclear. Future decisions may be needed around whether timestamps should be:\n\n- shown in UTC,\n- labelled as UTC,\n- converted to a club timezone,\n- converted to a viewer/user timezone,\n- or rendered relatively.\n\nThis should not block this iteration, but it is worth tracking before timestamp display spreads further.\n\n---\n\n### 2. Design-system CSS is manually duplicated into app CSS\n\n**Files:**  \n`web/assets/css/app.css`  \n`design-system/` reference files\n\n**Smell:**  \nThe plan explicitly asked to port `.follow-toggle`, child styles, and `.detail-head` from the design-system mirror into the app stylesheet. That creates manual duplication between the design reference and production CSS.\n\n**Why it may need human judgement:**  \nThis may be intentional for now, but as more design-system styles are ported, drift becomes likely. The project may eventually want either:\n\n- a documented copy/sync convention,\n- automated drift checks,\n- or a shared source of truth for design-system styles.\n\nNot blocking because this implementation followed the iteration instructions.\n\n---\n\n### 3. `format_timestamp/1` is generic but currently encodes one conversation-specific format\n\n**File:**  \n`web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**  \nThe helper name is broad, while the format is specifically the conversation-detail short timestamp format: `\"3 Jun, 7:02am\"`.\n\n**Why it may need human judgement:**  \nIf more timestamp formats appear elsewhere, this could lead to several one-off helpers or ambiguous reuse. A future pass may want a more explicit name such as `format_message_timestamp/1`, or a shared presentation helper with named formats.\n\nNot blocking because the plan explicitly requested a `format_timestamp/1` helper in this area.\n\n---\n\n## Suggested fixes\n\nIf polishing before merge, apply the bounded-safe timestamp simplification:\n\n```elixir\ndef format_timestamp(%DateTime{} = dt) do\n  Calendar.strftime(dt, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo behavioural, schema, routing, acceptance-feature, or domain changes are recommended.\n\n---\n\n## Validation notes\n\n- The workflow’s dev-check stage passed successfully.\n- Acceptance suite evidence shows `85 scenarios` / `523 steps` passing.\n- The implementation evidence shows LiveView coverage for:\n  - follow toggle initial state,\n  - follow/unfollow transitions through the existing events,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - non-member follow explanation,\n  - composer placement after replies,\n  - timestamps on original and reply entries.\n- No feature-file changes were indicated.\n- No migrations or projection changes were needed.\n- Manual visual validation via `./bin/dev gallery-walk` was part of the plan; it was not included in the provided command output, so any required screenshot comparison should be confirmed separately if not already done by the implementation workflow.",
+              "response.codex_review": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation stays within the existing presentation/LiveView boundary for this iteration:\n\n- No new commands, events, aggregates, projections, schemas, migrations, or event streams were introduced.\n- Follow/unfollow behaviour continues to use the existing `follow_conversation` / `unfollow_conversation` LiveView events and existing Messaging context capabilities.\n- Timestamp rendering uses the already-available read-model value, `@entry.message.inserted_at`, without changing projection shape or domain behaviour.\n- The changes are UI/CSS/template/test focused and do not replace ADR-mandated CQRS/event-sourced infrastructure with local shortcuts.\n\nThe earlier synthesized blocker, `simplify-timestamp-formatting`, appears to be a false positive: the implementation already uses the desired single `Calendar.strftime/2` format string in `format_message_time/1`.\n\n---\n\n## ADR violations\n\nNone.\n\n---\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, avoids obvious out-of-scope work, and the successful `dev ci` run provides the required behavioural feedback loop.\n\n---\n\n## Bounded-safe fixes\n\nNone required.\n\nThe timestamp formatting helper is already in the low-risk, maintainable form reviewers requested:\n\n```elixir\ndefp format_message_time(%DateTime{} = inserted_at) do\n  Calendar.strftime(inserted_at, \"%-d %b, %-I:%M%P\")\nend\n```\n\nNo additional code polish is necessary before merge.\n\n---\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Timestamp timezone policy remains implicit\n\n**Files:**\n\n- `web/lib/memba_web/controllers/page_html.ex`\n- Messaging message read-model usage via `@entry.message.inserted_at`\n\n**Smell:**\n\nThe UI formats the stored `%DateTime{}` directly. The projection timestamps are UTC, so the displayed time is effectively UTC but is not labelled as UTC or converted to a viewer/club-local timezone.\n\n**Why it may need human judgement:**\n\nThis is not a defect in this iteration; the plan explicitly scoped timestamp display to formatting existing data. However, before timestamp UI spreads further, the product may need a consistent policy:\n\n- display UTC as-is,\n- label timestamps as UTC,\n- convert to club timezone,\n- convert to viewer timezone,\n- or use relative timestamps.\n\nThis should not block merge.\n\n---\n\n### 2. Design-system CSS is manually duplicated into production CSS\n\n**Files:**\n\n- `web/assets/css/app.css`\n- `design-system/` reference styles / wireframes\n\n**Smell:**\n\nThe plan explicitly asked to port `.follow-toggle`, its children, and `.detail-head` from the design-system mirror into `app.css`. That creates manual duplication between the design reference and app implementation.\n\n**Why it may need human judgement:**\n\nThis may be intentional while the design system is a reference artifact, but drift risk increases as more styles are ported. Future options could include:\n\n- documenting a copy/sync convention,\n- adding a lightweight drift check,\n- or establishing a shared source of truth for reusable design-system styles.\n\nThis is not blocking because the implementation followed the iteration plan.\n\n---\n\n### 3. Conversation timestamp helper is intentionally specific\n\n**File:**\n\n- `web/lib/memba_web/controllers/page_html.ex`\n\n**Smell:**\n\n`format_message_time/1` encodes one compact timestamp format: `\"3 Jun, 7:02am\"`. If more timestamp formats appear, helper proliferation or inconsistent display could follow.\n\n**Why it may need human judgement:**\n\nThe current name is appropriately specific and preferable to an over-generic helper. No change is needed now. If timestamp display expands across the app, consider a shared presentation policy or named timestamp formats.\n\n---\n\n## Suggested fixes\n\nNone.\n\nNo behavioural, domain, schema, route, acceptance-feature, or server-side event changes are recommended.\n\n---\n\n## Validation notes\n\n- `dev ci` / dev check passed successfully.\n- Acceptance evidence shows `85 scenarios` / `523 steps` passing.\n- Acceptance feature files appear unchanged.\n- Automated LiveView evidence covers the important behaviours from the plan:\n  - follow toggle initial state,\n  - follow action through existing event wiring,\n  - persisted following state via `Messaging.following_conversation?/2`,\n  - unfollow action and state reversion,\n  - non-member explanation instead of interactive toggle,\n  - composer rendering after replies,\n  - timestamps on original and reply entries.\n- No migrations, projection changes, domain events, commands, or aggregates were added.\n- The plan’s visual validation step, `./bin/dev gallery-walk`, is not shown in the provided review-stage output. Given the stated plan-conformance gate and green automated checks, this does not change the code-review decision, but it should be considered confirmed separately if the release process requires explicit visual sign-off.",
               "last_stage": "codex_review",
               "last_response": "# Iteration Review Report\n\n**Iteration:** 046 — conversation page alignment  \n**Reviewed range:** `2c6de7809569245ce816c79f5ac012d020b8e2ae..HEAD`\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR c"
             },
@@ -5106,9 +5512,9 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 6374,
-                    "output_tokens": 1163,
-                    "reasoning_tokens": 2517,
+                    "input_tokens": 13401,
+                    "output_tokens": 1048,
+                    "reasoning_tokens": 516,
                     "cache_read_tokens": 0,
                     "cache_write_tokens": 0
                   }
@@ -5117,13 +5523,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 142270
+              "total_usd_micros": 113925
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 67030,
+              "inference_time_ms": 29081,
               "tool_time_ms": 0,
-              "active_time_ms": 67030
+              "active_time_ms": 29081
             }
           },
           "collect_implementation_evidence": {
@@ -5177,14 +5583,14 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "apply_review_fixes": 1,
           "preflight_sandbox": 1,
           "verify_review_repair": 1,
           "collect_implementation_evidence": 2,
           "start": 1,
-          "codex_review": 1,
+          "codex_review": 2,
           "read_plan": 1,
           "dev_check": 2,
           "gemini_review": 1,
@@ -5304,7 +5710,12 @@
       "first_event_seq": 232,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T10:57:37.289330878Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -5318,6 +5729,12 @@
       "output": null,
       "started_at": "2026-07-07T10:56:22.164776243Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 75124,
+        "inference_time_ms": 75079,
+        "tool_time_ms": 0,
+        "active_time_ms": 75079
+      },
       "usage": {
         "input_tokens": 14645,
         "output_tokens": 3387,
@@ -5331,7 +5748,7 @@
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 35,
@@ -5381,6 +5798,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "codex_review@2": {
+      "first_event_seq": 242,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-07T10:57:40.594841516Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "dev_check@2": {
       "first_event_seq": 212,
