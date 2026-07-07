@@ -119,9 +119,6 @@ defmodule MembaWeb.PageHTML do
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
-  defp active_member_count_label(1), do: "1 current member"
-  defp active_member_count_label(count), do: "#{count} current members"
-
   defp active_member_section?(active_section, section), do: active_section == section
 
   defp member_section_tab_class(active_section, section) do
