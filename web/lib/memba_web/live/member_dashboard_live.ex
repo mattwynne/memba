@@ -29,11 +29,17 @@ defmodule MembaWeb.MemberDashboardLive do
         {:ok,
          socket
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
+         |> assign(:active_section, "conversations")
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
         forbidden!()
     end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_params(_params, _uri, socket) do
+    {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
   end
 
   @impl Phoenix.LiveView
@@ -50,6 +56,9 @@ defmodule MembaWeb.MemberDashboardLive do
   def render(%{selected_club: _selected_club} = assigns) do
     MembaWeb.PageHTML.club(assigns)
   end
+
+  defp active_section(:members), do: "members"
+  defp active_section(_live_action), do: "conversations"
 
   defp refresh_dashboard(socket, club_id) do
     case MemberDashboardPresentation.load(

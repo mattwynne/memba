@@ -349,8 +349,10 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp current_member_name(nil), do: "Current member"
   defp current_member_name(current_member), do: current_member.name
 
-  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
-  defp club_home_path(selected_club, _route_params), do: ClubSite.url(selected_club)
+  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
+
+  defp club_home_path(selected_club, _route_params),
+    do: ClubSite.url(selected_club, "/conversations")
 
   defp member_initials(nil), do: "ME"
 

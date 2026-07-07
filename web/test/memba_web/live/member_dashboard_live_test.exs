@@ -39,7 +39,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -76,7 +76,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(view, "#member-section-tabs.section-tabs")
     assert has_element?(view, "#member-section-tabs-list[role='tablist']")
@@ -99,46 +99,95 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-panel-conversations.section-panel[data-panel='conversations']"
+             "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
+               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']"
            )
 
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
 
     assert has_element?(
              view,
-             "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
+             "#member-section-panel-members.section-panel[data-panel='members']" <>
+               "[role='tabpanel'][aria-labelledby='member-section-tab-members'][hidden]"
            )
 
     assert has_element?(
              view,
              "#member-section-tabs .section-tabs__action " <>
-               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+               "#member-section-action-new-message.btn.btn-primary.btn-sm" <>
+               "[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
 
     refute has_element?(view, "#member-section-action-new-message[hidden]")
-    refute has_element?(view, "#member-section-action-new-message[data-action='members']")
+    refute has_element?(view, "#member-section-action-new-message[data-section-action='members']")
     refute has_element?(view, "#member-dashboard-cta")
     refute has_element?(view, "#member-send-message-link")
   end
 
-  test "dashboard section tabs switch panels and actions with client-side LiveView JS" do
+  test "dashboard section tabs are LiveView patch links with push-state URLs" do
     html = dashboard_html(%{current_member_can_manage_members?: true})
 
-    conversations_click = attribute(html, "#member-section-tab-conversations", "phx-click")
-    members_click = attribute(html, "#member-section-tab-members", "phx-click")
+    assert html_has_selector?(
+             html,
+             "#member-section-tab-conversations[href='/conversations'][data-phx-link='patch']" <>
+               "[data-phx-link-state='push']"
+           )
 
-    assert conversations_click =~ "member-section-panel-conversations"
-    assert conversations_click =~ "data-action='conversations'"
-    assert conversations_click =~ "aria-selected"
-    assert conversations_click =~ "is-active"
-    refute conversations_click =~ "push"
+    assert html_has_selector?(
+             html,
+             "#member-section-tab-members[href='/members'][data-phx-link='patch']" <>
+               "[data-phx-link-state='push']"
+           )
 
-    assert members_click =~ "member-section-panel-members"
-    assert members_click =~ "data-action='members'"
-    assert members_click =~ "aria-selected"
-    assert members_click =~ "is-active"
-    refute members_click =~ "push"
+    refute html_has_selector?(html, "#member-section-tab-conversations[phx-click]")
+    refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
+  end
+
+  test "dashboard patching to members selects the members URL state", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    grant_manage_members!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    view
+    |> element("#member-section-tab-members")
+    |> render_click()
+
+    assert_patch(view, ~p"/members")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members.section-tab.is-active" <>
+               "[aria-selected='true'][aria-controls='member-section-panel-members']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations.section-tab" <>
+               "[aria-selected='false'][aria-controls='member-section-panel-conversations']"
+           )
+
+    assert has_element?(view, "#member-section-panel-conversations[hidden]")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-action-invite-member" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    refute has_element?(view, "#member-section-action-new-message")
   end
 
   test "dashboard renders conversations in the default visible section panel", %{
@@ -161,7 +210,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -193,7 +242,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -226,7 +275,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -273,18 +322,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, admin_view, _html} =
       conn
       |> signed_in_club_host("robin@example.com", robin)
-      |> live(~p"/")
+      |> live(~p"/members")
 
     assert has_element?(
              admin_view,
              "#member-section-tabs .section-tabs__action " <>
-               "#member-section-action-invite-member.btn.btn-primary.btn-sm[data-action='members'][hidden][href='/members/invitations/new']",
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
              "Invite member"
            )
 
     refute has_element?(
              admin_view,
-             "#member-section-action-invite-member[data-action='conversations']"
+             "#member-section-action-invite-member[data-section-action='conversations']"
            )
 
     alice =
@@ -297,7 +347,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, member_view, _html} =
       build_conn()
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     refute has_element?(
              member_view,
@@ -349,7 +399,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     refute has_element?(view, "#member-dashboard-hero")
 
@@ -359,7 +409,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-tabs .section-tabs__action " <>
-               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-action='conversations'][href='/messages/new']",
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
 
@@ -436,7 +486,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(view, "#active-members-card[data-active-member-count='8']")
 
@@ -463,7 +513,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("robin@example.com", robin)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -488,7 +538,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       conn
       |> Map.put(:host, "wcp.lvh.me")
       |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -510,7 +560,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     refute has_element?(view, "#club-members #member-invite-member-link")
   end
@@ -529,7 +579,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       conn
       |> Map.put(:host, "wcp.lvh.me")
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     refute has_element?(view, "#club-members #member-invite-member-link")
     refute has_element?(view, "#club-members a[href='/members/invitations/new']")
@@ -629,7 +679,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     message_selector = "#member-message-#{message.message_id}"
 
@@ -732,7 +782,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -778,7 +828,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     refute has_element?(view, "#member-dashboard-cta")
     refute has_element?(view, "#member-send-message-link")
@@ -811,7 +861,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -862,7 +912,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(view, "#member-message-list-empty", "No club messages yet")
 
@@ -885,7 +935,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -934,7 +984,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
-      |> live(~p"/")
+      |> live(~p"/conversations")
 
     assert has_element?(
              view,
@@ -1128,6 +1178,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
       current_member: %{name: "Alice Adams"},
       current_member_can_manage_members?: false,
+      active_section: "conversations",
+      club_id_source: "host",
       members: [],
       active_member_count: 0,
       message_rows: []
@@ -1142,13 +1194,5 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.any?()
-  end
-
-  defp attribute(html, selector, attribute) do
-    html
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query(selector)
-    |> LazyHTML.attribute(attribute)
-    |> List.first("")
   end
 end

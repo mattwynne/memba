@@ -229,11 +229,11 @@ defmodule MembaWeb.PageControllerTest do
     assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
-  test "GET / on the smoke-test club subdomain still shows the member dashboard to active members",
+  test "GET / on the smoke-test club subdomain redirects active members to conversations",
        %{conn: conn} do
     club = create_club(name: "Smoke Test Club", slug: "test")
 
-    tester =
+    _tester =
       create_active_member(
         email: "test@memba.io",
         name: "Smoke Tester",
@@ -241,34 +241,13 @@ defmodule MembaWeb.PageControllerTest do
         club_id: club.club_id
       )
 
-    _message =
-      create_message(club_id: club.club_id, sender_id: tester.person_id, subject: "Smoke test")
-
     conn =
       conn
       |> Map.put(:host, "test.lvh.me")
       |> init_test_session(%{IdentityAuth.identity_session_key() => "test@memba.io"})
       |> get(~p"/")
 
-    response = html_response(conn, 200)
-    html = LazyHTML.from_fragment(response)
-
-    refute response =~ "Hello, Smoke."
-    refute response =~ "Welcome to Smoke Test Club"
-
-    assert html
-           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
-           |> LazyHTML.text() =~ "Smoke Tester"
-
-    assert html
-           |> LazyHTML.query(
-             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
-           )
-           |> LazyHTML.text() =~ "Conversations"
+    assert redirected_to(conn, 302) == ~p"/conversations"
   end
 
   test "GET / with a member club_id redirects active members to the club subdomain", %{conn: conn} do
@@ -288,12 +267,12 @@ defmodule MembaWeb.PageControllerTest do
     assert redirected_to(conn, 302) == ClubSite.url(club)
   end
 
-  test "GET / on a club subdomain shows the member dashboard to active club members", %{
+  test "GET / on a club subdomain redirects active club members to conversations", %{
     conn: conn
   } do
     club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
 
-    alice =
+    _alice =
       create_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
@@ -301,49 +280,13 @@ defmodule MembaWeb.PageControllerTest do
         club_id: club.club_id
       )
 
-    message =
-      create_message(club_id: club.club_id, sender_id: alice.person_id, subject: "Trip night")
-
     conn =
       conn
       |> Map.put(:host, "kmc.lvh.me")
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/")
 
-    response = html_response(conn, 200)
-    html = LazyHTML.from_fragment(response)
-
-    refute response =~ "Hello, Alice."
-    refute response =~ "Welcome to Kootenay Mountaineering Club"
-
-    assert html
-           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#club-site-identity-menu-button .app-bar__who")
-           |> LazyHTML.text() =~ "Alice Adams"
-
-    assert html
-           |> LazyHTML.query(
-             "#member-section-tab-conversations[role='tab'][aria-selected='true']"
-           )
-           |> LazyHTML.text() =~ "Conversations"
-
-    assert html
-           |> LazyHTML.query(
-             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']"
-           )
-           |> Enum.any?()
-
-    refute html |> LazyHTML.query("#member-dashboard-cta") |> Enum.any?()
-    refute html |> LazyHTML.query("#member-send-message-link") |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query(
-             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}']"
-           )
-           |> Enum.any?()
+    assert redirected_to(conn, 302) == ~p"/conversations"
   end
 
   test "GET / on a club subdomain shows the public page to signed-in non-members", %{conn: conn} do
@@ -411,7 +354,10 @@ defmodule MembaWeb.PageControllerTest do
            )
            |> Enum.any?()
 
-    assert html |> LazyHTML.query("#member-compose-club-home-link[href='/']") |> Enum.any?()
+    assert html
+           |> LazyHTML.query("#member-compose-club-home-link[href='/conversations']")
+           |> Enum.any?()
+
     refute response =~ "club_id="
   end
 
@@ -453,7 +399,7 @@ defmodule MembaWeb.PageControllerTest do
            )
            |> Enum.any?()
 
-    assert html |> LazyHTML.query("#back-to-club-home-link[href='/']") |> Enum.any?()
+    assert html |> LazyHTML.query("#back-to-club-home-link[href='/conversations']") |> Enum.any?()
     refute response =~ "club_id="
   end
 
@@ -611,7 +557,7 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("a#back-to-club-home-link[href='/']")
+           |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
            |> Enum.any?()
 
     assert html

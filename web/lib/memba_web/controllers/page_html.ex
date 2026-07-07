@@ -67,24 +67,14 @@ defmodule MembaWeb.PageHTML do
   defp active_member_count_label(1), do: "1 current member"
   defp active_member_count_label(count), do: "#{count} current members"
 
-  defp member_section_tab_js(section) when section in ["conversations", "members"] do
-    selected_tab = "#member-section-tab-#{section}"
-    selected_panel = "#member-section-panel-#{section}"
-    selected_action = "#member-section-tabs-action [data-action='#{section}']"
+  defp active_member_section?(active_section, section), do: active_section == section
 
-    %JS{}
-    |> JS.remove_class("is-active", to: "#member-section-tabs-list .section-tab")
-    |> JS.add_class("is-active", to: selected_tab)
-    |> JS.set_attribute({"aria-selected", "false"}, to: "#member-section-tabs-list .section-tab")
-    |> JS.set_attribute({"aria-selected", "true"}, to: selected_tab)
-    |> JS.hide(to: ".section-panel", time: 0)
-    |> JS.set_attribute({"hidden", ""}, to: ".section-panel")
-    |> JS.remove_attribute("hidden", to: selected_panel)
-    |> JS.show(to: selected_panel, display: "block", time: 0)
-    |> JS.hide(to: "#member-section-tabs-action [data-action]", time: 0)
-    |> JS.set_attribute({"hidden", ""}, to: "#member-section-tabs-action [data-action]")
-    |> JS.remove_attribute("hidden", to: selected_action)
-    |> JS.show(to: selected_action, display: "inline-flex", time: 0)
+  defp member_section_tab_class(active_section, section) do
+    ["section-tab", active_member_section?(active_section, section) && "is-active"]
+  end
+
+  defp member_section_aria_selected(active_section, section) do
+    active_member_section?(active_section, section) |> to_string()
   end
 
   defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
@@ -135,8 +125,16 @@ defmodule MembaWeb.PageHTML do
     "member-conversation-body-#{message_id}"
   end
 
-  defp member_club_home_path(_selected_club, "host"), do: ~p"/"
-  defp member_club_home_path(selected_club, _source), do: ClubSite.url(selected_club)
+  defp member_club_home_path(_selected_club, "host"), do: ~p"/conversations"
+
+  defp member_club_home_path(selected_club, _source),
+    do: ClubSite.url(selected_club, "/conversations")
+
+  defp member_section_path("conversations", _selected_club, "host"), do: ~p"/conversations"
+  defp member_section_path("members", _selected_club, "host"), do: ~p"/members"
+
+  defp member_section_path(section, selected_club, _source),
+    do: ClubSite.url(selected_club, "/#{section}")
 
   defp member_compose_path(_selected_club, "host"), do: ~p"/messages/new"
 

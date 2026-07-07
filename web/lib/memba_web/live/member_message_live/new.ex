@@ -497,10 +497,12 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp current_member_id(nil), do: nil
   defp current_member_id(current_member), do: current_member.id
 
-  defp club_home_path(nil, _route_params), do: ~p"/"
+  defp club_home_path(nil, _route_params), do: ~p"/conversations"
 
-  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
-  defp club_home_path(selected_club, _route_params), do: ClubSite.url(selected_club)
+  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
+
+  defp club_home_path(selected_club, _route_params),
+    do: ClubSite.url(selected_club, "/conversations")
 
   defp compose_path(nil, _route_params), do: ~p"/messages/new"
 

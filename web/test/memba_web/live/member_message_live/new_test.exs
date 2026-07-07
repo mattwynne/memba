@@ -78,7 +78,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
              "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='2']"
            )
 
-    assert has_element?(view, "#member-compose-club-home-link[href='/']")
+    assert has_element?(view, "#member-compose-club-home-link[href='/conversations']")
     refute has_element?(view, "#member-compose-club-home-link[href*='club_id=']")
   end
 
@@ -167,7 +167,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-compose-club-home-link[href='/']",
+             "#member-compose-club-home-link[href='/conversations']",
              "Club home"
            )
 
@@ -215,7 +215,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-message-cancel-link.btn.btn-soft.btn-lg[href='/']",
+             "#member-message-cancel-link.btn.btn-soft.btn-lg[href='/conversations']",
              "Cancel"
            )
 

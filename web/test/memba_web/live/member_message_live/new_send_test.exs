@@ -95,7 +95,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     assert has_element?(
              view,
-             "#member-compose-back-home-link.btn.btn-ghost.btn-lg[href='/']",
+             "#member-compose-back-home-link.btn.btn-ghost.btn-lg[href='/conversations']",
              "Back to club home"
            )
 

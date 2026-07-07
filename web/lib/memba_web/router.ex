@@ -66,6 +66,8 @@ defmodule MembaWeb.Router do
     live_session :club_member,
       on_mount: [{MembaWeb.IdentityAuth, :mount_current_identity}],
       session: {MembaWeb.Plugs.ClubSiteMemberRoute, :live_session, []} do
+      live "/conversations", MemberDashboardLive, :conversations
+      live "/members", MemberDashboardLive, :members
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
       live "/members/invitations/new", MemberInvitationLive.New, :new

@@ -52,7 +52,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-club-invitation-club-home-link[href='/']",
+             "#member-club-invitation-club-home-link[href='/conversations']",
              "Club home"
            )
 
@@ -70,7 +70,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert has_element?(
              view,
-             "#cancel-member-club-invitation-link.btn.btn-soft.btn-lg[href='/']",
+             "#cancel-member-club-invitation-link.btn.btn-soft.btn-lg[href='/conversations']",
              "Cancel"
            )
   end
@@ -108,7 +108,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
              "#member-club-invitation-new[data-club-id='#{robin.club_id}'][data-current-member-id='#{robin.person_id}'][data-active-member-count='2']"
            )
 
-    assert has_element?(view, "#member-club-invitation-club-home-link[href='/']")
+    assert has_element?(view, "#member-club-invitation-club-home-link[href='/conversations']")
     refute has_element?(view, "#member-club-invitation-club-home-link[href*='club_id=']")
   end
 

@@ -1,4 +1,5 @@
-<% club_id_source = assigns[:club_id_source] %>
+<% club_id_source = assigns[:club_id_source] || "host" %>
+<% active_section = assigns[:active_section] || "conversations" %>
 <% inbound_email_address = club_inbound_email_address(@selected_club) %>
 
 <Layouts.club_site
@@ -20,49 +21,50 @@
         role="tablist"
         aria-label="Club home sections"
       >
-        <button
+        <.link
           id="member-section-tab-conversations"
-          type="button"
-          class="section-tab is-active"
+          patch={member_section_path("conversations", @selected_club, club_id_source)}
+          class={member_section_tab_class(active_section, "conversations")}
           data-tab="conversations"
-          phx-click={member_section_tab_js("conversations")}
           role="tab"
-          aria-selected="true"
+          aria-selected={member_section_aria_selected(active_section, "conversations")}
           aria-controls="member-section-panel-conversations"
         >
           Conversations
-        </button>
-        <button
+        </.link>
+        <.link
           id="member-section-tab-members"
-          type="button"
-          class="section-tab"
+          patch={member_section_path("members", @selected_club, club_id_source)}
+          class={member_section_tab_class(active_section, "members")}
           data-tab="members"
-          phx-click={member_section_tab_js("members")}
           role="tab"
-          aria-selected="false"
+          aria-selected={member_section_aria_selected(active_section, "members")}
           aria-controls="member-section-panel-members"
         >
           Members
-        </button>
+        </.link>
       </div>
       <div id="member-section-tabs-action" class="section-tabs__action">
         <.button
+          :if={active_member_section?(active_section, "conversations")}
           id="member-section-action-new-message"
           href={member_compose_path(@selected_club, club_id_source)}
           variant="primary"
           size="sm"
-          data-action="conversations"
+          data-section-action="conversations"
         >
           New message
         </.button>
         <.button
-          :if={@current_member_can_manage_members?}
+          :if={
+            active_member_section?(active_section, "members") and
+              @current_member_can_manage_members?
+          }
           id="member-section-action-invite-member"
           href={member_invitation_path(@selected_club, club_id_source)}
           variant="primary"
           size="sm"
-          data-action="members"
-          hidden
+          data-section-action="members"
         >
           Invite member
         </.button>
@@ -73,6 +75,9 @@
       id="member-section-panel-conversations"
       class="section-panel"
       data-panel="conversations"
+      role="tabpanel"
+      aria-labelledby="member-section-tab-conversations"
+      hidden={not active_member_section?(active_section, "conversations")}
     >
       <section id="club-messages">
         <div class="flex items-center justify-between gap-4">
@@ -195,7 +200,9 @@
       id="member-section-panel-members"
       class="section-panel"
       data-panel="members"
-      hidden
+      role="tabpanel"
+      aria-labelledby="member-section-tab-members"
+      hidden={not active_member_section?(active_section, "members")}
     >
       <section id="club-members">
         <div class="flex items-center justify-between gap-4">

@@ -10,7 +10,6 @@ defmodule MembaWeb.PageController do
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias MembaWeb.ClubSite
-  alias MembaWeb.IdentityAuth
 
   @publicly_hidden_club_slugs MapSet.new(["test"])
 
@@ -48,7 +47,7 @@ defmodule MembaWeb.PageController do
 
       club ->
         if signed_in_active_member?(conn, club.club_id) do
-          render_member_dashboard(conn, club.club_id, "host")
+          redirect(conn, to: ~p"/conversations")
         else
           render_public_club_page_or_not_found(conn, club)
         end
@@ -366,16 +365,6 @@ defmodule MembaWeb.PageController do
   end
 
   defp request_param(_request_params, _key), do: nil
-
-  defp render_member_dashboard(conn, club_id, club_id_source) do
-    Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
-      session: %{
-        "club_id" => club_id,
-        "club_id_source" => club_id_source,
-        IdentityAuth.identity_session_key() => conn.assigns.current_identity.email
-      }
-    )
-  end
 
   defp render_public_club_page_or_not_found(conn, nil), do: not_found(conn)
 

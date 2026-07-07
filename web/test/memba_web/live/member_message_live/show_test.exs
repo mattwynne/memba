@@ -59,7 +59,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "AA"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/']")
+    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
   end
 
   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
@@ -91,7 +91,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/']")
+    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
