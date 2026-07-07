@@ -1,0 +1,52 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index c350fa9..ba8f73f 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show` in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
++- [x] 001 Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show` in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
+ - [ ] 002 Create `MemberMessageDeliveryLive.Show` that loads the target message and its receipt model via `Messaging.list_member_email_deliverys/1 |> MemberEmailDeliveryPresentation.present_receipts/1`, scoped to the member's active clubs (reuse the `member_message_detail` load pattern and authz).
+ - [ ] 003 Build the delivery page template per `delivery-details.html`: header (subject / sender / `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
+ - [ ] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index b90485c..9df2c5f 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -70,6 +70,7 @@ defmodule MembaWeb.Router do
+       live "/members", MemberDashboardLive, :members
+       live "/messages/new", MemberMessageLive.New, :new
+       live "/messages/:message_id", MemberMessageLive.Show, :show
++      live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show
+       live "/members/invitations/new", MemberInvitationLive.New, :new
+     end
+   end
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index e3f86bd..a09e19b 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -134,6 +134,23 @@ defmodule MembaWeb.RouterTest do
+                  "localhost"
+                )
+     end
++
++    test "routes /messages/:message_id/delivery through the required club member pipeline to the member message delivery LiveView" do
++      assert %{
++               path_params: %{"message_id" => "message-123"},
++               pipe_through: [:browser, :club_member_required],
++               phoenix_live_view: {MembaWeb.MemberMessageDeliveryLive.Show, nil, _opts, _live_session},
++               plug: Phoenix.LiveView.Plug,
++               plug_opts: nil,
++               route: "/messages/:message_id/delivery"
++             } =
++               Phoenix.Router.route_info(
++                 MembaWeb.Router,
++                 "GET",
++                 "/messages/message-123/delivery",
++                 "localhost"
++               )
++    end
+   end
+ 
+   describe "member invitation routes" do
