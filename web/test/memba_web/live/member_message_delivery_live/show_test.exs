@@ -198,6 +198,47 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
     assert html_response(conn, 404) =~ "Not Found"
   end
 
+  test "routed delivery page links back to the containing conversation", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        conversation_id: conversation.message_id,
+        reply_to_message_id: conversation.message_id,
+        subject: "Re: Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{reply.message_id}/delivery")
+
+    assert has_element?(
+             view,
+             "a#member-delivery-back-to-conversation-link[href='/messages/#{conversation.message_id}']",
+             "Back to conversation"
+           )
+
+    refute has_element?(
+             view,
+             "a#member-delivery-back-to-conversation-link[href='/messages/#{reply.message_id}']"
+           )
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)

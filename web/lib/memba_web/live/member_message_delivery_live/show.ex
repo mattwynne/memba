@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   """
   use MembaWeb, :live_view
 
+  alias MembaWeb.ClubSite
   alias MembaWeb.MemberMessageDetail
 
   @impl Phoenix.LiveView
@@ -61,9 +62,23 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
         data-receipt-count={@member_email_delivery_count}
         class="mx-auto max-w-3xl"
       >
+        <.link
+          id="member-delivery-back-to-conversation-link"
+          href={
+            member_message_path(
+              conversation_message_id(@message),
+              @selected_club,
+              Map.get(@route_params, "club_id_source")
+            )
+          }
+          class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
+        >
+          <.icon name="hero-arrow-left" class="size-4" /> Back to conversation
+        </.link>
+
         <h1
           id="member-delivery-message-subject"
-          class="delivery-title"
+          class="delivery-title mt-5"
         >
           Delivery — “{@message.subject}”
         </h1>
@@ -265,6 +280,17 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
   defp delivery_status_tint_class("sent"), do: "deliv-tint-snd"
   defp delivery_status_tint_class("delivery problem"), do: "deliv-tint-bad"
   defp delivery_status_tint_class(_status), do: "deliv-tint-unknown"
+
+  defp conversation_message_id(%{conversation_id: conversation_id})
+       when is_binary(conversation_id) and conversation_id != "",
+       do: conversation_id
+
+  defp conversation_message_id(%{message_id: message_id}), do: message_id
+
+  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
+
+  defp member_message_path(message_id, selected_club, _source),
+    do: ClubSite.url(selected_club, "/messages/#{message_id}")
 
   defp recipient_initials(name) when is_binary(name) do
     name

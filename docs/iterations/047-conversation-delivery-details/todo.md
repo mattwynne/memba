@@ -5,7 +5,7 @@
 - [x] 003 Build the delivery page template per `delivery-details.html`: header (subject / sender / `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
 - [x] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
 - [x] 005 Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
-- [ ] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+- [x] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
 - [ ] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
 - [ ] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
 - [ ] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
