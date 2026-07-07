@@ -1,0 +1,190 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index 7d7ef6c..0b4c324 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Add a member-scoped route `live "/messages/:message_id/delivery", MemberMessageDeliveryLive.Show` in `web/lib/memba_web/router.ex`, in the same authenticated member scope as the message Show route.
+ - [x] 002 Create `MemberMessageDeliveryLive.Show` that loads the target message and its receipt model via `Messaging.list_member_email_deliverys/1 |> MemberEmailDeliveryPresentation.present_receipts/1`, scoped to the member's active clubs (reuse the `member_message_detail` load pattern and authz).
+ - [x] 003 Build the delivery page template per `delivery-details.html`: header (subject / sender / `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
+-- [ ] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
++- [x] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
+ - [ ] 005 Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [ ] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+ - [ ] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 69be22c..12d4a10 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -597,9 +597,13 @@ defmodule Memba.Messaging do
+   """
+   def list_member_email_deliverys(message_id) do
+     with {:ok, message_id} <- ID.cast(:message, message_id) do
+-      MemberEmailDeliveryProjection
+-      |> where([receipt], receipt.message_id == ^message_id)
+-      |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
++      from(receipt in MemberEmailDeliveryProjection,
++        left_join: deliverability in MembaStaffEmailDeliveryProjection,
++        on: deliverability.delivery_id == receipt.delivery_id,
++        where: receipt.message_id == ^message_id,
++        order_by: [asc: receipt.recipient_name, asc: receipt.recipient_id],
++        select_merge: %{reason: deliverability.reason}
++      )
+       |> Repo.all()
+       |> Enum.map(&normalize_member_email_delivery/1)
+     else
+diff --git a/web/lib/memba/messaging/projections/member_email_delivery.ex b/web/lib/memba/messaging/projections/member_email_delivery.ex
+index 8ac7e41..598e343 100644
+--- a/web/lib/memba/messaging/projections/member_email_delivery.ex
++++ b/web/lib/memba/messaging/projections/member_email_delivery.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Messaging.Projections.MemberEmailDelivery do
+     field :recipient_id, :string
+     field :recipient_name, :string
+     field :status, :string
++    field :reason, :string, virtual: true
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/lib/memba_web/live/member_message_delivery_live/show.ex b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+index b53f0e7..2dc93ae 100644
+--- a/web/lib/memba_web/live/member_message_delivery_live/show.ex
++++ b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+@@ -176,6 +176,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+                   data-recipient-id={receipt.recipient_id}
+                   data-recipient-name={receipt.recipient_name}
+                   data-receipt-status={receipt.status}
++                  data-recipient-reason={receipt.reason}
+                   class="recipient"
+                 >
+                   <span class="recipient__id">
+@@ -184,7 +185,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+                     </span>
+                     <span class="recipient__name">{receipt.recipient_name}</span>
+                   </span>
+-                  <span class="recipient__reason">{delivery_status_label(receipt)}</span>
++                  <span class="recipient__reason">{recipient_delivery_reason(receipt)}</span>
+                 </div>
+               </div>
+             </details>
+@@ -249,6 +250,12 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+   defp delivery_status_description(%{description: description}), do: description
+   defp delivery_status_description(_status), do: "Delivery status for this message"
+ 
++  defp recipient_delivery_reason(%{status: "delivery problem", reason: reason})
++       when is_binary(reason) and reason != "",
++       do: reason
++
++  defp recipient_delivery_reason(receipt), do: delivery_status_label(receipt)
++
+   defp delivery_status_class("delivered"), do: "deliv-ok"
+   defp delivery_status_class("sent"), do: "deliv-snd"
+   defp delivery_status_class("delivery problem"), do: "deliv-bad"
+diff --git a/web/lib/memba_web/member_email_delivery_presentation.ex b/web/lib/memba_web/member_email_delivery_presentation.ex
+index a1cc16b..c919f86 100644
+--- a/web/lib/memba_web/member_email_delivery_presentation.ex
++++ b/web/lib/memba_web/member_email_delivery_presentation.ex
+@@ -112,7 +112,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+       status: presentation.status,
+       status_label: presentation.label,
+       status_icon: presentation.icon,
+-      status_tone: presentation.tone
++      status_tone: presentation.tone,
++      reason: delivery_problem_reason(presentation.status, Map.get(receipt, :reason))
+     }
+   end
+ 
+@@ -188,4 +189,13 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+ 
+   defp percentage(_count, 0), do: 0
+   defp percentage(count, total_count), do: round(count * 100 / total_count)
++
++  defp delivery_problem_reason("delivery problem", reason) when is_binary(reason) do
++    case String.trim(reason) do
++      "" -> nil
++      reason -> reason
++    end
++  end
++
++  defp delivery_problem_reason(_status, _reason), do: nil
+ end
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index 1c905f7..e044a0c 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
++  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -53,7 +54,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+       message_id: message.message_id,
+       recipient_id: carol.person_id,
+       recipient_name: "Carol Clark",
+-      status: "bounced"
++      status: "bounced",
++      reason: "Address does not exist"
+     )
+ 
+     {:ok, view, _html} =
+@@ -161,6 +163,14 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+                "[data-receipt-status='delivery problem']",
+              "Carol Clark"
+            )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-delivery-receipt']" <>
++               "[data-recipient-id='#{carol.person_id}']" <>
++               " .recipient__reason",
++             "Address does not exist"
++           )
+   end
+ 
+   test "routed delivery page rejects messages outside the selected active club", %{conn: conn} do
+@@ -246,13 +256,37 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+-    Repo.insert!(%MemberEmailDelivery{
+-      delivery_id: Memba.ID.generate(:delivery),
+-      message_id: Keyword.fetch!(attrs, :message_id),
+-      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+-      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+-      status: Keyword.fetch!(attrs, :status)
+-    })
++    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
++
++    delivery =
++      Repo.insert!(%MemberEmailDelivery{
++        delivery_id: delivery_id,
++        message_id: Keyword.fetch!(attrs, :message_id),
++        recipient_id: Keyword.fetch!(attrs, :recipient_id),
++        recipient_name: Keyword.fetch!(attrs, :recipient_name),
++        status: Keyword.fetch!(attrs, :status)
++      })
++
++    maybe_create_staff_email_delivery(delivery, attrs)
++
++    delivery
++  end
++
++  defp maybe_create_staff_email_delivery(%MemberEmailDelivery{} = delivery, attrs) do
++    reason = Keyword.get(attrs, :reason)
++
++    if is_binary(reason) and reason != "" do
++      Repo.insert!(%MembaStaffEmailDelivery{
++        delivery_id: delivery.delivery_id,
++        message_id: delivery.message_id,
++        recipient_id: delivery.recipient_id,
++        recipient_name: delivery.recipient_name,
++        recipient_address: Keyword.get(attrs, :recipient_address, "carol@example.com"),
++        channel: "email",
++        status: Keyword.fetch!(attrs, :status),
++        reason: reason
++      })
++    end
+   end
+ 
+   defp format_message_time(%DateTime{} = inserted_at) do
