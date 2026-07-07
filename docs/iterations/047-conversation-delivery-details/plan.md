@@ -1,7 +1,7 @@
 # 047 — Delivery details page + relocate delivery off the conversation
 
 Date: 2026-07-04
-Status: validated
+Status: implementing
 
 > Written 2026-07-04 against the refreshed `member-conversation.html` + `delivery-details.html`,
 > grounded in the current `message.html.heex` and `member_message_detail.ex`. Delivers after 044
