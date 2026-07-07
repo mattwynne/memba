@@ -621,6 +621,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "[data-testid='member-receipt-summary-status']")
     refute has_element?(view, "[data-testid='member-receipt-summary-bar-segment']")
     refute has_element?(view, "[data-testid='member-receipt-group']")
+    refute render(view) =~ ~r/sent to[\s\S]*3[\s\S]*members/
     refute render(view) =~ "Members by delivery status"
   end
 

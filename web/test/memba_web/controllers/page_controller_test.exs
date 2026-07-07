@@ -580,6 +580,7 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("[data-testid='member-receipt-group']")
            |> Enum.any?()
 
+    refute response =~ ~r/sent to[\s\S]*2[\s\S]*members/
     refute response =~ "Members by delivery status"
 
     refute response =~ alice_receipt.delivery_id
