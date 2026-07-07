@@ -314,6 +314,24 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "3 Jun, 9:30am"
            )
 
+    html =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    conversation_child_ids =
+      html
+      |> LazyHTML.query("#member-conversation > *")
+      |> LazyHTML.attribute("id")
+
+    replies_index =
+      Enum.find_index(conversation_child_ids, &(&1 == "member-conversation-replies"))
+
+    composer_index =
+      Enum.find_index(conversation_child_ids, &(&1 == "member-message-reply-composer"))
+
+    assert replies_index < composer_index
+
     assert has_element?(
              view,
              "#member-message-reply-from[data-sender-id='#{bob.person_id}']",
