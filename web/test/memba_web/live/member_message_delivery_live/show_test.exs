@@ -95,7 +95,28 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
                "[data-testid='member-delivery-summary-bar-segment']" <>
                "[data-receipt-status='delivered']" <>
                "[data-receipt-count='1']" <>
-               "[data-receipt-percentage='50']"
+               "[data-receipt-percentage='50']" <>
+               "[style='width: 50%;']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-bar.delivery-bar " <>
+               "[data-testid='member-delivery-summary-bar-segment']" <>
+               "[data-receipt-status='sent']" <>
+               "[data-receipt-count='0']" <>
+               "[data-receipt-percentage='0']" <>
+               "[style='width: 0%;']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-bar.delivery-bar " <>
+               "[data-testid='member-delivery-summary-bar-segment']" <>
+               "[data-receipt-status='delivery problem']" <>
+               "[data-receipt-count='1']" <>
+               "[data-receipt-percentage='50']" <>
+               "[style='width: 50%;']"
            )
 
     assert has_element?(
@@ -319,6 +340,65 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
     refute has_element?(
              view,
              "a#member-delivery-back-to-conversation-link[href='/messages/#{reply.message_id}']"
+           )
+  end
+
+  test "routed delivery page shows an explicit zero-recipient state with safe bar widths", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Draft delivery model"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}/delivery")
+
+    assert has_element?(
+             view,
+             "#member-message-delivery-detail" <>
+               "[data-message-id='#{message.message_id}']" <>
+               "[data-receipt-count='0']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-count[data-receipt-count='0']",
+             "0 members"
+           )
+
+    for status <- ["delivered", "sent", "delivery problem"] do
+      assert has_element?(
+               view,
+               "#member-delivery-summary-bar.delivery-bar " <>
+                 "[data-testid='member-delivery-summary-bar-segment']" <>
+                 "[data-receipt-status='#{status}']" <>
+                 "[data-receipt-count='0']" <>
+                 "[data-receipt-percentage='0']" <>
+                 "[style='width: 0%;']"
+             )
+    end
+
+    assert has_element?(
+             view,
+             "#member-delivery-receipts-empty",
+             "Memba has not prepared the delivery list for this message yet."
+           )
+
+    refute has_element?(
+             view,
+             "#member-delivery-receipt-groups [data-testid='member-delivery-group']"
            )
   end
 
