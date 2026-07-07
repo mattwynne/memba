@@ -112,7 +112,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
       status: presentation.status,
       status_label: presentation.label,
       status_icon: presentation.icon,
-      status_tone: presentation.tone
+      status_tone: presentation.tone,
+      reason: delivery_problem_reason(presentation.status, Map.get(receipt, :reason))
     }
   end
 
@@ -188,4 +189,13 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
 
   defp percentage(_count, 0), do: 0
   defp percentage(count, total_count), do: round(count * 100 / total_count)
+
+  defp delivery_problem_reason("delivery problem", reason) when is_binary(reason) do
+    case String.trim(reason) do
+      "" -> nil
+      reason -> reason
+    end
+  end
+
+  defp delivery_problem_reason(_status, _reason), do: nil
 end

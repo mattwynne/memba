@@ -176,6 +176,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
                   data-recipient-id={receipt.recipient_id}
                   data-recipient-name={receipt.recipient_name}
                   data-receipt-status={receipt.status}
+                  data-recipient-reason={receipt.reason}
                   class="recipient"
                 >
                   <span class="recipient__id">
@@ -184,7 +185,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
                     </span>
                     <span class="recipient__name">{receipt.recipient_name}</span>
                   </span>
-                  <span class="recipient__reason">{delivery_status_label(receipt)}</span>
+                  <span class="recipient__reason">{recipient_delivery_reason(receipt)}</span>
                 </div>
               </div>
             </details>
@@ -248,6 +249,12 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
 
   defp delivery_status_description(%{description: description}), do: description
   defp delivery_status_description(_status), do: "Delivery status for this message"
+
+  defp recipient_delivery_reason(%{status: "delivery problem", reason: reason})
+       when is_binary(reason) and reason != "",
+       do: reason
+
+  defp recipient_delivery_reason(receipt), do: delivery_status_label(receipt)
 
   defp delivery_status_class("delivered"), do: "deliv-ok"
   defp delivery_status_class("sent"), do: "deliv-snd"

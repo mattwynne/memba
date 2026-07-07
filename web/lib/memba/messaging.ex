@@ -597,9 +597,13 @@ defmodule Memba.Messaging do
   """
   def list_member_email_deliverys(message_id) do
     with {:ok, message_id} <- ID.cast(:message, message_id) do
-      MemberEmailDeliveryProjection
-      |> where([receipt], receipt.message_id == ^message_id)
-      |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
+      from(receipt in MemberEmailDeliveryProjection,
+        left_join: deliverability in MembaStaffEmailDeliveryProjection,
+        on: deliverability.delivery_id == receipt.delivery_id,
+        where: receipt.message_id == ^message_id,
+        order_by: [asc: receipt.recipient_name, asc: receipt.recipient_id],
+        select_merge: %{reason: deliverability.reason}
+      )
       |> Repo.all()
       |> Enum.map(&normalize_member_email_delivery/1)
     else

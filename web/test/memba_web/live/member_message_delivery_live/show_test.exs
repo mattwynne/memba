@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -53,7 +54,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
       message_id: message.message_id,
       recipient_id: carol.person_id,
       recipient_name: "Carol Clark",
-      status: "bounced"
+      status: "bounced",
+      reason: "Address does not exist"
     )
 
     {:ok, view, _html} =
@@ -161,6 +163,14 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
                "[data-receipt-status='delivery problem']",
              "Carol Clark"
            )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-delivery-receipt']" <>
+               "[data-recipient-id='#{carol.person_id}']" <>
+               " .recipient__reason",
+             "Address does not exist"
+           )
   end
 
   test "routed delivery page rejects messages outside the selected active club", %{conn: conn} do
@@ -246,13 +256,37 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   end
 
   defp create_member_email_delivery(attrs) do
-    Repo.insert!(%MemberEmailDelivery{
-      delivery_id: Memba.ID.generate(:delivery),
-      message_id: Keyword.fetch!(attrs, :message_id),
-      recipient_id: Keyword.fetch!(attrs, :recipient_id),
-      recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      status: Keyword.fetch!(attrs, :status)
-    })
+    delivery_id = Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end)
+
+    delivery =
+      Repo.insert!(%MemberEmailDelivery{
+        delivery_id: delivery_id,
+        message_id: Keyword.fetch!(attrs, :message_id),
+        recipient_id: Keyword.fetch!(attrs, :recipient_id),
+        recipient_name: Keyword.fetch!(attrs, :recipient_name),
+        status: Keyword.fetch!(attrs, :status)
+      })
+
+    maybe_create_staff_email_delivery(delivery, attrs)
+
+    delivery
+  end
+
+  defp maybe_create_staff_email_delivery(%MemberEmailDelivery{} = delivery, attrs) do
+    reason = Keyword.get(attrs, :reason)
+
+    if is_binary(reason) and reason != "" do
+      Repo.insert!(%MembaStaffEmailDelivery{
+        delivery_id: delivery.delivery_id,
+        message_id: delivery.message_id,
+        recipient_id: delivery.recipient_id,
+        recipient_name: delivery.recipient_name,
+        recipient_address: Keyword.get(attrs, :recipient_address, "carol@example.com"),
+        channel: "email",
+        status: Keyword.fetch!(attrs, :status),
+        reason: reason
+      })
+    end
   end
 
   defp format_message_time(%DateTime{} = inserted_at) do
