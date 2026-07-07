@@ -2,7 +2,7 @@
 
 - [x] 001 Add a private `format_message_time/1` helper (near `conversation_entry_card` in `web/lib/memba_web/controllers/page_html.ex`) that formats a `%DateTime{}` like the design ("3 Jun, 7:02am").
 - [x] 002 In `conversation_entry_card` (`page_html.ex`), render `@entry.message.inserted_at` via that helper in the card head, beside the sender name — a timestamp on the original and every reply.
-- [ ] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+- [x] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
 - [ ] 004 In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so the follow control sits compactly beside the title.
 - [ ] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
 - [ ] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
