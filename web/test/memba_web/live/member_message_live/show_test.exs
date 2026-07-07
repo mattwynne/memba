@@ -126,7 +126,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         club_id: alice.club_id,
         sender_id: alice.person_id,
         subject: "Trip planning night",
-        body: "Bring your maps."
+        body: "Bring your maps.",
+        inserted_at: ~U[2026-06-03 07:02:00.000000Z]
       )
 
     first_reply =
@@ -136,7 +137,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I'll bring snacks."
+        body: "I'll bring snacks.",
+        inserted_at: ~U[2026-06-03 08:15:00.000000Z]
       )
 
     second_reply =
@@ -146,7 +148,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         conversation_id: message.message_id,
         reply_to_message_id: message.message_id,
         subject: "Trip planning night",
-        body: "I can drive."
+        body: "I can drive.",
+        inserted_at: ~U[2026-06-03 09:30:00.000000Z]
       )
 
     {:ok, view, _html} =
@@ -167,6 +170,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
+             "#member-conversation-entry-#{message.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T07:02:00.000000Z']",
+             "3 Jun, 7:02am"
+           )
+
+    assert has_element?(
+             view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{first_reply.message_id}" <>
                "[data-conversation-kind='reply']" <>
@@ -176,11 +187,27 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
+             "#member-conversation-entry-#{first_reply.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T08:15:00.000000Z']",
+             "3 Jun, 8:15am"
+           )
+
+    assert has_element?(
+             view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{second_reply.message_id}" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{carol.person_id}']",
              "I can drive."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{second_reply.message_id} " <>
+               "[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T09:30:00.000000Z']",
+             "3 Jun, 9:30am"
            )
 
     assert has_element?(
@@ -699,7 +726,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       conversation_id: Keyword.get(attrs, :conversation_id, message_id),
       reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body")
+      body: Keyword.get(attrs, :body, "Message body"),
+      inserted_at: Keyword.get(attrs, :inserted_at),
+      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
     })
   end
 

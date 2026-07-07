@@ -15,8 +15,6 @@ defmodule MembaWeb.PageHTML do
   attr :entry, :map, required: true
 
   defp conversation_entry_card(assigns) do
-    _format_message_time = &format_message_time/1
-
     ~H"""
     <article
       id={"member-conversation-entry-#{@entry.message.message_id}"}
@@ -44,7 +42,16 @@ defmodule MembaWeb.PageHTML do
         </span>
         <div class="min-w-0 flex-1">
           <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p class="font-semibold text-base-content">{@entry.sender_name}</p>
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <p class="font-semibold text-base-content">{@entry.sender_name}</p>
+              <time
+                data-testid="member-conversation-entry-time"
+                datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
+                class="text-sm font-medium text-ink-2"
+              >
+                {format_message_time(@entry.message.inserted_at)}
+              </time>
+            </div>
             <span
               data-testid="member-conversation-entry-label"
               class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
