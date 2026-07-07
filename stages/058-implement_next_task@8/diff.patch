@@ -1,0 +1,68 @@
+diff --git a/docs/iterations/046-conversation-page-alignment/todo.md b/docs/iterations/046-conversation-page-alignment/todo.md
+index 545c20e..b841e02 100644
+--- a/docs/iterations/046-conversation-page-alignment/todo.md
++++ b/docs/iterations/046-conversation-page-alignment/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
+ - [x] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
+ - [x] 007 Preserve the non-member state: when `!@can_follow_conversation`, show the existing "Only current club members can follow…" explanation instead of an interactive toggle.
+-- [ ] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
++- [x] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
+ - [ ] 009 Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card` so they match the design (`message` / `message--original`).
+ - [ ] 010 Update `MemberMessageDetailLive` tests: follow toggle reflects and changes following state via the existing events; the composer renders after the replies; original + replies show a timestamp.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare the conversation screenshot to `design-system/wireframes/member-conversation.html`.
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index f69748e..b62edbf 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -103,6 +103,10 @@
+         <.conversation_entry_card :for={entry <- original_entries} entry={entry} />
+       </div>
+ 
++      <div id="member-conversation-replies" class="space-y-4">
++        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
++      </div>
++
+       <section
+         id="member-message-reply-composer"
+         class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
+@@ -180,10 +184,6 @@
+           </div>
+         </.form>
+       </section>
+-
+-      <div id="member-conversation-replies" class="space-y-4">
+-        <.conversation_entry_card :for={entry <- reply_entries} entry={entry} />
+-      </div>
+     </section>
+ 
+     <section id="member-receipt-summary" class="mt-8">
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 027ff1a..7bb7f4f 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -314,6 +314,24 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "3 Jun, 9:30am"
+            )
+ 
++    html =
++      view
++      |> render()
++      |> LazyHTML.from_fragment()
++
++    conversation_child_ids =
++      html
++      |> LazyHTML.query("#member-conversation > *")
++      |> LazyHTML.attribute("id")
++
++    replies_index =
++      Enum.find_index(conversation_child_ids, &(&1 == "member-conversation-replies"))
++
++    composer_index =
++      Enum.find_index(conversation_child_ids, &(&1 == "member-message-reply-composer"))
++
++    assert replies_index < composer_index
++
+     assert has_element?(
+              view,
+              "#member-message-reply-from[data-sender-id='#{bob.person_id}']",
