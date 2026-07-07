@@ -92,7 +92,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
            )
   end
 
-  test "current member sees a compact follow toggle reflecting follow state", %{conn: conn} do
+  test "current member changes follow state with the compact follow toggle", %{conn: conn} do
     club_id = Memba.ID.generate(:club)
     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
@@ -124,27 +124,20 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "Not following"
            )
 
-    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
+           )
+
     refute has_element?(view, "#member-conversation-follow-toggle[checked]")
     refute has_element?(view, "#member-conversation-follow-button")
     refute has_element?(view, "#member-conversation-unfollow-button")
 
-    assert :ok =
-             Messaging.follow_conversation_as_current_member(
-               %{
-                 club_id: club_id,
-                 conversation_id: message.message_id,
-                 member_id: bob.person_id
-               },
-               consistency: :strong
-             )
+    view
+    |> element("#member-conversation-follow-toggle")
+    |> render_change()
 
     assert Messaging.following_conversation?(message.message_id, bob.person_id)
-
-    {:ok, view, _html} =
-      conn
-      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
-      |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(
              view,
@@ -153,7 +146,30 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
              "Following"
            )
 
-    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox'][checked]")
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][checked][phx-change='unfollow_conversation']"
+           )
+
+    view
+    |> element("#member-conversation-follow-toggle")
+    |> render_change()
+
+    refute Messaging.following_conversation?(message.message_id, bob.person_id)
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='false'][data-can-follow='true']",
+             "Not following"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
+           )
+
+    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
     refute has_element?(view, "#member-conversation-follow-button")
     refute has_element?(view, "#member-conversation-unfollow-button")
   end
