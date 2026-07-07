@@ -198,6 +198,89 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
     assert html_response(conn, 404) =~ "Not Found"
   end
 
+  test "routed delivery page forbids signed-in users outside the requested club", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    _pat =
+      create_active_member(
+        email: "pat@example.com",
+        name: "Pat Paddler",
+        club_name: "Paddling Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Private alpine delivery",
+        body: "This delivery detail belongs to Alpine Club."
+      )
+
+    create_member_email_delivery(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      status: "delivery problem",
+      reason: "Mailbox does not exist"
+    )
+
+    conn =
+      conn
+      |> signed_in_club_host("pat@example.com", alice)
+      |> get(~p"/messages/#{message.message_id}/delivery")
+
+    assert response(conn, 403) == "Forbidden"
+    refute conn.resp_body =~ "Private alpine delivery"
+    refute conn.resp_body =~ "This delivery detail belongs to Alpine Club."
+    refute conn.resp_body =~ "Bob Builder"
+    refute conn.resp_body =~ "Mailbox does not exist"
+  end
+
+  test "routed delivery page redirects unauthenticated visitors and preserves return path", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Members only delivery"
+      )
+
+    return_path = ~p"/messages/#{message.message_id}/delivery"
+
+    conn =
+      conn
+      |> club_host(alice)
+      |> get(return_path)
+
+    %{host: club_host} = URI.parse(ClubSite.url(alice))
+
+    assert redirected_to(conn) == ~p"/auth"
+
+    assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+             "http://#{club_host}#{return_path}"
+  end
+
   test "routed delivery page links back to the containing conversation", %{conn: conn} do
     alice =
       create_active_member(
