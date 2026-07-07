@@ -1,0 +1,106 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index 4ff59cf..73c371f 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -9,6 +9,6 @@
+ - [x] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+ - [x] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
+ - [x] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
+-- [ ] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
++- [x] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare the delivery page to `delivery-details.html` and the conversation to `member-conversation.html`.
+ - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index f3a769e..4c42ea9 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -198,6 +198,89 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+     assert html_response(conn, 404) =~ "Not Found"
+   end
+ 
++  test "routed delivery page forbids signed-in users outside the requested club", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    _pat =
++      create_active_member(
++        email: "pat@example.com",
++        name: "Pat Paddler",
++        club_name: "Paddling Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Private alpine delivery",
++        body: "This delivery detail belongs to Alpine Club."
++      )
++
++    create_member_email_delivery(
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      status: "delivery problem",
++      reason: "Mailbox does not exist"
++    )
++
++    conn =
++      conn
++      |> signed_in_club_host("pat@example.com", alice)
++      |> get(~p"/messages/#{message.message_id}/delivery")
++
++    assert response(conn, 403) == "Forbidden"
++    refute conn.resp_body =~ "Private alpine delivery"
++    refute conn.resp_body =~ "This delivery detail belongs to Alpine Club."
++    refute conn.resp_body =~ "Bob Builder"
++    refute conn.resp_body =~ "Mailbox does not exist"
++  end
++
++  test "routed delivery page redirects unauthenticated visitors and preserves return path", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Members only delivery"
++      )
++
++    return_path = ~p"/messages/#{message.message_id}/delivery"
++
++    conn =
++      conn
++      |> club_host(alice)
++      |> get(return_path)
++
++    %{host: club_host} = URI.parse(ClubSite.url(alice))
++
++    assert redirected_to(conn) == ~p"/auth"
++
++    assert get_session(conn, IdentityAuth.return_to_session_key()) ==
++             "http://#{club_host}#{return_path}"
++  end
++
+   test "routed delivery page links back to the containing conversation", %{conn: conn} do
+     alice =
+       create_active_member(
