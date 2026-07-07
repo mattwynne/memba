@@ -1,0 +1,65 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index fae206f..4ff59cf 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+ - [x] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+ - [x] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
+-- [ ] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
++- [x] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
+ - [ ] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare the delivery page to `delivery-details.html` and the conversation to `member-conversation.html`.
+ - [ ] 012 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 928da6c..83d1ad3 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -84,11 +84,6 @@
+       </div>
+       <p id="member-message-meta" class="mt-4 text-sm leading-6 text-ink-2">
+         From <span class="font-semibold text-base-content">{@sender_name}</span>
+-        · sent to
+-        <span class="font-semibold text-base-content">
+-          {@member_email_delivery_count}
+-        </span>
+-        member{if(@member_email_delivery_count == 1, do: "", else: "s")}
+       </p>
+     </section>
+ 
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 9d7e929..e1a33a5 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -160,6 +160,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
+              |> LazyHTML.query("[data-testid='member-receipt-group']")
+              |> Enum.any?()
+ 
++      refute response =~ ~r/sent to[\s\S]*3[\s\S]*members/
+       refute response =~ "Members by delivery status"
+     end
+ 
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index c7eee4d..b6e58a3 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -580,6 +580,7 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("[data-testid='member-receipt-group']")
+            |> Enum.any?()
+ 
++    refute response =~ ~r/sent to[\s\S]*2[\s\S]*members/
+     refute response =~ "Members by delivery status"
+ 
+     refute response =~ alice_receipt.delivery_id
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index fe0d909..a8c17cd 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -621,6 +621,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, "[data-testid='member-receipt-summary-status']")
+     refute has_element?(view, "[data-testid='member-receipt-summary-bar-segment']")
+     refute has_element?(view, "[data-testid='member-receipt-group']")
++    refute render(view) =~ ~r/sent to[\s\S]*3[\s\S]*members/
+     refute render(view) =~ "Members by delivery status"
+   end
+ 
