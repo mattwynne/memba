@@ -267,6 +267,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "#member-conversation-original " <>
                "#member-conversation-entry-#{message.message_id}" <>
+               ".message.message--original" <>
                "[data-conversation-kind='original']" <>
                "[data-sender-id='#{alice.person_id}']",
              "Bring your maps."
@@ -284,9 +285,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{first_reply.message_id}" <>
+               ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{bob.person_id}']",
              "I'll bring snacks."
+           )
+
+    refute has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{first_reply.message_id}.message--original"
            )
 
     assert has_element?(
@@ -301,9 +309,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "#member-conversation-replies " <>
                "#member-conversation-entry-#{second_reply.message_id}" <>
+               ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{carol.person_id}']",
              "I can drive."
+           )
+
+    refute has_element?(
+             view,
+             "#member-conversation-replies " <>
+               "#member-conversation-entry-#{second_reply.message_id}.message--original"
            )
 
     assert has_element?(
