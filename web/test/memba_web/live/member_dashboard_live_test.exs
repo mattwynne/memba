@@ -619,6 +619,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-members #member-invite-member-link")
   end
 
+  test "dashboard preserves the members empty state and invite actions for first-member admins",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members")
+
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #club-members " <>
+               "#member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members " <>
+               "#active-members-list.member-list[data-active-member-count='1']" <>
+               "[data-active-members-state='first-member'] #active-members-empty-state",
+             "You’re the first member listed"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{robin.person_id}.member-row[data-testid='club-member-row'] " <>
+               ".member-row__name",
+             "Robin Rivers"
+           )
+  end
+
   test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
        %{conn: conn} do
     _alice =
