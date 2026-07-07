@@ -69,11 +69,37 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
                "[data-receipt-count='2']"
            )
 
-    assert has_element?(view, "#member-delivery-message-subject", "Trip planning night")
+    assert has_element?(
+             view,
+             "#member-delivery-message-subject",
+             "Delivery — “Trip planning night”"
+           )
+
+    assert has_element?(view, "#member-delivery-message-meta", "Sent by Alice Adams")
 
     assert has_element?(
              view,
-             "[data-testid='member-delivery-summary-status']" <>
+             "#member-delivery-message-sent-at[datetime='#{DateTime.to_iso8601(message.inserted_at)}']",
+             format_message_time(message.inserted_at)
+           )
+
+    assert has_element?(view, "#member-delivery-message-meta", "to 2 members")
+
+    assert has_element?(view, "#member-delivery-summary.delivery-summary")
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-bar.delivery-bar " <>
+               "[data-testid='member-delivery-summary-bar-segment']" <>
+               "[data-receipt-status='delivered']" <>
+               "[data-receipt-count='1']" <>
+               "[data-receipt-percentage='50']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-legend.delivery-legend " <>
+               "[data-testid='member-delivery-summary-status']" <>
                "[data-receipt-status='delivered']" <>
                "[data-receipt-count='1']" <>
                "[data-receipt-percentage='50']",
@@ -82,12 +108,41 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
 
     assert has_element?(
              view,
-             "[data-testid='member-delivery-summary-status']" <>
+             "#member-delivery-summary-legend.delivery-legend " <>
+               "[data-testid='member-delivery-summary-status']" <>
+               "[data-receipt-status='sent']" <>
+               "[data-receipt-count='0']" <>
+               "[data-receipt-percentage='0']",
+             "Sending"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-summary-legend.delivery-legend " <>
+               "[data-testid='member-delivery-summary-status']" <>
                "[data-receipt-status='delivery problem']" <>
                "[data-receipt-count='1']" <>
                "[data-receipt-percentage='50']",
-             "Delivery problem"
+             "Didn't go through"
            )
+
+    assert has_element?(
+             view,
+             "#member-delivery-group-delivery-problem.delivery-group[open]" <>
+               "[data-receipt-status='delivery problem']" <>
+               "[data-receipt-count='1']",
+             "Didn't go through"
+           )
+
+    assert has_element?(
+             view,
+             "#member-delivery-group-delivered.delivery-group" <>
+               "[data-receipt-status='delivered']" <>
+               "[data-receipt-count='1']",
+             "Delivered"
+           )
+
+    refute has_element?(view, "#member-delivery-group-delivered[open]")
 
     assert has_element?(
              view,
@@ -198,5 +253,9 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
     })
+  end
+
+  defp format_message_time(%DateTime{} = inserted_at) do
+    Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
   end
 end
