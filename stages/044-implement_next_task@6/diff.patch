@@ -1,0 +1,120 @@
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index 6810a52..ec046ed 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Build the delivery page template per `delivery-details.html`: header (subject / sender / `inserted_at`), summary bar + legend, grouped recipients (problems expanded, delivered collapsed).
+ - [x] 004 Show each recipient's bounce reason for the "didn't go through" group, from the existing receipt presentation fields; keep the delivered group collapsed with a count.
+ - [x] 005 Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+-- [ ] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
++- [x] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+ - [ ] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+ - [ ] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
+ - [ ] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
+diff --git a/web/lib/memba_web/live/member_message_delivery_live/show.ex b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+index 2dc93ae..ec9a0d3 100644
+--- a/web/lib/memba_web/live/member_message_delivery_live/show.ex
++++ b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+   """
+   use MembaWeb, :live_view
+ 
++  alias MembaWeb.ClubSite
+   alias MembaWeb.MemberMessageDetail
+ 
+   @impl Phoenix.LiveView
+@@ -61,9 +62,23 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+         data-receipt-count={@member_email_delivery_count}
+         class="mx-auto max-w-3xl"
+       >
++        <.link
++          id="member-delivery-back-to-conversation-link"
++          href={
++            member_message_path(
++              conversation_message_id(@message),
++              @selected_club,
++              Map.get(@route_params, "club_id_source")
++            )
++          }
++          class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
++        >
++          <.icon name="hero-arrow-left" class="size-4" /> Back to conversation
++        </.link>
++
+         <h1
+           id="member-delivery-message-subject"
+-          class="delivery-title"
++          class="delivery-title mt-5"
+         >
+           Delivery — “{@message.subject}”
+         </h1>
+@@ -266,6 +281,17 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+   defp delivery_status_tint_class("delivery problem"), do: "deliv-tint-bad"
+   defp delivery_status_tint_class(_status), do: "deliv-tint-unknown"
+ 
++  defp conversation_message_id(%{conversation_id: conversation_id})
++       when is_binary(conversation_id) and conversation_id != "",
++       do: conversation_id
++
++  defp conversation_message_id(%{message_id: message_id}), do: message_id
++
++  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
++
++  defp member_message_path(message_id, selected_club, _source),
++    do: ClubSite.url(selected_club, "/messages/#{message_id}")
++
+   defp recipient_initials(name) when is_binary(name) do
+     name
+     |> String.split(~r/\s+/, trim: true)
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index e044a0c..f3a769e 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -198,6 +198,47 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+     assert html_response(conn, 404) =~ "Not Found"
+   end
+ 
++  test "routed delivery page links back to the containing conversation", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        conversation_id: conversation.message_id,
++        reply_to_message_id: conversation.message_id,
++        subject: "Re: Trip planning night"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/#{reply.message_id}/delivery")
++
++    assert has_element?(
++             view,
++             "a#member-delivery-back-to-conversation-link[href='/messages/#{conversation.message_id}']",
++             "Back to conversation"
++           )
++
++    refute has_element?(
++             view,
++             "a#member-delivery-back-to-conversation-link[href='/messages/#{reply.message_id}']"
++           )
++  end
++
+   defp signed_in_club_host(conn, email, club) do
+     conn
+     |> club_host(club)
