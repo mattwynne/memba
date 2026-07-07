@@ -103,7 +103,8 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                status: "delivered",
                status_label: "Delivered",
                status_icon: "hero-check-circle",
-               status_tone: "success"
+               status_tone: "success",
+               reason: nil
              }
     end
   end
