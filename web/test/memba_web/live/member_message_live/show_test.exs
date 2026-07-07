@@ -127,8 +127,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "#member-message-heading-row.detail-head > " <>
-               "#member-conversation-follow-control[data-following='false'][data-can-follow='true']"
+               "#member-conversation-follow-control.follow-toggle" <>
+               "[data-following='false'][data-can-follow='true']",
+             "Not following"
            )
+
+    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
+    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+    refute has_element?(view, "#member-conversation-follow-button")
+    refute has_element?(view, "#member-conversation-unfollow-button")
   end
 
   test "routed message detail renders the conversation and inline reply composer", %{

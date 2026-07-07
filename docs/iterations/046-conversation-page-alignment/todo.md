@@ -4,7 +4,7 @@
 - [x] 002 In `conversation_entry_card` (`page_html.ex`), render `@entry.message.inserted_at` via that helper in the card head, beside the sender name — a timestamp on the original and every reply.
 - [x] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
 - [x] 004 In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so the follow control sits compactly beside the title.
-- [ ] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
+- [x] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
 - [ ] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
 - [ ] 007 Preserve the non-member state: when `!@can_follow_conversation`, show the existing "Only current club members can follow…" explanation instead of an interactive toggle.
 - [ ] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
