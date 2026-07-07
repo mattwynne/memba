@@ -15,6 +15,8 @@ defmodule MembaWeb.PageHTML do
   attr :entry, :map, required: true
 
   defp conversation_entry_card(assigns) do
+    _format_message_time = &format_message_time/1
+
     ~H"""
     <article
       id={"member-conversation-entry-#{@entry.message.message_id}"}
@@ -60,6 +62,10 @@ defmodule MembaWeb.PageHTML do
       </div>
     </article>
     """
+  end
+
+  defp format_message_time(%DateTime{} = inserted_at) do
+    Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
   end
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
