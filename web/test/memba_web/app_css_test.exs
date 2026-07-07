@@ -20,6 +20,24 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ "display: none;"
   end
 
+  test "app css includes the club-home member list and row rules" do
+    css = File.read!(@app_css_path)
+
+    assert css =~ ".member-list {"
+    assert css =~ ".member-row {"
+    assert css =~ ".member-row__avatar {"
+    assert css =~ ".member-row__body {"
+    assert css =~ ".member-row__name {"
+    assert css =~ ".member-row__meta {"
+    assert css =~ ".member-row__role {"
+
+    assert css =~ "flex-direction: column;"
+    assert css =~ "border: 1px solid var(--color-line);"
+    assert css =~ "background: var(--color-paper);"
+    assert css =~ "color: var(--color-ink-3);"
+    assert css =~ "text-overflow: ellipsis;"
+  end
+
   test "app css includes the conversation detail head and follow toggle rules" do
     css = File.read!(@app_css_path)
 
