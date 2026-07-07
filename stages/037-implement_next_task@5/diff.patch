@@ -1,0 +1,139 @@
+diff --git a/docs/iterations/048-named-member-rows/todo.md b/docs/iterations/048-named-member-rows/todo.md
+index e219413..223f40f 100644
+--- a/docs/iterations/048-named-member-rows/todo.md
++++ b/docs/iterations/048-named-member-rows/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Render each of `@members` as a `member-row`: avatar initials + the member's name.
+ - [x] 003 Add a meta line per row and mark the **current member** with a "You" indicator.
+ - [x] 004 Preserve the existing members **empty state** and the **Invite member** action from 045.
+-- [ ] 005 Port the `member-list` and `member-row` CSS (and its children) from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1 with the mirror.
++- [x] 005 Port the `member-list` and `member-row` CSS (and its children) from `design-system/` (`memba.css` / `styles.css`) into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [ ] 006 Update the LiveView/controller test: members render as named rows; the current member's row is marked "You"; the Invite action and empty state still behave as before.
+ - [ ] 007 Run `./bin/dev gallery-walk` and compare the Members tab to `club-home.html` (named rows).
+ - [ ] 008 Run `dev check` and confirm it is green (no feature-file changes).
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index bbbbf27..73dd3e5 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -423,6 +423,92 @@ h1, h2, h3, h4 {
+   display: none;
+ }
+ 
++/* ============================================================
++   Club-home member list.
++
++   Ported from the design-system club-home Members panel so the
++   Phoenix app uses the same member-list / member-row vocabulary
++   as the static wireframe.
++   ============================================================ */
++.member-list {
++  display: flex;
++  flex-direction: column;
++  gap: 9px;
++}
++
++.member-row {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 14px;
++  border: 1px solid var(--color-line);
++  border-radius: 14px;
++  background: var(--color-paper);
++  color: inherit;
++  text-decoration: none;
++  box-shadow: 0 1px 2px rgb(21 32 28 / 0.05);
++  transition:
++    border-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    box-shadow 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    transform 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.member-row:hover {
++  border-color: var(--color-sage-200);
++  box-shadow: 0 2px 8px rgb(21 32 28 / 0.08);
++  transform: translateY(-1px);
++}
++
++.member-row:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.member-row__avatar {
++  width: 38px;
++  height: 38px;
++  border-radius: 999px;
++  background: var(--color-sage-200);
++  color: var(--color-sage-800);
++  display: grid;
++  place-items: center;
++  flex: none;
++  font-size: 12px;
++  font-weight: 700;
++  letter-spacing: 0.02em;
++  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.42);
++}
++
++.member-row__body {
++  min-width: 0;
++  flex: 1 1 auto;
++}
++
++.member-row__name {
++  color: var(--color-ink);
++  font-size: 14px;
++  font-weight: 600;
++  letter-spacing: -0.01em;
++  line-height: 1.25;
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++
++.member-row__meta {
++  color: var(--color-ink-3);
++  font-size: 12.5px;
++  font-weight: 500;
++  line-height: 1.35;
++  margin-top: 2px;
++}
++
++.member-row__role {
++  flex: none;
++  margin-left: auto;
++  white-space: nowrap;
++}
++
+ /* ============================================================
+    Conversation detail head and follow toggle.
+ 
+diff --git a/web/test/memba_web/app_css_test.exs b/web/test/memba_web/app_css_test.exs
+index 9dd9f34..2449320 100644
+--- a/web/test/memba_web/app_css_test.exs
++++ b/web/test/memba_web/app_css_test.exs
+@@ -20,6 +20,24 @@ defmodule MembaWeb.AppCssTest do
+     assert css =~ "display: none;"
+   end
+ 
++  test "app css includes the club-home member list and row rules" do
++    css = File.read!(@app_css_path)
++
++    assert css =~ ".member-list {"
++    assert css =~ ".member-row {"
++    assert css =~ ".member-row__avatar {"
++    assert css =~ ".member-row__body {"
++    assert css =~ ".member-row__name {"
++    assert css =~ ".member-row__meta {"
++    assert css =~ ".member-row__role {"
++
++    assert css =~ "flex-direction: column;"
++    assert css =~ "border: 1px solid var(--color-line);"
++    assert css =~ "background: var(--color-paper);"
++    assert css =~ "color: var(--color-ink-3);"
++    assert css =~ "text-overflow: ellipsis;"
++  end
++
+   test "app css includes the conversation detail head and follow toggle rules" do
+     css = File.read!(@app_css_path)
+ 
