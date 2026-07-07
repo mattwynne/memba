@@ -290,8 +290,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-panel-members #active-members-card[data-active-member-count='2'][data-active-members-state='active-members']"
+             "#member-section-panel-members " <>
+               "#active-members-list.member-list[data-active-member-count='2'][data-active-members-state='active-members']"
            )
+
+    refute has_element?(view, "#member-section-panel-members #active-members-card")
 
     assert has_element?(
              view,
@@ -454,8 +457,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-message-#{message.message_id} [data-testid='message-receipt-segment']"
            )
 
-    assert has_element?(view, "#active-members-card[data-active-member-count='2']")
-    assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
+    assert has_element?(view, "#active-members-list.member-list[data-active-member-count='2']")
+    assert has_element?(view, "#active-members-list[data-active-members-state='active-members']")
     refute has_element?(view, "#active-members-empty-state", "You’re the first member listed")
 
     assert has_element?(
@@ -488,7 +491,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
-    assert has_element?(view, "#active-members-card[data-active-member-count='8']")
+    assert has_element?(view, "#active-members-list.member-list[data-active-member-count='8']")
 
     assert has_element?(
              view,
@@ -939,7 +942,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-card[data-active-member-count='1'][data-active-members-state='first-member']"
+             "#active-members-list.member-list[data-active-member-count='1'][data-active-members-state='first-member']"
            )
 
     assert has_element?(view, "#active-members-empty-state", "You’re the first member listed")
@@ -988,7 +991,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-card[data-active-member-count='7'][data-active-members-state='active-members']"
+             "#active-members-list.member-list[data-active-member-count='7'][data-active-members-state='active-members']"
            )
 
     assert has_element?(
