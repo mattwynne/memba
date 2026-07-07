@@ -314,6 +314,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{alice.person_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
                "#club-member-#{bob.person_id}.member-row[data-testid='club-member-row'][data-member-name='Bob Builder'] " <>
                ".member-row__avatar",
              "BB"
@@ -324,6 +332,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-section-panel-members #active-members-list " <>
                "#club-member-#{bob.person_id}.member-row .member-row__name",
              "Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row[data-current-member='false'] " <>
+               ".member-row__meta"
+           )
+
+    refute has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']"
            )
   end
 

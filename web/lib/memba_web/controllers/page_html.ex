@@ -129,6 +129,12 @@ defmodule MembaWeb.PageHTML do
     active_member_section?(active_section, section) |> to_string()
   end
 
+  defp current_dashboard_member?(%{id: member_id}, %{id: current_member_id}) do
+    member_id == current_member_id
+  end
+
+  defp current_dashboard_member?(_member, _current_member), do: false
+
   defp split_conversation_entries(entries) when is_list(entries) do
     Enum.split_with(entries, &(&1.kind == :original))
   end
