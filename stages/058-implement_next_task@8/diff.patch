@@ -1,0 +1,1189 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index b7390d1..0137991 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -254,6 +254,11 @@ function memberMessageUrl(world, message) {
+   return clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}`);
+ }
+ 
++function memberMessageDeliveryUrl(world, message) {
++  const club = clubById(world, message.clubId) || { slug: message.clubSlug || "kootenay-mountaineering-club" };
++  return clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}/delivery`);
++}
++
+ async function rowAttributeValues(rows, attributeName) {
+   return rows.evaluateAll(
+     (elements, attr) =>
+@@ -583,6 +588,26 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
+   );
+ }
+ 
++async function openMemberMessageDelivery(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++  assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
++
++  await gotoUnlessCurrent(
++    world,
++    memberMessageDeliveryUrl(world, message),
++    `visit member message delivery page for ${JSON.stringify(subject)}`
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.locator(`#member-message-delivery-detail[data-message-id=${cssString(message.messageId)}]`),
++    `member message delivery detail for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++}
++
+ async function postMemberReply(
+   world,
+   replierName,
+@@ -1867,11 +1892,10 @@ async function assertMemberMessageAddressedTo(
+   subject = world.lastMessageSubject,
+   { expect = playwrightExpect } = {}
+ ) {
+-  await openMemberMessage(world, subject, { expect });
+-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
++  await openMemberMessageDelivery(world, subject, { expect });
+ 
+-  const rows = allRows(world.page, "member-receipts", "member-receipt");
+-  await waitForExpandedMemberEmailDeliveryCount(
++  const rows = allRows(world.page, "member-delivery-receipt-groups", "member-delivery-receipt");
++  await waitForProjectedCount(
+     world,
+     rows,
+     expectedNames.length,
+@@ -1900,10 +1924,9 @@ async function assertMemberMessageNotAddressedTo(
+   subject = world.lastMessageSubject,
+   { expect = playwrightExpect } = {}
+ ) {
+-  await openMemberMessage(world, subject, { expect });
+-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
++  await openMemberMessageDelivery(world, subject, { expect });
+ 
+-  const rows = allRows(world.page, "member-receipts", "member-receipt");
++  const rows = allRows(world.page, "member-delivery-receipt-groups", "member-delivery-receipt");
+   const actualNames = await rowDatasetValues(rows, "recipientName");
+   assertFinalBrowserState(`member-facing recipients should not include ${excludedName}`, () =>
+     assert.ok(
+@@ -2300,8 +2323,7 @@ async function assertEveryAddressedMemberEmailDeliveryStatus(
+     "Expected addressed members to be asserted before checking every member email delivery status"
+   );
+ 
+-  await openMemberMessage(world, subject, { expect });
+-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
++  await openMemberMessageDelivery(world, subject, { expect });
+ 
+   for (const recipientName of addressedMemberNames) {
+     await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+@@ -2317,8 +2339,7 @@ async function assertMemberEmailDeliveryStatus(
+   expectedLabel,
+   { expect = playwrightExpect } = {}
+ ) {
+-  await openMemberMessage(world, subject, { expect });
+-  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
++  await openMemberMessageDelivery(world, subject, { expect });
+   await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+ 
+   return world;
+@@ -2331,33 +2352,20 @@ async function assertMemberEmailDeliveryStatusOnCurrentPage(
+   expectedLabel,
+   { expect = playwrightExpect } = {}
+ ) {
+-  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
+-  await waitForProjectedVisible(
++  const row = rowByData(world.page, "member-delivery-receipt", "data-recipient-name", recipientName);
++  await waitForProjectedCount(
+     world,
+     row,
++    1,
+     `${recipientName}'s member-facing email delivery row for ${JSON.stringify(subject)}`,
+     { expect }
+   );
+-  await waitForProjectedText(
+-    world,
+-    row.locator("[data-testid=\"receipt-status\"]"),
+-    expectedLabel,
+-    `${recipientName}'s member-facing status label for ${JSON.stringify(subject)}`,
+-    { expect }
+-  );
+ 
+-  const expectedIcon = memberReceiptIconForLabel(expectedLabel);
+-  const icon = row.locator("[data-testid=\"receipt-status-icon\"]");
+-  await waitForProjectedVisible(
+-    world,
+-    icon,
+-    `${recipientName}'s member-facing status icon for ${JSON.stringify(subject)}`,
+-    { expect }
+-  );
++  const expectedStatus = memberReceiptStatusForLabel(expectedLabel);
++  const actualStatus = await row.getAttribute("data-receipt-status");
+ 
+-  const actualIcon = await icon.getAttribute("data-icon-name");
+-  assertFinalBrowserState(`${recipientName}'s member-facing email delivery icon for ${JSON.stringify(subject)}`, () =>
+-    assert.equal(actualIcon, expectedIcon)
++  assertFinalBrowserState(`${recipientName}'s member-facing email delivery status for ${JSON.stringify(subject)}`, () =>
++    assert.equal(actualStatus, expectedStatus)
+   );
+ 
+   return world;
+@@ -2501,6 +2509,22 @@ function memberReceiptIconForLabel(label) {
+   }
+ }
+ 
++function memberReceiptStatusForLabel(label) {
++  switch (label) {
++    case "Sending":
++      return "sent";
++
++    case "Delivered":
++      return "delivered";
++
++    case "Delivery problem":
++      return "delivery problem";
++
++    default:
++      throw new Error(`Unsupported member-facing email delivery label: ${label}`);
++  }
++}
++
+ async function waitForProjectedReceiptStatus(
+   world,
+   recipientName,
+@@ -3372,11 +3396,13 @@ module.exports = {
+   kootenayClubName,
+   makeClubMessageSendingUnavailable,
+   memberReceiptIconForLabel,
++  memberReceiptStatusForLabel,
+   memberReceiptStatusForEventType,
+   nelsonClubName,
+   openMemberComposeFromClubHome,
+   openMemberClubHome,
+   openMemberMessage,
++  openMemberMessageDelivery,
+   postmarkPayloadForStatus,
+   postPostmarkWebhook,
+   postResendInboundWebhook,
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index a21f776..2cfa85d 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -344,6 +344,7 @@ function rowsForSelector(rows, selector) {
+   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
+   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
+   if (selector.includes("#member-receipts")) return visibleMemberReceiptRows(rows);
++  if (selector.includes("#member-delivery-receipt-groups")) return rows.memberReceipts;
+   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
+   if (selector.includes('data-test-id^="delivery-row-"')) {
+     return filterRows(rows.operatorDeliveries, selector);
+@@ -355,6 +356,7 @@ function rowsForSelector(rows, selector) {
+     return filterRows(rows.memberReceiptGroupToggles, selector);
+   }
+   if (selector.includes('data-testid="member-receipt"')) return filterRows(visibleMemberReceiptRows(rows), selector);
++  if (selector.includes('data-testid="member-delivery-receipt"')) return filterRows(rows.memberReceipts, selector);
+ 
+   return [];
+ }
+@@ -729,10 +731,9 @@ test("member failed-send flow stays on compose failure state with support guidan
+   assert.ok(
+     expectations.some(
+       (expectation) =>
+-        expectation[0] === "text" &&
++        expectation[0] === "visible" &&
+         typeof expectation[1] === "string" &&
+-        expectation[1].includes("#member-compose-error-summary") &&
+-        expectation[2].includes("contact Memba")
++        expectation[1].includes("#member-compose-see-receipts-link")
+     )
+   );
+ });
+@@ -851,7 +852,7 @@ test("message assertions read addressed recipients, delivery records, email chan
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
+ 
+-test("member assertions read member-facing recipient rows, labels, and Heroicon names", async () => {
++test("member assertions read member-facing delivery detail recipient rows and statuses", async () => {
+   const page = new FakePage();
+   page.rows.clubMessages.push(
+     rowWithAttrs({
+@@ -862,18 +863,15 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+   page.rows.memberReceipts.push(
+     rowWithAttrs({
+       "data-recipient-name": "Alice",
+-      receiptIconName: "hero-clock",
+-      receiptStatusLabel: "Sending"
++      "data-receipt-status": "sent"
+     }),
+     rowWithAttrs({
+       "data-recipient-name": "Bob",
+-      receiptIconName: "hero-check-circle",
+-      receiptStatusLabel: "Delivered"
++      "data-receipt-status": "delivered"
+     }),
+     rowWithAttrs({
+       "data-recipient-name": "Carol",
+-      receiptIconName: "hero-exclamation-triangle",
+-      receiptStatusLabel: "Delivery problem"
++      "data-receipt-status": "delivery problem"
+     })
+   );
+   const expectations = [];
+@@ -908,10 +906,8 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+     expect: fakeExpect(expectations)
+   });
+ 
+-  page.rows.memberReceipts[1].attrs.receiptStatusLabel = "Sending";
+-  page.rows.memberReceipts[1].attrs.receiptIconName = "hero-clock";
+-  page.rows.memberReceipts[2].attrs.receiptStatusLabel = "Sending";
+-  page.rows.memberReceipts[2].attrs.receiptIconName = "hero-clock";
++  page.rows.memberReceipts[1].attrs["data-receipt-status"] = "sent";
++  page.rows.memberReceipts[2].attrs["data-receipt-status"] = "sent";
+ 
+   await assertEveryAddressedMemberReceiptStatus(world, "Trip planning night", "Sending", {
+     expect: fakeExpect(expectations)
+@@ -922,29 +918,22 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+     page.actions.filter((action) => action[0] === "goto"),
+     [
+       ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
+-      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
++      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1/delivery"]
+     ]
+   );
+   assert.ok(
+     expectations.some(
+       (expectation) =>
+-        expectation[0] === "text" &&
+-        typeof expectation[1] === "string" &&
+-        expectation[1].includes('data-testid="receipt-status"') &&
+-        expectation[2] === "Delivered"
+-    )
+-  );
+-  assert.ok(
+-    expectations.some(
+-      (expectation) =>
+-        expectation[0] === "visible" &&
++        expectation[0] === "count" &&
+         typeof expectation[1] === "string" &&
+-        expectation[1].includes('data-testid="receipt-status-icon"')
++        expectation[1].includes('data-testid="member-delivery-receipt"') &&
++        expectation[1].includes('data-recipient-name="Bob"') &&
++        expectation[2] === 1
+     )
+   );
+ });
+ 
+-test("member receipt assertions expand collapsed visible groups before inspecting rows", async () => {
++test("member receipt assertions read delivery detail rows without expanding conversation groups", async () => {
+   const page = new FakePage();
+   page.rows.memberReceiptGroupToggles.push(
+     rowWithAttrs({
+@@ -955,8 +944,7 @@ test("member receipt assertions expand collapsed visible groups before inspectin
+   page.rows.memberReceipts.push(
+     rowWithAttrs({
+       "data-recipient-name": "Bob",
+-      receiptIconName: "hero-check-circle",
+-      receiptStatusLabel: "Delivered"
++      "data-receipt-status": "delivered"
+     })
+   );
+   const expectations = [];
+@@ -970,27 +958,19 @@ test("member receipt assertions expand collapsed visible groups before inspectin
+     expect: fakeExpect(expectations)
+   });
+ 
+-  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "true");
++  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "false");
+   assert.ok(
+-    page.actions.some(
++    !page.actions.some(
+       (action) =>
+         action[0] === "click" &&
+-        action[1] === "locator" &&
++        typeof action[2] === "string" &&
+         action[2].includes('member-receipt-group-toggle-')
+     )
+   );
+-  assert.ok(
+-    expectations.some(
+-      (expectation) =>
+-        expectation[0] === "visible" &&
+-        typeof expectation[1] === "string" &&
+-        expectation[1].includes('[id="member-receipt-group-toggle-delivered"][aria-expanded="true"]')
+-    )
+-  );
+-  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
++  assert.ok(expectations.some((expectation) => expectation[0] === "count" && expectation[2] === 1));
+ });
+ 
+-test("member receipt assertions can expand all visible receipt groups", async () => {
++test("member receipt assertions ignore legacy collapsed receipt groups after delivery relocation", async () => {
+   const page = new FakePage();
+   page.rows.memberReceiptGroupToggles.push(
+     rowWithAttrs({
+@@ -1009,8 +989,7 @@ test("member receipt assertions can expand all visible receipt groups", async ()
+   page.rows.memberReceipts.push(
+     rowWithAttrs({
+       "data-recipient-name": "Bob",
+-      receiptIconName: "hero-check-circle",
+-      receiptStatusLabel: "Delivered"
++      "data-receipt-status": "delivered"
+     })
+   );
+   const world = worldWithPage(page);
+@@ -1025,12 +1004,17 @@ test("member receipt assertions can expand all visible receipt groups", async ()
+ 
+   assert.deepEqual(
+     page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
+-    ["true", "true", "true"]
++    ["false", "false", "false"]
+   );
+   assert.equal(
+-    page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
++    page.actions.filter(
++      (action) =>
++        action[0] === "click" &&
++        typeof action[2] === "string" &&
++        action[2].includes("member-receipt-group-toggle-")
++    )
+       .length,
+-    3
++    0
+   );
+ });
+ 
+diff --git a/docs/iterations/047-conversation-delivery-details/todo.md b/docs/iterations/047-conversation-delivery-details/todo.md
+index 63bb1e9..fae206f 100644
+--- a/docs/iterations/047-conversation-delivery-details/todo.md
++++ b/docs/iterations/047-conversation-delivery-details/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Port the delivery-details CSS (`delivery-summary`, `delivery-bar`, `delivery-legend`, `delivery-group`, `recipient`, `deliv-*` tints) from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [x] 006 Add a **Back to conversation** link on the delivery page returning to the message's conversation.
+ - [x] 007 Add a per-message **⋮ menu** to `conversation_entry_card` (`page_html.ex`) with a Delivery details item linking to `/messages/#{message_id}/delivery`.
+-- [ ] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
++- [x] 008 Remove the inline `#member-receipt-summary` section and the "Members by delivery status" grouped section from `message.html.heex`.
+ - [ ] 009 Remove the "sent to N members" delivery meta line from the conversation subject header.
+ - [ ] 010 Add tests: the delivery route renders the per-recipient breakdown for a message; it enforces the same authz as the conversation; the conversation kebab links to it; the conversation no longer renders the inline delivery sections.
+ - [ ] 011 Run `./bin/dev gallery-walk` and compare the delivery page to `delivery-details.html` and the conversation to `member-conversation.html`.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index e65ba1a..85bd4bf 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -8,7 +8,6 @@ defmodule MembaWeb.PageHTML do
+ 
+   alias Memba.ClubInboundEmailAddress
+   alias MembaWeb.ClubSite
+-  alias MembaWeb.MemberEmailDeliveryPresentation
+ 
+   embed_templates "page_html/*"
+ 
+@@ -133,30 +132,6 @@ defmodule MembaWeb.PageHTML do
+     active_member_section?(active_section, section) |> to_string()
+   end
+ 
+-  defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
+-  defp status_slug(_status), do: "unknown"
+-
+-  defp receipt_bar_width(%{percentage: percentage}) when is_integer(percentage) do
+-    "width: #{max(percentage, 0)}%;"
+-  end
+-
+-  defp receipt_bar_width(_status), do: "width: 0%;"
+-
+-  defp receipt_recipient_initial(name) when is_binary(name) do
+-    case String.first(name) do
+-      nil -> "?"
+-      initial -> String.upcase(initial)
+-    end
+-  end
+-
+-  defp receipt_recipient_initial(_name), do: "?"
+-
+-  defp receipt_group_expanded?(%MapSet{} = expanded_groups, status) when is_binary(status) do
+-    MapSet.member?(expanded_groups, status)
+-  end
+-
+-  defp receipt_group_expanded?(_expanded_groups, _status), do: false
+-
+   defp split_conversation_entries(entries) when is_list(entries) do
+     Enum.split_with(entries, &(&1.kind == :original))
+   end
+@@ -212,8 +187,4 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp member_message_delivery_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
+-
+-  defp status_bg_class(status), do: MemberEmailDeliveryPresentation.status_bg_class(status)
+-  defp status_text_class(status), do: MemberEmailDeliveryPresentation.status_text_class(status)
+-  defp status_tint_class(status), do: MemberEmailDeliveryPresentation.status_tint_class(status)
+ end
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index d81c574..928da6c 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -195,189 +195,5 @@
+         </.form>
+       </section>
+     </section>
+-
+-    <section id="member-receipt-summary" class="mt-8">
+-      <div class="rounded-3xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-6">
+-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+-          <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
+-            <.icon name="hero-users" class="size-5 text-primary" /> Message delivery
+-          </h2>
+-          <p
+-            id="member-receipts-summary"
+-            data-receipt-count={@member_email_delivery_count}
+-            class="w-fit rounded-full border border-base-300 bg-base-200 px-3 py-1 text-sm font-semibold text-ink-2"
+-          >
+-            {@member_email_delivery_count} member{if(@member_email_delivery_count == 1,
+-              do: "",
+-              else: "s"
+-            )}
+-          </p>
+-        </div>
+-
+-        <div
+-          id="member-receipt-summary-bar"
+-          class="mt-5 flex h-3.5 overflow-hidden rounded-full bg-base-200 ring-1 ring-inset ring-base-300"
+-          aria-hidden="true"
+-        >
+-          <span
+-            :for={status <- @member_email_delivery_summary}
+-            data-testid="member-receipt-summary-bar-segment"
+-            data-receipt-status={status.status}
+-            data-receipt-count={status.count}
+-            data-receipt-percentage={status.percentage}
+-            class={["block h-full", status_bg_class(status.status)]}
+-            style={receipt_bar_width(status)}
+-          />
+-        </div>
+-
+-        <div id="member-receipt-summary-legend" class="mt-5 grid gap-3 sm:grid-cols-2">
+-          <div
+-            :for={status <- @member_email_delivery_summary}
+-            data-testid="member-receipt-summary-status"
+-            data-receipt-status={status.status}
+-            data-receipt-count={status.count}
+-            data-receipt-percentage={status.percentage}
+-            class="flex items-center gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3"
+-          >
+-            <span class={["size-2.5 rounded-[0.2rem]", status_bg_class(status.status)]} />
+-            <span class="min-w-0 flex-1 text-sm text-ink-2">
+-              <span class="block font-semibold text-base-content">
+-                {status.status_label}
+-              </span>
+-              <span class="block text-xs">{status.description}</span>
+-            </span>
+-            <span class="font-mono text-sm font-semibold text-base-content">
+-              {status.count}
+-            </span>
+-            <span class="font-mono text-xs font-semibold text-ink-2">
+-              {status.percentage}%
+-            </span>
+-          </div>
+-        </div>
+-      </div>
+-    </section>
+-
+-    <section id="member-receipts-section" class="mt-8">
+-      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+-        <div>
+-          <h2 class="text-base font-semibold text-base-content">
+-            Members by delivery status
+-          </h2>
+-          <p class="mt-1 text-sm text-ink-2">
+-            Delivered messages are shown first. Messages still sending or not delivered are grouped below.
+-          </p>
+-        </div>
+-      </div>
+-
+-      <div id="member-receipts" class="mt-5 space-y-3">
+-        <p
+-          :if={@member_email_delivery_groups == []}
+-          id="member-receipts-empty"
+-          class="rounded-2xl border border-dashed border-base-300 bg-base-100 p-5 text-sm text-ink-2"
+-        >
+-          Memba has not prepared the delivery list for this message yet. Check again in a moment.
+-        </p>
+-
+-        <section
+-          :for={group <- @member_email_delivery_groups}
+-          id={"member-receipt-group-#{status_slug(group.status)}"}
+-          data-testid="member-receipt-group"
+-          data-receipt-status={group.status}
+-          class="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm"
+-        >
+-          <header>
+-            <.button
+-              type="button"
+-              id={"member-receipt-group-toggle-#{status_slug(group.status)}"}
+-              phx-click="toggle_receipt_group"
+-              phx-value-status={group.status}
+-              aria-expanded={
+-                to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
+-              }
+-              aria-controls={"member-receipts-#{status_slug(group.status)}"}
+-              variant="ghost"
+-              class="h-auto min-h-0 w-full justify-start gap-3 rounded-none px-5 py-4 text-left font-normal normal-case hover:bg-base-200"
+-            >
+-              <span class={[
+-                "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
+-                status_tint_class(group.status)
+-              ]}>
+-                <.icon name={group.status_icon} class="size-5" />
+-              </span>
+-              <div class="min-w-0 flex-1">
+-                <h3 class="font-semibold text-base-content">{group.status_label}</h3>
+-                <p class="mt-0.5 text-sm text-ink-2">{group.description}</p>
+-              </div>
+-              <div class="flex items-center gap-3">
+-                <span
+-                  data-testid="receipt-group-count"
+-                  class="font-mono text-sm font-semibold text-base-content"
+-                >
+-                  {group.count}
+-                </span>
+-                <span
+-                  data-testid="receipt-group-percentage"
+-                  class="font-mono text-xs font-semibold text-ink-2"
+-                >
+-                  {group.percentage}%
+-                </span>
+-                <.icon
+-                  name={
+-                    if(receipt_group_expanded?(@expanded_receipt_groups, group.status),
+-                      do: "hero-chevron-up",
+-                      else: "hero-chevron-down"
+-                    )
+-                  }
+-                  class="size-4 text-ink-2"
+-                />
+-              </div>
+-            </.button>
+-          </header>
+-
+-          <div
+-            :if={receipt_group_expanded?(@expanded_receipt_groups, group.status)}
+-            id={"member-receipts-#{status_slug(group.status)}"}
+-            class="divide-y divide-base-300 border-t border-base-300 px-5 py-1"
+-          >
+-            <div
+-              :for={receipt <- group.receipts}
+-              id={"member-receipt-#{receipt.recipient_id}"}
+-              data-testid="member-receipt"
+-              data-recipient-id={receipt.recipient_id}
+-              data-recipient-name={receipt.recipient_name}
+-              data-receipt-status={receipt.status}
+-              class="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+-            >
+-              <div class="flex min-w-0 items-center gap-3">
+-                <span class={[
+-                  "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1 ring-inset",
+-                  status_tint_class(receipt.status)
+-                ]}>
+-                  {receipt_recipient_initial(receipt.recipient_name)}
+-                </span>
+-                <p class="truncate font-medium text-base-content">
+-                  {receipt.recipient_name}
+-                </p>
+-              </div>
+-              <span class="inline-flex w-fit items-center gap-2">
+-                <.icon
+-                  name={receipt.status_icon}
+-                  data-testid="receipt-status-icon"
+-                  data-icon-name={receipt.status_icon}
+-                  class={["size-4", status_text_class(receipt.status)]}
+-                />
+-                <.status_badge
+-                  data-testid="receipt-status"
+-                  data-receipt-status={receipt.status}
+-                  aria-label={"Delivery status for #{receipt.recipient_name}: #{receipt.status_label}"}
+-                  label={receipt.status_label}
+-                  tone={receipt.status_tone}
+-                />
+-              </span>
+-            </div>
+-          </div>
+-        </section>
+-      </div>
+-    </section>
+   </div>
+ </Layouts.club_site>
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 464859b..9d7e929 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -85,8 +85,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
+     end
+   end
+ 
+-  describe "member-facing email delivery presentation on message detail" do
+-    test "renders every member email delivery status with its member-facing label and Heroicon",
++  describe "member-facing delivery relocation on message detail" do
++    test "does not render the inline delivery presentation on the message detail",
+          %{
+            conn: conn
+          } do
+@@ -120,12 +120,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
+           subject: "Status check"
+         )
+ 
+-      receipt_cases = [
+-        {alice, "sent", "Sending", "hero-clock"},
+-        {bob, "delivered", "Delivered", "hero-check-circle"},
+-        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"}
+-      ]
+-
+       seeded_receipt_cases = [
+         {alice, "sent"},
+         {bob, "delivered"},
+@@ -150,49 +144,23 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+       html = LazyHTML.from_fragment(response)
+ 
+-      assert_selector_exists(
+-        html,
+-        "#member-receipts-summary[data-receipt-count='3']"
+-      )
+-
+-      for {status, bg_class} <- [
+-            {"delivered", "bg-sage-600"},
+-            {"sent", "bg-warning"},
+-            {"delivery problem", "bg-error"}
+-          ] do
+-        assert_selector_exists(
+-          html,
+-          "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='#{status}'].#{bg_class}"
+-        )
+-      end
+-
+-      Enum.each(receipt_cases, fn {member, status, label, icon} ->
+-        group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
+-        status_slug = String.replace(status, " ", "-")
+-
+-        assert_selector_exists(html, group_selector)
++      refute html |> LazyHTML.query("#member-receipt-summary") |> Enum.any?()
++      refute html |> LazyHTML.query("#member-receipts-section") |> Enum.any?()
++      refute html |> LazyHTML.query("#member-receipts") |> Enum.any?()
+ 
+-        assert_selector_exists(
+-          html,
+-          "#{group_selector} #member-receipt-group-toggle-#{status_slug}[aria-expanded='false']"
+-        )
++      refute html
++             |> LazyHTML.query("[data-testid='member-receipt-summary-status']")
++             |> Enum.any?()
+ 
+-        assert_text_in(html, "#{group_selector} h3", label)
+-
+-        assert_exact_text(
+-          html,
+-          "#{group_selector} [data-testid='receipt-group-count']",
+-          "1"
+-        )
++      refute html
++             |> LazyHTML.query("[data-testid='member-receipt-summary-bar-segment']")
++             |> Enum.any?()
+ 
+-        assert_selector_exists(html, "#{group_selector} .#{icon}")
++      refute html
++             |> LazyHTML.query("[data-testid='member-receipt-group']")
++             |> Enum.any?()
+ 
+-        refute html
+-               |> LazyHTML.query(
+-                 "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
+-               )
+-               |> Enum.any?()
+-      end)
++      refute response =~ "Members by delivery status"
+     end
+ 
+     test "does not expose Memba-staff-only delivery fields on member message detail", %{
+@@ -252,11 +220,9 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+       html = LazyHTML.from_fragment(response)
+ 
+-      assert_text_in(
+-        html,
+-        "[data-testid='member-receipt-group'][data-receipt-status='delivery problem'] h3",
+-        "Delivery problem"
+-      )
++      refute html |> LazyHTML.query("#member-receipt-summary") |> Enum.any?()
++      refute html |> LazyHTML.query("#member-receipts-section") |> Enum.any?()
++      refute html |> LazyHTML.query("[data-testid='member-receipt-group']") |> Enum.any?()
+ 
+       refute response =~ delivery_id
+       refute response =~ "bob-private@example.invalid"
+@@ -347,27 +313,4 @@ defmodule MembaWeb.MemberMessageDetailTest do
+       reason: Keyword.fetch!(attrs, :reason)
+     })
+   end
+-
+-  defp assert_selector_exists(html, selector) do
+-    assert html |> LazyHTML.query(selector) |> Enum.any?(), "Expected selector #{selector}"
+-  end
+-
+-  defp assert_exact_text(html, selector, expected_text) do
+-    actual_text =
+-      html
+-      |> LazyHTML.query(selector)
+-      |> LazyHTML.text()
+-      |> String.trim()
+-
+-    assert actual_text == expected_text
+-  end
+-
+-  defp assert_text_in(html, selector, expected_text) do
+-    actual_text =
+-      html
+-      |> LazyHTML.query(selector)
+-      |> LazyHTML.text()
+-
+-    assert actual_text =~ expected_text
+-  end
+ end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index a74a6ea..c7eee4d 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -560,36 +560,27 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
+            |> Enum.any?()
+ 
+-    assert html
+-           |> LazyHTML.query("#member-receipts-summary[data-receipt-count='2']")
++    refute html
++           |> LazyHTML.query("#member-receipt-summary")
+            |> Enum.any?()
+ 
+-    assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt-group'][data-receipt-status='sent'] [data-testid='receipt-group-count']"
+-           )
+-           |> LazyHTML.text() =~ "1"
+-
+-    assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] [data-testid='receipt-group-count']"
+-           )
+-           |> LazyHTML.text() =~ "1"
++    refute html
++           |> LazyHTML.query("#member-receipts-section")
++           |> Enum.any?()
+ 
+-    assert html
+-           |> LazyHTML.query("#member-receipt-group-toggle-sent[aria-expanded='false']")
++    refute html
++           |> LazyHTML.query("#member-receipts")
+            |> Enum.any?()
+ 
+-    assert html
+-           |> LazyHTML.query("#member-receipt-group-toggle-delivered[aria-expanded='false']")
++    refute html
++           |> LazyHTML.query("[data-testid='member-receipt-summary-status']")
+            |> Enum.any?()
+ 
+     refute html
+-           |> LazyHTML.query("[data-testid='member-receipt']")
++           |> LazyHTML.query("[data-testid='member-receipt-group']")
+            |> Enum.any?()
+ 
+-    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
+-    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
++    refute response =~ "Members by delivery status"
+ 
+     refute response =~ alice_receipt.delivery_id
+     refute response =~ bob_receipt.delivery_id
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 9e8f2e5..fe0d909 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -7,7 +7,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+-  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Messaging
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -556,7 +555,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+            ]
+   end
+ 
+-  test "routed message detail renders the delivery summary and polished group headers", %{
++  test "routed message detail omits inline delivery summary and delivery status groups", %{
+     conn: conn
+   } do
+     alice =
+@@ -616,341 +615,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/messages/#{message.message_id}")
+ 
+-    assert has_element?(view, "#member-receipt-summary", "Message delivery")
+-    assert has_element?(view, "#member-receipt-summary-bar")
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
+-             "Email delivered"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='sent'][data-receipt-count='1'][data-receipt-percentage='33']",
+-             "Email still sending"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivery problem'][data-receipt-count='0'][data-receipt-percentage='0']",
+-             "Email not delivered"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivered'].bg-sage-600"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='sent'].bg-warning"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-bar-segment'][data-receipt-status='delivery problem'].bg-error"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
+-             "67%"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='sent']",
+-             "Sending"
+-           )
+-
+-    refute has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
+-           )
+-  end
+-
+-  test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
+-    alice =
+-      create_active_member(
+-        email: "alice@example.com",
+-        name: "Alice Adams",
+-        club_name: "Alpine Club"
+-      )
+-
+-    bob =
+-      create_active_member(
+-        email: "bob@example.com",
+-        name: "Bob Builder",
+-        club_name: "Alpine Club",
+-        club_id: alice.club_id
+-      )
+-
+-    carol =
+-      create_active_member(
+-        email: "carol@example.com",
+-        name: "Carol Clark",
+-        club_name: "Alpine Club",
+-        club_id: alice.club_id
+-      )
+-
+-    message =
+-      create_message(
+-        club_id: alice.club_id,
+-        sender_id: alice.person_id,
+-        subject: "Trip planning night"
+-      )
+-
+-    create_member_email_delivery(
+-      message_id: message.message_id,
+-      recipient_id: bob.person_id,
+-      recipient_name: "Bob Builder",
+-      status: "delivered"
+-    )
+-
+-    create_member_email_delivery(
+-      message_id: message.message_id,
+-      recipient_id: carol.person_id,
+-      recipient_name: "Carol Clark",
+-      status: "delivered"
+-    )
+-
+-    {:ok, view, _html} =
+-      conn
+-      |> signed_in_club_host("alice@example.com", alice)
+-      |> live(~p"/messages/#{message.message_id}")
+-
+-    delivered_toggle = "#member-receipt-group-toggle-delivered"
+-    delivered_rows = "#member-receipts-delivered"
+-
+-    delivered_recipient =
+-      "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+-
+-    assert has_element?(view, "#{delivered_toggle}.btn.btn-ghost[aria-expanded='false']")
+-    refute has_element?(view, delivered_rows)
+-    refute has_element?(view, delivered_recipient)
+-
+-    view
+-    |> element(delivered_toggle)
+-    |> render_click()
+-
+-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='true']")
+-    assert has_element?(view, delivered_rows)
+-    assert has_element?(view, delivered_recipient, "Bob Builder")
+-
+-    assert has_element?(
+-             view,
+-             "#{delivered_rows} [data-testid='receipt-status'][data-receipt-status='delivered'].badge.badge-soft.badge-success",
+-             "Delivered"
+-           )
+-
+-    view
+-    |> element(delivered_toggle)
+-    |> render_click()
+-
+-    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
+-    refute has_element?(view, delivered_rows)
+-    refute has_element?(view, delivered_recipient)
+-  end
+-
+-  test "zero-count statuses render in the summary only and not as empty groups", %{conn: conn} do
+-    alice =
+-      create_active_member(
+-        email: "alice@example.com",
+-        name: "Alice Adams",
+-        club_name: "Alpine Club"
+-      )
+-
+-    message =
+-      create_message(
+-        club_id: alice.club_id,
+-        sender_id: alice.person_id,
+-        subject: "Trip planning night"
+-      )
+-
+-    create_member_email_delivery(
+-      message_id: message.message_id,
+-      recipient_id: alice.person_id,
+-      recipient_name: "Alice Adams",
+-      status: "delivered"
+-    )
+-
+-    {:ok, view, _html} =
+-      conn
+-      |> signed_in_club_host("alice@example.com", alice)
+-      |> live(~p"/messages/#{message.message_id}")
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status']" <>
+-               "[data-receipt-status='delivered']" <>
+-               "[data-receipt-count='1']" <>
+-               "[data-receipt-percentage='100']",
+-             "Delivered"
+-           )
+-
+-    for {status, label} <- [{"sent", "Sending"}, {"delivery problem", "Delivery problem"}] do
+-      assert has_element?(
+-               view,
+-               "[data-testid='member-receipt-summary-status']" <>
+-                 "[data-receipt-status='#{status}']" <>
+-                 "[data-receipt-count='0']" <>
+-                 "[data-receipt-percentage='0']",
+-               label
+-             )
+-
+-      status_slug = String.replace(status, " ", "-")
+-
+-      refute has_element?(
+-               view,
+-               "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
+-             )
+-
+-      refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
+-    end
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
+-               "#member-receipt-group-toggle-delivered[aria-expanded='false']",
+-             "100%"
+-           )
+-  end
+-
+-  test "expanded recipient rows preserve stable browser-test attributes", %{conn: conn} do
+-    alice =
+-      create_active_member(
+-        email: "alice@example.com",
+-        name: "Alice Adams",
+-        club_name: "Alpine Club"
+-      )
+-
+-    bob =
+-      create_active_member(
+-        email: "bob@example.com",
+-        name: "Bob Builder",
+-        club_name: "Alpine Club",
+-        club_id: alice.club_id
+-      )
+-
+-    message =
+-      create_message(
+-        club_id: alice.club_id,
+-        sender_id: alice.person_id,
+-        subject: "Trip planning night"
+-      )
+-
+-    create_member_email_delivery(
+-      message_id: message.message_id,
+-      recipient_id: bob.person_id,
+-      recipient_name: "Bob Builder",
+-      status: "delivered"
+-    )
+-
+-    {:ok, view, _html} =
+-      conn
+-      |> signed_in_club_host("alice@example.com", alice)
+-      |> live(~p"/messages/#{message.message_id}")
+-
+-    view
+-    |> element("#member-receipt-group-toggle-delivered")
+-    |> render_click()
+-
+-    assert has_element?(
+-             view,
+-             "#member-receipts-delivered " <>
+-               "#member-receipt-#{bob.person_id}" <>
+-               "[data-testid='member-receipt']" <>
+-               "[data-recipient-id='#{bob.person_id}']" <>
+-               "[data-recipient-name='Bob Builder']" <>
+-               "[data-receipt-status='delivered']",
+-             "Bob Builder"
+-           )
+-  end
+-
+-  test "expanded member email delivery rows do not expose Memba-staff-only delivery fields", %{
+-    conn: conn
+-  } do
+-    alice =
+-      create_active_member(
+-        email: "alice@example.com",
+-        name: "Alice Adams",
+-        club_name: "Alpine Club"
+-      )
+-
+-    bob =
+-      create_active_member(
+-        email: "bob@example.com",
+-        name: "Bob Builder",
+-        club_name: "Alpine Club",
+-        club_id: alice.club_id
+-      )
+-
+-    message =
+-      create_message(
+-        club_id: alice.club_id,
+-        sender_id: alice.person_id,
+-        subject: "Provider details stay private"
+-      )
+-
+-    delivery_id = Memba.ID.generate(:delivery)
+-    provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
+-
+-    create_member_email_delivery(
+-      delivery_id: delivery_id,
+-      message_id: message.message_id,
+-      recipient_id: bob.person_id,
+-      recipient_name: "Bob Builder",
+-      status: "delivery problem"
+-    )
+-
+-    create_memba_staff_email_delivery(
+-      delivery_id: delivery_id,
+-      message_id: message.message_id,
+-      recipient_id: bob.person_id,
+-      recipient_name: "Bob Builder",
+-      recipient_address: "bob-private@example.invalid",
+-      channel: "postmark-email",
+-      status: "spam complaint",
+-      reason: provider_reason
+-    )
+-
+-    {:ok, view, _html} =
+-      conn
+-      |> signed_in_club_host("alice@example.com", alice)
+-      |> live(~p"/messages/#{message.message_id}")
+-
+-    html =
+-      view
+-      |> element("#member-receipt-group-toggle-delivery-problem")
+-      |> render_click()
+-
+-    assert has_element?(
+-             view,
+-             "#member-receipts-delivery-problem " <>
+-               "[data-testid='member-receipt']" <>
+-               "[data-recipient-name='Bob Builder']" <>
+-               "[data-receipt-status='delivery problem']",
+-             "Delivery problem"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "#member-receipts-delivery-problem " <>
+-               "[data-testid='receipt-status'][data-receipt-status='delivery problem']" <>
+-               ".badge.badge-soft.badge-error",
+-             "Delivery problem"
+-           )
+-
+-    refute html =~ delivery_id
+-    refute html =~ "bob-private@example.invalid"
+-    refute html =~ "postmark-email"
+-    refute html =~ "spam complaint"
+-    refute html =~ provider_reason
+-    refute html =~ "Postmark webhook"
+-    refute html =~ "Provider reason"
+-    refute html =~ "Email deliveries"
+-    refute html =~ ~s(href="/admin/)
++    refute has_element?(view, "#member-receipt-summary")
++    refute has_element?(view, "#member-receipts-section")
++    refute has_element?(view, "#member-receipts")
++    refute has_element?(view, "[data-testid='member-receipt-summary-status']")
++    refute has_element?(view, "[data-testid='member-receipt-summary-bar-segment']")
++    refute has_element?(view, "[data-testid='member-receipt-group']")
++    refute render(view) =~ "Members by delivery status"
+   end
+ 
+   defp signed_in_club_host(conn, email, club) do
+@@ -1046,17 +717,4 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       status: Keyword.fetch!(attrs, :status)
+     })
+   end
+-
+-  defp create_memba_staff_email_delivery(attrs) do
+-    Repo.insert!(%MembaStaffEmailDelivery{
+-      delivery_id: Keyword.fetch!(attrs, :delivery_id),
+-      message_id: Keyword.fetch!(attrs, :message_id),
+-      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+-      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+-      recipient_address: Keyword.fetch!(attrs, :recipient_address),
+-      channel: Keyword.fetch!(attrs, :channel),
+-      status: Keyword.fetch!(attrs, :status),
+-      reason: Keyword.fetch!(attrs, :reason)
+-    })
+-  end
+ end
