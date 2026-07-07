@@ -1,0 +1,112 @@
+diff --git a/docs/iterations/046-conversation-page-alignment/todo.md b/docs/iterations/046-conversation-page-alignment/todo.md
+index a6781fa..f9125ab 100644
+--- a/docs/iterations/046-conversation-page-alignment/todo.md
++++ b/docs/iterations/046-conversation-page-alignment/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.
+ - [x] 004 In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so the follow control sits compactly beside the title.
+ - [x] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.
+-- [ ] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
++- [x] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.
+ - [ ] 007 Preserve the non-member state: when `!@can_follow_conversation`, show the existing "Only current club members can follow…" explanation instead of an interactive toggle.
+ - [ ] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping "Replying as {name}" and the posted / validation-error states.
+ - [ ] 009 Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card` so they match the design (`message` / `message--original`).
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 1c28cb7..dba00c2 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -45,6 +45,12 @@
+             type="checkbox"
+             class="toggle toggle-primary toggle-sm"
+             checked={@following_conversation}
++            phx-change={
++              if(@following_conversation,
++                do: "unfollow_conversation",
++                else: "follow_conversation"
++              )
++            }
+             aria-label="Follow this conversation"
+           />
+           <span class="follow-toggle__text">
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+index ddda8c7..f133dd3 100644
+--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -92,7 +92,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+            )
+   end
+ 
+-  test "current member sees a compact follow toggle reflecting follow state", %{conn: conn} do
++  test "current member changes follow state with the compact follow toggle", %{conn: conn} do
+     club_id = Memba.ID.generate(:club)
+     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+@@ -124,28 +124,21 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              "Not following"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
++    assert has_element?(
++             view,
++             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
++           )
++
+     refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+     refute has_element?(view, "#member-conversation-follow-button")
+     refute has_element?(view, "#member-conversation-unfollow-button")
+ 
+-    assert :ok =
+-             Messaging.follow_conversation_as_current_member(
+-               %{
+-                 club_id: club_id,
+-                 conversation_id: message.message_id,
+-                 member_id: bob.person_id
+-               },
+-               consistency: :strong
+-             )
++    view
++    |> element("#member-conversation-follow-toggle")
++    |> render_change()
+ 
+     assert Messaging.following_conversation?(message.message_id, bob.person_id)
+ 
+-    {:ok, view, _html} =
+-      conn
+-      |> signed_in_club_host("bob@example.com", %{club_id: club_id})
+-      |> live(~p"/messages/#{message.message_id}")
+-
+     assert has_element?(
+              view,
+              "#member-conversation-follow-control.follow-toggle" <>
+@@ -153,7 +146,30 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+              "Following"
+            )
+ 
+-    assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox'][checked]")
++    assert has_element?(
++             view,
++             "#member-conversation-follow-toggle[type='checkbox'][checked][phx-change='unfollow_conversation']"
++           )
++
++    view
++    |> element("#member-conversation-follow-toggle")
++    |> render_change()
++
++    refute Messaging.following_conversation?(message.message_id, bob.person_id)
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-control.follow-toggle" <>
++               "[data-following='false'][data-can-follow='true']",
++             "Not following"
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']"
++           )
++
++    refute has_element?(view, "#member-conversation-follow-toggle[checked]")
+     refute has_element?(view, "#member-conversation-follow-button")
+     refute has_element?(view, "#member-conversation-unfollow-button")
+   end

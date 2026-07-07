@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-07T07:39:48.957179860Z",
-  "last_event_at": "2026-07-07T08:56:48.339063893Z",
+  "last_event_at": "2026-07-07T08:57:09.976614043Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -12862,9 +12862,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1618,
       "checkpoint": {
-        "timestamp": "2026-07-07T08:57:06.363717094Z",
+        "timestamp": "2026-07-07T08:57:09.926898935Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -12914,12 +12914,335 @@
         ],
         "node_retries": {},
         "context_values": {
+          "current_node": "implement_next_task",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.start.current_node": "read_plan",
+          "failure_signature": "",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows the validation snapshot was clean at checkpoint `4663016`.\n  - Live `git status --short` and `git diff --stat` are clean.\n  - Recent checkpoint `4663016 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `005` from `- [ ]` to `- [x]`.\n  - Parent todo state confirms `005` was the first unchecked task after `001`–`004`.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/controllers/page_html/message.html.heex` replaces the old follow card/buttons with:\n    - `#member-conversation-follow-control.follow-toggle`\n    - `#member-conversation-follow-toggle[type='checkbox']`\n    - `checked={@following_conversation}`\n    - compact “Following” / “Not following” copy.\n  - Old `#member-conversation-follow-button` and `#member-conversation-unfollow-button` are removed.\n  - `data-following` and `data-can-follow` remain on the follow control.\n  - Tests updated in:\n    - `web/test/memba_web/live/member_message_live/show_test.exs`\n    - `web/test/memba_web/live/member_message_live/show_reply_test.exs`\n  - No acceptance `.feature` files were changed; `git show --name-only 4663016` lists only the todo, HEEx template, and two LiveView test files.\n\n- Tests run/results found.\n  - Reran focused tests live:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs`\n    - Result: `14 tests, 0 failures`.\n  - Implementation summary also reports `dev check` passed.\n\n- ADR/plan conformance notes.\n  - Work matches plan task `005`: compact checkbox/switch follow toggle reflecting `@following_conversation`.\n  - It appropriately leaves event wiring for pending task `006` and non-member explanatory state for pending task `007`.\n  - ADR 0015 is respected by keeping this member app surface in LiveView.\n  - ADR 0013 is respected with focused LiveView/Phoenix test coverage for user-visible state.\n  - Checkpoint is small and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.resume_gate": 0,
+          "task_retry_available": false,
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `006 Wire the toggle to the existing follow_conversation / unfollow_conversation events (fire the matching event from the toggle's change), unchanged server-side.`\n\n2. **Changes made**\n   - `web/lib/memba_web/controllers/page_html/message.html.heex`\n     - Added `phx-change` to `#member-conversation-follow-toggle`.\n     - The event is selected from current state:\n       - not following → `follow_conversation`\n       - following → `unfollow_conversation`\n     - No server-side event handlers were changed.\n   - `web/test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Updated the compact follow toggle test to exercise the toggle with `render_change/1`.\n     - Asserts the toggle:\n       - starts wired to `follow_conversation`\n       - follows the conversation on change\n       - re-renders checked and wired to `unfollow_conversation`\n       - unfollows on the next change\n       - preserves removal of the old follow/unfollow buttons.\n   - `docs/iterations/046-conversation-page-alignment/todo.md`\n     - Checked off task `006` only.\n\n3. **Focused validation commands run and results**\n   - Expected TDD failure after adding test coverage:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Failed as expected because the toggle lacked `phx-change`.\n   - Focused test after implementation:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed: `3 tests, 0 failures`.\n   - Formatting:\n     - `cd web && mix format --check-formatted lib/memba_web/controllers/page_html/message.html.heex test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed after formatting the HEEx attribute.\n   - Broader focused LiveView tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed: `14 tests, 0 failures`.\n   - Full browser-facing validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed, including acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 006 Wire the toggle to the existing ...`\n   - To:\n     - `- [x] 006 Wire the toggle to the existing ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - The plan references no explicit ADRs.\n   - No `docs/adr/*.md` ADR files were present to inspect.\n   - Followed local Phoenix LiveView / HEEx guidance:\n     - stable DOM IDs/selectors retained\n     - LiveView event wiring uses existing server events\n     - tests use `element/2`, `render_change/1`, and `has_element?/2`\n     - no acceptance feature files changed.",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.max_node_visits": "80",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.run_id": "01KWXR80B8ZGXP28BB8ZZMC47E",
+          "task_valid": true,
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "last_response": "1. **Selected todo line**\n   - `006 Wire the toggle to the existing follow_conversation / unfollow_conversation events (fire the matching event from the toggle's change), unchanged server-side.`\n\n2. *",
+          "internal.thread_id": "all_tasks_done",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.sync_task_list": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.task_gate": 0,
+          "failure_class": "",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.preflight_sandbox": 0,
+          "command.output": "blob://sha256/9c36e0925deba5850a6ada98a6e2f92a58a6b2add155738c9c90cfe11a4c83d3",
+          "last_stage": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "outcome": "succeeded",
+          "internal.work_dir": "/workspace/memba",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.node_visit_count": 6
+        },
+        "node_outcomes": {
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4b4d1ebeb0cd44941d856221c29d01ae905f660ce72fa93b8150086c753749de"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows the validation snapshot was clean at checkpoint `4663016`.\n  - Live `git",
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows the validation snapshot was clean at checkpoint `4663016`.\n  - Live `git status --short` and `git diff --stat` are clean.\n  - Recent checkpoint `4663016 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `005` from `- [ ]` to `- [x]`.\n  - Parent todo state confirms `005` was the first unchecked task after `001`–`004`.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/controllers/page_html/message.html.heex` replaces the old follow card/buttons with:\n    - `#member-conversation-follow-control.follow-toggle`\n    - `#member-conversation-follow-toggle[type='checkbox']`\n    - `checked={@following_conversation}`\n    - compact “Following” / “Not following” copy.\n  - Old `#member-conversation-follow-button` and `#member-conversation-unfollow-button` are removed.\n  - `data-following` and `data-can-follow` remain on the follow control.\n  - Tests updated in:\n    - `web/test/memba_web/live/member_message_live/show_test.exs`\n    - `web/test/memba_web/live/member_message_live/show_reply_test.exs`\n  - No acceptance `.feature` files were changed; `git show --name-only 4663016` lists only the todo, HEEx template, and two LiveView test files.\n\n- Tests run/results found.\n  - Reran focused tests live:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs`\n    - Result: `14 tests, 0 failures`.\n  - Implementation summary also reports `dev check` passed.\n\n- ADR/plan conformance notes.\n  - Work matches plan task `005`: compact checkbox/switch follow toggle reflecting `@following_conversation`.\n  - It appropriately leaves event wiring for pending task `006` and non-member explanatory state for pending task `007`.\n  - ADR 0015 is respected by keeping this member app surface in LiveView.\n  - ADR 0013 is respected with focused LiveView/Phoenix test coverage for user-visible state.\n  - Checkpoint is small and independently reviewable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 296496,
+                    "output_tokens": 1850,
+                    "reasoning_tokens": 1413,
+                    "cache_read_tokens": 294912,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1727826
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 114508,
+              "tool_time_ms": 10842,
+              "active_time_ms": 125350
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c6e79454487b6dd3e03a39c227a87a9a39cff1c41e7bea0bc50ac9c4a094dfba"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1947,
+              "active_time_ms": 1947
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/34bc5b3504fa3c8ae53b1dc8a8970d5f15c3f489c2f9a9ce1a9dda081221a100"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8c1a66fdb043c6fa7f4539f5771314037c7e9abb9eba4994793ad48968a06175"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 180,
+              "active_time_ms": 180
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/68ff2eff80695c20dc2140400f283d6c9e3ad8ce49b9ba3ea859c8b1a0f25fa4"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8ed0a750a844fc7048a965f4ab6aae60b0b422214135d7c07f434b33f04f7ddf"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 105697,
+              "active_time_ms": 105697
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9c36e0925deba5850a6ada98a6e2f92a58a6b2add155738c9c90cfe11a4c83d3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bc5f8906718a9d91897fa62513bd46b5e9cc09cfb5137667f8530c1592f424ab"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "1. **Selected todo line**\n   - `006 Wire the toggle to the existing follow_conversation / unfollow_conversation events (fire the matching event from the toggle's change), unchanged server-side.`\n\n2. *",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `006 Wire the toggle to the existing follow_conversation / unfollow_conversation events (fire the matching event from the toggle's change), unchanged server-side.`\n\n2. **Changes made**\n   - `web/lib/memba_web/controllers/page_html/message.html.heex`\n     - Added `phx-change` to `#member-conversation-follow-toggle`.\n     - The event is selected from current state:\n       - not following → `follow_conversation`\n       - following → `unfollow_conversation`\n     - No server-side event handlers were changed.\n   - `web/test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Updated the compact follow toggle test to exercise the toggle with `render_change/1`.\n     - Asserts the toggle:\n       - starts wired to `follow_conversation`\n       - follows the conversation on change\n       - re-renders checked and wired to `unfollow_conversation`\n       - unfollows on the next change\n       - preserves removal of the old follow/unfollow buttons.\n   - `docs/iterations/046-conversation-page-alignment/todo.md`\n     - Checked off task `006` only.\n\n3. **Focused validation commands run and results**\n   - Expected TDD failure after adding test coverage:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Failed as expected because the toggle lacked `phx-change`.\n   - Focused test after implementation:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed: `3 tests, 0 failures`.\n   - Formatting:\n     - `cd web && mix format --check-formatted lib/memba_web/controllers/page_html/message.html.heex test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed after formatting the HEEx attribute.\n   - Broader focused LiveView tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba_web/live/member_message_live/show_test.exs test/memba_web/live/member_message_live/show_reply_test.exs`\n     - Passed: `14 tests, 0 failures`.\n   - Full browser-facing validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed, including acceptance: `85 scenarios (85 passed)`, `523 steps (523 passed)`.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 006 Wire the toggle to the existing ...`\n   - To:\n     - `- [x] 006 Wire the toggle to the existing ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - The plan references no explicit ADRs.\n   - No `docs/adr/*.md` ADR files were present to inspect.\n   - Followed local Phoenix LiveView / HEEx guidance:\n     - stable DOM IDs/selectors retained\n     - LiveView event wiring uses existing server events\n     - tests use `element/2`, `render_change/1`, and `has_element?/2`\n     - no acceptance feature files changed."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 818064,
+                    "output_tokens": 4481,
+                    "reasoning_tokens": 2115,
+                    "cache_read_tokens": 1428992,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5002696
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 223982,
+              "tool_time_ms": 347969,
+              "active_time_ms": 571951
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "9ab2599dee91df93cd414b55241f20224d4b3be0",
+        "node_visits": {
+          "todo_readable": 6,
+          "all_tasks_done": 6,
+          "validate_task": 5,
+          "wip_gate": 1,
+          "pre_validate_snapshot": 5,
+          "implement_next_task": 6,
+          "preflight_sandbox": 1,
+          "task_gate": 5,
+          "resume_gate": 1,
+          "start": 1,
+          "sync_task_list": 6,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/046-conversation-page-alignment/todo.md b/docs/iterations/046-conversation-page-alignment/todo.md\nindex a6781fa..f9125ab 100644\n--- a/docs/iterations/046-conversation-page-alignment/todo.md\n+++ b/docs/iterations/046-conversation-page-alignment/todo.md\n@@ -5,7 +5,7 @@\n - [x] 003 Port the follow-toggle CSS (`follow-toggle` and its children) and the `detail-head` title row from `design-system/` into `web/assets/css/app.css`, names 1:1 with the mirror.\n - [x] 004 In `message.html.heex`, wrap the subject `<h1>` and the follow control in a `detail-head` row so the follow control sits compactly beside the title.\n - [x] 005 Replace the `#member-conversation-follow-control` card + Follow/Stop buttons with a compact follow **toggle** (checkbox/switch) that reads as following/not-following from `@following_conversation`.\n-- [ ] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.\n+- [x] 006 Wire the toggle to the existing `follow_conversation` / `unfollow_conversation` events (fire the matching event from the toggle's change), unchanged server-side.\n - [ ] 007 Preserve the non-member state: when `!@can_follow_conversation`, show the existing \"Only current club members can follow…\" explanation instead of an interactive toggle.\n - [ ] 008 Move the `#member-message-reply-composer` block to render **after** `#member-conversation-replies` (composer below the replies), keeping \"Replying as {name}\" and the posted / validation-error states.\n - [ ] 009 Apply the boxed message-card treatment to the original and reply cards in `conversation_entry_card` so they match the design (`message` / `message--original`).\ndiff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex\nindex 1c28cb7..dba00c2 100644\n--- a/web/lib/memba_web/controllers/page_html/message.html.heex\n+++ b/web/lib/memba_web/controllers/page_html/message.html.heex\n@@ -45,6 +45,12 @@\n             type=\"checkbox\"\n             class=\"toggle toggle-primary toggle-sm\"\n             checked={@following_conversation}\n+            phx-change={\n+              if(@following_conversation,\n+                do: \"unfollow_conversation\",\n+                else: \"follow_conversation\"\n+              )\n+            }\n             aria-label=\"Follow this conversation\"\n           />\n           <span class=\"follow-toggle__text\">\ndiff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs\nindex ddda8c7..f133dd3 100644\n--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs\n+++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs\n@@ -92,7 +92,7 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do\n            )\n   end\n \n-  test \"current member sees a compact follow toggle reflecting follow state\", %{conn: conn} do\n+  test \"current member changes follow state with the compact follow toggle\", %{conn: conn} do\n     club_id = Memba.ID.generate(:club)\n     alice = create_active_member(club_id, name: \"Alice Adams\", email: \"alice@example.com\")\n     bob = create_active_member(club_id, name: \"Bob Builder\", email: \"bob@example.com\")\n@@ -124,28 +124,21 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do\n              \"Not following\"\n            )\n \n-    assert has_element?(view, \"#member-conversation-follow-toggle[type='checkbox']\")\n+    assert has_element?(\n+             view,\n+             \"#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']\"\n+           )\n+\n     refute has_element?(view, \"#member-conversation-follow-toggle[checked]\")\n     refute has_element?(view, \"#member-conversation-follow-button\")\n     refute has_element?(view, \"#member-conversation-unfollow-button\")\n \n-    assert :ok =\n-             Messaging.follow_conversation_as_current_member(\n-               %{\n-                 club_id: club_id,\n-                 conversation_id: message.message_id,\n-                 member_id: bob.person_id\n-               },\n-               consistency: :strong\n-             )\n+    view\n+    |> element(\"#member-conversation-follow-toggle\")\n+    |> render_change()\n \n     assert Messaging.following_conversation?(message.message_id, bob.person_id)\n \n-    {:ok, view, _html} =\n-      conn\n-      |> signed_in_club_host(\"bob@example.com\", %{club_id: club_id})\n-      |> live(~p\"/messages/#{message.message_id}\")\n-\n     assert has_element?(\n              view,\n              \"#member-conversation-follow-control.follow-toggle\" <>\n@@ -153,7 +146,30 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do\n              \"Following\"\n            )\n \n-    assert has_element?(view, \"#member-conversation-follow-toggle[type='checkbox'][checked]\")\n+    assert has_element?(\n+             view,\n+             \"#member-conversation-follow-toggle[type='checkbox'][checked][phx-change='unfollow_conversation']\"\n+           )\n+\n+    view\n+    |> element(\"#member-conversation-follow-toggle\")\n+    |> render_change()\n+\n+    refute Messaging.following_conversation?(message.message_id, bob.person_id)\n+\n+    assert has_element?(\n+             view,\n+             \"#member-conversation-follow-control.follow-toggle\" <>\n+               \"[data-following='false'][data-can-follow='true']\",\n+             \"Not following\"\n+           )\n+\n+    assert has_element?(\n+             view,\n+             \"#member-conversation-follow-toggle[type='checkbox'][phx-change='follow_conversation']\"\n+           )\n+\n+    refute has_element?(view, \"#member-conversation-follow-toggle[checked]\")\n     refute has_element?(view, \"#member-conversation-follow-button\")\n     refute has_element?(view, \"#member-conversation-unfollow-button\")\n   end\n",
+        "summary": {
+          "files_changed": 7,
+          "additions": 274,
+          "deletions": 103
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-07T08:57:10.150292782Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "last_stage": "implement_next_task",
           "internal.retry_count.validate_task": 0,
           "thread.todo_readable.current_node": "all_tasks_done",
-          "internal.thread_id": "all_tasks_done",
-          "current_node": "implement_next_task",
-          "command.output": "blob://sha256/9c36e0925deba5850a6ada98a6e2f92a58a6b2add155738c9c90cfe11a4c83d3",
+          "internal.thread_id": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
+          "command.output": "blob://sha256/c2dbacfa8f604f0017c424337f4bc84dc5a141ce8f029951681552fc62db2e61",
           "internal.retry_count.wip_gate": 0,
           "internal.retry_count.resume_gate": 0,
           "thread.pre_validate_snapshot.current_node": "validate_task",
@@ -12964,15 +13287,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/34bc5b3504fa3c8ae53b1dc8a8970d5f15c3f489c2f9a9ce1a9dda081221a100"
+              "command.output": "blob://sha256/c2dbacfa8f604f0017c424337f4bc84dc5a141ce8f029951681552fc62db2e61"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 158,
-              "active_time_ms": 158
+              "tool_time_ms": 154,
+              "active_time_ms": 154
             }
           },
           "sync_task_list": {
@@ -13157,7 +13480,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "wip_gate": 1,
           "preflight_sandbox": 1,
@@ -13167,7 +13490,7 @@
           "validate_task": 5,
           "todo_readable": 6,
           "implement_next_task": 6,
-          "pre_validate_snapshot": 5,
+          "pre_validate_snapshot": 6,
           "task_gate": 5,
           "start": 1,
           "sync_task_list": 6
@@ -13898,6 +14221,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@6": {
+      "first_event_seq": 1621,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/046-conversation-page-alignment/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-07T08:57:09.976047734Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "read_plan@1": {
       "first_event_seq": 25,
@@ -15145,7 +15496,12 @@
       "first_event_seq": 1449,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-07-07T08:57:06.356187693Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -15159,13 +15515,20 @@
       "output": null,
       "started_at": "2026-07-07T08:47:33.983290672Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 572372,
+        "inference_time_ms": 223982,
+        "tool_time_ms": 347969,
+        "active_time_ms": 571951
+      },
       "usage": {
-        "input_tokens": 805896,
-        "output_tokens": 3807,
-        "total_tokens": 2173514,
-        "reasoning_tokens": 1891,
-        "cache_read_tokens": 1361920,
-        "cache_write_tokens": 0
+        "input_tokens": 818064,
+        "output_tokens": 4481,
+        "total_tokens": 2253652,
+        "reasoning_tokens": 2115,
+        "cache_read_tokens": 1428992,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5002696
       },
       "model": {
         "provider": "openai",
@@ -15346,22 +15709,22 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 77697,
-        "usage_percent": 28.565073529411766,
+        "input_tokens": 79240,
+        "usage_percent": 29.13235294117647,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-07-07T08:56:48.256692097Z",
-        "event_seq": 1607,
+        "generated_at": "2026-07-07T08:57:06.349263331Z",
+        "event_seq": 1612,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1074,
-            "usage_percent": 0.3948529411764706
+            "tokens": 1073,
+            "usage_percent": 0.39448529411764705
           },
           {
             "category": "tools",
-            "tokens": 1532,
-            "usage_percent": 0.5632352941176471
+            "tokens": 1531,
+            "usage_percent": 0.5628676470588235
           },
           {
             "category": "memory",
@@ -15370,18 +15733,18 @@
           },
           {
             "category": "conversation",
-            "tokens": 74674,
-            "usage_percent": 27.453676470588235
+            "tokens": 76218,
+            "usage_percent": 28.021323529411763
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "todo_readable@1": {
       "first_event_seq": 75,
