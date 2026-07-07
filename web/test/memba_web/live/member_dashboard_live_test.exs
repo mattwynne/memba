@@ -144,6 +144,141 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
   end
 
+  test "club template renders named member rows with current marker and preserved members actions" do
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
+
+    members = [
+      %{id: alice_id, name: "Alice Adams", initials: "AA"},
+      %{id: bob_id, name: "Bob Builder", initials: "BB"}
+    ]
+
+    html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: true,
+        members: members,
+        active_member_count: 2
+      })
+
+    refute html_has_selector?(html, "#member-section-panel-members[hidden]")
+
+    assert html_has_selector?(
+             html,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm" <>
+               "[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#active-members-list.member-list[data-active-member-count='2']" <>
+               "[data-active-members-state='active-members']"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-testid='club-member-row']" <>
+               "[data-member-id='#{alice_id}'][data-member-name='Alice Adams'] " <>
+               ".member-row__avatar",
+             "AA"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__name",
+             "Alice Adams"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row[data-testid='club-member-row']" <>
+               "[data-member-id='#{bob_id}'][data-member-name='Bob Builder'] " <>
+               ".member-row__avatar",
+             "BB"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row[data-current-member='false'] " <>
+               ".member-row__name",
+             "Bob Builder"
+           )
+
+    refute html_has_selector?(
+             html,
+             "#club-member-#{bob_id}.member-row " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']"
+           )
+
+    refute html_has_selector?(html, "#active-members-empty-state")
+    refute html_has_selector?(html, "#active-members-avatar-stack")
+
+    first_member_html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: true,
+        members: [hd(members)],
+        active_member_count: 1
+      })
+
+    assert html_has_selector?(
+             first_member_html,
+             "#active-members-list.member-list[data-active-member-count='1']" <>
+               "[data-active-members-state='first-member'] #active-members-empty-state",
+             "You’re the first member listed"
+           )
+
+    assert html_has_selector?(
+             first_member_html,
+             "#active-members-empty-state",
+             "As members are added, you’ll see them here."
+           )
+
+    assert html_has_selector?(
+             first_member_html,
+             "#club-member-#{alice_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    ordinary_member_html =
+      dashboard_html(%{
+        active_section: "members",
+        current_member: %{id: alice_id, name: "Alice Adams"},
+        current_member_can_manage_members?: false,
+        members: [hd(members)],
+        active_member_count: 1
+      })
+
+    refute html_has_selector?(ordinary_member_html, "#member-section-action-invite-member")
+    refute html_has_selector?(ordinary_member_html, "#club-members #member-invite-member-link")
+
+    assert html_has_selector?(
+             ordinary_member_html,
+             "#active-members-empty-state",
+             "You’re the first member listed"
+           )
+  end
+
   test "dashboard patching to members selects the members URL state", %{conn: conn} do
     alice =
       create_active_member(
@@ -290,21 +425,62 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-panel-members #active-members-card[data-active-member-count='2'][data-active-members-state='active-members']"
+             "#member-section-panel-members " <>
+               "#active-members-list.member-list[data-active-member-count='2'][data-active-members-state='active-members']"
            )
+
+    refute has_element?(view, "#member-section-panel-members #active-members-card")
 
     assert has_element?(
              view,
-             "#member-section-panel-members #active-members-avatar-stack " <>
-               "#club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
+               ".member-row__avatar",
              "AA"
            )
 
     assert has_element?(
              view,
-             "#member-section-panel-members #active-members-avatar-stack " <>
-               "#club-member-#{bob.person_id}[data-testid='club-member-row'][data-member-name='Bob Builder']",
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{alice.person_id}.member-row .member-row__name",
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{alice.person_id}.member-row[data-current-member='true'] " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']",
+             "You"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row[data-testid='club-member-row'][data-member-name='Bob Builder'] " <>
+               ".member-row__avatar",
              "BB"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row .member-row__name",
+             "Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row[data-current-member='false'] " <>
+               ".member-row__meta"
+           )
+
+    refute has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{bob.person_id}.member-row " <>
+               ".member-row__meta [data-testid='club-member-current-indicator']"
            )
   end
 
@@ -355,7 +531,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "dashboard renders polished CTA, conversation rows, reply activity, and active-member card",
+  test "dashboard renders polished CTA, conversation rows, reply activity, and named member rows",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -454,18 +630,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-message-#{message.message_id} [data-testid='message-receipt-segment']"
            )
 
-    assert has_element?(view, "#active-members-card[data-active-member-count='2']")
-    assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
+    assert has_element?(view, "#active-members-list.member-list[data-active-member-count='2']")
+    assert has_element?(view, "#active-members-list[data-active-members-state='active-members']")
     refute has_element?(view, "#active-members-empty-state", "You’re the first member listed")
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
+             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
+               ".member-row__avatar",
              "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-list #club-member-#{alice.person_id}.member-row .member-row__name",
+             "Alice Adams"
            )
   end
 
-  test "dashboard renders the shared avatar overflow affordance for larger member lists",
+  test "dashboard renders larger member lists as named member rows without overflow",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -474,28 +657,34 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_name: "Alpine Club"
       )
 
-    for index <- 2..8 do
-      create_active_member(
-        email: "member#{index}@example.com",
-        name: "Member #{index}",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-    end
+    members =
+      for index <- 2..8 do
+        create_active_member(
+          email: "member#{index}@example.com",
+          name: "Member #{index}",
+          club_name: "Alpine Club",
+          club_id: alice.club_id
+        )
+      end
+
+    last_member = List.last(members)
 
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
-    assert has_element?(view, "#active-members-card[data-active-member-count='8']")
+    assert has_element?(view, "#active-members-list.member-list[data-active-member-count='8']")
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder[title='2 more current members']",
-             "+2"
+             "#active-members-list #club-member-#{last_member.person_id}.member-row[data-testid='club-member-row'][data-member-name='Member 8'] " <>
+               ".member-row__name",
+             "Member 8"
            )
 
+    refute has_element?(view, "#active-members-avatar-stack")
+    refute has_element?(view, "#active-members-overflow-avatar")
     refute has_element?(view, "#active-members-empty-state")
   end
 
@@ -563,6 +752,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> live(~p"/conversations")
 
     refute has_element?(view, "#club-members #member-invite-member-link")
+  end
+
+  test "dashboard preserves the members empty state and invite actions for first-member admins",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members")
+
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #club-members " <>
+               "#member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members " <>
+               "#active-members-list.member-list[data-active-member-count='1']" <>
+               "[data-active-members-state='first-member'] #active-members-empty-state",
+             "You’re the first member listed"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-panel-members #active-members-list " <>
+               "#club-member-#{robin.person_id}.member-row[data-testid='club-member-row'] " <>
+               ".member-row__name",
+             "Robin Rivers"
+           )
   end
 
   test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
@@ -939,7 +1178,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-card[data-active-member-count='1'][data-active-members-state='first-member']"
+             "#active-members-list.member-list[data-active-member-count='1'][data-active-members-state='first-member']"
            )
 
     assert has_element?(view, "#active-members-empty-state", "You’re the first member listed")
@@ -952,8 +1191,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams'].avatar.avatar-placeholder",
+             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'][data-member-name='Alice Adams'] " <>
+               ".member-row__avatar",
              "AA"
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-list #club-member-#{alice.person_id}.member-row .member-row__name",
+             "Alice Adams"
            )
 
     refute has_element?(
@@ -963,7 +1209,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "dashboard renders active-member stack overflow through the shared avatar component",
+  test "dashboard renders every active member as a named row",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -972,14 +1218,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         club_name: "Alpine Club"
       )
 
-    for index <- 2..7 do
-      create_active_member(
-        email: "member#{index}@example.com",
-        name: "Member #{index}",
-        club_name: "Alpine Club",
-        club_id: alice.club_id
-      )
-    end
+    members =
+      for index <- 2..7 do
+        create_active_member(
+          email: "member#{index}@example.com",
+          name: "Member #{index}",
+          club_name: "Alpine Club",
+          club_id: alice.club_id
+        )
+      end
+
+    last_member = List.last(members)
 
     {:ok, view, _html} =
       conn
@@ -988,20 +1237,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#active-members-card[data-active-member-count='7'][data-active-members-state='active-members']"
+             "#active-members-list.member-list[data-active-member-count='7'][data-active-members-state='active-members']"
            )
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'].avatar.avatar-placeholder",
+             "#active-members-list #club-member-#{alice.person_id}.member-row[data-testid='club-member-row'] " <>
+               ".member-row__avatar",
              "AA"
            )
 
     assert has_element?(
              view,
-             "#active-members-avatar-stack #active-members-overflow-avatar[data-testid='club-member-overflow-avatar'].avatar.avatar-placeholder",
-             "+1"
+             "#active-members-list #club-member-#{last_member.person_id}.member-row[data-testid='club-member-row'][data-member-name='Member 7'] " <>
+               ".member-row__name",
+             "Member 7"
            )
+
+    refute has_element?(view, "#active-members-avatar-stack")
+    refute has_element?(view, "#active-members-overflow-avatar")
   end
 
   test "logged-out club home still renders the public club page", %{conn: conn} do
@@ -1194,5 +1448,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.any?()
+  end
+
+  defp html_has_selector?(html, selector, text) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
+    |> String.contains?(text)
   end
 end

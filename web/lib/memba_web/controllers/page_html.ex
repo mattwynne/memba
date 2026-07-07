@@ -119,9 +119,6 @@ defmodule MembaWeb.PageHTML do
 
   defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
-  defp active_member_count_label(1), do: "1 current member"
-  defp active_member_count_label(count), do: "#{count} current members"
-
   defp active_member_section?(active_section, section), do: active_section == section
 
   defp member_section_tab_class(active_section, section) do
@@ -131,6 +128,12 @@ defmodule MembaWeb.PageHTML do
   defp member_section_aria_selected(active_section, section) do
     active_member_section?(active_section, section) |> to_string()
   end
+
+  defp current_dashboard_member?(%{id: member_id}, %{id: current_member_id}) do
+    member_id == current_member_id
+  end
+
+  defp current_dashboard_member?(_member, _current_member), do: false
 
   defp split_conversation_entries(entries) when is_list(entries) do
     Enum.split_with(entries, &(&1.kind == :original))
