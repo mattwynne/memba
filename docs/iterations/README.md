@@ -58,6 +58,7 @@ green than before.
 | 046 | 2026-07-04 | merged | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
 | 047 | 2026-07-04 | merged | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
 | 048 | 2026-07-04 | merged | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
+| 049 | 2026-07-07 | ready | Club home Members: role badges | [plan](049-member-role-badges/plan.md) |
 
 Status notes:
 
@@ -81,3 +82,4 @@ Shared acceptance feature files used across these iterations:
 - [`homepage.feature`](../../acceptance-tests/features/homepage.feature) (iteration 031 adds an `@not-domain @todo-ui` homepage volunteering-vision scenario)
 - [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
+- [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
