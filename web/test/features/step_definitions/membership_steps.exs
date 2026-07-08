@@ -7,10 +7,15 @@ defmodule Memba.Cucumber.MembershipSteps do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Projections.Club, as: ClubProjection
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Projections.Role, as: RoleProjection
+  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -42,6 +47,13 @@ defmodule Memba.Cucumber.MembershipSteps do
     add_members(context, ["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
   end
 
+  step "Alice, Bob, and Carol are active members of Kootenay Mountaineering Club", context do
+    context
+    |> create_club("Kootenay Mountaineering Club")
+    |> create_people(["Alice", "Bob", "Carol"])
+    |> add_members(["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
+  end
+
   step "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", context do
     add_members(context, ["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
   end
@@ -52,6 +64,70 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   step "Pat is a member of Nelson Paddling Club", context do
     add_members(context, ["Pat"], "Nelson Paddling Club")
+  end
+
+  step ~r/^(\w+) has the roles (.+) and (.+) in (.+)$/,
+       %{args: [person_name, first_role_name, second_role_name, club_name]} = context do
+    assign_roles(context, person_name, [first_role_name, second_role_name], club_name)
+  end
+
+  step ~r/^(\w+) has the role (.+) in (.+)$/,
+       %{args: [person_name, role_name, club_name]} = context do
+    assign_roles(context, person_name, [role_name], club_name)
+  end
+
+  step ~r/^(\w+) is removed from (.+)$/, %{args: [person_name, club_name]} = context do
+    membership_id = active_membership_id!(context, person_name, club_name)
+
+    assert :ok =
+             Membership.remove_member(
+               %{membership_id: membership_id},
+               consistency: :strong
+             )
+
+    update_context_map(context, :memberships, {club_name, person_name}, nil)
+  end
+
+  step ~r/^(\w+) views the member list for (.+)$/,
+       %{args: [viewer_name, club_name]} = context do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    viewer_id = person_id_from_context!(context, viewer_name)
+
+    assert Membership.active_member_of_club?(club_id, viewer_id)
+
+    context
+    |> Map.put(:current_member_list_club, club_name)
+    |> Map.put(:current_member_list, Membership.list_active_members_of_club(club_id))
+  end
+
+  step ~r/^(\w+)'s member row should show the roles (.+) and (.+)$/,
+       %{args: [person_name, first_role_name, second_role_name]} = context do
+    assert_member_roles(context, person_name, [first_role_name, second_role_name])
+  end
+
+  step ~r/^(\w+)'s member row should show the role (.+)$/,
+       %{args: [person_name, role_name]} = context do
+    assert_member_roles(context, person_name, [role_name])
+  end
+
+  step ~r/^(\w+)'s member row should show no roles$/, %{args: [person_name]} = context do
+    assert_member_roles(context, person_name, [])
+  end
+
+  step ~r/^(\w+) should not appear in the member list$/, %{args: [person_name]} = context do
+    refute find_member_row(context, person_name)
+    context
+  end
+
+  step ~r/^(.+) should appear in the member list$/, %{args: [person_names_text]} = context do
+    person_names_text
+    |> parse_person_list()
+    |> Enum.each(fn person_name ->
+      assert find_member_row(context, person_name),
+             "Expected #{person_name} to appear in the member list"
+    end)
+
+    context
   end
 
   step "Memba staff review people", context do
@@ -261,6 +337,62 @@ defmodule Memba.Cucumber.MembershipSteps do
     update_context_map(context, :memberships, {club_name, person_name}, membership_id)
   end
 
+  defp assign_roles(context, person_name, role_names, club_name) do
+    Enum.reduce(role_names, context, fn role_name, context ->
+      assign_role(context, person_name, role_name, club_name)
+    end)
+  end
+
+  defp assign_role(context, person_name, role_name, club_name) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    person_id = person_id_from_context!(context, person_name)
+    membership_id = active_membership_id!(context, person_name, club_name)
+    role_id = ensure_role(context, club_id, role_name)
+
+    unless active_role_assignment?(club_id, membership_id, person_id, role_id) do
+      assert :ok =
+               App.dispatch(
+                 %AssignMemberRole{
+                   club_id: club_id,
+                   membership_id: membership_id,
+                   person_id: person_id,
+                   role_id: role_id
+                 },
+                 consistency: :strong
+               )
+    end
+
+    context
+  end
+
+  defp ensure_role(_context, club_id, role_name) do
+    role_key = role_key(role_name)
+
+    case Repo.get_by(RoleProjection, club_id: club_id, role_key: role_key) do
+      %RoleProjection{role_id: role_id} ->
+        role_id
+
+      nil ->
+        role_id = Memba.ID.deterministic(:role, ["acceptance-list-members", club_id, role_key])
+
+        assert :ok =
+                 App.dispatch(
+                   %DefineClubRole{
+                     club_id: club_id,
+                     role_id: role_id,
+                     role_key: role_key,
+                     name: role_name
+                   },
+                   consistency: :strong
+                 )
+
+        assert %RoleProjection{role_id: ^role_id, name: ^role_name} =
+                 Repo.get(RoleProjection, role_id)
+
+        role_id
+    end
+  end
+
   defp try_change_club_slug(context, club_name, slug) do
     club_id = fetch_from_context!(context, :clubs, club_name)
     previous_slug = Membership.get_club(club_id).slug
@@ -307,6 +439,67 @@ defmodule Memba.Cucumber.MembershipSteps do
            end)
 
     context
+  end
+
+  defp assert_member_roles(context, person_name, expected_role_names) do
+    assert %{roles: ^expected_role_names} = find_member_row!(context, person_name)
+    context
+  end
+
+  defp find_member_row!(context, person_name) do
+    find_member_row(context, person_name) ||
+      flunk("Expected #{person_name} to appear in the member list")
+  end
+
+  defp find_member_row(context, person_name) do
+    person_id = person_id_from_context!(context, person_name)
+
+    context
+    |> Map.fetch!(:current_member_list)
+    |> Enum.find(&(&1.id == person_id and &1.name == person_name))
+  end
+
+  defp active_membership_id!(context, person_name, club_name) do
+    case fetch_from_context!(context, :memberships, {club_name, person_name}) do
+      membership_id when is_binary(membership_id) ->
+        membership_id
+
+      _missing ->
+        club_id = fetch_from_context!(context, :clubs, club_name)
+        person_id = person_id_from_context!(context, person_name)
+
+        MembershipProjection
+        |> where([membership], membership.club_id == ^club_id)
+        |> where([membership], membership.person_id == ^person_id)
+        |> where([membership], membership.active == true)
+        |> select([membership], membership.membership_id)
+        |> limit(1)
+        |> Repo.one() ||
+          flunk("Expected active membership for #{person_name} in #{club_name}")
+    end
+  end
+
+  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
+    RoleAssignmentProjection
+    |> where([assignment], assignment.club_id == ^club_id)
+    |> where([assignment], assignment.membership_id == ^membership_id)
+    |> where([assignment], assignment.person_id == ^person_id)
+    |> where([assignment], assignment.role_id == ^role_id)
+    |> where([assignment], assignment.active == true)
+    |> Repo.exists?()
+  end
+
+  defp parse_person_list(text) do
+    text
+    |> String.replace(~r/,?\s+and\s+/u, ", ")
+    |> String.split(~r/\s*,\s*/u, trim: true)
+  end
+
+  defp role_key(role_name) do
+    role_name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, "-")
+    |> String.trim("-")
   end
 
   defp fetch_from_context!(context, collection_key, item_key) do

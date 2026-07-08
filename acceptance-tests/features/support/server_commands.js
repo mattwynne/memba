@@ -230,6 +230,80 @@ Enum.map(results, &Map.put(&1, "membershipProjectorCheckpoint", membership_proje
   );
 }
 
+function ensureMemberRoles({ clubId, membershipId, personId, roleNames }) {
+  return runCommand(
+    `
+club_id = Map.fetch!(payload, "clubId")
+membership_id = Map.fetch!(payload, "membershipId")
+person_id = Map.fetch!(payload, "personId")
+role_names = Map.fetch!(payload, "roleNames")
+
+role_key = fn role_name ->
+  role_name
+  |> String.downcase()
+  |> String.replace(~r/[^a-z0-9]+/u, "-")
+  |> String.trim("-")
+end
+
+ensure_role = fn role_name ->
+  key = role_key.(role_name)
+
+  case Memba.Repo.get_by(Memba.Membership.Projections.Role, club_id: club_id, role_key: key) do
+    nil ->
+      role_id = Memba.ID.deterministic(:role, ["acceptance-list-members", club_id, key])
+
+      :ok =
+        Memba.Membership.App.dispatch(
+          %Memba.Membership.Commands.DefineClubRole{
+            club_id: club_id,
+            role_id: role_id,
+            role_key: key,
+            name: role_name
+          },
+          consistency: :strong
+        )
+
+      Memba.Repo.get!(Memba.Membership.Projections.Role, role_id)
+
+    role ->
+      role
+  end
+end
+
+ensure_assignment = fn role ->
+  active_assignment =
+    Memba.Repo.get_by(Memba.Membership.Projections.RoleAssignment,
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      role_id: role.role_id,
+      active: true
+    )
+
+  if is_nil(active_assignment) do
+    :ok =
+      Memba.Membership.App.dispatch(
+        %Memba.Membership.Commands.AssignMemberRole{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id,
+          role_id: role.role_id
+        },
+        consistency: :strong
+      )
+  end
+
+  %{roleId: role.role_id, roleName: role.name}
+end
+
+role_names
+|> Enum.map(ensure_role)
+|> Enum.map(ensure_assignment)
+`,
+    { clubId, membershipId, personId, roleNames }
+  );
+}
+
 function ensurePeople(people) {
   return runCommand(
     `
@@ -530,6 +604,7 @@ module.exports = {
   ensureClubSlug,
   ensureMember,
   ensureMembers,
+  ensureMemberRoles,
   ensurePeople,
   ensurePerson,
   ensurePersonEmailAddresses,

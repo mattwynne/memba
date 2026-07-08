@@ -4,8 +4,11 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -144,6 +147,65 @@ defmodule Memba.Membership.QueryTest do
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
+    end
+
+    test "includes active role names sorted alphabetically for each member" do
+      club = create_club("Kootenay Mountaineering Club")
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      bob = create_person(name: "Bob", email: "bob@example.com")
+
+      alice_membership_id = add_member(club.club_id, alice.person_id)
+      bob_membership_id = add_member(club.club_id, bob.person_id)
+
+      secretary_role_id =
+        define_role(club.club_id, role_key: "secretary", name: "Secretary")
+
+      chair_role_id = define_role(club.club_id, role_key: "chair", name: "Chair")
+
+      assign_role(club.club_id, alice_membership_id, alice.person_id, secretary_role_id)
+      assign_role(club.club_id, alice_membership_id, alice.person_id, chair_role_id)
+
+      assert [
+               %{
+                 membership_id: ^alice_membership_id,
+                 id: alice_person_id,
+                 name: "Alice",
+                 roles: ["Chair", "Secretary"]
+               },
+               %{
+                 membership_id: ^bob_membership_id,
+                 id: bob_person_id,
+                 name: "Bob",
+                 roles: []
+               }
+             ] = Membership.list_active_members_of_club(club.club_id)
+
+      assert alice_person_id == alice.person_id
+      assert bob_person_id == bob.person_id
+    end
+
+    test "excludes removed members even when they had assigned roles" do
+      club = create_club("Kootenay Mountaineering Club")
+      active_person = create_person(name: "Active Alice", email: "alice@example.com")
+      removed_person = create_person(name: "Removed Riley", email: "riley@example.com")
+
+      active_membership_id = add_member(club.club_id, active_person.person_id)
+      removed_membership_id = add_member(club.club_id, removed_person.person_id)
+
+      role_id = define_role(club.club_id, role_key: "treasurer", name: "Treasurer")
+      assign_role(club.club_id, removed_membership_id, removed_person.person_id, role_id)
+      remove_member(removed_membership_id)
+
+      assert [
+               %{
+                 membership_id: ^active_membership_id,
+                 id: active_person_id,
+                 name: "Active Alice",
+                 roles: []
+               }
+             ] = Membership.list_active_members_of_club(club.club_id)
+
+      assert active_person_id == active_person.person_id
     end
 
     test "returns an empty list for missing or invalid club IDs" do
@@ -463,14 +525,53 @@ defmodule Memba.Membership.QueryTest do
   end
 
   defp add_member(club_id, person_id) do
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              App.dispatch(
                %AddMember{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
                },
                consistency: :strong
              )
+
+    membership_id
+  end
+
+  defp define_role(club_id, attrs) do
+    role_id = Memba.ID.generate(:role)
+
+    assert :ok =
+             App.dispatch(
+               %DefineClubRole{
+                 club_id: club_id,
+                 role_id: role_id,
+                 role_key: Keyword.fetch!(attrs, :role_key),
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
+
+    role_id
+  end
+
+  defp assign_role(club_id, membership_id, person_id, role_id) do
+    assert :ok =
+             App.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: role_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp remove_member(membership_id) do
+    assert :ok =
+             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
   end
 end

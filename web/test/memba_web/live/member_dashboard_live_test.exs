@@ -7,6 +7,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Role
+  alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
@@ -416,6 +418,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       initials: "BB",
       current?: false
     )
+  end
+
+  test "dashboard renders member role badges and omits removed members", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id,
+        active: false
+      )
+
+    chair_role = create_role(club_id: alice.club_id, role_key: "chair", name: "Chair")
+    secretary_role = create_role(club_id: alice.club_id, role_key: "secretary", name: "Secretary")
+    treasurer_role = create_role(club_id: alice.club_id, role_key: "treasurer", name: "Treasurer")
+
+    assign_role(bob, treasurer_role)
+    assign_role(bob, chair_role)
+    assign_role(carol, secretary_role)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    bob_role_selector =
+      "#club-member-#{bob.person_id} .member-row__role.badge.badge-primary.badge-soft"
+
+    assert has_element?(view, bob_role_selector, "Chair")
+    assert has_element?(view, bob_role_selector, "Treasurer")
+    assert role_badge_labels(render(view), bob.person_id) == ["Chair", "Treasurer"]
+
+    refute has_element?(view, "#club-member-#{alice.person_id} .member-row__role")
+    refute has_element?(view, "#club-member-#{carol.person_id}")
+    refute has_element?(view, ".member-row__role", "Secretary")
   end
 
   test "dashboard renders the members tab invite action only for members who can manage members",
@@ -1269,6 +1321,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     })
   end
 
+  defp create_role(attrs) do
+    Repo.insert!(%Role{
+      role_id: Memba.ID.generate(:role),
+      club_id: Keyword.fetch!(attrs, :club_id),
+      role_key: Keyword.fetch!(attrs, :role_key),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp assign_role(member, role) do
+    Repo.insert!(%RoleAssignment{
+      club_id: role.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      role_id: role.role_id,
+      active: true
+    })
+  end
+
   defp club_attrs(attrs, club_id, club_name) do
     base = [
       club_id: club_id,
@@ -1432,6 +1503,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   defp scoped_member_row_selector(scope, member_id) do
     "#{scope} #{member_row_selector(member_id)}"
+  end
+
+  defp role_badge_labels(html, member_id) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#{member_row_selector(member_id)} .member-row__role")
+    |> Enum.map(fn role_badge -> role_badge |> LazyHTML.text() |> String.trim() end)
   end
 
   defp member_row_selector(member_id) do
