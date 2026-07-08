@@ -1,0 +1,150 @@
+diff --git a/docs/iterations/049-member-role-badges/todo.md b/docs/iterations/049-member-role-badges/todo.md
+index c5c48ce..b7692aa 100644
+--- a/docs/iterations/049-member-role-badges/todo.md
++++ b/docs/iterations/049-member-role-badges/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the existing role projection schemas and queries (`Membership.Projections.RoleAssignment`, role projections, and role-assignment projector) to confirm field names and active flags.
+ - [x] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
+ - [x] 003 Add or update Membership query tests covering: members with no roles, members with multiple roles sorted alphabetically, and removed members not appearing even when they had roles.
+-- [ ] 004 Update `MemberDashboardPresentation` only as needed to pass through/prep `roles` for member rows; keep the HEEx template free of direct projection queries.
++- [x] 004 Update `MemberDashboardPresentation` only as needed to pass through/prep `roles` for member rows; keep the HEEx template free of direct projection queries.
+ - [ ] 005 Render each role as a `member-row__role badge badge-primary badge-soft` badge in `web/lib/memba_web/controllers/page_html/club.html.heex`.
+ - [ ] 006 Add/update LiveView or presentation tests proving role badges render, no-role members show none, and removed members remain absent.
+ - [ ] 007 Add browser and domain Cucumber step definitions/support for `list_members.feature`.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 492701a..aa740af 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -143,6 +143,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     initials = initials(member.name)
+ 
+     member
++    |> Map.put(:roles, Map.get(member, :roles, []))
+     |> Map.put(:initials, initials)
+     |> Map.put(:avatar_initials, initials)
+   end
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 6505a3d..efbf591 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -3,6 +3,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+ 
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Role
++  alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias MembaWeb.MemberDashboardPresentation
+@@ -196,6 +198,68 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+              )
+   end
+ 
++  test "passes member roles through to dashboard member rows" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    chair_role =
++      create_role(
++        club_id: alice.club_id,
++        role_key: "chair",
++        name: "Chair"
++      )
++
++    secretary_role =
++      create_role(
++        club_id: alice.club_id,
++        role_key: "secretary",
++        name: "Secretary"
++      )
++
++    assign_role(alice, secretary_role)
++    assign_role(alice, chair_role)
++
++    assert {:ok, assigns} =
++             MemberDashboardPresentation.load(
++               alice.club_id,
++               %{email: "alice@example.com"},
++               [alice.club]
++             )
++
++    assert [
++             %{
++               id: alice_person_id,
++               name: "Alice Adams",
++               roles: ["Chair", "Secretary"],
++               initials: "AA",
++               avatar_initials: "AA"
++             },
++             %{
++               id: bob_person_id,
++               name: "Bob Builder",
++               roles: [],
++               initials: "BB",
++               avatar_initials: "BB"
++             }
++           ] = assigns.members
++
++    assert alice_person_id == alice.person_id
++    assert bob_person_id == bob.person_id
++    assert assigns.current_member.roles == ["Chair", "Secretary"]
++  end
++
+   test "forbids missing, invalid, unauthorized, or identity-mismatched selected clubs" do
+     alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+     other_club_member = create_active_member(email: "pat@example.com", club_name: "Paddling Club")
+@@ -241,8 +305,10 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: true
+@@ -251,10 +317,30 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     %{
+       club: club,
+       club_id: club_id,
++      membership_id: membership_id,
+       person_id: person.person_id
+     }
+   end
+ 
++  defp create_role(attrs) do
++    Repo.insert!(%Role{
++      role_id: Memba.ID.generate(:role),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      role_key: Keyword.fetch!(attrs, :role_key),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp assign_role(member, role) do
++    Repo.insert!(%RoleAssignment{
++      club_id: role.club_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      role_id: role.role_id,
++      active: true
++    })
++  end
++
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+     message_id = Memba.ID.generate(:message)
