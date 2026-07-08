@@ -58,7 +58,7 @@ green than before.
 | 046 | 2026-07-04 | merged | Conversation page: follow toggle, replies-first, message timestamps (slot repurposed 2026-07-04) | [plan](046-conversation-page-alignment/plan.md) |
 | 047 | 2026-07-04 | merged | Delivery details page + relocate delivery off the conversation | [plan](047-conversation-delivery-details/plan.md) |
 | 048 | 2026-07-04 | merged | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
-| 049 | 2026-07-07 | ready | Club home Members: role badges | [plan](049-member-role-badges/plan.md) |
+| 049 | 2026-07-07 | validated | Club home Members: role badges | [plan](049-member-role-badges/plan.md) |
 
 Status notes:
 

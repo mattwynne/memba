@@ -1,7 +1,7 @@
 # 049 — Club home Members: role badges
 
 Date: 2026-07-07
-Status: ready
+Status: validated
 
 ## Goal
 
