@@ -1,0 +1,66 @@
+diff --git a/docs/iterations/049-member-role-badges/todo.md b/docs/iterations/049-member-role-badges/todo.md
+index b2ce661..c5c48ce 100644
+--- a/docs/iterations/049-member-role-badges/todo.md
++++ b/docs/iterations/049-member-role-badges/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the existing role projection schemas and queries (`Membership.Projections.RoleAssignment`, role projections, and role-assignment projector) to confirm field names and active flags.
+ - [x] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
+-- [ ] 003 Add or update Membership query tests covering: members with no roles, members with multiple roles sorted alphabetically, and removed members not appearing even when they had roles.
++- [x] 003 Add or update Membership query tests covering: members with no roles, members with multiple roles sorted alphabetically, and removed members not appearing even when they had roles.
+ - [ ] 004 Update `MemberDashboardPresentation` only as needed to pass through/prep `roles` for member rows; keep the HEEx template free of direct projection queries.
+ - [ ] 005 Render each role as a `member-row__role badge badge-primary badge-soft` badge in `web/lib/memba_web/controllers/page_html/club.html.heex`.
+ - [ ] 006 Add/update LiveView or presentation tests proving role badges render, no-role members show none, and removed members remain absent.
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 6c61e17..bddaeec 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+@@ -183,6 +184,30 @@ defmodule Memba.Membership.QueryTest do
+       assert bob_person_id == bob.person_id
+     end
+ 
++    test "excludes removed members even when they had assigned roles" do
++      club = create_club("Kootenay Mountaineering Club")
++      active_person = create_person(name: "Active Alice", email: "alice@example.com")
++      removed_person = create_person(name: "Removed Riley", email: "riley@example.com")
++
++      active_membership_id = add_member(club.club_id, active_person.person_id)
++      removed_membership_id = add_member(club.club_id, removed_person.person_id)
++
++      role_id = define_role(club.club_id, role_key: "treasurer", name: "Treasurer")
++      assign_role(club.club_id, removed_membership_id, removed_person.person_id, role_id)
++      remove_member(removed_membership_id)
++
++      assert [
++               %{
++                 membership_id: ^active_membership_id,
++                 id: active_person_id,
++                 name: "Active Alice",
++                 roles: []
++               }
++             ] = Membership.list_active_members_of_club(club.club_id)
++
++      assert active_person_id == active_person.person_id
++    end
++
+     test "returns an empty list for missing or invalid club IDs" do
+       assert Membership.list_active_members_of_club(Memba.ID.generate(:club)) == []
+       assert Membership.list_active_members_of_club(nil) == []
+@@ -544,4 +569,9 @@ defmodule Memba.Membership.QueryTest do
+                consistency: :strong
+              )
+   end
++
++  defp remove_member(membership_id) do
++    assert :ok =
++             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++  end
+ end
