@@ -26,6 +26,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Projections.Role, as: RoleProjection
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
@@ -583,37 +584,48 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  List active members of the given club for recipient resolution.
+  List active members of the given club for recipient resolution and member lists.
 
   Returns plain maps containing the public identity needed outside the
-  Membership context: `:id`, `:name`, and `:email`. Members of other clubs,
-  inactive memberships, memberships without a projected person, and invalid club
-  IDs are excluded.
+  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
+  Role names come from active role assignments and are sorted alphabetically for
+  each member. Members of other clubs, inactive memberships, memberships without
+  a projected person, and invalid club IDs are excluded.
   """
   def list_active_members_of_club(club_id) do
     with {:ok, club_id} <- ID.cast(:club, club_id) do
-      MembershipProjection
-      |> join(:inner, [membership], person in Person,
-        on: person.person_id == membership.person_id
-      )
-      |> join(:inner, [membership, person], primary_email_address in PersonEmailAddress,
-        on:
-          primary_email_address.person_id == person.person_id and
-            primary_email_address.is_primary == true
-      )
-      |> where([membership, _person, _primary_email_address], membership.club_id == ^club_id)
-      |> where([membership, _person, _primary_email_address], membership.active == true)
-      |> order_by([_membership, person, _primary_email_address],
-        asc: person.name,
-        asc: person.person_id
-      )
-      |> select([membership, person, primary_email_address], %{
-        membership_id: membership.membership_id,
-        id: person.person_id,
-        name: person.name,
-        email: primary_email_address.email
-      })
-      |> Repo.all()
+      members =
+        MembershipProjection
+        |> join(:inner, [membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(:inner, [membership, person], primary_email_address in PersonEmailAddress,
+          on:
+            primary_email_address.person_id == person.person_id and
+              primary_email_address.is_primary == true
+        )
+        |> where([membership, _person, _primary_email_address], membership.club_id == ^club_id)
+        |> where([membership, _person, _primary_email_address], membership.active == true)
+        |> order_by([_membership, person, _primary_email_address],
+          asc: person.name,
+          asc: person.person_id
+        )
+        |> select([membership, person, primary_email_address], %{
+          membership_id: membership.membership_id,
+          id: person.person_id,
+          name: person.name,
+          email: primary_email_address.email
+        })
+        |> Repo.all()
+
+      role_names_by_membership =
+        members
+        |> Enum.map(& &1.membership_id)
+        |> active_role_names_by_membership()
+
+      Enum.map(members, fn member ->
+        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
+      end)
     else
       :error -> []
     end
@@ -822,6 +834,28 @@ defmodule Memba.Membership do
     })
     |> Repo.all()
     |> Enum.group_by(& &1.person_id)
+  end
+
+  defp active_role_names_by_membership([]), do: %{}
+
+  defp active_role_names_by_membership(membership_ids) do
+    RoleAssignment
+    |> join(:inner, [assignment], role in RoleProjection,
+      on: role.role_id == assignment.role_id and role.club_id == assignment.club_id
+    )
+    |> where([assignment, _role], assignment.membership_id in ^membership_ids)
+    |> where([assignment, _role], assignment.active == true)
+    |> order_by([assignment, role],
+      asc: assignment.membership_id,
+      asc: role.name,
+      asc: role.role_id
+    )
+    |> select([assignment, role], %{
+      membership_id: assignment.membership_id,
+      role_name: role.name
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.membership_id, & &1.role_name)
   end
 
   defp create_club_command(attrs) do

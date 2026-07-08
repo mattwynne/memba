@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the existing role projection schemas and queries (`Membership.Projections.RoleAssignment`, role projections, and role-assignment projector) to confirm field names and active flags.
-- [ ] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
+- [x] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
 - [ ] 003 Add or update Membership query tests covering: members with no roles, members with multiple roles sorted alphabetically, and removed members not appearing even when they had roles.
 - [ ] 004 Update `MemberDashboardPresentation` only as needed to pass through/prep `roles` for member rows; keep the HEEx template free of direct projection queries.
 - [ ] 005 Render each role as a `member-row__role badge badge-primary badge-soft` badge in `web/lib/memba_web/controllers/page_html/club.html.heex`.
