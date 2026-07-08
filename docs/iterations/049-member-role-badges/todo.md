@@ -9,4 +9,4 @@
 - [x] 007 Add browser and domain Cucumber step definitions/support for `list_members.feature`.
 - [x] 008 Remove `@todo-domain @todo-ui` from the `@iteration-049` scenarios once both runners execute them successfully.
 - [x] 009 Run `./bin/dev gallery-walk` and compare the Members tab to `design-system/wireframes/club-home.html`.
-- [ ] 010 Run `dev check` and confirm it is green.
+- [x] 010 Run `dev check` and confirm it is green.
