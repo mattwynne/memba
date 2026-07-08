@@ -1,0 +1,236 @@
+diff --git a/docs/iterations/049-member-role-badges/todo.md b/docs/iterations/049-member-role-badges/todo.md
+index c473fb0..b2ce661 100644
+--- a/docs/iterations/049-member-role-badges/todo.md
++++ b/docs/iterations/049-member-role-badges/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the existing role projection schemas and queries (`Membership.Projections.RoleAssignment`, role projections, and role-assignment projector) to confirm field names and active flags.
+-- [ ] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
++- [x] 002 Extend `Membership.list_active_members_of_club/1` to include `roles: [...]` for each active member. Use active role assignments only and sort each member's role names alphabetically.
+ - [ ] 003 Add or update Membership query tests covering: members with no roles, members with multiple roles sorted alphabetically, and removed members not appearing even when they had roles.
+ - [ ] 004 Update `MemberDashboardPresentation` only as needed to pass through/prep `roles` for member rows; keep the HEEx template free of direct projection queries.
+ - [ ] 005 Render each role as a `member-row__role badge badge-primary badge-soft` badge in `web/lib/memba_web/controllers/page_html/club.html.heex`.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index fa55b38..aadf70c 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -26,6 +26,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.PersonEmailAddress
++  alias Memba.Membership.Projections.Role, as: RoleProjection
+   alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
+@@ -583,37 +584,48 @@ defmodule Memba.Membership do
+   end
+ 
+   @doc """
+-  List active members of the given club for recipient resolution.
++  List active members of the given club for recipient resolution and member lists.
+ 
+   Returns plain maps containing the public identity needed outside the
+-  Membership context: `:id`, `:name`, and `:email`. Members of other clubs,
+-  inactive memberships, memberships without a projected person, and invalid club
+-  IDs are excluded.
++  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
++  Role names come from active role assignments and are sorted alphabetically for
++  each member. Members of other clubs, inactive memberships, memberships without
++  a projected person, and invalid club IDs are excluded.
+   """
+   def list_active_members_of_club(club_id) do
+     with {:ok, club_id} <- ID.cast(:club, club_id) do
+-      MembershipProjection
+-      |> join(:inner, [membership], person in Person,
+-        on: person.person_id == membership.person_id
+-      )
+-      |> join(:inner, [membership, person], primary_email_address in PersonEmailAddress,
+-        on:
+-          primary_email_address.person_id == person.person_id and
+-            primary_email_address.is_primary == true
+-      )
+-      |> where([membership, _person, _primary_email_address], membership.club_id == ^club_id)
+-      |> where([membership, _person, _primary_email_address], membership.active == true)
+-      |> order_by([_membership, person, _primary_email_address],
+-        asc: person.name,
+-        asc: person.person_id
+-      )
+-      |> select([membership, person, primary_email_address], %{
+-        membership_id: membership.membership_id,
+-        id: person.person_id,
+-        name: person.name,
+-        email: primary_email_address.email
+-      })
+-      |> Repo.all()
++      members =
++        MembershipProjection
++        |> join(:inner, [membership], person in Person,
++          on: person.person_id == membership.person_id
++        )
++        |> join(:inner, [membership, person], primary_email_address in PersonEmailAddress,
++          on:
++            primary_email_address.person_id == person.person_id and
++              primary_email_address.is_primary == true
++        )
++        |> where([membership, _person, _primary_email_address], membership.club_id == ^club_id)
++        |> where([membership, _person, _primary_email_address], membership.active == true)
++        |> order_by([_membership, person, _primary_email_address],
++          asc: person.name,
++          asc: person.person_id
++        )
++        |> select([membership, person, primary_email_address], %{
++          membership_id: membership.membership_id,
++          id: person.person_id,
++          name: person.name,
++          email: primary_email_address.email
++        })
++        |> Repo.all()
++
++      role_names_by_membership =
++        members
++        |> Enum.map(& &1.membership_id)
++        |> active_role_names_by_membership()
++
++      Enum.map(members, fn member ->
++        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
++      end)
+     else
+       :error -> []
+     end
+@@ -824,6 +836,28 @@ defmodule Memba.Membership do
+     |> Enum.group_by(& &1.person_id)
+   end
+ 
++  defp active_role_names_by_membership([]), do: %{}
++
++  defp active_role_names_by_membership(membership_ids) do
++    RoleAssignment
++    |> join(:inner, [assignment], role in RoleProjection,
++      on: role.role_id == assignment.role_id and role.club_id == assignment.club_id
++    )
++    |> where([assignment, _role], assignment.membership_id in ^membership_ids)
++    |> where([assignment, _role], assignment.active == true)
++    |> order_by([assignment, role],
++      asc: assignment.membership_id,
++      asc: role.name,
++      asc: role.role_id
++    )
++    |> select([assignment, role], %{
++      membership_id: assignment.membership_id,
++      role_name: role.name
++    })
++    |> Repo.all()
++    |> Enum.group_by(& &1.membership_id, & &1.role_name)
++  end
++
+   defp create_club_command(attrs) do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, name} <- fetch_required(attrs, :name),
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index bba5b11..6c61e17 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -4,8 +4,10 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+@@ -146,6 +148,41 @@ defmodule Memba.Membership.QueryTest do
+       assert bob_person_id == bob.person_id
+     end
+ 
++    test "includes active role names sorted alphabetically for each member" do
++      club = create_club("Kootenay Mountaineering Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      bob = create_person(name: "Bob", email: "bob@example.com")
++
++      alice_membership_id = add_member(club.club_id, alice.person_id)
++      bob_membership_id = add_member(club.club_id, bob.person_id)
++
++      secretary_role_id =
++        define_role(club.club_id, role_key: "secretary", name: "Secretary")
++
++      chair_role_id = define_role(club.club_id, role_key: "chair", name: "Chair")
++
++      assign_role(club.club_id, alice_membership_id, alice.person_id, secretary_role_id)
++      assign_role(club.club_id, alice_membership_id, alice.person_id, chair_role_id)
++
++      assert [
++               %{
++                 membership_id: ^alice_membership_id,
++                 id: alice_person_id,
++                 name: "Alice",
++                 roles: ["Chair", "Secretary"]
++               },
++               %{
++                 membership_id: ^bob_membership_id,
++                 id: bob_person_id,
++                 name: "Bob",
++                 roles: []
++               }
++             ] = Membership.list_active_members_of_club(club.club_id)
++
++      assert alice_person_id == alice.person_id
++      assert bob_person_id == bob.person_id
++    end
++
+     test "returns an empty list for missing or invalid club IDs" do
+       assert Membership.list_active_members_of_club(Memba.ID.generate(:club)) == []
+       assert Membership.list_active_members_of_club(nil) == []
+@@ -463,14 +500,48 @@ defmodule Memba.Membership.QueryTest do
+   end
+ 
+   defp add_member(club_id, person_id) do
++    membership_id = Memba.ID.generate(:membership)
++
+     assert :ok =
+              App.dispatch(
+                %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id,
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
++
++    membership_id
++  end
++
++  defp define_role(club_id, attrs) do
++    role_id = Memba.ID.generate(:role)
++
++    assert :ok =
++             App.dispatch(
++               %DefineClubRole{
++                 club_id: club_id,
++                 role_id: role_id,
++                 role_key: Keyword.fetch!(attrs, :role_key),
++                 name: Keyword.fetch!(attrs, :name)
++               },
++               consistency: :strong
++             )
++
++    role_id
++  end
++
++  defp assign_role(club_id, membership_id, person_id, role_id) do
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
+   end
+ end
