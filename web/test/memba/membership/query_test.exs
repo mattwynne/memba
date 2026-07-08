@@ -8,6 +8,7 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -181,6 +182,30 @@ defmodule Memba.Membership.QueryTest do
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
+    end
+
+    test "excludes removed members even when they had assigned roles" do
+      club = create_club("Kootenay Mountaineering Club")
+      active_person = create_person(name: "Active Alice", email: "alice@example.com")
+      removed_person = create_person(name: "Removed Riley", email: "riley@example.com")
+
+      active_membership_id = add_member(club.club_id, active_person.person_id)
+      removed_membership_id = add_member(club.club_id, removed_person.person_id)
+
+      role_id = define_role(club.club_id, role_key: "treasurer", name: "Treasurer")
+      assign_role(club.club_id, removed_membership_id, removed_person.person_id, role_id)
+      remove_member(removed_membership_id)
+
+      assert [
+               %{
+                 membership_id: ^active_membership_id,
+                 id: active_person_id,
+                 name: "Active Alice",
+                 roles: []
+               }
+             ] = Membership.list_active_members_of_club(club.club_id)
+
+      assert active_person_id == active_person.person_id
     end
 
     test "returns an empty list for missing or invalid club IDs" do
@@ -543,5 +568,10 @@ defmodule Memba.Membership.QueryTest do
                },
                consistency: :strong
              )
+  end
+
+  defp remove_member(membership_id) do
+    assert :ok =
+             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
   end
 end
