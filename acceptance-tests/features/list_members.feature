@@ -4,7 +4,6 @@ Feature: List club members
 
   Rule: Active members show their assigned roles
 
-    @todo-domain @todo-ui
     Scenario: A member sees assigned roles in the member list
       Given Alice, Bob, and Carol are active members of Kootenay Mountaineering Club
       And Bob has the roles Treasurer and Secretary in Kootenay Mountaineering Club
@@ -16,7 +15,6 @@ Feature: List club members
 
   Rule: Removed members are not listed
 
-    @todo-domain @todo-ui
     Scenario: A removed member had a role
       Given Alice, Bob, and Carol are active members of Kootenay Mountaineering Club
       And Bob has the role Treasurer in Kootenay Mountaineering Club
