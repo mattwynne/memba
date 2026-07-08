@@ -143,6 +143,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
     initials = initials(member.name)
 
     member
+    |> Map.put(:roles, Map.get(member, :roles, []))
     |> Map.put(:initials, initials)
     |> Map.put(:avatar_initials, initials)
   end
