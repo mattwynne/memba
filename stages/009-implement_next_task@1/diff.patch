@@ -1,0 +1,77 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index 0d32b50..a22b75a 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
++- [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+ - [ ] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [ ] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+ - [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 3b50496..1fbc467 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -137,6 +137,13 @@
+                   {message_row.subject}
+                 </span>
+ 
++                <span
++                  data-testid="message-preview"
++                  class="mt-1 block line-clamp-1 text-sm leading-6 text-ink-2"
++                >
++                  {message_row.body}
++                </span>
++
+                 <span
+                   data-testid="message-started-by"
+                   data-originator-id={message_row.originator_id}
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 6a4ce98..f3842e2 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -972,6 +972,42 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard renders the full message body as a one-line conversation preview" do
++    club_id = Memba.ID.generate(:club)
++    sender_id = Memba.ID.generate(:person)
++    message_id = Memba.ID.generate(:message)
++
++    body =
++      "Route update — the forestry service closed the approach road after last week's storm, " <>
++        "so the original plan is off. Please weigh in before Friday so we can lock in permits."
++
++    message = %Message{
++      message_id: message_id,
++      club_id: club_id,
++      sender_id: sender_id,
++      subject: "Goodsir traverse route update",
++      body: body,
++      inserted_at: ~U[2026-06-03 14:15:00Z]
++    }
++
++    assert [message_row] =
++             MemberDashboardPresentation.present_message_rows([message], %{
++               sender_id => "Bob Builder"
++             })
++
++    html =
++      dashboard_html(%{
++        selected_club: %{club_id: club_id, name: "Alpine Club"},
++        message_rows: [message_row]
++      })
++
++    assert html_has_selector?(
++             html,
++             "#member-message-#{message_id} [data-testid='message-preview'].line-clamp-1",
++             body
++           )
++  end
++
+   test "dashboard preserves browser acceptance selectors for messages and members", %{conn: conn} do
+     alice =
+       create_active_member(
