@@ -125,6 +125,20 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Trip planning night"
            )
 
+    subject_class =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#member-message-subject")
+      |> LazyHTML.attribute("class")
+      |> List.first()
+
+    assert subject_class =~ "text-[38px]"
+    assert subject_class =~ "leading-[1.08]"
+    assert subject_class =~ "tracking-[-0.032em]"
+    refute subject_class =~ "text-4xl"
+    refute subject_class =~ "sm:text-5xl"
+
     assert has_element?(
              view,
              "#member-message-heading-row.detail-head > " <>
