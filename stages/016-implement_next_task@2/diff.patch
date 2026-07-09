@@ -1,0 +1,55 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index a22b75a..91983eb 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+-- [ ] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
++- [x] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [ ] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+ - [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+ - [ ] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 3079fcc..dc09ff6 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -55,12 +55,6 @@ defmodule MembaWeb.PageHTML do
+               </time>
+             </div>
+             <div class="flex items-center gap-2">
+-              <span
+-                data-testid="member-conversation-entry-label"
+-                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+-              >
+-                {conversation_entry_label(@entry.kind)}
+-              </span>
+               <div
+                 id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+                 data-testid="member-conversation-entry-menu"
+@@ -150,9 +144,6 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp conversation_sender_initial(_name), do: "?"
+ 
+-  defp conversation_entry_label(:original), do: "Original message"
+-  defp conversation_entry_label(_kind), do: "Reply"
+-
+   defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
+ 
+   defp conversation_entry_body_id(%{message: %{message_id: message_id}}) do
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index a8c17cd..b8ecc6e 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -349,6 +349,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+     assert has_element?(view, "#member-conversation[data-message-count='3']")
+ 
++    refute has_element?(view, "[data-testid='member-conversation-entry-label']")
++    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Original message")
++    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Reply")
++
+     assert has_element?(
+              view,
+              "#member-conversation-original " <>
