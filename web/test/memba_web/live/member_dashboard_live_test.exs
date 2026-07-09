@@ -404,7 +404,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     refute has_element?(view, "#member-section-panel-members #club-members h2", "Current members")
-    refute has_element?(view, "#member-section-panel-members #club-members #member-invite-member-link")
+
+    refute has_element?(
+             view,
+             "#member-section-panel-members #club-members #member-invite-member-link"
+           )
 
     assert has_element?(
              view,
@@ -779,7 +783,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     refute has_element?(view, "#member-section-panel-members #club-members h2", "Current members")
-    refute has_element?(view, "#member-section-panel-members #club-members #member-invite-member-link")
+
+    refute has_element?(
+             view,
+             "#member-section-panel-members #club-members #member-invite-member-link"
+           )
+
     assert invite_member_action_count(render(view)) == 1
 
     assert has_element?(
