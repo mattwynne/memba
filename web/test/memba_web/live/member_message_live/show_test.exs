@@ -139,6 +139,38 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "#member-conversation-unfollow-button")
   end
 
+  test "routed message detail renders the subject at page-title scale", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}")
+
+    subject_classes =
+      view
+      |> render()
+      |> classes("#member-message-subject")
+
+    assert "text-[38px]" in subject_classes
+    assert "leading-[1.08]" in subject_classes
+    assert "tracking-[-0.032em]" in subject_classes
+    refute "text-4xl" in subject_classes
+    refute "sm:text-5xl" in subject_classes
+  end
+
   test "current member changes follow state with the compact follow toggle", %{conn: conn} do
     alice =
       create_active_member(
@@ -652,6 +684,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     |> MembaWeb.PageHTML.message()
     |> Phoenix.HTML.Safe.to_iodata()
     |> IO.iodata_to_binary()
+  end
+
+  defp classes(html, selector) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute("class")
+    |> List.first("")
+    |> String.split()
   end
 
   defp create_active_member(attrs) do
