@@ -30,7 +30,6 @@ Feature: Club message replies (conversations)
   @iteration-040
   Rule: A reply is emailed to current club-member followers
 
-    @todo-ui
     Scenario: The sender and repliers automatically follow the conversation
       Then Alice should be following the conversation for "Trip planning night"
       And Carol should not be following the conversation for "Trip planning night"
