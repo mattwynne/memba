@@ -452,6 +452,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "+2"
            )
 
+    assert participant_avatar_names(html, message_id) == [
+             "Carol Canoe",
+             "Dana Downhill",
+             "Elliot Explorer"
+           ]
+
     assert html_has_selector?(
              html,
              "#{link_selector} .conversation__replies[data-testid='message-reply-activity']" <>
@@ -708,6 +714,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-message-#{message.message_id} [data-testid='message-reply-activity'][data-reply-count='0']",
              "No replies yet"
+           )
+
+    refute has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-participant-avatar-stack']"
            )
 
     refute has_element?(
@@ -1641,6 +1652,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   defp member_row_selector(member_id) do
     "#club-member-#{member_id}.member-row[data-testid='club-member-row']" <>
       "[data-member-id='#{member_id}']"
+  end
+
+  defp participant_avatar_names(html, message_id) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#member-message-#{message_id} [data-testid='message-participant-avatar']")
+    |> LazyHTML.attribute("data-participant-name")
   end
 
   defp html_has_selector?(html, selector) do
