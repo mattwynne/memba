@@ -146,7 +146,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute html_has_selector?(html, "#member-section-tab-members[phx-click]")
   end
 
-  test "club template renders named member rows with current marker and preserved members actions" do
+  test "club template renders named member rows with current marker and a single members action" do
     alice_id = Memba.ID.generate(:person)
     bob_id = Memba.ID.generate(:person)
 
@@ -174,12 +174,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Invite member"
            )
 
-    assert html_has_selector?(
-             html,
-             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm" <>
-               "[href='/members/invitations/new']",
-             "Invite member"
-           )
+    refute html_has_selector?(html, "#club-members h2", "Current members")
+    refute html_has_selector?(html, "#club-members #member-invite-member-link")
+    assert invite_member_action_count(html) == 1
 
     assert html_has_selector?(
              html,
@@ -406,11 +403,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-section-panel-members.section-panel[data-panel='members'][hidden]"
            )
 
-    assert has_element?(
-             view,
-             "#member-section-panel-members #club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
-             "Invite member"
-           )
+    refute has_element?(view, "#member-section-panel-members #club-members h2", "Current members")
+    refute has_element?(view, "#member-section-panel-members #club-members #member-invite-member-link")
 
     assert has_element?(
              view,
@@ -508,6 +502,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "[data-section-action='members'][href='/members/invitations/new']",
              "Invite member"
            )
+
+    refute has_element?(admin_view, "#club-members #member-invite-member-link")
+    assert invite_member_action_count(render(admin_view)) == 1
 
     refute has_element?(
              admin_view,
@@ -680,7 +677,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#active-members-empty-state")
   end
 
-  test "dashboard exposes the member invite action from the existing members list to Membership Admins",
+  test "dashboard exposes the members tab invite action to Membership Admins",
        %{conn: conn} do
     robin =
       create_active_member(
@@ -694,16 +691,21 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("robin@example.com", robin)
-      |> live(~p"/conversations")
+      |> live(~p"/members")
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
              "Invite member"
            )
+
+    refute has_element?(view, "#club-members #member-invite-member-link")
+    assert invite_member_action_count(render(view)) == 1
   end
 
-  test "club subdomain dashboard exposes the member invite action to Membership Admins without a club_id query",
+  test "club subdomain dashboard exposes the members tab invite action to Membership Admins without a club_id query",
        %{conn: conn} do
     robin =
       create_active_member(
@@ -719,15 +721,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       conn
       |> Map.put(:host, "wcp.lvh.me")
       |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
-      |> live(~p"/conversations")
+      |> live(~p"/members")
 
     assert has_element?(
              view,
-             "#club-members #member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
+             "#member-section-tabs .section-tabs__action " <>
+               "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
+               "[data-section-action='members'][href='/members/invitations/new']",
              "Invite member"
            )
 
-    refute has_element?(view, "#club-members #member-invite-member-link[href*='club_id=']")
+    refute has_element?(view, "#club-members #member-invite-member-link")
+    refute has_element?(view, "#member-section-action-invite-member[href*='club_id=']")
+    assert invite_member_action_count(render(view)) == 1
   end
 
   test "dashboard keeps the member invite action hidden from ordinary members", %{conn: conn} do
@@ -772,12 +778,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Invite member"
            )
 
-    assert has_element?(
-             view,
-             "#member-section-panel-members #club-members " <>
-               "#member-invite-member-link.btn.btn-soft.btn-sm[href='/members/invitations/new']",
-             "Invite member"
-           )
+    refute has_element?(view, "#member-section-panel-members #club-members h2", "Current members")
+    refute has_element?(view, "#member-section-panel-members #club-members #member-invite-member-link")
+    assert invite_member_action_count(render(view)) == 1
 
     assert has_element?(
              view,
@@ -1525,6 +1528,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#{member_row_selector(member_id)} .member-row__role")
     |> Enum.map(fn role_badge -> role_badge |> LazyHTML.text() |> String.trim() end)
+  end
+
+  defp invite_member_action_count(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("a[href='/members/invitations/new']")
+    |> Enum.count(fn action ->
+      action
+      |> LazyHTML.text()
+      |> String.contains?("Invite member")
+    end)
   end
 
   defp member_row_selector(member_id) do
