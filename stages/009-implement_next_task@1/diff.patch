@@ -1,0 +1,59 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index 0d32b50..a22b75a 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
++- [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+ - [ ] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [ ] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+ - [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 3b50496..f22b3d8 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -137,6 +137,13 @@
+                   {message_row.subject}
+                 </span>
+ 
++                <span
++                  data-testid="message-body-preview"
++                  class="mt-2 line-clamp-1 text-sm leading-6 text-ink-2"
++                >
++                  {message_row.body}
++                </span>
++
+                 <span
+                   data-testid="message-started-by"
+                   data-originator-id={message_row.originator_id}
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 6a4ce98..b720ecb 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -313,7 +313,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       create_message(
+         club_id: alice.club_id,
+         sender_id: alice.person_id,
+-        subject: "Trip planning night"
++        subject: "Trip planning night",
++        body:
++          "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
+       )
+ 
+     {:ok, view, _html} =
+@@ -335,6 +337,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+                "#member-message-#{message.message_id}[data-testid='club-message-row'][data-message-subject='Trip planning night']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-message-#{message.message_id} " <>
++               "[data-testid='message-body-preview'].line-clamp-1",
++             "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
++           )
++
+     refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
+   end
+ 
