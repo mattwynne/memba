@@ -150,6 +150,23 @@ The exact heading scale (`.page-title` vs hero heading) should be validated by t
 Phoenix/LiveView test and gallery-walk comparison because Gherkin should not assert CSS class or
 font-size implementation details.
 
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/club_message_replies.feature`: implementation may add or update
+  `@iteration-050` scenarios under `Rule: On the club home, each conversation is one entry with
+  its reply count` (conversation-row preview text, no "Recent club messages" heading) and may add
+  or update one `@iteration-050` conversation-page scenario (no ORIGINAL MESSAGE/REPLY badges, no
+  duplicate "From {sender}" line). It must not retag, reorder, or otherwise modify any existing
+  scenario, rule, or tag outside the new `@iteration-050` scenarios (in particular, no changes to
+  the existing `@iteration-039`/`@iteration-040`/`@iteration-041`/`@not-ui` tags on unrelated reply
+  rules) — this iteration is a presentation-only slice, not a tagging cleanup.
+- `acceptance-tests/features/list_members.feature`: implementation may add or update an
+  `@iteration-050` scenario for the club-home Members tab (no "Current members" heading; exactly
+  one visible "Invite member" action for a member who can manage members). It must not modify the
+  existing `@iteration-049` role-badge scenarios or any other existing scenario/tag.
+- Matching Cucumber step definitions/support files under the domain and browser acceptance test
+  trees may be added or updated as needed to execute the new `@iteration-050` scenarios.
+
 ## Implementation Plan
 
 1. Add a preview element to the club-home conversation row template using `message_row.body`,
