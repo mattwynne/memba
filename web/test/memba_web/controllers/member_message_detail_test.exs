@@ -86,6 +86,40 @@ defmodule MembaWeb.MemberMessageDetailTest do
   end
 
   describe "member-facing conversation presentation" do
+    test "conversation heading does not render a duplicate sender meta line", %{conn: conn} do
+      alice =
+        create_member(
+          email: "alice@example.com",
+          name: "Alice Adams",
+          club_name: "Alpine Club"
+        )
+
+      message =
+        create_message(
+          club_id: alice.club_id,
+          sender_id: alice.person_id,
+          subject: "Trip planning night",
+          body: "Bring your maps."
+        )
+
+      response =
+        conn
+        |> club_host(alice)
+        |> sign_in_as("alice@example.com")
+        |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+        |> html_response(200)
+
+      html = LazyHTML.from_fragment(response)
+
+      assert html
+             |> LazyHTML.query("#member-conversation-original .message__name")
+             |> LazyHTML.text() =~ "Alice Adams"
+
+      refute html
+             |> LazyHTML.query("#member-message-meta")
+             |> Enum.any?()
+    end
+
     test "conversation entries do not render kind badges", %{conn: conn} do
       alice =
         create_member(
