@@ -2,6 +2,17 @@
 
 Judgement-worthy, non-blocking review findings that were intentionally allowed to merge. Clean reviews and silently auto-fixed issues are not recorded here.
 
+## 2026-07-09 — Design gap pass: club-home and conversation templates don't reuse the design system's own CSS classes
+
+Plan: `docs/design-gaps-2026-07-09.md` (gap #5); fixed content-wise by [iteration 050](iterations/050-club-home-conversation-and-member-row-fidelity/plan.md), but the underlying class-reuse gap itself was intentionally left open.
+
+Note: comparing the shipped app against the design system's own CSS found a systemic, one-directional pattern rather than a single bug. `web/assets/css/app.css` already carries faithful, exact-name ports of several design-system component classes — `.app-frame`, `.app-card`, `.app-bar*`, `.section-tab*`, `.member-row*`, `.detail-head*`, `.follow-toggle*`, and the full `.delivery-*` family — and those surfaces (top shell, tabs, member list, follow toggle, delivery details) match the design closely as a direct result.
+
+1. **Club-home conversation rows and the conversation/message page don't use the matching design-system classes at all.**
+   - Evidence: the design system defines `.conversation` / `.conversation__*` / `.avatar-stack` (club-home conversation rows) and `.message` / `.message__*` / `.composer*` / `.page-title` (the conversation page and its composer) in `memba.css`. None of these class names exist anywhere in `web/assets/css/app.css`. `web/lib/memba_web/controllers/page_html/club.html.heex`'s conversation list and `message.html.heex` are hand-rolled with Tailwind utility classes directly in the `.heex` templates instead.
+   - Risk: this is why the two most visible fidelity gaps in the 2026-07-09 pass existed in the first place (an oversized hero-scale subject heading, and no structural home for the message preview/avatar-stack) — without the shared classes, there's no natural place for those elements to slot into. It also means future spacing/color/typography tweaks to `.message`/`.conversation` in the design system won't propagate to the app; these two surfaces are the most likely to silently drift again.
+   - Suggested next action: port `.conversation`/`.conversation__*`/`.avatar-stack` and `.message`/`.message__*`/`.composer*`/`.page-title` into `app.css` (mechanical, same pattern already used for `.member-row*`/`.follow-toggle*`), then rewrite the club-home conversation list and the conversation page to use them instead of ad hoc Tailwind. Iteration 050 fixed the visible symptoms (oversized title, stray badge/meta line, missing headings) directly in the existing Tailwind markup rather than doing this port, so the underlying gap remains; the conversation-participant avatar-stack work (next iteration) is a natural place to do it, since it touches the same templates and needs `.avatar-stack`/`.conversation__participants` either way.
+
 ## 2026-07-07 — ADR 0023 architectural review: URL-addressable LiveView state
 
 ADRs: `docs/adr/0015-use-liveview-for-member-application-pages.md`, `docs/adr/0023-use-url-addressable-liveview-state.md`

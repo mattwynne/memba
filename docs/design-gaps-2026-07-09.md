@@ -247,21 +247,27 @@ summary-card layout, same "Prepare conversion" panel, same inbox table). No gap 
 
 ## Suggested slicing order
 
-1. **Iteration 050 (ready — [plan](iterations/050-club-home-conversation-and-member-row-fidelity/plan.md)):**
+1. **Iteration 050 (merged — [plan](iterations/050-club-home-conversation-and-member-row-fidelity/plan.md)):**
    conversation-row preview text (CSS line-clamp), the duplicate Invite-member button, and the
    conversation page's dropped badge/meta-line/oversized headline/headings (#1's preview half,
    #3, #3a). Member-row join dates (#2) were pulled out after review with Matt — see below.
-2. **Not yet scheduled:** member-row join dates (#2) — needs a dedicated import-aware join-date
-   feature, not a query tweak. Confirmed with Matt that `membership.inserted_at` alone isn't
-   trustworthy once real clubs' migrated membership history is in play.
-3. **Follow-up (sequencing not yet decided):** conversation participant avatar-stack (#1's
-   avatar-stack half) — needs a new participants query, bundle with the CSS-class port (#5) since
-   they touch the same templates.
-4. **Follow-up:** port `.conversation*`/`.message*`/`.composer*`/`.page-title` into `app.css` and
-   rewrite the two templates to use them (#5) — do this alongside whichever of #1/#3 lands next,
-   since it's the same files.
-5. **Own iteration, later:** club "About" tab (#4) — blocked on a product decision about where the
-   copy comes from.
+2. **Tracked as a problem, not an iteration:** member-row join dates (#2) — needs a dedicated
+   import-aware join-date feature, not a query tweak. Confirmed with Matt that
+   `membership.inserted_at` alone isn't trustworthy once real clubs' migrated membership history
+   is in play. See
+   [`docs/problems/2026-07-09-member-since-date-needs-import-support.md`](problems/2026-07-09-member-since-date-needs-import-support.md).
+3. **Iteration 051 (draft — [plan](iterations/051-conversation-participant-avatar-stack/plan.md)):**
+   conversation participant avatar-stack (#1's avatar-stack half), bundled with the
+   `.conversation*`/`.avatar-stack` slice of the CSS-class port (#5) since they need the same
+   templates. Matt confirmed this should be built next.
+4. **Follow-up, not yet scheduled:** the remaining slice of gap #5 — port
+   `.message*`/`.composer*`/`.page-title` into `app.css` and rewrite the conversation/message
+   detail page to use them. Recorded in
+   [`docs/code-health.md`](code-health.md) (2026-07-09 entry) so it isn't lost once iteration 051
+   closes the club-home-row half.
+5. **Tracked as a problem, not an iteration:** club "About" tab (#4) — blocked on a product
+   decision about where the copy comes from. See
+   [`docs/problems/2026-07-09-club-about-tab-missing.md`](problems/2026-07-09-club-about-tab-missing.md).
 6. **Product decision first, then its own iteration:** staff console (#6) — decide whether
    `staff-console.html`'s richer table/search/counts is the direction, or the simpler shipped
    shell is fine and that file should be retired/reconciled instead.
