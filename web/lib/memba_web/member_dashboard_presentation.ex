@@ -13,6 +13,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.Membership.Authorization
   alias Memba.Messaging
 
+  @participant_avatar_limit 3
+
   @doc """
   Load dashboard assigns for a signed-in active member of the selected club.
 
@@ -114,6 +116,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
       originator_name = Map.get(member_names_by_id, conversation.sender_id, "Club member")
       originator_initials = initials(originator_name)
       latest_replier_name = latest_replier_name(conversation)
+      participant_ids = participant_ids(conversation)
+      participants = present_participants(participant_ids, member_names_by_id)
 
       %{
         message: Map.get(conversation, :message),
@@ -132,7 +136,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
         reply_count: reply_count,
         latest_replier_id: latest_replier_id,
         latest_replier_name: latest_replier_name,
-        reply_activity_label: reply_activity_label(reply_count, latest_replier_name)
+        reply_activity_label: reply_activity_label(reply_count, latest_replier_name),
+        participants: participants,
+        additional_participant_count: additional_participant_count(participant_ids, participants)
       }
     end)
   end
@@ -163,6 +169,31 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp latest_replier_name(%{latest_replier_name: name}) when is_binary(name), do: name
   defp latest_replier_name(_conversation), do: nil
+
+  defp participant_ids(conversation) do
+    case Map.get(conversation, :participant_ids, []) do
+      participant_ids when is_list(participant_ids) -> participant_ids
+      _missing_or_unexpected -> []
+    end
+  end
+
+  defp present_participants(participant_ids, member_names_by_id) do
+    participant_ids
+    |> Enum.take(@participant_avatar_limit)
+    |> Enum.map(fn participant_id ->
+      name = Map.get(member_names_by_id, participant_id, "Club member")
+
+      %{
+        id: participant_id,
+        name: name,
+        initials: initials(name)
+      }
+    end)
+  end
+
+  defp additional_participant_count(participant_ids, participants) do
+    max(Enum.count(participant_ids) - Enum.count(participants), 0)
+  end
 
   defp reply_activity_label(0, _latest_replier_name), do: "No replies yet"
 
