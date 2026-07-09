@@ -58,7 +58,6 @@ Feature: Club message replies (conversations)
       Then Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
       And Dana should not receive Bob's reply by email
 
-    @todo-ui
     Scenario: A reply-email stop-follow link unfollows only that recipient
       Given Carol follows the conversation for "Trip planning night"
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
