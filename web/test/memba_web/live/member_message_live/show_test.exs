@@ -349,6 +349,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(view, "#member-conversation[data-message-count='3']")
 
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']")
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Original message")
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Reply")
+
     assert has_element?(
              view,
              "#member-conversation-original " <>

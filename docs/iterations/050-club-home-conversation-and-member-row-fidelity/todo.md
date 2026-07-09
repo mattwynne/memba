@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
-- [ ] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+- [x] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
 - [ ] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
 - [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
 - [ ] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
