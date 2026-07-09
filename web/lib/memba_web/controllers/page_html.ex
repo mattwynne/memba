@@ -55,12 +55,6 @@ defmodule MembaWeb.PageHTML do
               </time>
             </div>
             <div class="flex items-center gap-2">
-              <span
-                data-testid="member-conversation-entry-label"
-                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
-              >
-                {conversation_entry_label(@entry.kind)}
-              </span>
               <div
                 id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
                 data-testid="member-conversation-entry-menu"
@@ -149,9 +143,6 @@ defmodule MembaWeb.PageHTML do
   end
 
   defp conversation_sender_initial(_name), do: "?"
-
-  defp conversation_entry_label(:original), do: "Original message"
-  defp conversation_entry_label(_kind), do: "Reply"
 
   defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
 

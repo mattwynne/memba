@@ -85,6 +85,70 @@ defmodule MembaWeb.MemberMessageDetailTest do
     end
   end
 
+  describe "member-facing conversation presentation" do
+    test "conversation entries do not render kind badges", %{conn: conn} do
+      alice =
+        create_member(
+          email: "alice@example.com",
+          name: "Alice Adams",
+          club_name: "Alpine Club"
+        )
+
+      bob =
+        create_member(
+          email: "bob@example.com",
+          name: "Bob Builder",
+          club_name: "Alpine Club",
+          club_id: alice.club_id
+        )
+
+      message =
+        create_message(
+          club_id: alice.club_id,
+          sender_id: alice.person_id,
+          subject: "Trip planning night",
+          body: "Bring your maps."
+        )
+
+      reply =
+        create_message(
+          club_id: alice.club_id,
+          sender_id: bob.person_id,
+          conversation_id: message.message_id,
+          reply_to_message_id: message.message_id,
+          subject: "Trip planning night",
+          body: "I'll bring snacks."
+        )
+
+      response =
+        conn
+        |> club_host(alice)
+        |> sign_in_as("alice@example.com")
+        |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+        |> html_response(200)
+
+      html = LazyHTML.from_fragment(response)
+
+      assert html
+             |> LazyHTML.query("[data-testid='member-conversation-entry']")
+             |> Enum.count() == 2
+
+      assert html
+             |> LazyHTML.query("[data-conversation-kind='original']")
+             |> Enum.any?()
+
+      assert html
+             |> LazyHTML.query("[data-conversation-kind='reply'][data-message-id='#{reply.message_id}']")
+             |> Enum.any?()
+
+      refute html
+             |> LazyHTML.query("[data-testid='member-conversation-entry-label']")
+             |> Enum.any?()
+
+      refute response =~ "Original message"
+    end
+  end
+
   describe "member-facing delivery relocation on message detail" do
     test "does not render the inline delivery presentation on the message detail",
          %{
