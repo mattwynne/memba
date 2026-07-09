@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-09T21:20:06.448055647Z",
-  "last_event_at": "2026-07-09T21:21:41.619392609Z",
+  "last_event_at": "2026-07-09T21:21:49.867167086Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1064,9 +1064,258 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 94,
       "checkpoint": {
-        "timestamp": "2026-07-09T21:21:43.748277758Z",
+        "timestamp": "2026-07-09T21:21:43.746748217Z",
+        "current_node": "synthesize",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "claude_review_confidence": "High",
+          "gemini_review_blocking_gap_count": 0,
+          "gemini_review_confidence": "High",
+          "internal.retry_count.codex_review": 0,
+          "codex_review_decision": "READY",
+          "internal.fidelity": "summary:high",
+          "thread.codex_review.current_node": "synthesize",
+          "graph.rankdir": "LR",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "failure_signature": "",
+          "last_stage": "synthesize",
+          "internal.thread_id": "codex_review",
+          "codex_review_blocking_gap_count": 0,
+          "codex_review_blocking_gaps": "None",
+          "gemini_review_decision": "READY",
+          "claude_review_required_edits": "None",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.retry_count.start": 0,
+          "plan_needs_fix": false,
+          "response.claude_review": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Implementation step 2** references \"computing the distinct-additional-participant count for the overflow badge,\" but could be clearer: the overflow badge shows `+N` where `N` is total distinct repliers minus 3, not distinct repliers beyond those already shown (though these are the same thing, stating it explicitly would help).\n\n2. **Minor clarity:** The phrase \"capped to the first 3\" appears in multiple places but could state whether the 3 includes or excludes the originator—though the plan does clarify elsewhere that the originator is excluded, so this is evident from context.\n\n## Smallest viable iteration\n\nThis iteration is already minimal. The only potentially separable element is the CSS class migration from Tailwind to design-system classes, but that's appropriately bundled here since:\n- The avatar-stack has no other natural insertion point without those classes\n- Leaving the row split across design-system classes (for the avatar-stack) and ad-hoc Tailwind (for the rest) would create inconsistency\n- The CSS migration is scoped tightly to just the conversation row classes needed\n\nNo further reduction recommended.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nThe plan includes a clear three-level validation approach:\n\n1. **Automated testing:** Query tests for participant ordering/dedup/cap, presentation/LiveView tests for rendered output\n2. **Visual validation:** gallery-walk comparison against the design-system reference wireframe\n3. **Manual verification:** Live testing with 0, 1-3, and 4+ distinct repliers\n\nThis is comprehensive and appropriate for a behaviour-facing iteration.\n\n---\n\n## Detailed Assessment\n\n### 1. Goal clarity ✅\n\n- **Clearly articulated:** Yes. Club-home conversation rows show participant avatar-stacks matching the design-system wireframe.\n- **User/business outcome:** Clear—\"members can see at a glance who else is participating in a conversation from the club home, without opening it.\"\n- **Beneficiary:** Club members browsing the club home.\n\n### 2. Scope focus ✅\n\n- **Coherent outcome:** Yes. Single focused capability—adding participant visibility to conversation rows.\n- **Minimality:** Already minimal. Could not be smaller while remaining useful.\n- **Boundaries clear:** Non-goals explicitly exclude other CSS classes, reply-count changes, and the About tab. The plan clearly positions this as \"the half of gap #1 that iteration 050 didn't take.\"\n\n### 3. Acceptance criteria, BDD scenarios, and decisions ✅\n\n- **Concrete & testable:** Yes. Acceptance criteria specify observable behaviors: avatar-stack ordering, deduplication, cap at 3, \"+N\" overflow badge, no-replies case, CSS class migration.\n- **Coverage:** Covers happy path (1-3 repliers), edge cases (no replies, deduplication, 4+ repliers), and data state (ordering by first reply).\n- **Iteration type classified:** Yes—explicitly marked \"Behaviour-facing.\"\n- **Gherkin scenarios section present:** Yes. Section `## Acceptance Scenarios / Feature Files` names the specific feature file (`club_message_replies.feature`) and lists stakeholder-readable examples for all key behaviors.\n- **Business decisions resolved:** Yes. Section `## Decisions` records three specific decisions made 2026-07-09 about participant ordering, count semantics, and cap value.\n\n### 4. Implementation plan and technical decisions ✅\n\n- **Steps clear and ordered:** Yes. 7 steps from query addition through CSS porting to validation.\n- **Files/modules named:** Yes. `Messaging.conversations_for_club_query/1`, `MemberDashboardPresentation.present_message_rows/2`, `club.html.heex`, `app.css`, `acceptance-tests/features/club_message_replies.feature`.\n- **Data model/API/UI clear:** Yes. Query approach (distinct sender_id from replies, ordered by first reply), presentation layer changes (capping, overflow count), template changes (avatar-stack rendering).\n- **Technical decisions resolved:** Yes. All decisions about ordering, counting, and cap are explicit.\n\n### 5. Expected capability and validation ✅\n\n- **New capability clear:** Yes. Members can see who else is in a conversation without opening it.\n- **Proof of success:** Three-level validation (automated, visual, manual).\n- **Stop condition:** Clear—avatar-stack renders correctly across 0, 1-3, and 4+ replier cases; CSS classes ported; `dev check` passes; acceptance coverage added.\n\n---\n\n## Summary\n\nThis is an exemplary iteration plan. It demonstrates:\n\n- **Strong goal articulation** tied to user value\n- **Crisp scope boundaries** with explicit non-goals\n- **Resolved decisions** documented with date and rationale\n- **Comprehensive acceptance criteria** with Gherkin coverage\n- **Clear implementation path** naming specific files and integration points\n- **Thoughtful validation approach** at multiple levels\n\nThe plan is ready for implementation without edits.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "plan_ready": true,
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_required_edits": "None",
+          "gemini_review_blocking_gaps": "None",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "internal.retry_count.gemini_review": 0,
+          "plan_needs_human": false,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.node_visit_count": 1,
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely test files/modules more explicitly, but it already names enough integration points to proceed.\n2. The plan could specify exactly how acceptance tests should identify avatar-stack participants in the UI — initials, labels, accessible text, or DOM selectors — but this can reasonably be decided during implementation.\n3. Because the file already has `Status: validated`, no further status edit is needed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: add participant data for club-home conversation rows, render distinct replier avatars excluding the originator, cap at 3 with `+N`, and port only the row-relevant conversation/avatar-stack classes needed for this UI. Further splitting would likely leave either backend data with no visible outcome or visual markup without correct participant state.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Acceptance coverage in `acceptance-tests/features/club_message_replies.feature` for:\n   - no replies showing no participant avatar-stack;\n   - 1–3 distinct repliers shown in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers showing first 3 plus `+N`.\n\n2. Automated tests for:\n   - participant query ordering and de-duplication;\n   - overflow count;\n   - no-replies state;\n   - rendered club-home row output.\n\n3. Visual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare against `design-system/wireframes/club-home.html`.\n\n4. Final project validation:\n   - run `dev check` successfully.\n\nThe stop condition is clear: club-home conversation rows visibly show the correct participant avatar-stack behavior and all automated/project checks pass.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "internal.retry_count.claude_review": 0,
+          "claude_review_blocking_gaps": "None",
+          "thread.start.current_node": "gemini_review",
+          "graph.default_fidelity": "summary:high",
+          "codex_review_required_edits": "None",
+          "claude_review_blocking_gap_count": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "current_node": "synthesize",
+          "claude_review_decision": "READY",
+          "internal.retry_count.synthesize": 0,
+          "internal.run_id": "01KX4C0Z66JNJ7AZNQF45YC7E2",
+          "internal.work_dir": "/workspace/memba",
+          "failure_class": "",
+          "codex_review_confidence": "High",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_blocking_gaps": "None",
+              "codex_review_required_edits": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_decision": "READY",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the ",
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9995,
+                    "output_tokens": 535,
+                    "reasoning_tokens": 462,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 79885
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20253,
+              "tool_time_ms": 45,
+              "active_time_ms": 20298
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 0,
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## ",
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely test files/modules more explicitly, but it already names enough integration points to proceed.\n2. The plan could specify exactly how acceptance tests should identify avatar-stack participants in the UI — initials, labels, accessible text, or DOM selectors — but this can reasonably be decided during implementation.\n3. Because the file already has `Status: validated`, no further status edit is needed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: add participant data for club-home conversation rows, render distinct replier avatars excluding the originator, cap at 3 with `+N`, and port only the row-relevant conversation/avatar-stack classes needed for this UI. Further splitting would likely leave either backend data with no visible outcome or visual markup without correct participant state.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Acceptance coverage in `acceptance-tests/features/club_message_replies.feature` for:\n   - no replies showing no participant avatar-stack;\n   - 1–3 distinct repliers shown in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers showing first 3 plus `+N`.\n\n2. Automated tests for:\n   - participant query ordering and de-duplication;\n   - overflow count;\n   - no-replies state;\n   - rendered club-home row output.\n\n3. Visual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare against `design-system/wireframes/club-home.html`.\n\n4. Final project validation:\n   - run `dev check` successfully.\n\nThe stop condition is clear: club-home conversation rows visibly show the correct participant avatar-stack behavior and all automated/project checks pass.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_required_edits": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "READY"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9929,
+                    "output_tokens": 518,
+                    "reasoning_tokens": 384,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 76705
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 18965,
+              "tool_time_ms": 57,
+              "active_time_ms": 19022
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_blocking_gaps": "None",
+              "claude_review_required_edits": "None",
+              "response.claude_review": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Implementation step 2** references \"computing the distinct-additional-participant count for the overflow badge,\" but could be clearer: the overflow badge shows `+N` where `N` is total distinct repliers minus 3, not distinct repliers beyond those already shown (though these are the same thing, stating it explicitly would help).\n\n2. **Minor clarity:** The phrase \"capped to the first 3\" appears in multiple places but could state whether the 3 includes or excludes the originator—though the plan does clarify elsewhere that the originator is excluded, so this is evident from context.\n\n## Smallest viable iteration\n\nThis iteration is already minimal. The only potentially separable element is the CSS class migration from Tailwind to design-system classes, but that's appropriately bundled here since:\n- The avatar-stack has no other natural insertion point without those classes\n- Leaving the row split across design-system classes (for the avatar-stack) and ad-hoc Tailwind (for the rest) would create inconsistency\n- The CSS migration is scoped tightly to just the conversation row classes needed\n\nNo further reduction recommended.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nThe plan includes a clear three-level validation approach:\n\n1. **Automated testing:** Query tests for participant ordering/dedup/cap, presentation/LiveView tests for rendered output\n2. **Visual validation:** gallery-walk comparison against the design-system reference wireframe\n3. **Manual verification:** Live testing with 0, 1-3, and 4+ distinct repliers\n\nThis is comprehensive and appropriate for a behaviour-facing iteration.\n\n---\n\n## Detailed Assessment\n\n### 1. Goal clarity ✅\n\n- **Clearly articulated:** Yes. Club-home conversation rows show participant avatar-stacks matching the design-system wireframe.\n- **User/business outcome:** Clear—\"members can see at a glance who else is participating in a conversation from the club home, without opening it.\"\n- **Beneficiary:** Club members browsing the club home.\n\n### 2. Scope focus ✅\n\n- **Coherent outcome:** Yes. Single focused capability—adding participant visibility to conversation rows.\n- **Minimality:** Already minimal. Could not be smaller while remaining useful.\n- **Boundaries clear:** Non-goals explicitly exclude other CSS classes, reply-count changes, and the About tab. The plan clearly positions this as \"the half of gap #1 that iteration 050 didn't take.\"\n\n### 3. Acceptance criteria, BDD scenarios, and decisions ✅\n\n- **Concrete & testable:** Yes. Acceptance criteria specify observable behaviors: avatar-stack ordering, deduplication, cap at 3, \"+N\" overflow badge, no-replies case, CSS class migration.\n- **Coverage:** Covers happy path (1-3 repliers), edge cases (no replies, deduplication, 4+ repliers), and data state (ordering by first reply).\n- **Iteration type classified:** Yes—explicitly marked \"Behaviour-facing.\"\n- **Gherkin scenarios section present:** Yes. Section `## Acceptance Scenarios / Feature Files` names the specific feature file (`club_message_replies.feature`) and lists stakeholder-readable examples for all key behaviors.\n- **Business decisions resolved:** Yes. Section `## Decisions` records three specific decisions made 2026-07-09 about participant ordering, count semantics, and cap value.\n\n### 4. Implementation plan and technical decisions ✅\n\n- **Steps clear and ordered:** Yes. 7 steps from query addition through CSS porting to validation.\n- **Files/modules named:** Yes. `Messaging.conversations_for_club_query/1`, `MemberDashboardPresentation.present_message_rows/2`, `club.html.heex`, `app.css`, `acceptance-tests/features/club_message_replies.feature`.\n- **Data model/API/UI clear:** Yes. Query approach (distinct sender_id from replies, ordered by first reply), presentation layer changes (capping, overflow count), template changes (avatar-stack rendering).\n- **Technical decisions resolved:** Yes. All decisions about ordering, counting, and cap are explicit.\n\n### 5. Expected capability and validation ✅\n\n- **New capability clear:** Yes. Members can see who else is in a conversation without opening it.\n- **Proof of success:** Three-level validation (automated, visual, manual).\n- **Stop condition:** Clear—avatar-stack renders correctly across 0, 1-3, and 4+ replier cases; CSS classes ported; `dev check` passes; acceptance coverage added.\n\n---\n\n## Summary\n\nThis is an exemplary iteration plan. It demonstrates:\n\n- **Strong goal articulation** tied to user value\n- **Crisp scope boundaries** with explicit non-goals\n- **Resolved decisions** documented with date and rationale\n- **Comprehensive acceptance criteria** with Gherkin coverage\n- **Clear implementation path** naming specific files and integration points\n- **Thoughtful validation approach** at multiple levels\n\nThe plan is ready for implementation without edits.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "last_response": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Impleme",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4320,
+                    "output_tokens": 1456,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 5080,
+                    "cache_write_tokens": 6347
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6347,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 60125
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 32865,
+              "tool_time_ms": 45,
+              "active_time_ms": 32910
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_ready": true,
+              "plan_needs_human": false,
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4560,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 247,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 6039,
+              "tool_time_ms": 0,
+              "active_time_ms": 6039
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "15e62f9e80eaf0b384219b544b66dae135228666",
+        "node_visits": {
+          "start": 1,
+          "synthesize": 1,
+          "codex_review": 1,
+          "claude_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 102,
+      "checkpoint": {
+        "timestamp": "2026-07-09T21:21:47.588655647Z",
         "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
@@ -1078,12 +1327,273 @@
         ],
         "node_retries": {},
         "context_values": {
+          "plan_needs_fix": false,
+          "claude_review_required_edits": "None",
+          "codex_review_decision": "READY",
+          "codex_review_required_edits": "None",
+          "failure_signature": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.gemini_review": 0,
+          "last_stage": "synthesize",
+          "claude_review_blocking_gaps": "None",
+          "codex_review_blocking_gaps": "None",
+          "gemini_review_blocking_gap_count": 0,
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely test files/modules more explicitly, but it already names enough integration points to proceed.\n2. The plan could specify exactly how acceptance tests should identify avatar-stack participants in the UI — initials, labels, accessible text, or DOM selectors — but this can reasonably be decided during implementation.\n3. Because the file already has `Status: validated`, no further status edit is needed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: add participant data for club-home conversation rows, render distinct replier avatars excluding the originator, cap at 3 with `+N`, and port only the row-relevant conversation/avatar-stack classes needed for this UI. Further splitting would likely leave either backend data with no visible outcome or visual markup without correct participant state.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Acceptance coverage in `acceptance-tests/features/club_message_replies.feature` for:\n   - no replies showing no participant avatar-stack;\n   - 1–3 distinct repliers shown in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers showing first 3 plus `+N`.\n\n2. Automated tests for:\n   - participant query ordering and de-duplication;\n   - overflow count;\n   - no-replies state;\n   - rendered club-home row output.\n\n3. Visual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare against `design-system/wireframes/club-home.html`.\n\n4. Final project validation:\n   - run `dev check` successfully.\n\nThe stop condition is clear: club-home conversation rows visibly show the correct participant avatar-stack behavior and all automated/project checks pass.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "internal.retry_count.claude_review": 0,
+          "outcome": "succeeded",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.start.current_node": "gemini_review",
+          "codex_review_blocking_gap_count": 0,
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.start": 0,
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.retry_count.synthesize": 0,
+          "claude_review_confidence": "High",
+          "current_node": "synthesis_gate",
+          "gemini_review_required_edits": "None",
+          "internal.thread_id": "synthesize",
+          "internal.node_visit_count": 1,
+          "plan_needs_human": false,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_confidence": "High",
+          "gemini_review_decision": "READY",
+          "failure_class": "",
+          "claude_review_decision": "READY",
+          "response.claude_review": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Implementation step 2** references \"computing the distinct-additional-participant count for the overflow badge,\" but could be clearer: the overflow badge shows `+N` where `N` is total distinct repliers minus 3, not distinct repliers beyond those already shown (though these are the same thing, stating it explicitly would help).\n\n2. **Minor clarity:** The phrase \"capped to the first 3\" appears in multiple places but could state whether the 3 includes or excludes the originator—though the plan does clarify elsewhere that the originator is excluded, so this is evident from context.\n\n## Smallest viable iteration\n\nThis iteration is already minimal. The only potentially separable element is the CSS class migration from Tailwind to design-system classes, but that's appropriately bundled here since:\n- The avatar-stack has no other natural insertion point without those classes\n- Leaving the row split across design-system classes (for the avatar-stack) and ad-hoc Tailwind (for the rest) would create inconsistency\n- The CSS migration is scoped tightly to just the conversation row classes needed\n\nNo further reduction recommended.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nThe plan includes a clear three-level validation approach:\n\n1. **Automated testing:** Query tests for participant ordering/dedup/cap, presentation/LiveView tests for rendered output\n2. **Visual validation:** gallery-walk comparison against the design-system reference wireframe\n3. **Manual verification:** Live testing with 0, 1-3, and 4+ distinct repliers\n\nThis is comprehensive and appropriate for a behaviour-facing iteration.\n\n---\n\n## Detailed Assessment\n\n### 1. Goal clarity ✅\n\n- **Clearly articulated:** Yes. Club-home conversation rows show participant avatar-stacks matching the design-system wireframe.\n- **User/business outcome:** Clear—\"members can see at a glance who else is participating in a conversation from the club home, without opening it.\"\n- **Beneficiary:** Club members browsing the club home.\n\n### 2. Scope focus ✅\n\n- **Coherent outcome:** Yes. Single focused capability—adding participant visibility to conversation rows.\n- **Minimality:** Already minimal. Could not be smaller while remaining useful.\n- **Boundaries clear:** Non-goals explicitly exclude other CSS classes, reply-count changes, and the About tab. The plan clearly positions this as \"the half of gap #1 that iteration 050 didn't take.\"\n\n### 3. Acceptance criteria, BDD scenarios, and decisions ✅\n\n- **Concrete & testable:** Yes. Acceptance criteria specify observable behaviors: avatar-stack ordering, deduplication, cap at 3, \"+N\" overflow badge, no-replies case, CSS class migration.\n- **Coverage:** Covers happy path (1-3 repliers), edge cases (no replies, deduplication, 4+ repliers), and data state (ordering by first reply).\n- **Iteration type classified:** Yes—explicitly marked \"Behaviour-facing.\"\n- **Gherkin scenarios section present:** Yes. Section `## Acceptance Scenarios / Feature Files` names the specific feature file (`club_message_replies.feature`) and lists stakeholder-readable examples for all key behaviors.\n- **Business decisions resolved:** Yes. Section `## Decisions` records three specific decisions made 2026-07-09 about participant ordering, count semantics, and cap value.\n\n### 4. Implementation plan and technical decisions ✅\n\n- **Steps clear and ordered:** Yes. 7 steps from query addition through CSS porting to validation.\n- **Files/modules named:** Yes. `Messaging.conversations_for_club_query/1`, `MemberDashboardPresentation.present_message_rows/2`, `club.html.heex`, `app.css`, `acceptance-tests/features/club_message_replies.feature`.\n- **Data model/API/UI clear:** Yes. Query approach (distinct sender_id from replies, ordered by first reply), presentation layer changes (capping, overflow count), template changes (avatar-stack rendering).\n- **Technical decisions resolved:** Yes. All decisions about ordering, counting, and cap are explicit.\n\n### 5. Expected capability and validation ✅\n\n- **New capability clear:** Yes. Members can see who else is in a conversation without opening it.\n- **Proof of success:** Three-level validation (automated, visual, manual).\n- **Stop condition:** Clear—avatar-stack renders correctly across 0, 1-3, and 4+ replier cases; CSS classes ported; `dev check` passes; acceptance coverage added.\n\n---\n\n## Summary\n\nThis is an exemplary iteration plan. It demonstrates:\n\n- **Strong goal articulation** tied to user value\n- **Crisp scope boundaries** with explicit non-goals\n- **Resolved decisions** documented with date and rationale\n- **Comprehensive acceptance criteria** with Gherkin coverage\n- **Clear implementation path** naming specific files and integration points\n- **Thoughtful validation approach** at multiple levels\n\nThe plan is ready for implementation without edits.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "graph.default_fidelity": "summary:high",
+          "gemini_review_confidence": "High",
+          "plan_ready": true,
+          "claude_review_blocking_gap_count": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.codex_review": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "thread.codex_review.current_node": "synthesize",
+          "internal.run_id": "01KX4C0Z66JNJ7AZNQF45YC7E2"
+        },
+        "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_blocking_gaps": "None",
+              "claude_review_required_edits": "None",
+              "response.claude_review": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Implementation step 2** references \"computing the distinct-additional-participant count for the overflow badge,\" but could be clearer: the overflow badge shows `+N` where `N` is total distinct repliers minus 3, not distinct repliers beyond those already shown (though these are the same thing, stating it explicitly would help).\n\n2. **Minor clarity:** The phrase \"capped to the first 3\" appears in multiple places but could state whether the 3 includes or excludes the originator—though the plan does clarify elsewhere that the originator is excluded, so this is evident from context.\n\n## Smallest viable iteration\n\nThis iteration is already minimal. The only potentially separable element is the CSS class migration from Tailwind to design-system classes, but that's appropriately bundled here since:\n- The avatar-stack has no other natural insertion point without those classes\n- Leaving the row split across design-system classes (for the avatar-stack) and ad-hoc Tailwind (for the rest) would create inconsistency\n- The CSS migration is scoped tightly to just the conversation row classes needed\n\nNo further reduction recommended.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nThe plan includes a clear three-level validation approach:\n\n1. **Automated testing:** Query tests for participant ordering/dedup/cap, presentation/LiveView tests for rendered output\n2. **Visual validation:** gallery-walk comparison against the design-system reference wireframe\n3. **Manual verification:** Live testing with 0, 1-3, and 4+ distinct repliers\n\nThis is comprehensive and appropriate for a behaviour-facing iteration.\n\n---\n\n## Detailed Assessment\n\n### 1. Goal clarity ✅\n\n- **Clearly articulated:** Yes. Club-home conversation rows show participant avatar-stacks matching the design-system wireframe.\n- **User/business outcome:** Clear—\"members can see at a glance who else is participating in a conversation from the club home, without opening it.\"\n- **Beneficiary:** Club members browsing the club home.\n\n### 2. Scope focus ✅\n\n- **Coherent outcome:** Yes. Single focused capability—adding participant visibility to conversation rows.\n- **Minimality:** Already minimal. Could not be smaller while remaining useful.\n- **Boundaries clear:** Non-goals explicitly exclude other CSS classes, reply-count changes, and the About tab. The plan clearly positions this as \"the half of gap #1 that iteration 050 didn't take.\"\n\n### 3. Acceptance criteria, BDD scenarios, and decisions ✅\n\n- **Concrete & testable:** Yes. Acceptance criteria specify observable behaviors: avatar-stack ordering, deduplication, cap at 3, \"+N\" overflow badge, no-replies case, CSS class migration.\n- **Coverage:** Covers happy path (1-3 repliers), edge cases (no replies, deduplication, 4+ repliers), and data state (ordering by first reply).\n- **Iteration type classified:** Yes—explicitly marked \"Behaviour-facing.\"\n- **Gherkin scenarios section present:** Yes. Section `## Acceptance Scenarios / Feature Files` names the specific feature file (`club_message_replies.feature`) and lists stakeholder-readable examples for all key behaviors.\n- **Business decisions resolved:** Yes. Section `## Decisions` records three specific decisions made 2026-07-09 about participant ordering, count semantics, and cap value.\n\n### 4. Implementation plan and technical decisions ✅\n\n- **Steps clear and ordered:** Yes. 7 steps from query addition through CSS porting to validation.\n- **Files/modules named:** Yes. `Messaging.conversations_for_club_query/1`, `MemberDashboardPresentation.present_message_rows/2`, `club.html.heex`, `app.css`, `acceptance-tests/features/club_message_replies.feature`.\n- **Data model/API/UI clear:** Yes. Query approach (distinct sender_id from replies, ordered by first reply), presentation layer changes (capping, overflow count), template changes (avatar-stack rendering).\n- **Technical decisions resolved:** Yes. All decisions about ordering, counting, and cap are explicit.\n\n### 5. Expected capability and validation ✅\n\n- **New capability clear:** Yes. Members can see who else is in a conversation without opening it.\n- **Proof of success:** Three-level validation (automated, visual, manual).\n- **Stop condition:** Clear—avatar-stack renders correctly across 0, 1-3, and 4+ replier cases; CSS classes ported; `dev check` passes; acceptance coverage added.\n\n---\n\n## Summary\n\nThis is an exemplary iteration plan. It demonstrates:\n\n- **Strong goal articulation** tied to user value\n- **Crisp scope boundaries** with explicit non-goals\n- **Resolved decisions** documented with date and rationale\n- **Comprehensive acceptance criteria** with Gherkin coverage\n- **Clear implementation path** naming specific files and integration points\n- **Thoughtful validation approach** at multiple levels\n\nThe plan is ready for implementation without edits.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "last_response": "Now I'll review the plan against the readiness criteria.\n\n---\n\n# Iteration 051 Plan Review\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Impleme",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4320,
+                    "output_tokens": 1456,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 5080,
+                    "cache_write_tokens": 6347
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6347,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 60125
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 32865,
+              "tool_time_ms": 45,
+              "active_time_ms": 32910
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_blocking_gap_count": 0,
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## ",
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md` through line 151.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name likely test files/modules more explicitly, but it already names enough integration points to proceed.\n2. The plan could specify exactly how acceptance tests should identify avatar-stack participants in the UI — initials, labels, accessible text, or DOM selectors — but this can reasonably be decided during implementation.\n3. Because the file already has `Status: validated`, no further status edit is needed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the plan as written: add participant data for club-home conversation rows, render distinct replier avatars excluding the originator, cap at 3 with `+N`, and port only the row-relevant conversation/avatar-stack classes needed for this UI. Further splitting would likely leave either backend data with no visible outcome or visual markup without correct participant state.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Acceptance coverage in `acceptance-tests/features/club_message_replies.feature` for:\n   - no replies showing no participant avatar-stack;\n   - 1–3 distinct repliers shown in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers showing first 3 plus `+N`.\n\n2. Automated tests for:\n   - participant query ordering and de-duplication;\n   - overflow count;\n   - no-replies state;\n   - rendered club-home row output.\n\n3. Visual validation:\n   - run `./bin/dev gallery-walk`;\n   - compare against `design-system/wireframes/club-home.html`.\n\n4. Final project validation:\n   - run `dev check` successfully.\n\nThe stop condition is clear: club-home conversation rows visibly show the correct participant avatar-stack behavior and all automated/project checks pass.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_required_edits": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "READY"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9929,
+                    "output_tokens": 518,
+                    "reasoning_tokens": 384,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 76705
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 18965,
+              "tool_time_ms": 57,
+              "active_time_ms": 19022
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_ready": true,
+              "plan_needs_human": false,
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4560,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 247,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 6039,
+              "tool_time_ms": 0,
+              "active_time_ms": 6039
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_blocking_gaps": "None",
+              "codex_review_required_edits": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_decision": "READY",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the ",
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9995,
+                    "output_tokens": 535,
+                    "reasoning_tokens": 462,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 79885
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20253,
+              "tool_time_ms": 45,
+              "active_time_ms": 20298
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "293021c908643383a4b528245635943535a5ba36",
+        "node_visits": {
+          "claude_review": 1,
+          "start": 1,
+          "synthesize": 1,
+          "codex_review": 1,
+          "synthesis_gate": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-09T21:21:49.877545844Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.start": 0,
           "codex_review_blocking_gap_count": 0,
           "internal.retry_count.codex_review": 0,
           "plan_ready": true,
           "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "command.output": "blob://sha256/34de6d8020aca0203077e38962a4b7006adb4fb368406b6437ea4b54adf7c2fb",
           "claude_review_confidence": "High",
+          "internal.retry_count.publish_ready": 0,
           "gemini_review_blocking_gaps": "None",
           "plan_needs_fix": false,
           "claude_review_required_edits": "None",
@@ -1107,13 +1617,14 @@
           "internal.retry_count.gemini_review": 0,
           "internal.work_dir": "/workspace/memba",
           "outcome": "succeeded",
-          "current_node": "synthesis_gate",
+          "current_node": "publish_ready",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.thread_id": "synthesize",
+          "internal.thread_id": "synthesis_gate",
           "thread.start.current_node": "gemini_review",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "plan_needs_human": false,
           "internal.retry_count.synthesis_gate": 0,
+          "thread.synthesis_gate.current_node": "publish_ready",
           "last_stage": "synthesize",
           "claude_review_blocking_gaps": "None",
           "internal.retry_count.claude_review": 0,
@@ -1169,9 +1680,64 @@
               "active_time_ms": 19022
             }
           },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/34de6d8020aca0203077e38962a4b7006adb4fb368406b6437ea4b54adf7c2fb"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/051-conversation-participant-avatar-stack/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2267,
+              "active_time_ms": 2267
+            }
+          },
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_blocking_gaps": "None",
+              "codex_review_required_edits": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_decision": "READY",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the ",
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9995,
+                    "output_tokens": 535,
+                    "reasoning_tokens": 462,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 79885
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20253,
+              "tool_time_ms": 45,
+              "active_time_ms": 20298
+            }
           },
           "synthesis_gate": {
             "status": "succeeded",
@@ -1221,47 +1787,6 @@
               "active_time_ms": 32910
             }
           },
-          "codex_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "codex_review_blocking_gap_count": 0,
-              "codex_review_blocking_gaps": "None",
-              "codex_review_required_edits": "None",
-              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the file already shows `Status: validated`. I made no edits.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the likely concrete files/modules for faster handoff, such as `Messaging`, `MemberDashboardPresentation`, `club.html.heex`, `app.css`, and the relevant test files.\n2. The acceptance criteria could explicitly state whether “no avatar-stack” means no stack container is rendered at all versus an empty hidden element. The scenarios imply no visible stack, which is sufficient.\n3. The validation plan could mention checking accessibility/semantics for the overflow badge, e.g. that `+N` is understandable in rendered output or test assertions.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the focused behaviour described: on club-home conversation rows only, show distinct reply participants excluding the originator, ordered by first reply, capped at 3 with `+N` overflow, with no stack for conversations without replies. Port only the row-relevant conversation/avatar-stack CSS needed to support that UI.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Acceptance scenarios in `acceptance-tests/features/club_message_replies.feature` covering:\n   - no replies → no avatar-stack;\n   - 1–3 distinct repliers in first-reply order;\n   - originator excluded;\n   - duplicate repliers de-duplicated;\n   - 4+ distinct repliers → first 3 avatars plus `+N`.\n2. Unit/query tests proving participant selection, ordering, de-duplication, originator exclusion, cap, and overflow count.\n3. Presentation/LiveView tests proving the club-home row renders the expected avatars and overflow badge.\n4. Visual comparison via `./bin/dev gallery-walk` against `design-system/wireframes/club-home.html`.\n5. Final `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-              "codex_review_decision": "READY",
-              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/051-conversation-participant-avatar-stack/plan.md`. The plan is ready for implementation, and the ",
-              "last_stage": "codex_review",
-              "codex_review_confidence": "High"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 9995,
-                    "output_tokens": 535,
-                    "reasoning_tokens": 462,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 79885
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 20253,
-              "tool_time_ms": 45,
-              "active_time_ms": 20298
-            }
-          },
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1302,12 +1827,13 @@
             }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "start": 1,
           "synthesize": 1,
           "claude_review": 1,
           "synthesis_gate": 1,
+          "publish_ready": 1,
           "gemini_review": 1,
           "codex_review": 1
         }
@@ -1651,6 +2177,43 @@
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
+    },
+    "publish_ready@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/051-conversation-participant-avatar-stack/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/051-conversation-participant-avatar-stack/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/34de6d8020aca0203077e38962a4b7006adb4fb368406b6437ea4b54adf7c2fb",
+        "exit_code": 0,
+        "duration_ms": 2267,
+        "termination": "exited",
+        "output_bytes": 225,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 225,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-09T21:21:47.589779888Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "gemini_review@1": {
       "first_event_seq": 21,
@@ -2073,6 +2636,40 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 97,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-07-09T21:21:43.747954541Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-09T21:21:43.747706259Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     }
