@@ -2,7 +2,7 @@
 
 Date: 2026-07-09
 
-Status: implementing
+Status: merged
 
 ## Goal
 

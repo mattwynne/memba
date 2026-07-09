@@ -128,6 +128,11 @@ Feature: Club message replies (conversations)
   @iteration-043
   Rule: On the club home, each conversation is one entry with its reply count
 
+    @iteration-050
+    Scenario: Conversation rows show previews without the redundant panel heading
+      Then Alice's club home should show the "Trip planning night" conversation preview "Trip planning night details."
+      And Alice's club home should not show the "Recent club messages" heading
+
     Scenario: A replied-to message appears once, with its reply count
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"
@@ -143,3 +148,11 @@ Feature: Club message replies (conversations)
       Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
+
+  @iteration-050
+  Rule: Conversation pages match the member-visible conversation design
+
+    Scenario: Conversation entries omit kind badges and the duplicate sender line
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Alice should not see conversation entry kind badges for "Trip planning night"
+      And Alice should not see a separate "From Alice" line under the title for "Trip planning night"

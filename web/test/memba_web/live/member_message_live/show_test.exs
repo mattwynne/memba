@@ -125,6 +125,20 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Trip planning night"
            )
 
+    subject_class =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#member-message-subject")
+      |> LazyHTML.attribute("class")
+      |> List.first()
+
+    assert subject_class =~ "text-[38px]"
+    assert subject_class =~ "leading-[1.08]"
+    assert subject_class =~ "tracking-[-0.032em]"
+    refute subject_class =~ "text-4xl"
+    refute subject_class =~ "sm:text-5xl"
+
     assert has_element?(
              view,
              "#member-message-heading-row.detail-head > " <>
@@ -132,6 +146,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                "[data-following='false'][data-can-follow='true']",
              "Not following"
            )
+
+    refute has_element?(view, "#member-message-meta")
+    refute has_element?(view, "#member-message-meta", "From Alice Adams")
 
     assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
     refute has_element?(view, "#member-conversation-follow-toggle[checked]")
@@ -348,6 +365,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> live(~p"/messages/#{message.message_id}")
 
     assert has_element?(view, "#member-conversation[data-message-count='3']")
+
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']")
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Original message")
+    refute has_element?(view, "[data-testid='member-conversation-entry-label']", "Reply")
 
     assert has_element?(
              view,
