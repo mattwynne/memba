@@ -1,0 +1,85 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index 46e052a..58c4153 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+ - [x] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [x] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+-- [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
++- [x] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+ - [ ] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
+ - [ ] 006 Remove the "Current members" heading block (including the redundant inline "Invite member" button) from the Members panel in `club.html.heex`; confirm the tab-row "Invite member" action still covers the same permission check (`@current_member_can_manage_members?`).
+ - [ ] 007 Update/remove the named acceptance scenarios and any unit test assertions tied to the removed elements; add coverage for the new preview text.
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index b53c001..e0ec6d9 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -28,7 +28,7 @@
+         <div class="detail-head__main">
+           <h1
+             id="member-message-subject"
+-            class="text-4xl font-semibold leading-tight tracking-tight text-base-content sm:text-5xl"
++            class="text-[38px] font-semibold leading-[1.08] tracking-[-0.032em] text-base-content"
+           >
+             {@message.subject}
+           </h1>
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index a8c17cd..fbc79a4 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -139,6 +139,38 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, "#member-conversation-unfollow-button")
+   end
+ 
++  test "routed message detail renders the subject at page-title scale", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/#{message.message_id}")
++
++    subject_classes =
++      view
++      |> render()
++      |> classes("#member-message-subject")
++
++    assert "text-[38px]" in subject_classes
++    assert "leading-[1.08]" in subject_classes
++    assert "tracking-[-0.032em]" in subject_classes
++    refute "text-4xl" in subject_classes
++    refute "sm:text-5xl" in subject_classes
++  end
++
+   test "current member changes follow state with the compact follow toggle", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -654,6 +686,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     |> IO.iodata_to_binary()
+   end
+ 
++  defp classes(html, selector) do
++    html
++    |> LazyHTML.from_fragment()
++    |> LazyHTML.query(selector)
++    |> LazyHTML.attribute("class")
++    |> List.first("")
++    |> String.split()
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+     person_id = Memba.ID.generate(:person)
