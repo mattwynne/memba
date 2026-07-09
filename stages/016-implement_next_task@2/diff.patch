@@ -1,0 +1,115 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index a22b75a..91983eb 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+-- [ ] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
++- [x] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [ ] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+ - [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+ - [ ] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 3079fcc..dc09ff6 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -55,12 +55,6 @@ defmodule MembaWeb.PageHTML do
+               </time>
+             </div>
+             <div class="flex items-center gap-2">
+-              <span
+-                data-testid="member-conversation-entry-label"
+-                class="w-fit rounded-full border border-base-300 bg-base-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-2"
+-              >
+-                {conversation_entry_label(@entry.kind)}
+-              </span>
+               <div
+                 id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+                 data-testid="member-conversation-entry-menu"
+@@ -150,9 +144,6 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp conversation_sender_initial(_name), do: "?"
+ 
+-  defp conversation_entry_label(:original), do: "Original message"
+-  defp conversation_entry_label(_kind), do: "Reply"
+-
+   defp conversation_entry_body_id(%{kind: :original}), do: "member-message-body"
+ 
+   defp conversation_entry_body_id(%{message: %{message_id: message_id}}) do
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index e1a33a5..ad05f60 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -85,6 +85,70 @@ defmodule MembaWeb.MemberMessageDetailTest do
+     end
+   end
+ 
++  describe "member-facing conversation presentation" do
++    test "conversation entries do not render kind badges", %{conn: conn} do
++      alice =
++        create_member(
++          email: "alice@example.com",
++          name: "Alice Adams",
++          club_name: "Alpine Club"
++        )
++
++      bob =
++        create_member(
++          email: "bob@example.com",
++          name: "Bob Builder",
++          club_name: "Alpine Club",
++          club_id: alice.club_id
++        )
++
++      message =
++        create_message(
++          club_id: alice.club_id,
++          sender_id: alice.person_id,
++          subject: "Trip planning night",
++          body: "Bring your maps."
++        )
++
++      reply =
++        create_message(
++          club_id: alice.club_id,
++          sender_id: bob.person_id,
++          conversation_id: message.message_id,
++          reply_to_message_id: message.message_id,
++          subject: "Trip planning night",
++          body: "I'll bring snacks."
++        )
++
++      response =
++        conn
++        |> club_host(alice)
++        |> sign_in_as("alice@example.com")
++        |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++        |> html_response(200)
++
++      html = LazyHTML.from_fragment(response)
++
++      assert html
++             |> LazyHTML.query("[data-testid='member-conversation-entry']")
++             |> Enum.count() == 2
++
++      assert html
++             |> LazyHTML.query("[data-conversation-kind='original']")
++             |> Enum.any?()
++
++      assert html
++             |> LazyHTML.query("[data-conversation-kind='reply'][data-message-id='#{reply.message_id}']")
++             |> Enum.any?()
++
++      refute html
++             |> LazyHTML.query("[data-testid='member-conversation-entry-label']")
++             |> Enum.any?()
++
++      refute response =~ "Original message"
++    end
++  end
++
+   describe "member-facing delivery relocation on message detail" do
+     test "does not render the inline delivery presentation on the message detail",
+          %{
