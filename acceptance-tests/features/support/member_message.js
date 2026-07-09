@@ -417,6 +417,10 @@ function conversationFollowControl(world) {
   return world.page.locator("#member-conversation-follow-control");
 }
 
+function conversationFollowToggle(world) {
+  return world.page.locator("#member-conversation-follow-toggle");
+}
+
 async function waitForProjectedFollowState(world, expectedFollowing, description, options = {}) {
   await waitForProjectedAttribute(
     world,
@@ -670,6 +674,7 @@ async function followConversation(world, memberName, subject, { expect = playwri
   ensureState(world);
 
   await openMemberMessage(world, subject, { expect, timeoutMs });
+  await world.page.waitForLoadState("networkidle", { timeout: timeoutMs });
 
   const control = conversationFollowControl(world);
   await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
@@ -682,7 +687,7 @@ async function followConversation(world, memberName, subject, { expect = playwri
   }
 
   await browserInteraction(`${memberName} follows ${JSON.stringify(subject)}`, () =>
-    world.page.locator("#member-conversation-follow-button").click()
+    conversationFollowToggle(world).click()
   );
 
   await waitForProjectedFollowState(world, true, `${memberName} follows ${JSON.stringify(subject)}`, {
@@ -697,6 +702,7 @@ async function unfollowConversation(world, memberName, subject, { expect = playw
   ensureState(world);
 
   await openMemberMessage(world, subject, { expect, timeoutMs });
+  await world.page.waitForLoadState("networkidle", { timeout: timeoutMs });
 
   const control = conversationFollowControl(world);
   await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
@@ -709,7 +715,7 @@ async function unfollowConversation(world, memberName, subject, { expect = playw
   }
 
   await browserInteraction(`${memberName} stops following ${JSON.stringify(subject)}`, () =>
-    world.page.locator("#member-conversation-unfollow-button").click()
+    conversationFollowToggle(world).click()
   );
 
   await waitForProjectedFollowState(world, false, `${memberName} stops following ${JSON.stringify(subject)}`, {

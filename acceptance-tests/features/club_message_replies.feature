@@ -1,4 +1,4 @@
-@not-ui @iteration-039
+@iteration-039
 Feature: Club message replies (conversations)
   Club members want to reply to a club message and keep the conversation in Memba,
   instead of replies scattering to private inboxes and never being tracked.
@@ -14,6 +14,7 @@ Feature: Club message replies (conversations)
     And Pat is a member of Nelson Paddling Club
     And Alice sent the message "Trip planning night" to Kootenay Mountaineering Club members
 
+  @todo-ui
   Rule: A member can reply to a club message, and the reply joins that message's conversation
 
     Scenario: Bob replies to Alice's club message
@@ -29,6 +30,7 @@ Feature: Club message replies (conversations)
   @iteration-040
   Rule: A reply is emailed to current club-member followers
 
+    @todo-ui
     Scenario: The sender and repliers automatically follow the conversation
       Then Alice should be following the conversation for "Trip planning night"
       And Carol should not be following the conversation for "Trip planning night"
@@ -42,6 +44,7 @@ Feature: Club message replies (conversations)
       When Carol stops following the conversation for "Trip planning night"
       Then Carol should not be following the conversation for "Trip planning night"
 
+    @todo-ui
     Scenario: Followers receive Bob's reply, but non-followers and the author do not
       Given Carol follows the conversation for "Trip planning night"
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
@@ -49,6 +52,7 @@ Feature: Club message replies (conversations)
       And Dana should not receive Bob's reply by email
       And Bob should not receive his own reply by email
 
+    @todo-ui
     Scenario: Former members do not receive replies even if they followed before leaving
       Given Dana follows the conversation for "Trip planning night"
       And Dana is no longer a member of Kootenay Mountaineering Club
@@ -56,6 +60,7 @@ Feature: Club message replies (conversations)
       Then Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
       And Dana should not receive Bob's reply by email
 
+    @todo-ui
     Scenario: A reply-email stop-follow link unfollows only that recipient
       Given Carol follows the conversation for "Trip planning night"
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
@@ -66,18 +71,20 @@ Feature: Club message replies (conversations)
       Then Bob should receive Alice's reply by email from Kootenay Mountaineering Club via Memba
       And Carol should not receive Alice's reply by email
 
+    @todo-ui
     Scenario: A tampered stop-follow link changes nothing
       Given Carol follows the conversation for "Trip planning night"
       When Carol follows a tampered stop-follow link for "Trip planning night"
       Then Carol should be told the stop-follow link is not valid
       And Carol should be following the conversation for "Trip planning night"
 
+  @todo-ui
   Rule: Only a current member of the club can reply to its messages
 
     Scenario: A member of another club cannot reply
       Then Pat should not be able to reply to "Trip planning night"
 
-  @iteration-041
+  @iteration-041 @todo-ui
   Rule: Email replies use standard reply headers to join conversations
 
     Scenario: Bob replies by email and followers receive the reply
@@ -117,6 +124,7 @@ Feature: Club message replies (conversations)
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
 
+  @todo-ui
   Rule: Email replies use the everyone address on the club email subdomain
 
     @iteration-042
@@ -125,7 +133,7 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply
       And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
 
-  @iteration-043
+  @iteration-043 @todo-ui
   Rule: On the club home, each conversation is one entry with its reply count
 
     @iteration-050
@@ -149,7 +157,7 @@ Feature: Club message replies (conversations)
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
 
-  @iteration-050
+  @iteration-050 @todo-ui
   Rule: Conversation pages match the member-visible conversation design
 
     Scenario: Conversation entries omit kind badges and the duplicate sender line
