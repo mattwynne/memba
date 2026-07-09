@@ -80,7 +80,7 @@
       hidden={not active_member_section?(active_section, "conversations")}
     >
       <section id="club-messages">
-        <div id="member-message-list" class="mt-4 space-y-2">
+        <div id="member-message-list" class="conversation-list mt-4">
           <div
             :if={@message_rows == []}
             id="member-message-list-empty"
@@ -112,64 +112,87 @@
             data-testid="club-message-row"
             data-message-id={message_row.message_id}
             data-message-subject={message_row.subject}
-            class="rounded-2xl border border-base-300 bg-base-100 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ink-3/40 hover:shadow-md"
           >
             <.link
               data-testid="club-message-link"
               href={member_message_path(message_row.message_id, @selected_club, club_id_source)}
-              class="grid gap-4 p-4 sm:grid-cols-[2.25rem_1fr_auto] sm:items-start"
+              class="conversation"
             >
               <.avatar
                 data-testid="message-originator-initials"
                 initials={message_row.originator_initials}
                 size={:md}
-                class="shrink-0"
+                class="conversation__avatar"
               />
 
-              <span class="min-w-0">
-                <span class="mt-1 block truncate text-base font-semibold tracking-tight text-base-content">
-                  {message_row.subject}
-                </span>
+              <div class="conversation__body">
+                <div class="conversation__head">
+                  <span class="conversation__subject">
+                    {message_row.subject}
+                  </span>
 
-                <span
-                  data-testid="message-body-preview"
-                  class="mt-2 line-clamp-1 text-sm leading-6 text-ink-2"
-                >
+                  <span
+                    :if={message_row.sent_at_label}
+                    data-testid="message-sent-at"
+                    class="conversation__date"
+                  >
+                    {message_row.sent_at_label}
+                  </span>
+                </div>
+
+                <div data-testid="message-body-preview" class="conversation__preview">
                   {message_row.body}
-                </span>
+                </div>
 
                 <span
                   data-testid="message-started-by"
                   data-originator-id={message_row.originator_id}
                   data-originator-name={message_row.originator_name}
-                  class="mt-1 block text-xs font-medium text-ink-2"
+                  class="conversation__replies"
                 >
                   Started by {message_row.originator_name}
                 </span>
 
-                <span
-                  data-testid="message-reply-activity"
-                  data-reply-count={message_row.reply_count}
-                  data-latest-replier-id={message_row.latest_replier_id}
-                  data-latest-replier-name={message_row.latest_replier_name}
-                  class="mt-3 block text-sm font-medium text-ink-2"
-                >
-                  {message_row.reply_activity_label}
-                </span>
-              </span>
+                <div class="conversation__participants">
+                  <div
+                    :if={
+                      message_row.participants != [] or
+                        message_row.additional_participant_count > 0
+                    }
+                    class="avatar-stack"
+                    data-testid="message-participant-avatar-stack"
+                    aria-label="Conversation participants"
+                  >
+                    <.avatar
+                      :for={participant <- message_row.participants}
+                      data-testid="message-participant-avatar"
+                      data-participant-id={participant.id}
+                      data-participant-name={participant.name}
+                      initials={participant.initials}
+                      size={:sm}
+                      title={participant.name}
+                    />
+                    <span
+                      :if={message_row.additional_participant_count > 0}
+                      class="is-more"
+                      data-testid="message-participant-overflow"
+                      aria-label={"#{message_row.additional_participant_count} more participants"}
+                    >
+                      +{message_row.additional_participant_count}
+                    </span>
+                  </div>
 
-              <span class="flex items-start justify-between gap-3 sm:justify-end">
-                <span
-                  :if={message_row.sent_at_label}
-                  data-testid="message-sent-at"
-                  class="text-xs font-medium tabular-nums text-ink-2"
-                >
-                  {message_row.sent_at_label}
-                </span>
-                <span class="text-ink-2">
-                  <.icon name="hero-chevron-right" class="size-5" />
-                </span>
-              </span>
+                  <span
+                    data-testid="message-reply-activity"
+                    data-reply-count={message_row.reply_count}
+                    data-latest-replier-id={message_row.latest_replier_id}
+                    data-latest-replier-name={message_row.latest_replier_name}
+                    class="conversation__replies"
+                  >
+                    {message_row.reply_activity_label}
+                  </span>
+                </div>
+              </div>
             </.link>
           </article>
         </div>

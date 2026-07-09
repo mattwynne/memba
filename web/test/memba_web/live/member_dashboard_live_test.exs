@@ -343,7 +343,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-message-#{message.message_id} " <>
-               "[data-testid='message-body-preview'].line-clamp-1",
+               "[data-testid='message-body-preview'].conversation__preview",
              "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
            )
 
@@ -370,6 +370,94 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-section-panel-conversations.section-panel[data-panel='conversations'] " <>
                "#member-message-list-empty",
              "No club messages yet"
+           )
+  end
+
+  test "dashboard conversation rows use design-system classes and render participant avatar stacks" do
+    message_id = Memba.ID.generate(:message)
+    originator_id = Memba.ID.generate(:person)
+    carol_id = Memba.ID.generate(:person)
+    dana_id = Memba.ID.generate(:person)
+    elliot_id = Memba.ID.generate(:person)
+
+    html =
+      dashboard_html(%{
+        message_rows: [
+          %{
+            message_id: message_id,
+            originator_id: originator_id,
+            originator_name: "Bob Builder",
+            originator_initials: "BB",
+            subject: "Weekend conditions",
+            body: "Trail is clear to the lake, with snow above the pass.",
+            sent_at_label: "Jun 03, 2026",
+            reply_count: 5,
+            latest_replier_id: elliot_id,
+            latest_replier_name: "Elliot Explorer",
+            reply_activity_label: "5 replies · latest from Elliot Explorer",
+            participants: [
+              %{id: carol_id, name: "Carol Canoe", initials: "CC"},
+              %{id: dana_id, name: "Dana Downhill", initials: "DD"},
+              %{id: elliot_id, name: "Elliot Explorer", initials: "EE"}
+            ],
+            additional_participant_count: 2
+          }
+        ]
+      })
+
+    row_selector = "#member-message-#{message_id}[data-testid='club-message-row']"
+    link_selector = "#{row_selector} [data-testid='club-message-link'].conversation"
+
+    assert html_has_selector?(html, "#member-message-list.conversation-list")
+    assert html_has_selector?(html, "#{link_selector}[href='/messages/#{message_id}']")
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} [data-testid='message-originator-initials']" <>
+               ".conversation__avatar.avatar.avatar-placeholder",
+             "BB"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__body .conversation__head .conversation__subject",
+             "Weekend conditions"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__date[data-testid='message-sent-at']",
+             "Jun 03, 2026"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__preview[data-testid='message-body-preview']",
+             "Trail is clear to the lake"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__participants " <>
+               ".avatar-stack[data-testid='message-participant-avatar-stack'] " <>
+               "[data-testid='message-participant-avatar'][data-participant-id='#{carol_id}']" <>
+               "[data-participant-name='Carol Canoe'].avatar.avatar-placeholder",
+             "CC"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__participants " <>
+               ".avatar-stack [data-testid='message-participant-overflow'].is-more",
+             "+2"
+           )
+
+    assert html_has_selector?(
+             html,
+             "#{link_selector} .conversation__replies[data-testid='message-reply-activity']" <>
+               "[data-reply-count='5'][data-latest-replier-id='#{elliot_id}']" <>
+               "[data-latest-replier-name='Elliot Explorer']",
+             "5 replies · latest from Elliot Explorer"
            )
   end
 
