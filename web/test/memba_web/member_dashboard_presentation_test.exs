@@ -198,6 +198,95 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
              )
   end
 
+  test "presents conversation participants capped to three with an additional participant count" do
+    root_sender_id = Memba.ID.generate(:person)
+    first_participant_id = Memba.ID.generate(:person)
+    second_participant_id = Memba.ID.generate(:person)
+    third_participant_id = Memba.ID.generate(:person)
+    fourth_participant_id = Memba.ID.generate(:person)
+    fifth_participant_id = Memba.ID.generate(:person)
+
+    root = %Message{
+      message_id: Memba.ID.generate(:message),
+      sender_id: root_sender_id,
+      conversation_id: Memba.ID.generate(:message),
+      subject: "Participant stack",
+      body: "Body",
+      inserted_at: DateTime.utc_now()
+    }
+
+    assert [
+             %{
+               participants: [
+                 %{id: ^first_participant_id, name: "Bob Builder", initials: "BB"},
+                 %{id: ^second_participant_id, name: "Carol Canoe", initials: "CC"},
+                 %{id: ^third_participant_id, name: "Dana", initials: "D"}
+               ],
+               additional_participant_count: 2
+             }
+           ] =
+             MemberDashboardPresentation.present_message_rows(
+               [
+                 %{
+                   message: root,
+                   message_id: root.message_id,
+                   conversation_id: root.message_id,
+                   sender_id: root.sender_id,
+                   subject: root.subject,
+                   body: root.body,
+                   inserted_at: root.inserted_at,
+                   participant_ids: [
+                     first_participant_id,
+                     second_participant_id,
+                     third_participant_id,
+                     fourth_participant_id,
+                     fifth_participant_id
+                   ]
+                 }
+               ],
+               %{
+                 root_sender_id => "Alice Adams",
+                 first_participant_id => "Bob Builder",
+                 second_participant_id => "Carol Canoe",
+                 third_participant_id => "Dana",
+                 fourth_participant_id => "Elliot Explorer",
+                 fifth_participant_id => "Fran Fern"
+               }
+             )
+  end
+
+  test "presents an empty participant list and zero additional participants by default" do
+    root = %Message{
+      message_id: Memba.ID.generate(:message),
+      sender_id: Memba.ID.generate(:person),
+      conversation_id: Memba.ID.generate(:message),
+      subject: "No participants yet",
+      body: "Body",
+      inserted_at: DateTime.utc_now()
+    }
+
+    assert [
+             %{
+               participants: [],
+               additional_participant_count: 0
+             }
+           ] =
+             MemberDashboardPresentation.present_message_rows(
+               [
+                 %{
+                   message: root,
+                   message_id: root.message_id,
+                   conversation_id: root.message_id,
+                   sender_id: root.sender_id,
+                   subject: root.subject,
+                   body: root.body,
+                   inserted_at: root.inserted_at
+                 }
+               ],
+               %{}
+             )
+  end
+
   test "passes member roles through to dashboard member rows" do
     alice =
       create_active_member(

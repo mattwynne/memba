@@ -149,6 +149,31 @@ Feature: Club message replies (conversations)
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
 
+    @iteration-051
+    Scenario: A conversation with no replies shows no participant avatar-stack
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation should show no participant avatars
+
+    @iteration-051
+    Scenario: Participant avatar-stacks show distinct repliers in first-reply order
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      And Alice replies "I'll confirm the room" to "Trip planning night"
+      And Carol replies "I'll bring the maps" to "Trip planning night"
+      And Bob replies "I can also bring snacks" to "Trip planning night"
+      And Dana replies "I'll print route cards" to "Trip planning night"
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana
+
+    @iteration-051
+    Scenario: More than three distinct repliers show an overflow count
+      Given Elliot is a member of Kootenay Mountaineering Club
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      And Carol replies "I'll bring the maps" to "Trip planning night"
+      And Dana replies "I'll print route cards" to "Trip planning night"
+      And Elliot replies "I can bring the permit" to "Trip planning night"
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana, plus 1 more
+
   @iteration-050
   Rule: Conversation pages match the member-visible conversation design
 

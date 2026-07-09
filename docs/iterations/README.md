@@ -60,7 +60,7 @@ green than before.
 | 048 | 2026-07-04 | merged | Club home Members: named member rows (role badges deferred to 049) | [plan](048-named-member-rows/plan.md) |
 | 049 | 2026-07-07 | merged | Club home Members: role badges | [plan](049-member-role-badges/plan.md) |
 | 050 | 2026-07-09 | merged | Club home conversation & member-list fidelity fixes | [plan](050-club-home-conversation-and-member-row-fidelity/plan.md) |
-| 051 | 2026-07-09 | implementing | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |
+| 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |
 
 Status notes:
 
