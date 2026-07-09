@@ -1,0 +1,142 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index 1e1546e..fc19820 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -149,6 +149,31 @@ Feature: Club message replies (conversations)
+       When Carol replies "I'll take the old skis" to "Trip planning night"
+       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
+ 
++    @iteration-051
++    Scenario: A conversation with no replies shows no participant avatar-stack
++      Then Alice's club home should list one conversation for "Trip planning night"
++      And the "Trip planning night" conversation should show no participant avatars
++
++    @iteration-051
++    Scenario: Participant avatar-stacks show distinct repliers in first-reply order
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      And Alice replies "I'll confirm the room" to "Trip planning night"
++      And Carol replies "I'll bring the maps" to "Trip planning night"
++      And Bob replies "I can also bring snacks" to "Trip planning night"
++      And Dana replies "I'll print route cards" to "Trip planning night"
++      Then Alice's club home should list one conversation for "Trip planning night"
++      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana
++
++    @iteration-051
++    Scenario: More than three distinct repliers show an overflow count
++      Given Elliot is a member of Kootenay Mountaineering Club
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      And Carol replies "I'll bring the maps" to "Trip planning night"
++      And Dana replies "I'll print route cards" to "Trip planning night"
++      And Elliot replies "I can bring the permit" to "Trip planning night"
++      Then Alice's club home should list one conversation for "Trip planning night"
++      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana, plus 1 more
++
+   @iteration-050
+   Rule: Conversation pages match the member-visible conversation design
+ 
+diff --git a/docs/iterations/051-conversation-participant-avatar-stack/todo.md b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+index 560ad71..b761a5d 100644
+--- a/docs/iterations/051-conversation-participant-avatar-stack/todo.md
++++ b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+@@ -4,6 +4,6 @@
+ - [x] 002 Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping to the first 3 and computing the distinct-additional-participant count for the overflow badge.
+ - [x] 003 Port the row-relevant `.conversation`/`.conversation__*`/`.avatar-stack` classes into `app.css` (mirroring `memba.css`'s definitions for those classes).
+ - [x] 004 Rewrite the club-home conversation row in `club.html.heex` to use the ported classes, rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an overflow badge.
+-- [ ] 005 Add/update acceptance and unit test coverage for participant ordering, the overflow count, and the no-replies-yet case.
++- [x] 005 Add/update acceptance and unit test coverage for participant ordering, the overflow count, and the no-replies-yet case.
+ - [ ] 006 Run `./bin/dev gallery-walk` and compare against `design-system/wireframes/club-home.html`.
+ - [ ] 007 Run `dev check` and confirm it is green.
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 61bff8d..eb294d6 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -355,6 +355,29 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  step "the {string} conversation should show no participant avatars",
++       %{args: [subject]} = context do
++    conversation = club_home_conversation_for!(context, subject)
++
++    assert Map.get(conversation, :participant_ids, []) == []
++
++    context
++  end
++
++  step ~r/^the "([^"]+)" conversation participant avatar-stack should show (.+?)(?:, plus (\d+) more)?$/,
++       %{args: args} = context do
++    [subject, participant_names_text | additional_count_args] = args
++    expected_participant_ids = participant_ids_from_text(context, participant_names_text)
++    conversation = club_home_conversation_for!(context, subject)
++    participant_ids = Map.get(conversation, :participant_ids, [])
++    expected_additional_count = additional_count_arg(additional_count_args)
++
++    assert Enum.take(participant_ids, 3) == expected_participant_ids
++    assert max(length(participant_ids) - 3, 0) == expected_additional_count
++
++    context
++  end
++
+   step ~r/^(\w+)'s club home should list "([^"]+)" before "([^"]+)"$/,
+        %{args: [viewer_name, earlier_subject, later_subject]} = context do
+     conversations =
+@@ -1289,6 +1312,16 @@ defmodule Memba.Cucumber.MessagingSteps do
+     end
+   end
+ 
++  defp participant_ids_from_text(context, participant_names_text) do
++    participant_names_text
++    |> parse_person_list()
++    |> Enum.map(&person_id_from_context!(context, &1))
++  end
++
++  defp additional_count_arg([]), do: 0
++  defp additional_count_arg([nil]), do: 0
++  defp additional_count_arg([count]), do: String.to_integer(count)
++
+   defp primary_email_for(context, person_name) do
+     context
+     |> person_id_from_context!(person_name)
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 51192c2..f90599f 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -452,6 +452,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "+2"
+            )
+ 
++    assert participant_avatar_names(html, message_id) == [
++             "Carol Canoe",
++             "Dana Downhill",
++             "Elliot Explorer"
++           ]
++
+     assert html_has_selector?(
+              html,
+              "#{link_selector} .conversation__replies[data-testid='message-reply-activity']" <>
+@@ -710,6 +716,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "No replies yet"
+            )
+ 
++    refute has_element?(
++             view,
++             "#member-message-#{message.message_id} [data-testid='message-participant-avatar-stack']"
++           )
++
+     refute has_element?(
+              view,
+              "#member-message-#{message.message_id} [data-testid='message-receipt-glance']"
+@@ -1643,6 +1654,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       "[data-member-id='#{member_id}']"
+   end
+ 
++  defp participant_avatar_names(html, message_id) do
++    html
++    |> LazyHTML.from_fragment()
++    |> LazyHTML.query("#member-message-#{message_id} [data-testid='message-participant-avatar']")
++    |> LazyHTML.attribute("data-participant-name")
++  end
++
+   defp html_has_selector?(html, selector) do
+     html
+     |> LazyHTML.from_fragment()
