@@ -50,7 +50,6 @@ Feature: Club message replies (conversations)
       And Dana should not receive Bob's reply by email
       And Bob should not receive his own reply by email
 
-    @todo-ui
     Scenario: Former members do not receive replies even if they followed before leaving
       Given Dana follows the conversation for "Trip planning night"
       And Dana is no longer a member of Kootenay Mountaineering Club
