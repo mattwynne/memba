@@ -338,6 +338,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
   end
 
+  test "dashboard conversations panel starts directly with the message list" do
+    html = dashboard_html(%{})
+
+    assert html_has_selector?(html, "#member-section-panel-conversations #club-messages")
+    assert html_has_selector?(html, "#member-section-panel-conversations #member-message-list")
+
+    refute html_has_selector?(
+             html,
+             "#member-section-panel-conversations #club-messages h2",
+             "Recent club messages"
+           )
+  end
+
   test "dashboard renders the empty conversation state inside the default panel", %{
     conn: conn
   } do
