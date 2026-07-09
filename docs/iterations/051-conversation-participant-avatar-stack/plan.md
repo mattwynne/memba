@@ -40,10 +40,10 @@ page's `.message*`/`.composer*`/`.page-title` classes remain untouched).
   large originator avatar, matching the design: the big avatar is the originator, the stack is
   everyone else), capped to the first 3 with a "+N" overflow badge for the rest, reusing the
   existing `<.avatar>` component's deterministic initials/color scheme.
-- Port `.conversation`, `.conversation__*`, and `.avatar-stack` from the design system into
-  `app.css`, and rewrite the club-home conversation row template to use them instead of the
-  current ad hoc Tailwind classes (this also closes the preview-text/heading work from iteration
-  050 onto the "real" shared classes rather than leaving it on bespoke Tailwind).
+- Port the row-relevant `.conversation`, `.conversation__*`, and `.avatar-stack` classes from the
+  design system into `app.css`, and rewrite the club-home conversation row template to use them
+  instead of the current ad hoc Tailwind classes (this also closes the preview-text/heading work
+  from iteration 050 onto the "real" shared classes rather than leaving it on bespoke Tailwind).
 - Update the shared acceptance feature file(s) used for the club-home conversation rows.
 
 ### Out of scope
@@ -79,12 +79,26 @@ Matt answered all three open questions from the draft, confirming the recommende
 ## Acceptance Criteria
 
 - Each club-home conversation row shows an avatar-stack of distinct repliers (excluding the row's
-  own originator avatar), ordered by first reply, capped to 3, with a "+N" overflow badge counting
-  distinct additional participants when there are more than 3.
+  own originator avatar), ordered by first reply, de-duplicated when the same participant replies
+  multiple times, capped to 3, with a "+N" overflow badge counting distinct additional
+  participants when there are more than 3.
 - A conversation with no replies shows no avatar-stack (nothing to add beyond the originator).
-- `app.css` gains `.conversation`, `.conversation__*`, and `.avatar-stack`; `club.html.heex`'s
-  conversation row uses them instead of the current Tailwind implementation.
+- `app.css` gains the row-relevant `.conversation`, `.conversation__*`, and `.avatar-stack`
+  classes; `club.html.heex`'s conversation row uses them instead of the current Tailwind
+  implementation.
 - `dev check` passes; acceptance coverage added for the avatar-stack.
+
+## Acceptance Scenarios / Feature Files
+
+- Update `acceptance-tests/features/club_message_replies.feature`.
+- Extend the existing rule `Rule: On the club home, each conversation is one entry with its reply count`
+  with stakeholder-readable coverage for:
+  - a conversation with no replies shows no participant avatar-stack;
+  - 1–3 distinct repliers are shown in first-reply order;
+  - the originator is excluded from the stack;
+  - duplicate replies by the same participant are de-duplicated;
+  - 4+ distinct repliers show the first 3 avatars plus a "+N" overflow badge counting the remaining
+    distinct participants.
 
 ## Implementation Plan
 
@@ -93,8 +107,8 @@ Matt answered all three open questions from the draft, confirming the recommende
    replies only (excluding the root sender), ordered by first reply time.
 2. Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping
    to the first 3 and computing the distinct-additional-participant count for the overflow badge.
-3. Port `.conversation`/`.conversation__*`/`.avatar-stack` into `app.css` (mirroring
-   `memba.css`'s definitions).
+3. Port the row-relevant `.conversation`/`.conversation__*`/`.avatar-stack` classes into `app.css`
+   (mirroring `memba.css`'s definitions for those classes).
 4. Rewrite the club-home conversation row in `club.html.heex` to use the ported classes,
    rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an
    overflow badge.
