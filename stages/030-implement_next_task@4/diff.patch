@@ -1,0 +1,257 @@
+diff --git a/docs/iterations/051-conversation-participant-avatar-stack/todo.md b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+index dc87613..560ad71 100644
+--- a/docs/iterations/051-conversation-participant-avatar-stack/todo.md
++++ b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Add a participants query (likely alongside `reply_counts_query`/`latest_replies_query` in `Messaging.conversations_for_club_query/1`): distinct `sender_id` per `conversation_id` across replies only (excluding the root sender), ordered by first reply time.
+ - [x] 002 Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping to the first 3 and computing the distinct-additional-participant count for the overflow badge.
+ - [x] 003 Port the row-relevant `.conversation`/`.conversation__*`/`.avatar-stack` classes into `app.css` (mirroring `memba.css`'s definitions for those classes).
+-- [ ] 004 Rewrite the club-home conversation row in `club.html.heex` to use the ported classes, rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an overflow badge.
++- [x] 004 Rewrite the club-home conversation row in `club.html.heex` to use the ported classes, rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an overflow badge.
+ - [ ] 005 Add/update acceptance and unit test coverage for participant ordering, the overflow count, and the no-replies-yet case.
+ - [ ] 006 Run `./bin/dev gallery-walk` and compare against `design-system/wireframes/club-home.html`.
+ - [ ] 007 Run `dev check` and confirm it is green.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index fd4bd4f..f014b83 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -80,7 +80,7 @@
+       hidden={not active_member_section?(active_section, "conversations")}
+     >
+       <section id="club-messages">
+-        <div id="member-message-list" class="mt-4 space-y-2">
++        <div id="member-message-list" class="conversation-list mt-4">
+           <div
+             :if={@message_rows == []}
+             id="member-message-list-empty"
+@@ -112,64 +112,87 @@
+             data-testid="club-message-row"
+             data-message-id={message_row.message_id}
+             data-message-subject={message_row.subject}
+-            class="rounded-2xl border border-base-300 bg-base-100 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ink-3/40 hover:shadow-md"
+           >
+             <.link
+               data-testid="club-message-link"
+               href={member_message_path(message_row.message_id, @selected_club, club_id_source)}
+-              class="grid gap-4 p-4 sm:grid-cols-[2.25rem_1fr_auto] sm:items-start"
++              class="conversation"
+             >
+               <.avatar
+                 data-testid="message-originator-initials"
+                 initials={message_row.originator_initials}
+                 size={:md}
+-                class="shrink-0"
++                class="conversation__avatar"
+               />
+ 
+-              <span class="min-w-0">
+-                <span class="mt-1 block truncate text-base font-semibold tracking-tight text-base-content">
+-                  {message_row.subject}
+-                </span>
++              <div class="conversation__body">
++                <div class="conversation__head">
++                  <span class="conversation__subject">
++                    {message_row.subject}
++                  </span>
+ 
+-                <span
+-                  data-testid="message-body-preview"
+-                  class="mt-2 line-clamp-1 text-sm leading-6 text-ink-2"
+-                >
++                  <span
++                    :if={message_row.sent_at_label}
++                    data-testid="message-sent-at"
++                    class="conversation__date"
++                  >
++                    {message_row.sent_at_label}
++                  </span>
++                </div>
++
++                <div data-testid="message-body-preview" class="conversation__preview">
+                   {message_row.body}
+-                </span>
++                </div>
+ 
+                 <span
+                   data-testid="message-started-by"
+                   data-originator-id={message_row.originator_id}
+                   data-originator-name={message_row.originator_name}
+-                  class="mt-1 block text-xs font-medium text-ink-2"
++                  class="conversation__replies"
+                 >
+                   Started by {message_row.originator_name}
+                 </span>
+ 
+-                <span
+-                  data-testid="message-reply-activity"
+-                  data-reply-count={message_row.reply_count}
+-                  data-latest-replier-id={message_row.latest_replier_id}
+-                  data-latest-replier-name={message_row.latest_replier_name}
+-                  class="mt-3 block text-sm font-medium text-ink-2"
+-                >
+-                  {message_row.reply_activity_label}
+-                </span>
+-              </span>
++                <div class="conversation__participants">
++                  <div
++                    :if={
++                      message_row.participants != [] or
++                        message_row.additional_participant_count > 0
++                    }
++                    class="avatar-stack"
++                    data-testid="message-participant-avatar-stack"
++                    aria-label="Conversation participants"
++                  >
++                    <.avatar
++                      :for={participant <- message_row.participants}
++                      data-testid="message-participant-avatar"
++                      data-participant-id={participant.id}
++                      data-participant-name={participant.name}
++                      initials={participant.initials}
++                      size={:sm}
++                      title={participant.name}
++                    />
++                    <span
++                      :if={message_row.additional_participant_count > 0}
++                      class="is-more"
++                      data-testid="message-participant-overflow"
++                      aria-label={"#{message_row.additional_participant_count} more participants"}
++                    >
++                      +{message_row.additional_participant_count}
++                    </span>
++                  </div>
+ 
+-              <span class="flex items-start justify-between gap-3 sm:justify-end">
+-                <span
+-                  :if={message_row.sent_at_label}
+-                  data-testid="message-sent-at"
+-                  class="text-xs font-medium tabular-nums text-ink-2"
+-                >
+-                  {message_row.sent_at_label}
+-                </span>
+-                <span class="text-ink-2">
+-                  <.icon name="hero-chevron-right" class="size-5" />
+-                </span>
+-              </span>
++                  <span
++                    data-testid="message-reply-activity"
++                    data-reply-count={message_row.reply_count}
++                    data-latest-replier-id={message_row.latest_replier_id}
++                    data-latest-replier-name={message_row.latest_replier_name}
++                    class="conversation__replies"
++                  >
++                    {message_row.reply_activity_label}
++                  </span>
++                </div>
++              </div>
+             </.link>
+           </article>
+         </div>
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index b68ca55..51192c2 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -343,7 +343,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#member-message-#{message.message_id} " <>
+-               "[data-testid='message-body-preview'].line-clamp-1",
++               "[data-testid='message-body-preview'].conversation__preview",
+              "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
+            )
+ 
+@@ -373,6 +373,94 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard conversation rows use design-system classes and render participant avatar stacks" do
++    message_id = Memba.ID.generate(:message)
++    originator_id = Memba.ID.generate(:person)
++    carol_id = Memba.ID.generate(:person)
++    dana_id = Memba.ID.generate(:person)
++    elliot_id = Memba.ID.generate(:person)
++
++    html =
++      dashboard_html(%{
++        message_rows: [
++          %{
++            message_id: message_id,
++            originator_id: originator_id,
++            originator_name: "Bob Builder",
++            originator_initials: "BB",
++            subject: "Weekend conditions",
++            body: "Trail is clear to the lake, with snow above the pass.",
++            sent_at_label: "Jun 03, 2026",
++            reply_count: 5,
++            latest_replier_id: elliot_id,
++            latest_replier_name: "Elliot Explorer",
++            reply_activity_label: "5 replies · latest from Elliot Explorer",
++            participants: [
++              %{id: carol_id, name: "Carol Canoe", initials: "CC"},
++              %{id: dana_id, name: "Dana Downhill", initials: "DD"},
++              %{id: elliot_id, name: "Elliot Explorer", initials: "EE"}
++            ],
++            additional_participant_count: 2
++          }
++        ]
++      })
++
++    row_selector = "#member-message-#{message_id}[data-testid='club-message-row']"
++    link_selector = "#{row_selector} [data-testid='club-message-link'].conversation"
++
++    assert html_has_selector?(html, "#member-message-list.conversation-list")
++    assert html_has_selector?(html, "#{link_selector}[href='/messages/#{message_id}']")
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} [data-testid='message-originator-initials']" <>
++               ".conversation__avatar.avatar.avatar-placeholder",
++             "BB"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__body .conversation__head .conversation__subject",
++             "Weekend conditions"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__date[data-testid='message-sent-at']",
++             "Jun 03, 2026"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__preview[data-testid='message-body-preview']",
++             "Trail is clear to the lake"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__participants " <>
++               ".avatar-stack[data-testid='message-participant-avatar-stack'] " <>
++               "[data-testid='message-participant-avatar'][data-participant-id='#{carol_id}']" <>
++               "[data-participant-name='Carol Canoe'].avatar.avatar-placeholder",
++             "CC"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__participants " <>
++               ".avatar-stack [data-testid='message-participant-overflow'].is-more",
++             "+2"
++           )
++
++    assert html_has_selector?(
++             html,
++             "#{link_selector} .conversation__replies[data-testid='message-reply-activity']" <>
++               "[data-reply-count='5'][data-latest-replier-id='#{elliot_id}']" <>
++               "[data-latest-replier-name='Elliot Explorer']",
++             "5 replies · latest from Elliot Explorer"
++           )
++  end
++
+   test "dashboard renders member content inside the hidden members section panel", %{
+     conn: conn
+   } do
