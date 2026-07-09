@@ -1,0 +1,381 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index 0827281..1e1546e 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -128,6 +128,11 @@ Feature: Club message replies (conversations)
+   @iteration-043
+   Rule: On the club home, each conversation is one entry with its reply count
+ 
++    @iteration-050
++    Scenario: Conversation rows show previews without the redundant panel heading
++      Then Alice's club home should show the "Trip planning night" conversation preview "Trip planning night details."
++      And Alice's club home should not show the "Recent club messages" heading
++
+     Scenario: A replied-to message appears once, with its reply count
+       When Bob replies "I can drive, three seats spare" to "Trip planning night"
+       And Carol replies "I'll bring the maps" to "Trip planning night"
+@@ -143,3 +148,11 @@ Feature: Club message replies (conversations)
+       Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
+       When Carol replies "I'll take the old skis" to "Trip planning night"
+       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
++
++  @iteration-050
++  Rule: Conversation pages match the member-visible conversation design
++
++    Scenario: Conversation entries omit kind badges and the duplicate sender line
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Alice should not see conversation entry kind badges for "Trip planning night"
++      And Alice should not see a separate "From Alice" line under the title for "Trip planning night"
+diff --git a/acceptance-tests/features/list_members.feature b/acceptance-tests/features/list_members.feature
+index daa219b..410b70f 100644
+--- a/acceptance-tests/features/list_members.feature
++++ b/acceptance-tests/features/list_members.feature
+@@ -22,3 +22,13 @@ Feature: List club members
+       When Alice views the member list for Kootenay Mountaineering Club
+       Then Bob should not appear in the member list
+       And Alice and Carol should appear in the member list
++
++  Rule: Club-home Members tab presentation
++
++    @iteration-050
++    Scenario: A member who can manage members sees one invite action and no redundant heading
++      Given Alice, Bob, and Carol are active members of Kootenay Mountaineering Club
++      And Alice can manage members in Kootenay Mountaineering Club
++      When Alice views the member list for Kootenay Mountaineering Club
++      Then the club-home Members tab should not show the "Current members" heading
++      And Alice should see exactly 1 visible "Invite member" action
+diff --git a/acceptance-tests/features/step_definitions/list_members_steps.js b/acceptance-tests/features/step_definitions/list_members_steps.js
+index e6f3a3d..301fde2 100644
+--- a/acceptance-tests/features/step_definitions/list_members_steps.js
++++ b/acceptance-tests/features/step_definitions/list_members_steps.js
+@@ -1,11 +1,14 @@
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const { removeMemberFromClub } = require("../support/member_message");
+ const {
++  assertMembersTabOmitsHeading,
+   assertMemberAbsent,
+   assertMemberHasNoRoles,
+   assertMemberRoles,
+   assertMembersPresent,
++  assertVisibleInviteMemberActionCount,
+   ensureActiveMembers,
++  ensureMemberCanManageMembers,
+   ensureMemberRoles,
+   parsePersonList,
+   viewMemberList
+@@ -26,6 +29,10 @@ Given(/^(\w+) has the role (.+) in (.+)$/, async function (personName, roleName,
+   ensureMemberRoles(this, personName, [roleName], clubName);
+ });
+ 
++Given(/^(\w+) can manage members in (.+)$/, async function (personName, clubName) {
++  ensureMemberCanManageMembers(this, personName, clubName);
++});
++
+ Given(/^(\w+) is removed from (.+)$/, async function (personName, clubName) {
+   removeMemberFromClub(this, personName, clubName);
+ });
+@@ -56,3 +63,11 @@ Then(/^(\w+) should not appear in the member list$/, async function (personName)
+ Then(/^(.+) should appear in the member list$/, async function (personNamesText) {
+   await assertMembersPresent(this, parsePersonList(personNamesText));
+ });
++
++Then(/^the club-home Members tab should not show the "([^"]+)" heading$/, async function (heading) {
++  await assertMembersTabOmitsHeading(this, heading);
++});
++
++Then(/^(\w+) should see exactly (\d+) visible "Invite member" action$/, async function (_viewerName, expectedCount) {
++  await assertVisibleInviteMemberActionCount(this, Number(expectedCount));
++});
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index d7671ee..0541c64 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -14,6 +14,10 @@ const {
+   assertMemberMessageNotAddressedTo,
+   assertConversationFollowingState,
+   assertConversationDoesNotShowReply,
++  assertClubHomeConversationPreview,
++  assertClubHomeDoesNotShowHeading,
++  assertConversationEntryKindBadgesAbsent,
++  assertConversationDuplicateFromLineAbsent,
+   assertConversationReplyOrder,
+   assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
+@@ -257,6 +261,42 @@ Then(
+   }
+ );
+ 
++Then(
++  "{word}'s club home should show the {string} conversation preview {string}",
++  async function (viewerName, subject, expectedPreview) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertClubHomeConversationPreview(member, viewerName, subject, expectedPreview)
++    );
++  }
++);
++
++Then(
++  "{word}'s club home should not show the {string} heading",
++  async function (viewerName, heading) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertClubHomeDoesNotShowHeading(member, viewerName, heading)
++    );
++  }
++);
++
++Then(
++  "{word} should not see conversation entry kind badges for {string}",
++  async function (viewerName, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertConversationEntryKindBadgesAbsent(member, subject)
++    );
++  }
++);
++
++Then(
++  "{word} should not see a separate {string} line under the title for {string}",
++  async function (viewerName, fromLine, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertConversationDuplicateFromLineAbsent(member, subject, fromLine)
++    );
++  }
++);
++
+ Then(
+   /^the conversation for "([^"]+)" should not show (\w+)'s reply "([^"]+)"$/,
+   async function (subject, senderName, body) {
+diff --git a/acceptance-tests/features/support/list_members.js b/acceptance-tests/features/support/list_members.js
+index 87148bb..8f0040f 100644
+--- a/acceptance-tests/features/support/list_members.js
++++ b/acceptance-tests/features/support/list_members.js
+@@ -64,6 +64,59 @@ function ensureMemberRoles(world, personName, roleNames, clubName) {
+   return roles;
+ }
+ 
++function ensureMemberCanManageMembers(world, personName, clubName) {
++  ensureState(world);
++  ensureActiveMembers(world, [personName], clubName);
++
++  const membership = world.memberships[`${clubName}:${personName}`];
++  assert.ok(membership, `Expected ${personName} to be an active member of ${clubName}`);
++
++  const result = serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_id = Map.fetch!(payload, "clubId")
++membership_id = Map.fetch!(payload, "membershipId")
++person_id = Map.fetch!(payload, "personId")
++role_id = Memba.Membership.Roles.membership_administrator_role_id(club_id)
++
++already_assigned? =
++  Memba.Membership.Projections.RoleAssignment
++  |> where([assignment],
++    assignment.club_id == ^club_id and
++      assignment.membership_id == ^membership_id and
++      assignment.person_id == ^person_id and
++      assignment.role_id == ^role_id and
++      assignment.active == true
++  )
++  |> Memba.Repo.exists?()
++
++unless already_assigned? do
++  :ok =
++    Memba.Membership.App.dispatch(
++      %Memba.Membership.Commands.AssignMemberRole{
++        club_id: club_id,
++        membership_id: membership_id,
++        person_id: person_id,
++        role_id: role_id
++      },
++      consistency: :strong
++    )
++end
++
++%{status: "ok"}
++`,
++    {
++      clubId: membership.clubId,
++      membershipId: membership.membershipId,
++      personId: membership.personId
++    }
++  );
++
++  assert.equal(result.status, "ok", `Expected ${personName} to be able to manage members in ${clubName}`);
++  return world;
++}
++
+ async function viewMemberList(world, viewerName, clubName, { expect = playwrightExpect } = {}) {
+   ensureState(world);
+   ensureActiveMembers(world, [viewerName], clubName);
+@@ -80,6 +133,28 @@ async function viewMemberList(world, viewerName, clubName, { expect = playwright
+   return world;
+ }
+ 
++async function assertMembersTabOmitsHeading(world, heading, { expect = playwrightExpect } = {}) {
++  await expect(
++    world.page.locator("#member-section-panel-members:not([hidden]) #club-members h2", { hasText: heading })
++  ).toHaveCount(0, { timeout: projectionTimeoutMs(world) });
++
++  return world;
++}
++
++async function assertVisibleInviteMemberActionCount(world, expectedCount, { expect = playwrightExpect } = {}) {
++  const inviteActions = world.page
++    .locator("#member-club-home")
++    .getByRole("link", { name: "Invite member" });
++
++  await expect(inviteActions).toHaveCount(expectedCount, { timeout: projectionTimeoutMs(world) });
++
++  if (expectedCount === 1) {
++    await expect(inviteActions.first()).toBeVisible({ timeout: projectionTimeoutMs(world) });
++  }
++
++  return world;
++}
++
+ async function assertMemberRoles(world, personName, expectedRoleNames, { expect = playwrightExpect } = {}) {
+   const row = memberRow(world, personName);
+   await expect(row).toBeVisible({ timeout: projectionTimeoutMs(world) });
+@@ -154,11 +229,14 @@ function clubSlugFor(clubName) {
+ }
+ 
+ module.exports = {
++  assertMembersTabOmitsHeading,
+   assertMemberAbsent,
+   assertMemberHasNoRoles,
+   assertMemberRoles,
+   assertMembersPresent,
++  assertVisibleInviteMemberActionCount,
+   ensureActiveMembers,
++  ensureMemberCanManageMembers,
+   ensureMemberRoles,
+   parsePersonList,
+   viewMemberList
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 0137991..bcd2090 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1543,6 +1543,98 @@ async function assertMemberMessageBody(world, expectedBody, { expect = playwrigh
+   return world;
+ }
+ 
++async function assertClubHomeConversationPreview(
++  world,
++  viewerName,
++  subject,
++  expectedPreview,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
++
++  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
++  await waitForProjectedVisible(
++    world,
++    row,
++    `${viewerName}'s club-home conversation row for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  await waitForProjectedText(
++    world,
++    row.locator("[data-testid=\"message-body-preview\"]"),
++    expectedPreview,
++    `${viewerName}'s club-home conversation preview for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertClubHomeDoesNotShowHeading(
++  world,
++  viewerName,
++  heading,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
++
++  await waitForProjectedCount(
++    world,
++    world.page.getByRole("heading", { name: heading }),
++    0,
++    `${viewerName}'s club home should not show heading ${JSON.stringify(heading)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertConversationEntryKindBadgesAbsent(
++  world,
++  subject,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-conversation [data-testid=\"member-conversation-entry-label\"]"),
++    0,
++    `conversation entry kind badges for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertConversationDuplicateFromLineAbsent(
++  world,
++  subject,
++  fromLine,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-message-meta"),
++    0,
++    `duplicate conversation sender meta line for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-message-heading-row", { hasText: fromLine }),
++    0,
++    `heading row text ${JSON.stringify(fromLine)} for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
+ async function assertConversationShowsReply(
+   world,
+   subject,
+@@ -3353,7 +3445,11 @@ module.exports = {
+   assertEachAddressedMemberReceivedEmailInTestMailbox,
+   assertEachAddressedMemberReceivedEmailSubject,
+   assertEachDeliverySentThroughEmailProvider,
++  assertClubHomeConversationPreview,
++  assertClubHomeDoesNotShowHeading,
+   assertConversationDoesNotShowReply,
++  assertConversationDuplicateFromLineAbsent,
++  assertConversationEntryKindBadgesAbsent,
+   assertInboundRejectionEmail,
+   assertInboundRejectionEmailFrom,
+   assertInboundRejectionEmailSupportGuidance,
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index 657ec19..da35c25 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -6,6 +6,6 @@
+ - [x] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+ - [x] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
+ - [x] 006 Remove the "Current members" heading block (including the redundant inline "Invite member" button) from the Members panel in `club.html.heex`; confirm the tab-row "Invite member" action still covers the same permission check (`@current_member_can_manage_members?`).
+-- [ ] 007 Update/remove the named acceptance scenarios and any unit test assertions tied to the removed elements; add coverage for the new preview text.
++- [x] 007 Update/remove the named acceptance scenarios and any unit test assertions tied to the removed elements; add coverage for the new preview text.
+ - [ ] 008 Run `./bin/dev gallery-walk` and compare the club-home and conversation-page screenshots against `design-system/wireframes/club-home.html` and `member-conversation.html`.
+ - [ ] 009 Run `dev check` and confirm it is green.
