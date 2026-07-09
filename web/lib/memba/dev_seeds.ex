@@ -35,6 +35,9 @@ defmodule Memba.DevSeeds do
   @read_model_timeout 5_000
   @read_model_poll_interval 50
 
+  @gallery_staff_person_id "per_5ca11e2f-5ca1-5ca1-5ca1-5ca11e2f5ca1"
+  @gallery_staff_email "gallery-staff@memba.io"
+
   @clubs [
     %{
       key: "kac",
@@ -192,6 +195,7 @@ defmodule Memba.DevSeeds do
       seed_pending_account_request()
       seed_messages(clubs)
       seed_conversation_replies(clubs)
+      seed_staff_person()
 
       IO.puts("Seeded representative Memba data.")
       IO.puts("Reset and seed path: cd web && mix ecto.reset")
@@ -200,6 +204,7 @@ defmodule Memba.DevSeeds do
       IO.puts("Alice alternate sign-in email: alice@work.example")
       IO.puts("Pending invitation email: invitee.kac@example.com")
       IO.puts("Pending account request email: priya.requester@example.com")
+      IO.puts("Staff sign-in email: #{@gallery_staff_email}")
       IO.puts("Representative emails are available at /dev/mailbox.")
     end)
   end
@@ -337,6 +342,19 @@ defmodule Memba.DevSeeds do
       {:error, :role_already_assigned} -> :ok
       {:error, reason} -> raise "Could not assign #{member.name} as manager: #{inspect(reason)}"
     end
+  end
+
+  defp seed_staff_person do
+    dispatch_unless_projected(Membership.get_person_by_email(@gallery_staff_email), fn ->
+      Membership.create_person(
+        %{
+          person_id: @gallery_staff_person_id,
+          name: "Gallery Staff",
+          email: @gallery_staff_email
+        },
+        consistency: :strong
+      )
+    end)
   end
 
   defp seed_pending_invitation(clubs) do

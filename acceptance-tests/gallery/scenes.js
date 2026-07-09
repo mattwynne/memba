@@ -145,6 +145,31 @@ const scenes = [
     }
   },
   {
+    id: "member-club-home-members-tab",
+    area: "app",
+    label: "Member club home — Members tab",
+    auth: "member",
+    async navigate(page, ctx) {
+      await page.goto(clubUrl(ctx, clubs.kootenay, "/members"), { waitUntil: "domcontentloaded" });
+      await page.locator(`#member-club-home[data-club-id="${clubs.kootenay.clubId}"]`).waitFor();
+      await page.locator("#active-members-list").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "member-club-invitation-new",
+    area: "app",
+    label: "Member-facing invite a member",
+    auth: "member",
+    async navigate(page, ctx) {
+      await page.goto(clubUrl(ctx, clubs.kootenay, "/members/invitations/new"), {
+        waitUntil: "domcontentloaded"
+      });
+      await page.locator("#member-club-invitation-new").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
     id: "conversation-stop-following",
     area: "app",
     label: "Conversation stop following",
@@ -165,6 +190,101 @@ const scenes = [
     async navigate(page, ctx) {
       await page.goto(clubUrl(ctx, clubs.wessex), { waitUntil: "domcontentloaded" });
       await page.locator(`#public-club-page-page[data-club-id="${clubs.wessex.clubId}"]`).waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-clubs-index",
+    area: "app",
+    label: "Staff console — Clubs",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/clubs"), { waitUntil: "domcontentloaded" });
+      await page.locator("#clubs-index").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-club-show",
+    area: "app",
+    label: "Staff console — Club detail",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, `/admin/clubs/${clubs.kootenay.clubId}`), {
+        waitUntil: "domcontentloaded"
+      });
+      await page.locator("#club-show").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-requests-index",
+    area: "app",
+    label: "Staff console — Requests",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/requests"), { waitUntil: "domcontentloaded" });
+      await page.locator("#admin-requests-index").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-request-review",
+    area: "app",
+    label: "Staff console — Request review",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/requests"), { waitUntil: "domcontentloaded" });
+      await page.locator("#admin-requests-index").waitFor();
+      await waitForLiveViewConnected(page);
+      await page.locator('[id^="convert-request-"]').first().click();
+      await page.locator('[data-testid="convert-request-panel"]').waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-people-index",
+    area: "app",
+    label: "Staff console — People",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/people"), { waitUntil: "domcontentloaded" });
+      await page.locator("#admin-people-index").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-deliveries-index",
+    area: "app",
+    label: "Staff console — Deliveries",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/deliveries"), { waitUntil: "domcontentloaded" });
+      await page.locator("#deliveries-overview").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-messages-index",
+    area: "app",
+    label: "Staff console — Messages",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, "/admin/messages"), { waitUntil: "domcontentloaded" });
+      await page.locator("#admin-messages-index").waitFor();
+      await waitForLoaded(page);
+    }
+  },
+  {
+    id: "staff-invite-member-new",
+    area: "app",
+    label: "Staff console — Invite a member",
+    auth: "staff",
+    async navigate(page, ctx) {
+      await page.goto(rootUrl(ctx, `/admin/clubs/${clubs.kootenay.clubId}/invitations/new`), {
+        waitUntil: "domcontentloaded"
+      });
+      await page.locator("#club-member-invitation-new").waitFor();
       await waitForLoaded(page);
     }
   }
