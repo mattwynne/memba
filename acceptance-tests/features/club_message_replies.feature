@@ -43,7 +43,6 @@ Feature: Club message replies (conversations)
       When Carol stops following the conversation for "Trip planning night"
       Then Carol should not be following the conversation for "Trip planning night"
 
-    @todo-ui
     Scenario: Followers receive Bob's reply, but non-followers and the author do not
       Given Carol follows the conversation for "Trip planning night"
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
