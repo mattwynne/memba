@@ -133,6 +133,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Not following"
            )
 
+    refute has_element?(view, "#member-message-meta")
+    refute has_element?(view, "#member-message-meta", "From Alice Adams")
+
     assert has_element?(view, "#member-conversation-follow-toggle[type='checkbox']")
     refute has_element?(view, "#member-conversation-follow-toggle[checked]")
     refute has_element?(view, "#member-conversation-follow-button")
