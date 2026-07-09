@@ -1,0 +1,178 @@
+diff --git a/docs/iterations/051-conversation-participant-avatar-stack/todo.md b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+index 993f3be..2634ba6 100644
+--- a/docs/iterations/051-conversation-participant-avatar-stack/todo.md
++++ b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add a participants query (likely alongside `reply_counts_query`/`latest_replies_query` in `Messaging.conversations_for_club_query/1`): distinct `sender_id` per `conversation_id` across replies only (excluding the root sender), ordered by first reply time.
+-- [ ] 002 Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping to the first 3 and computing the distinct-additional-participant count for the overflow badge.
++- [x] 002 Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping to the first 3 and computing the distinct-additional-participant count for the overflow badge.
+ - [ ] 003 Port the row-relevant `.conversation`/`.conversation__*`/`.avatar-stack` classes into `app.css` (mirroring `memba.css`'s definitions for those classes).
+ - [ ] 004 Rewrite the club-home conversation row in `club.html.heex` to use the ported classes, rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an overflow badge.
+ - [ ] 005 Add/update acceptance and unit test coverage for participant ordering, the overflow count, and the no-replies-yet case.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index aa740af..c2f0ff4 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -13,6 +13,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   alias Memba.Membership.Authorization
+   alias Memba.Messaging
+ 
++  @participant_avatar_limit 3
++
+   @doc """
+   Load dashboard assigns for a signed-in active member of the selected club.
+ 
+@@ -114,6 +116,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
+       originator_name = Map.get(member_names_by_id, conversation.sender_id, "Club member")
+       originator_initials = initials(originator_name)
+       latest_replier_name = latest_replier_name(conversation)
++      participant_ids = participant_ids(conversation)
++      participants = present_participants(participant_ids, member_names_by_id)
+ 
+       %{
+         message: Map.get(conversation, :message),
+@@ -132,7 +136,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
+         reply_count: reply_count,
+         latest_replier_id: latest_replier_id,
+         latest_replier_name: latest_replier_name,
+-        reply_activity_label: reply_activity_label(reply_count, latest_replier_name)
++        reply_activity_label: reply_activity_label(reply_count, latest_replier_name),
++        participants: participants,
++        additional_participant_count: additional_participant_count(participant_ids, participants)
+       }
+     end)
+   end
+@@ -164,6 +170,31 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp latest_replier_name(%{latest_replier_name: name}) when is_binary(name), do: name
+   defp latest_replier_name(_conversation), do: nil
+ 
++  defp participant_ids(conversation) do
++    case Map.get(conversation, :participant_ids, []) do
++      participant_ids when is_list(participant_ids) -> participant_ids
++      _missing_or_unexpected -> []
++    end
++  end
++
++  defp present_participants(participant_ids, member_names_by_id) do
++    participant_ids
++    |> Enum.take(@participant_avatar_limit)
++    |> Enum.map(fn participant_id ->
++      name = Map.get(member_names_by_id, participant_id, "Club member")
++
++      %{
++        id: participant_id,
++        name: name,
++        initials: initials(name)
++      }
++    end)
++  end
++
++  defp additional_participant_count(participant_ids, participants) do
++    max(Enum.count(participant_ids) - Enum.count(participants), 0)
++  end
++
+   defp reply_activity_label(0, _latest_replier_name), do: "No replies yet"
+ 
+   defp reply_activity_label(reply_count, latest_replier_name) when is_integer(reply_count) do
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index efbf591..1ff5e2c 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -198,6 +198,95 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+              )
+   end
+ 
++  test "presents conversation participants capped to three with an additional participant count" do
++    root_sender_id = Memba.ID.generate(:person)
++    first_participant_id = Memba.ID.generate(:person)
++    second_participant_id = Memba.ID.generate(:person)
++    third_participant_id = Memba.ID.generate(:person)
++    fourth_participant_id = Memba.ID.generate(:person)
++    fifth_participant_id = Memba.ID.generate(:person)
++
++    root = %Message{
++      message_id: Memba.ID.generate(:message),
++      sender_id: root_sender_id,
++      conversation_id: Memba.ID.generate(:message),
++      subject: "Participant stack",
++      body: "Body",
++      inserted_at: DateTime.utc_now()
++    }
++
++    assert [
++             %{
++               participants: [
++                 %{id: ^first_participant_id, name: "Bob Builder", initials: "BB"},
++                 %{id: ^second_participant_id, name: "Carol Canoe", initials: "CC"},
++                 %{id: ^third_participant_id, name: "Dana", initials: "D"}
++               ],
++               additional_participant_count: 2
++             }
++           ] =
++             MemberDashboardPresentation.present_message_rows(
++               [
++                 %{
++                   message: root,
++                   message_id: root.message_id,
++                   conversation_id: root.message_id,
++                   sender_id: root.sender_id,
++                   subject: root.subject,
++                   body: root.body,
++                   inserted_at: root.inserted_at,
++                   participant_ids: [
++                     first_participant_id,
++                     second_participant_id,
++                     third_participant_id,
++                     fourth_participant_id,
++                     fifth_participant_id
++                   ]
++                 }
++               ],
++               %{
++                 root_sender_id => "Alice Adams",
++                 first_participant_id => "Bob Builder",
++                 second_participant_id => "Carol Canoe",
++                 third_participant_id => "Dana",
++                 fourth_participant_id => "Elliot Explorer",
++                 fifth_participant_id => "Fran Fern"
++               }
++             )
++  end
++
++  test "presents an empty participant list and zero additional participants by default" do
++    root = %Message{
++      message_id: Memba.ID.generate(:message),
++      sender_id: Memba.ID.generate(:person),
++      conversation_id: Memba.ID.generate(:message),
++      subject: "No participants yet",
++      body: "Body",
++      inserted_at: DateTime.utc_now()
++    }
++
++    assert [
++             %{
++               participants: [],
++               additional_participant_count: 0
++             }
++           ] =
++             MemberDashboardPresentation.present_message_rows(
++               [
++                 %{
++                   message: root,
++                   message_id: root.message_id,
++                   conversation_id: root.message_id,
++                   sender_id: root.sender_id,
++                   subject: root.subject,
++                   body: root.body,
++                   inserted_at: root.inserted_at
++                 }
++               ],
++               %{}
++             )
++  end
++
+   test "passes member roles through to dashboard member rows" do
+     alice =
+       create_active_member(
