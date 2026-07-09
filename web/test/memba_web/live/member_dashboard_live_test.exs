@@ -313,7 +313,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       create_message(
         club_id: alice.club_id,
         sender_id: alice.person_id,
-        subject: "Trip planning night"
+        subject: "Trip planning night",
+        body:
+          "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
       )
 
     {:ok, view, _html} =
@@ -333,6 +335,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-panel-conversations #club-messages #member-message-list " <>
                "#member-message-#{message.message_id}[data-testid='club-message-row'][data-message-subject='Trip planning night']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} " <>
+               "[data-testid='message-body-preview'].line-clamp-1",
+             "Route update — the forestry service closed the approach road after last week's storm, so the original plan is off."
            )
 
     refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
