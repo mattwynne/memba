@@ -331,6 +331,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
     assert has_element?(view, "#member-section-panel-members[hidden]")
 
+    refute has_element?(
+             view,
+             "#member-section-panel-conversations #club-messages h2",
+             "Recent club messages"
+           )
+
     assert has_element?(
              view,
              "#member-section-panel-conversations #club-messages #member-message-list " <>
