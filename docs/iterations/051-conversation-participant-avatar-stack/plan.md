@@ -100,6 +100,20 @@ Matt answered all three open questions from the draft, confirming the recommende
   - 4+ distinct repliers show the first 3 avatars plus a "+N" overflow badge counting the remaining
     distinct participants.
 
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/club_message_replies.feature`: implementation may add or update
+  `@iteration-051` scenarios under `Rule: On the club home, each conversation is one entry with
+  its reply count` for the avatar-stack coverage listed above (no replies → no stack; 1–3 distinct
+  repliers in first-reply order; originator excluded; duplicate repliers de-duplicated; 4+ distinct
+  repliers → first 3 avatars + "+N"). It must not retag, reorder, or otherwise modify any existing
+  scenario, rule, or tag outside the new `@iteration-051` scenarios (in particular, no changes to
+  the `@iteration-039`/`@iteration-040`/`@iteration-041`/`@not-ui`/`@iteration-050` tags already in
+  this file) — this iteration adds one new capability to existing rows, it does not touch anything
+  else in this feature file.
+- Matching Cucumber step definitions/support files under the domain and browser acceptance test
+  trees may be added or updated as needed to execute the new `@iteration-051` scenarios.
+
 ## Implementation Plan
 
 1. Add a participants query (likely alongside `reply_counts_query`/`latest_replies_query` in
