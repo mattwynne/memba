@@ -972,6 +972,42 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard renders the full message body as a one-line conversation preview" do
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    message_id = Memba.ID.generate(:message)
+
+    body =
+      "Route update — the forestry service closed the approach road after last week's storm, " <>
+        "so the original plan is off. Please weigh in before Friday so we can lock in permits."
+
+    message = %Message{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: "Goodsir traverse route update",
+      body: body,
+      inserted_at: ~U[2026-06-03 14:15:00Z]
+    }
+
+    assert [message_row] =
+             MemberDashboardPresentation.present_message_rows([message], %{
+               sender_id => "Bob Builder"
+             })
+
+    html =
+      dashboard_html(%{
+        selected_club: %{club_id: club_id, name: "Alpine Club"},
+        message_rows: [message_row]
+      })
+
+    assert html_has_selector?(
+             html,
+             "#member-message-#{message_id} [data-testid='message-preview'].line-clamp-1",
+             body
+           )
+  end
+
   test "dashboard preserves browser acceptance selectors for messages and members", %{conn: conn} do
     alice =
       create_active_member(
