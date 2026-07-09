@@ -1,0 +1,166 @@
+diff --git a/docs/iterations/051-conversation-participant-avatar-stack/todo.md b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+index 4ce72e2..993f3be 100644
+--- a/docs/iterations/051-conversation-participant-avatar-stack/todo.md
++++ b/docs/iterations/051-conversation-participant-avatar-stack/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add a participants query (likely alongside `reply_counts_query`/`latest_replies_query` in `Messaging.conversations_for_club_query/1`): distinct `sender_id` per `conversation_id` across replies only (excluding the root sender), ordered by first reply time.
++- [x] 001 Add a participants query (likely alongside `reply_counts_query`/`latest_replies_query` in `Messaging.conversations_for_club_query/1`): distinct `sender_id` per `conversation_id` across replies only (excluding the root sender), ordered by first reply time.
+ - [ ] 002 Thread participant data through `MemberDashboardPresentation.present_message_rows/2`, capping to the first 3 and computing the distinct-additional-participant count for the overflow badge.
+ - [ ] 003 Port the row-relevant `.conversation`/`.conversation__*`/`.avatar-stack` classes into `app.css` (mirroring `memba.css`'s definitions for those classes).
+ - [ ] 004 Rewrite the club-home conversation row in `club.html.heex` to use the ported classes, rendering the avatar-stack via the existing `<.avatar>` component for each participant plus an overflow badge.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 12d4a10..14493e5 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -718,11 +718,45 @@ defmodule Memba.Messaging do
+           latest_replier_id: reply.sender_id
+         }
+ 
++    participant_first_replies_query =
++      from reply in MessageProjection,
++        join: root in MessageProjection,
++        on:
++          root.club_id == reply.club_id and
++            root.message_id == reply.conversation_id and
++            root.message_id == root.conversation_id,
++        where:
++          reply.club_id == ^club_id and
++            reply.message_id != reply.conversation_id and
++            reply.sender_id != root.sender_id,
++        group_by: [reply.conversation_id, reply.sender_id],
++        select: %{
++          conversation_id: reply.conversation_id,
++          sender_id: reply.sender_id,
++          first_replied_at: min(reply.inserted_at)
++        }
++
++    participants_query =
++      from participant in subquery(participant_first_replies_query),
++        group_by: participant.conversation_id,
++        select: %{
++          conversation_id: participant.conversation_id,
++          participant_ids:
++            fragment(
++              "array_agg(? ORDER BY ?, ?)",
++              participant.sender_id,
++              participant.first_replied_at,
++              participant.sender_id
++            )
++        }
++
+     from root in MessageProjection,
+       left_join: reply_counts in subquery(reply_counts_query),
+       on: reply_counts.conversation_id == root.message_id,
+       left_join: latest_reply in subquery(latest_replies_query),
+       on: latest_reply.conversation_id == root.message_id,
++      left_join: participants in subquery(participants_query),
++      on: participants.conversation_id == root.message_id,
+       where: root.club_id == ^club_id and root.message_id == root.conversation_id,
+       order_by: [desc: root.inserted_at, desc: root.message_id],
+       select: %{
+@@ -736,7 +770,8 @@ defmodule Memba.Messaging do
+         inserted_at: root.inserted_at,
+         updated_at: root.updated_at,
+         reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
+-        latest_replier_id: latest_reply.latest_replier_id
++        latest_replier_id: latest_reply.latest_replier_id,
++        participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
+       }
+   end
+ 
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index b84a528..b309fc7 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -263,6 +263,89 @@ defmodule Memba.Messaging.MessageProjectionTest do
+       refute newer_reply_to_older_conversation.message_id in [newer_root_id, older_root_id]
+       refute unrelated_root.message_id in [newer_root_id, older_root_id]
+     end
++
++    test "returns distinct reply participants per conversation ordered by first reply" do
++      club_id = Memba.ID.generate(:club)
++      alice_id = Memba.ID.generate(:person)
++      bob_id = Memba.ID.generate(:person)
++      carol_id = Memba.ID.generate(:person)
++      dave_id = Memba.ID.generate(:person)
++
++      quiet_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          subject: "Quiet route idea",
++          inserted_at: ~U[2026-06-05 11:00:00.000000Z]
++        )
++
++      active_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
++        )
++
++      _originator_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: alice_id,
++          conversation_id: active_root.message_id,
++          reply_to_message_id: active_root.message_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:01:00.000000Z]
++        )
++
++      _carol_first_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: carol_id,
++          conversation_id: active_root.message_id,
++          reply_to_message_id: active_root.message_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:02:00.000000Z]
++        )
++
++      _bob_first_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: bob_id,
++          conversation_id: active_root.message_id,
++          reply_to_message_id: active_root.message_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:03:00.000000Z]
++        )
++
++      _carol_duplicate_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: carol_id,
++          conversation_id: active_root.message_id,
++          reply_to_message_id: active_root.message_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:04:00.000000Z]
++        )
++
++      _dave_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: dave_id,
++          conversation_id: active_root.message_id,
++          reply_to_message_id: active_root.message_id,
++          subject: "Busy route idea",
++          inserted_at: ~U[2026-06-05 10:05:00.000000Z]
++        )
++
++      assert [
++               %{message_id: quiet_root_id, participant_ids: []},
++               %{message_id: active_root_id, participant_ids: participant_ids}
++             ] = Messaging.list_conversations_for_club(club_id)
++
++      assert quiet_root_id == quiet_root.message_id
++      assert active_root_id == active_root.message_id
++      assert participant_ids == [carol_id, bob_id, dave_id]
++    end
+   end
+ 
+   describe "list_conversation_messages/1" do
