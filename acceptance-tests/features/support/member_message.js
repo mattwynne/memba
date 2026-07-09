@@ -1656,6 +1656,97 @@ async function assertConversationReplyOrder(
   return world;
 }
 
+async function assertClubHomeConversationPreview(
+  world,
+  subject,
+  expectedPreview,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+
+  await waitForProjectedVisible(
+    world,
+    row,
+    `club home conversation row for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  await waitForProjectedText(
+    world,
+    row.locator("[data-testid='message-preview']"),
+    expectedPreview,
+    `club home conversation preview for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationPanelHeadingAbsent(
+  world,
+  heading,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-section-panel-conversations:not([hidden]) #member-message-list"),
+    "visible club home Conversations panel",
+    { expect, timeoutMs }
+  );
+
+  await withProjectionWait(`club home Conversations panel heading ${JSON.stringify(heading)} absent`, () =>
+    expect(
+      world.page.locator("#member-section-panel-conversations:not([hidden]) h2", { hasText: heading })
+    ).toHaveCount(0, { timeout: timeoutMs || projectionTimeoutMs(world) })
+  );
+
+  return world;
+}
+
+async function assertConversationEntryBadgesAbsent(
+  world,
+  subject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("[data-testid='member-conversation-entry']").first(),
+    `conversation entry for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  await withProjectionWait(`conversation entry badges absent for ${JSON.stringify(subject)}`, () =>
+    expect(world.page.locator("[data-testid='member-conversation-entry-label']")).toHaveCount(0, {
+      timeout: timeoutMs || projectionTimeoutMs(world)
+    })
+  );
+
+  return world;
+}
+
+async function assertConversationDuplicateSenderMetaAbsent(
+  world,
+  subject,
+  metaLine,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await withProjectionWait(`duplicate sender meta ${JSON.stringify(metaLine)} absent`, () =>
+    expect(world.page.locator("#member-message-meta", { hasText: metaLine })).toHaveCount(0, {
+      timeout: timeoutMs || projectionTimeoutMs(world)
+    })
+  );
+
+  return world;
+}
+
 async function assertReplyEmailDeliveredToMembers(
   world,
   senderName,
@@ -3353,7 +3444,11 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
+  assertClubHomeConversationPanelHeadingAbsent,
+  assertClubHomeConversationPreview,
   assertConversationDoesNotShowReply,
+  assertConversationDuplicateSenderMetaAbsent,
+  assertConversationEntryBadgesAbsent,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,

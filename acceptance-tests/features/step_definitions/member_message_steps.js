@@ -13,6 +13,10 @@ const {
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
   assertConversationFollowingState,
+  assertClubHomeConversationPanelHeadingAbsent,
+  assertClubHomeConversationPreview,
+  assertConversationDuplicateSenderMetaAbsent,
+  assertConversationEntryBadgesAbsent,
   assertConversationDoesNotShowReply,
   assertConversationReplyOrder,
   assertConversationShowsReply,
@@ -253,6 +257,42 @@ Then(
   async function (subject, earlierBody, laterBody) {
     await withMemberHarness(this, "Alice", (member) =>
       assertConversationReplyOrder(member, subject, earlierBody, laterBody)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home conversation for {string} should show the preview {string}",
+  async function (viewerName, subject, preview) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationPreview(member, subject, preview)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home Conversations panel should not show the {string} heading",
+  async function (viewerName, heading) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationPanelHeadingAbsent(member, heading)
+    );
+  }
+);
+
+Then(
+  "{word}'s conversation page for {string} should not show conversation entry badges",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertConversationEntryBadgesAbsent(member, subject)
+    );
+  }
+);
+
+Then(
+  "{word}'s conversation page for {string} should not show a duplicate sender meta line {string}",
+  async function (viewerName, subject, metaLine) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertConversationDuplicateSenderMetaAbsent(member, subject, metaLine)
     );
   }
 );

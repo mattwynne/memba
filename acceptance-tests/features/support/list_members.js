@@ -64,6 +64,57 @@ function ensureMemberRoles(world, personName, roleNames, clubName) {
   return roles;
 }
 
+function ensureMemberCanManageMembers(world, personName, clubName) {
+  ensureState(world);
+  ensureActiveMembers(world, [personName], clubName);
+
+  const membership = world.memberships[`${clubName}:${personName}`];
+  assert.ok(membership, `Expected ${personName} to be an active member of ${clubName}`);
+
+  const result = serverCommands.runCommand(
+    `
+club_id = Map.fetch!(payload, "clubId")
+membership_id = Map.fetch!(payload, "membershipId")
+person_id = Map.fetch!(payload, "personId")
+role_id = Memba.Membership.Roles.membership_administrator_role_id(club_id)
+
+already_assigned? =
+  Memba.Repo.get_by(
+    Memba.Membership.Projections.RoleAssignment,
+    club_id: club_id,
+    membership_id: membership_id,
+    person_id: person_id,
+    role_id: role_id,
+    active: true
+  )
+
+unless already_assigned? do
+  :ok =
+    Memba.Membership.App.dispatch(
+      %Memba.Membership.Commands.AssignMemberRole{
+        club_id: club_id,
+        membership_id: membership_id,
+        person_id: person_id,
+        role_id: role_id
+      },
+      consistency: :strong
+    )
+end
+
+%{status: "ok"}
+`,
+    {
+      clubId: membership.clubId,
+      membershipId: membership.membershipId,
+      personId: membership.personId
+    }
+  );
+
+  assert.deepEqual(result, { status: "ok" });
+
+  return membership;
+}
+
 async function viewMemberList(world, viewerName, clubName, { expect = playwrightExpect } = {}) {
   ensureState(world);
   ensureActiveMembers(world, [viewerName], clubName);
@@ -108,6 +159,26 @@ async function assertMembersPresent(world, personNames, { expect = playwrightExp
   for (const personName of personNames) {
     await expect(memberRow(world, personName)).toBeVisible({ timeout: projectionTimeoutMs(world) });
   }
+
+  return world;
+}
+
+async function assertMembersPanelHeadingAbsent(world, heading, { expect = playwrightExpect } = {}) {
+  await expect(world.page.locator("#member-section-panel-members:not([hidden]) #active-members-list")).toBeVisible({
+    timeout: projectionTimeoutMs(world)
+  });
+
+  await expect(
+    world.page.locator("#member-section-panel-members:not([hidden]) #club-members h2", { hasText: heading })
+  ).toHaveCount(0, { timeout: projectionTimeoutMs(world) });
+
+  return world;
+}
+
+async function assertVisibleInviteMemberActionCount(world, expectedCount, { expect = playwrightExpect } = {}) {
+  await expect(world.page.getByRole("link", { name: "Invite member" })).toHaveCount(expectedCount, {
+    timeout: projectionTimeoutMs(world)
+  });
 
   return world;
 }
@@ -158,7 +229,10 @@ module.exports = {
   assertMemberHasNoRoles,
   assertMemberRoles,
   assertMembersPresent,
+  assertMembersPanelHeadingAbsent,
+  assertVisibleInviteMemberActionCount,
   ensureActiveMembers,
+  ensureMemberCanManageMembers,
   ensureMemberRoles,
   parsePersonList,
   viewMemberList

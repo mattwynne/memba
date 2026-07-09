@@ -22,3 +22,13 @@ Feature: List club members
       When Alice views the member list for Kootenay Mountaineering Club
       Then Bob should not appear in the member list
       And Alice and Carol should appear in the member list
+
+  @iteration-050 @not-domain
+  Rule: The club-home Members panel matches the current design
+
+    Scenario: A Membership Admin sees one invite action without the redundant panel heading
+      Given Alice, Bob, and Carol are active members of Kootenay Mountaineering Club
+      And Alice can manage members in Kootenay Mountaineering Club
+      When Alice views the member list for Kootenay Mountaineering Club
+      Then the club-home Members panel should not show the "Current members" heading
+      And Alice should see exactly one visible Invite member action

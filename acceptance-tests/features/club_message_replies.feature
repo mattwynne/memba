@@ -1,4 +1,4 @@
-@not-ui @iteration-039
+@iteration-039
 Feature: Club message replies (conversations)
   Club members want to reply to a club message and keep the conversation in Memba,
   instead of replies scattering to private inboxes and never being tracked.
@@ -14,6 +14,7 @@ Feature: Club message replies (conversations)
     And Pat is a member of Nelson Paddling Club
     And Alice sent the message "Trip planning night" to Kootenay Mountaineering Club members
 
+  @not-ui
   Rule: A member can reply to a club message, and the reply joins that message's conversation
 
     Scenario: Bob replies to Alice's club message
@@ -26,7 +27,7 @@ Feature: Club message replies (conversations)
       And Carol replies "I'll bring the maps" to "Trip planning night"
       Then the conversation for "Trip planning night" should show "I can drive, three seats spare" before "I'll bring the maps"
 
-  @iteration-040
+  @not-ui @iteration-040
   Rule: A reply is emailed to current club-member followers
 
     Scenario: The sender and repliers automatically follow the conversation
@@ -72,12 +73,13 @@ Feature: Club message replies (conversations)
       Then Carol should be told the stop-follow link is not valid
       And Carol should be following the conversation for "Trip planning night"
 
+  @not-ui
   Rule: Only a current member of the club can reply to its messages
 
     Scenario: A member of another club cannot reply
       Then Pat should not be able to reply to "Trip planning night"
 
-  @iteration-041
+  @not-ui @iteration-041
   Rule: Email replies use standard reply headers to join conversations
 
     Scenario: Bob replies by email and followers receive the reply
@@ -117,6 +119,7 @@ Feature: Club message replies (conversations)
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
 
+  @not-ui
   Rule: Email replies use the everyone address on the club email subdomain
 
     @iteration-042
@@ -125,7 +128,7 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply
       And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
 
-  @iteration-043
+  @not-ui @iteration-043
   Rule: On the club home, each conversation is one entry with its reply count
 
     Scenario: A replied-to message appears once, with its reply count
@@ -143,3 +146,15 @@ Feature: Club message replies (conversations)
       Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
+
+  @iteration-050 @not-domain
+  Rule: Member conversation surfaces match the current design
+
+    Scenario: Club home conversation rows show the original message preview without the panel heading
+      Then Alice's club home conversation for "Trip planning night" should show the preview "Trip planning night details."
+      And Alice's club home Conversations panel should not show the "Recent club messages" heading
+
+    Scenario: Conversation pages omit duplicate entry badges and sender meta
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Alice's conversation page for "Trip planning night" should not show conversation entry badges
+      And Alice's conversation page for "Trip planning night" should not show a duplicate sender meta line "From Alice"
