@@ -1,0 +1,51 @@
+diff --git a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+index 46e052a..58c4153 100644
+--- a/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
++++ b/docs/iterations/050-club-home-conversation-and-member-row-fidelity/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Add a preview element to the club-home conversation row template using `message_row.body`, clamped to one line with CSS (no server-side character truncation).
+ - [x] 002 Remove `conversation_entry_label/1` and its call site in `page_html.ex`.
+ - [x] 003 Remove the `#member-message-meta` paragraph in `message.html.heex`.
+-- [ ] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
++- [x] 004 Resize the conversation subject heading in `message.html.heex` to match `.page-title` scale.
+ - [ ] 005 Remove the "Recent club messages" heading block from the Conversations panel in `club.html.heex`.
+ - [ ] 006 Remove the "Current members" heading block (including the redundant inline "Invite member" button) from the Members panel in `club.html.heex`; confirm the tab-row "Invite member" action still covers the same permission check (`@current_member_can_manage_members?`).
+ - [ ] 007 Update/remove the named acceptance scenarios and any unit test assertions tied to the removed elements; add coverage for the new preview text.
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index b53c001..e0ec6d9 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -28,7 +28,7 @@
+         <div class="detail-head__main">
+           <h1
+             id="member-message-subject"
+-            class="text-4xl font-semibold leading-tight tracking-tight text-base-content sm:text-5xl"
++            class="text-[38px] font-semibold leading-[1.08] tracking-[-0.032em] text-base-content"
+           >
+             {@message.subject}
+           </h1>
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 019f1e4..4847402 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -125,6 +125,20 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "Trip planning night"
+            )
+ 
++    subject_class =
++      view
++      |> render()
++      |> LazyHTML.from_fragment()
++      |> LazyHTML.query("#member-message-subject")
++      |> LazyHTML.attribute("class")
++      |> List.first()
++
++    assert subject_class =~ "text-[38px]"
++    assert subject_class =~ "leading-[1.08]"
++    assert subject_class =~ "tracking-[-0.032em]"
++    refute subject_class =~ "text-4xl"
++    refute subject_class =~ "sm:text-5xl"
++
+     assert has_element?(
+              view,
+              "#member-message-heading-row.detail-head > " <>
