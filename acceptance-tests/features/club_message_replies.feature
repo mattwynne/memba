@@ -95,7 +95,7 @@ Feature: Club message replies (conversations)
       And Dana should not receive Bob's reply by email
       And Bob should not receive his own reply by email
 
-    @iteration-042 @todo-ui
+    @iteration-042
     Scenario: Email to the club address without reply headers starts a new club-wide message
       When Bob emails "Re: Trip planning night" to everyone@kmc.clubs.memba.io
       Then Bob should see the message "Re: Trip planning night" in Kootenay Mountaineering Club
