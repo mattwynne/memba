@@ -145,7 +145,6 @@ Feature: Club message replies (conversations)
       Then Alice's club home should list one conversation for "Trip planning night"
       And the "Trip planning night" conversation should show no replies yet
 
-    @todo-ui
     Scenario: Conversations are ordered by original message, newest first
       Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
       When Carol replies "I'll take the old skis" to "Trip planning night"

@@ -16,6 +16,7 @@ const {
   assertConversationDoesNotShowReply,
   assertClubHomeConversationCount,
   assertClubHomeConversationLatestReplyFrom,
+  assertClubHomeConversationOrder,
   assertClubHomeConversationPreview,
   assertClubHomeConversationReplyCount,
   assertClubHomeDoesNotShowHeading,
@@ -311,6 +312,15 @@ Then("the {string} conversation should show no replies yet", async function (sub
     assertClubHomeConversationReplyCount(member, subject, 0)
   );
 });
+
+Then(
+  "{word}'s club home should list {string} before {string}",
+  async function (viewerName, earlierSubject, laterSubject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationOrder(member, viewerName, earlierSubject, laterSubject)
+    );
+  }
+);
 
 Then(
   "{word} should not see conversation entry kind badges for {string}",

@@ -1616,6 +1616,52 @@ async function assertClubHomeConversationReplyCount(
   return world;
 }
 
+async function assertClubHomeConversationOrder(
+  world,
+  viewerName,
+  earlierSubject,
+  laterSubject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", earlierSubject),
+    `${viewerName}'s club-home conversation row for ${JSON.stringify(earlierSubject)}`,
+    { expect, timeoutMs }
+  );
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", laterSubject),
+    `${viewerName}'s club-home conversation row for ${JSON.stringify(laterSubject)}`,
+    { expect, timeoutMs }
+  );
+
+  const subjects = await rowAttributeValues(world.page.locator("[data-testid=\"club-message-row\"]"), "data-message-subject");
+  const earlierIndex = subjects.indexOf(earlierSubject);
+  const laterIndex = subjects.indexOf(laterSubject);
+
+  assertFinalBrowserState(`${viewerName}'s club-home conversation order`, () => {
+    assert.notEqual(
+      earlierIndex,
+      -1,
+      `Expected club home conversations to include ${JSON.stringify(earlierSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+    assert.notEqual(
+      laterIndex,
+      -1,
+      `Expected club home conversations to include ${JSON.stringify(laterSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+    assert.ok(
+      earlierIndex < laterIndex,
+      `Expected ${JSON.stringify(earlierSubject)} before ${JSON.stringify(laterSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+  });
+
+  return world;
+}
+
 async function assertClubHomeConversationLatestReplyFrom(
   world,
   subject,
@@ -3519,6 +3565,7 @@ module.exports = {
   assertClubHomeConversationPreview,
   assertClubHomeConversationCount,
   assertClubHomeConversationLatestReplyFrom,
+  assertClubHomeConversationOrder,
   assertClubHomeConversationReplyCount,
   assertClubHomeDoesNotShowHeading,
   assertConversationDoesNotShowReply,
