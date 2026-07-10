@@ -19,7 +19,7 @@ function clubSiteBaseDomain() {
 }
 
 function clubInboundEmailDomain() {
-  return process.env.MEMBA_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io";
+  return process.env.ACCEPTANCE_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io";
 }
 
 function clubEveryoneAddress(club) {
@@ -1231,7 +1231,7 @@ async function sendInboundClubEmailReply(
 
   world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
 
-  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
+  await recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply: true });
 
   return world;
 }
@@ -1256,7 +1256,7 @@ async function sendInboundClubEmailWithReplyHeaders(
     textBody: textBody ?? `${subject} details.`
   });
 
-  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
+  await recordInboundReplyIfAccepted(world, providerMessageId, senderName);
 
   return world;
 }
@@ -3155,9 +3155,14 @@ async function outboundMessageIdForSubject(world, subject, preferredRecipientNam
   return outboundMessageId;
 }
 
-function recordInboundReplyIfAccepted(world, providerMessageId, senderName) {
-  const result = serverCommands.runCommand(
-    `
+async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
+  const timeoutMs = requireReply ? projectionTimeoutMs(world) : 0;
+  const deadline = Date.now() + timeoutMs;
+  let result;
+
+  do {
+    result = serverCommands.runCommand(
+      `
 provider_message_id = Map.fetch!(payload, "providerMessageId")
 source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
 
@@ -3171,7 +3176,8 @@ message =
   source: if(source, do: %{
     status: source.status,
     messageId: source.message_id,
-    rejectionReason: source.rejection_reason
+    rejectionReason: source.rejection_reason,
+    toAddress: source.to_address
   }, else: nil),
   message: if(message, do: %{
     body: message.body,
@@ -3184,13 +3190,39 @@ message =
   }, else: nil)
 }
 `,
-    { providerMessageId }
-  );
+      { providerMessageId }
+    );
 
-  const message = result.message;
+    if (result.source && result.source.status === "rejected") {
+      if (requireReply) {
+        throw new Error(
+          `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
+        );
+      }
+
+      return;
+    }
+
+    if (result.message && result.message.replyToMessageId) {
+      break;
+    }
+
+    if (Date.now() <= deadline) {
+      await delay(projectionPollIntervalMs(world));
+    }
+  } while (Date.now() <= deadline);
+
+  const message = result && result.message;
 
   if (!message || !message.replyToMessageId) {
-    return;
+    if (!requireReply) {
+      return;
+    }
+
+    assert.ok(
+      message && message.replyToMessageId,
+      `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`
+    );
   }
 
   const reply = {
