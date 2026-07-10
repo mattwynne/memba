@@ -263,6 +263,89 @@ defmodule Memba.Messaging.MessageProjectionTest do
       refute newer_reply_to_older_conversation.message_id in [newer_root_id, older_root_id]
       refute unrelated_root.message_id in [newer_root_id, older_root_id]
     end
+
+    test "returns distinct reply participants per conversation ordered by first reply" do
+      club_id = Memba.ID.generate(:club)
+      alice_id = Memba.ID.generate(:person)
+      bob_id = Memba.ID.generate(:person)
+      carol_id = Memba.ID.generate(:person)
+      dave_id = Memba.ID.generate(:person)
+
+      quiet_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          subject: "Quiet route idea",
+          inserted_at: ~U[2026-06-05 11:00:00.000000Z]
+        )
+
+      active_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
+        )
+
+      _originator_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: alice_id,
+          conversation_id: active_root.message_id,
+          reply_to_message_id: active_root.message_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:01:00.000000Z]
+        )
+
+      _carol_first_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: carol_id,
+          conversation_id: active_root.message_id,
+          reply_to_message_id: active_root.message_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:02:00.000000Z]
+        )
+
+      _bob_first_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: bob_id,
+          conversation_id: active_root.message_id,
+          reply_to_message_id: active_root.message_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:03:00.000000Z]
+        )
+
+      _carol_duplicate_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: carol_id,
+          conversation_id: active_root.message_id,
+          reply_to_message_id: active_root.message_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:04:00.000000Z]
+        )
+
+      _dave_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: dave_id,
+          conversation_id: active_root.message_id,
+          reply_to_message_id: active_root.message_id,
+          subject: "Busy route idea",
+          inserted_at: ~U[2026-06-05 10:05:00.000000Z]
+        )
+
+      assert [
+               %{message_id: quiet_root_id, participant_ids: []},
+               %{message_id: active_root_id, participant_ids: participant_ids}
+             ] = Messaging.list_conversations_for_club(club_id)
+
+      assert quiet_root_id == quiet_root.message_id
+      assert active_root_id == active_root.message_id
+      assert participant_ids == [carol_id, bob_id, dave_id]
+    end
   end
 
   describe "list_conversation_messages/1" do

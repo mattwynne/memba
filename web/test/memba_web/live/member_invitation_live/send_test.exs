@@ -88,7 +88,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     |> assert_has("section#club-member-profile-completion[data-club-id='#{robin.club_id}']")
     |> fill_in("Your name", with: " Dana Example ")
     |> click_button("Join West Coast Paddlers")
-    |> assert_path("/")
+    |> assert_path(~p"/conversations")
     |> assert_has("#member-club-home[data-club-id='#{robin.club_id}']")
     |> assert_has("#club-site-identity-menu-button .app-bar__who", "Dana Example")
     |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")

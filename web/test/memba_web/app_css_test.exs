@@ -38,6 +38,30 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ "text-overflow: ellipsis;"
   end
 
+  test "app css includes the club-home conversation row and avatar-stack rules" do
+    css = File.read!(@app_css_path)
+
+    assert css =~ ".conversation-list {"
+    assert css =~ ".conversation {"
+    assert css =~ ".conversation__avatar {"
+    assert css =~ ".conversation__body {"
+    assert css =~ ".conversation__head {"
+    assert css =~ ".conversation__subject {"
+    assert css =~ ".conversation__date {"
+    assert css =~ ".conversation__preview {"
+    assert css =~ ".conversation__participants {"
+    assert css =~ ".conversation__replies {"
+    assert css =~ ".avatar-stack {"
+    assert css =~ ".avatar-stack > span,"
+    assert css =~ ".avatar-stack > .avatar {"
+    assert css =~ ".avatar-stack > .is-more {"
+
+    assert css =~ "grid-template-columns: 38px minmax(0, 1fr);"
+    assert css =~ "line-clamp: 1;"
+    assert css =~ "margin-left: -6px;"
+    assert css =~ "font-family: var(--font-mono);"
+  end
+
   test "app css includes the conversation detail head and follow toggle rules" do
     css = File.read!(@app_css_path)
 

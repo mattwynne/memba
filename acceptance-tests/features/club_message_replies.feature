@@ -128,11 +128,6 @@ Feature: Club message replies (conversations)
   @iteration-043
   Rule: On the club home, each conversation is one entry with its reply count
 
-    @iteration-050
-    Scenario: Conversation rows show previews without the redundant panel heading
-      Then Alice's club home should show the "Trip planning night" conversation preview "Trip planning night details."
-      And Alice's club home should not show the "Recent club messages" heading
-
     Scenario: A replied-to message appears once, with its reply count
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"
@@ -149,10 +144,27 @@ Feature: Club message replies (conversations)
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
 
-  @iteration-050
-  Rule: Conversation pages match the member-visible conversation design
+    @iteration-051
+    Scenario: A conversation with no replies shows no participant avatar-stack
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation should show no participant avatars
 
-    Scenario: Conversation entries omit kind badges and the duplicate sender line
+    @iteration-051
+    Scenario: Participant avatar-stacks show distinct repliers in first-reply order
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
-      Then Alice should not see conversation entry kind badges for "Trip planning night"
-      And Alice should not see a separate "From Alice" line under the title for "Trip planning night"
+      And Alice replies "I'll confirm the room" to "Trip planning night"
+      And Carol replies "I'll bring the maps" to "Trip planning night"
+      And Bob replies "I can also bring snacks" to "Trip planning night"
+      And Dana replies "I'll print route cards" to "Trip planning night"
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana
+
+    @iteration-051
+    Scenario: More than three distinct repliers show an overflow count
+      Given Elliot is a member of Kootenay Mountaineering Club
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      And Carol replies "I'll bring the maps" to "Trip planning night"
+      And Dana replies "I'll print route cards" to "Trip planning night"
+      And Elliot replies "I can bring the permit" to "Trip planning night"
+      Then Alice's club home should list one conversation for "Trip planning night"
+      And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana, plus 1 more

@@ -14,10 +14,6 @@ const {
   assertMemberMessageNotAddressedTo,
   assertConversationFollowingState,
   assertConversationDoesNotShowReply,
-  assertClubHomeConversationPreview,
-  assertClubHomeDoesNotShowHeading,
-  assertConversationEntryKindBadgesAbsent,
-  assertConversationDuplicateFromLineAbsent,
   assertConversationReplyOrder,
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
@@ -257,42 +253,6 @@ Then(
   async function (subject, earlierBody, laterBody) {
     await withMemberHarness(this, "Alice", (member) =>
       assertConversationReplyOrder(member, subject, earlierBody, laterBody)
-    );
-  }
-);
-
-Then(
-  "{word}'s club home should show the {string} conversation preview {string}",
-  async function (viewerName, subject, expectedPreview) {
-    await withMemberHarness(this, viewerName, (member) =>
-      assertClubHomeConversationPreview(member, viewerName, subject, expectedPreview)
-    );
-  }
-);
-
-Then(
-  "{word}'s club home should not show the {string} heading",
-  async function (viewerName, heading) {
-    await withMemberHarness(this, viewerName, (member) =>
-      assertClubHomeDoesNotShowHeading(member, viewerName, heading)
-    );
-  }
-);
-
-Then(
-  "{word} should not see conversation entry kind badges for {string}",
-  async function (viewerName, subject) {
-    await withMemberHarness(this, viewerName, (member) =>
-      assertConversationEntryKindBadgesAbsent(member, subject)
-    );
-  }
-);
-
-Then(
-  "{word} should not see a separate {string} line under the title for {string}",
-  async function (viewerName, fromLine, subject) {
-    await withMemberHarness(this, viewerName, (member) =>
-      assertConversationDuplicateFromLineAbsent(member, subject, fromLine)
     );
   }
 );

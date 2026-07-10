@@ -119,7 +119,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     |> assert_has("#club-member-profile-name-input")
     |> fill_in("Your name", with: " Robin Example ")
     |> click_button("Join Kootenay Mountaineering Club")
-    |> assert_path("/")
+    |> assert_path(~p"/conversations")
     |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
     |> assert_has("#club-site-identity-menu-button .app-bar__who", "Robin Example")
     |> assert_has("#member-section-tab-conversations[aria-selected='true']", "Conversations")

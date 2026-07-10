@@ -25,7 +25,7 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
     club_home_html =
       conn
       |> signed_in_club_host(club, member.email)
-      |> get(~p"/")
+      |> get(~p"/conversations")
       |> html_response(200)
 
     assert_club_site_shell(
@@ -76,7 +76,7 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
     club_home_html =
       conn
       |> signed_in_club_host(club, alice.email)
-      |> get(~p"/")
+      |> get(~p"/conversations")
       |> html_response(200)
 
     assert_club_site_shell(

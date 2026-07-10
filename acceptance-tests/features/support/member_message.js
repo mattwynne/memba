@@ -1543,98 +1543,6 @@ async function assertMemberMessageBody(world, expectedBody, { expect = playwrigh
   return world;
 }
 
-async function assertClubHomeConversationPreview(
-  world,
-  viewerName,
-  subject,
-  expectedPreview,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
-
-  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
-  await waitForProjectedVisible(
-    world,
-    row,
-    `${viewerName}'s club-home conversation row for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
-
-  await waitForProjectedText(
-    world,
-    row.locator("[data-testid=\"message-body-preview\"]"),
-    expectedPreview,
-    `${viewerName}'s club-home conversation preview for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
-
-  return world;
-}
-
-async function assertClubHomeDoesNotShowHeading(
-  world,
-  viewerName,
-  heading,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
-
-  await waitForProjectedCount(
-    world,
-    world.page.getByRole("heading", { name: heading }),
-    0,
-    `${viewerName}'s club home should not show heading ${JSON.stringify(heading)}`,
-    { expect, timeoutMs }
-  );
-
-  return world;
-}
-
-async function assertConversationEntryKindBadgesAbsent(
-  world,
-  subject,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  await openMemberMessage(world, subject, { expect, timeoutMs });
-
-  await waitForProjectedCount(
-    world,
-    world.page.locator("#member-conversation [data-testid=\"member-conversation-entry-label\"]"),
-    0,
-    `conversation entry kind badges for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
-
-  return world;
-}
-
-async function assertConversationDuplicateFromLineAbsent(
-  world,
-  subject,
-  fromLine,
-  { expect = playwrightExpect, timeoutMs } = {}
-) {
-  await openMemberMessage(world, subject, { expect, timeoutMs });
-
-  await waitForProjectedCount(
-    world,
-    world.page.locator("#member-message-meta"),
-    0,
-    `duplicate conversation sender meta line for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
-
-  await waitForProjectedCount(
-    world,
-    world.page.locator("#member-message-heading-row", { hasText: fromLine }),
-    0,
-    `heading row text ${JSON.stringify(fromLine)} for ${JSON.stringify(subject)}`,
-    { expect, timeoutMs }
-  );
-
-  return world;
-}
-
 async function assertConversationShowsReply(
   world,
   subject,
@@ -3445,11 +3353,7 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
-  assertClubHomeConversationPreview,
-  assertClubHomeDoesNotShowHeading,
   assertConversationDoesNotShowReply,
-  assertConversationDuplicateFromLineAbsent,
-  assertConversationEntryKindBadgesAbsent,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,

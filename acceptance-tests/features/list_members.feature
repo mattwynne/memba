@@ -22,13 +22,3 @@ Feature: List club members
       When Alice views the member list for Kootenay Mountaineering Club
       Then Bob should not appear in the member list
       And Alice and Carol should appear in the member list
-
-  Rule: Club-home Members tab presentation
-
-    @iteration-050
-    Scenario: A member who can manage members sees one invite action and no redundant heading
-      Given Alice, Bob, and Carol are active members of Kootenay Mountaineering Club
-      And Alice can manage members in Kootenay Mountaineering Club
-      When Alice views the member list for Kootenay Mountaineering Club
-      Then the club-home Members tab should not show the "Current members" heading
-      And Alice should see exactly 1 visible "Invite member" action

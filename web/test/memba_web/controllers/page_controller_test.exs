@@ -547,7 +547,6 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "Trip planning night"
     assert response =~ "Bring your maps."
-    assert response =~ "From"
     assert response =~ "Alice Adams"
 
     assert html

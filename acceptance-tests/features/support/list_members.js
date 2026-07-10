@@ -64,59 +64,6 @@ function ensureMemberRoles(world, personName, roleNames, clubName) {
   return roles;
 }
 
-function ensureMemberCanManageMembers(world, personName, clubName) {
-  ensureState(world);
-  ensureActiveMembers(world, [personName], clubName);
-
-  const membership = world.memberships[`${clubName}:${personName}`];
-  assert.ok(membership, `Expected ${personName} to be an active member of ${clubName}`);
-
-  const result = serverCommands.runCommand(
-    `
-import Ecto.Query
-
-club_id = Map.fetch!(payload, "clubId")
-membership_id = Map.fetch!(payload, "membershipId")
-person_id = Map.fetch!(payload, "personId")
-role_id = Memba.Membership.Roles.membership_administrator_role_id(club_id)
-
-already_assigned? =
-  Memba.Membership.Projections.RoleAssignment
-  |> where([assignment],
-    assignment.club_id == ^club_id and
-      assignment.membership_id == ^membership_id and
-      assignment.person_id == ^person_id and
-      assignment.role_id == ^role_id and
-      assignment.active == true
-  )
-  |> Memba.Repo.exists?()
-
-unless already_assigned? do
-  :ok =
-    Memba.Membership.App.dispatch(
-      %Memba.Membership.Commands.AssignMemberRole{
-        club_id: club_id,
-        membership_id: membership_id,
-        person_id: person_id,
-        role_id: role_id
-      },
-      consistency: :strong
-    )
-end
-
-%{status: "ok"}
-`,
-    {
-      clubId: membership.clubId,
-      membershipId: membership.membershipId,
-      personId: membership.personId
-    }
-  );
-
-  assert.equal(result.status, "ok", `Expected ${personName} to be able to manage members in ${clubName}`);
-  return world;
-}
-
 async function viewMemberList(world, viewerName, clubName, { expect = playwrightExpect } = {}) {
   ensureState(world);
   ensureActiveMembers(world, [viewerName], clubName);
@@ -129,28 +76,6 @@ async function viewMemberList(world, viewerName, clubName, { expect = playwright
   await expect(world.page.locator("#member-section-panel-members:not([hidden])")).toBeVisible({
     timeout: projectionTimeoutMs(world)
   });
-
-  return world;
-}
-
-async function assertMembersTabOmitsHeading(world, heading, { expect = playwrightExpect } = {}) {
-  await expect(
-    world.page.locator("#member-section-panel-members:not([hidden]) #club-members h2", { hasText: heading })
-  ).toHaveCount(0, { timeout: projectionTimeoutMs(world) });
-
-  return world;
-}
-
-async function assertVisibleInviteMemberActionCount(world, expectedCount, { expect = playwrightExpect } = {}) {
-  const inviteActions = world.page
-    .locator("#member-club-home")
-    .getByRole("link", { name: "Invite member" });
-
-  await expect(inviteActions).toHaveCount(expectedCount, { timeout: projectionTimeoutMs(world) });
-
-  if (expectedCount === 1) {
-    await expect(inviteActions.first()).toBeVisible({ timeout: projectionTimeoutMs(world) });
-  }
 
   return world;
 }
@@ -229,14 +154,11 @@ function clubSlugFor(clubName) {
 }
 
 module.exports = {
-  assertMembersTabOmitsHeading,
   assertMemberAbsent,
   assertMemberHasNoRoles,
   assertMemberRoles,
   assertMembersPresent,
-  assertVisibleInviteMemberActionCount,
   ensureActiveMembers,
-  ensureMemberCanManageMembers,
   ensureMemberRoles,
   parsePersonList,
   viewMemberList

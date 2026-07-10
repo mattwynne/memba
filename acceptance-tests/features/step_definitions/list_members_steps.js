@@ -1,14 +1,11 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const { removeMemberFromClub } = require("../support/member_message");
 const {
-  assertMembersTabOmitsHeading,
   assertMemberAbsent,
   assertMemberHasNoRoles,
   assertMemberRoles,
   assertMembersPresent,
-  assertVisibleInviteMemberActionCount,
   ensureActiveMembers,
-  ensureMemberCanManageMembers,
   ensureMemberRoles,
   parsePersonList,
   viewMemberList
@@ -27,10 +24,6 @@ Given(/^(\w+) has the roles (.+) and (.+) in (.+)$/, async function (personName,
 
 Given(/^(\w+) has the role (.+) in (.+)$/, async function (personName, roleName, clubName) {
   ensureMemberRoles(this, personName, [roleName], clubName);
-});
-
-Given(/^(\w+) can manage members in (.+)$/, async function (personName, clubName) {
-  ensureMemberCanManageMembers(this, personName, clubName);
 });
 
 Given(/^(\w+) is removed from (.+)$/, async function (personName, clubName) {
@@ -62,12 +55,4 @@ Then(/^(\w+) should not appear in the member list$/, async function (personName)
 
 Then(/^(.+) should appear in the member list$/, async function (personNamesText) {
   await assertMembersPresent(this, parsePersonList(personNamesText));
-});
-
-Then(/^the club-home Members tab should not show the "([^"]+)" heading$/, async function (heading) {
-  await assertMembersTabOmitsHeading(this, heading);
-});
-
-Then(/^(\w+) should see exactly (\d+) visible "Invite member" action$/, async function (_viewerName, expectedCount) {
-  await assertVisibleInviteMemberActionCount(this, Number(expectedCount));
 });

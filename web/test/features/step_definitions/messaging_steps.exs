@@ -355,6 +355,29 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  step "the {string} conversation should show no participant avatars",
+       %{args: [subject]} = context do
+    conversation = club_home_conversation_for!(context, subject)
+
+    assert Map.get(conversation, :participant_ids, []) == []
+
+    context
+  end
+
+  step ~r/^the "([^"]+)" conversation participant avatar-stack should show (.+?)(?:, plus (\d+) more)?$/,
+       %{args: args} = context do
+    [subject, participant_names_text | additional_count_args] = args
+    expected_participant_ids = participant_ids_from_text(context, participant_names_text)
+    conversation = club_home_conversation_for!(context, subject)
+    participant_ids = Map.get(conversation, :participant_ids, [])
+    expected_additional_count = additional_count_arg(additional_count_args)
+
+    assert Enum.take(participant_ids, 3) == expected_participant_ids
+    assert max(length(participant_ids) - 3, 0) == expected_additional_count
+
+    context
+  end
+
   step ~r/^(\w+)'s club home should list "([^"]+)" before "([^"]+)"$/,
        %{args: [viewer_name, earlier_subject, later_subject]} = context do
     conversations =
@@ -1288,6 +1311,16 @@ defmodule Memba.Cucumber.MessagingSteps do
       person_id when is_binary(person_id) -> person_id
     end
   end
+
+  defp participant_ids_from_text(context, participant_names_text) do
+    participant_names_text
+    |> parse_person_list()
+    |> Enum.map(&person_id_from_context!(context, &1))
+  end
+
+  defp additional_count_arg([]), do: 0
+  defp additional_count_arg([nil]), do: 0
+  defp additional_count_arg([count]), do: String.to_integer(count)
 
   defp primary_email_for(context, person_name) do
     context

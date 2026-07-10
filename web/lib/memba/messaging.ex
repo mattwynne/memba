@@ -718,11 +718,45 @@ defmodule Memba.Messaging do
           latest_replier_id: reply.sender_id
         }
 
+    participant_first_replies_query =
+      from reply in MessageProjection,
+        join: root in MessageProjection,
+        on:
+          root.club_id == reply.club_id and
+            root.message_id == reply.conversation_id and
+            root.message_id == root.conversation_id,
+        where:
+          reply.club_id == ^club_id and
+            reply.message_id != reply.conversation_id and
+            reply.sender_id != root.sender_id,
+        group_by: [reply.conversation_id, reply.sender_id],
+        select: %{
+          conversation_id: reply.conversation_id,
+          sender_id: reply.sender_id,
+          first_replied_at: min(reply.inserted_at)
+        }
+
+    participants_query =
+      from participant in subquery(participant_first_replies_query),
+        group_by: participant.conversation_id,
+        select: %{
+          conversation_id: participant.conversation_id,
+          participant_ids:
+            fragment(
+              "array_agg(? ORDER BY ?, ?)",
+              participant.sender_id,
+              participant.first_replied_at,
+              participant.sender_id
+            )
+        }
+
     from root in MessageProjection,
       left_join: reply_counts in subquery(reply_counts_query),
       on: reply_counts.conversation_id == root.message_id,
       left_join: latest_reply in subquery(latest_replies_query),
       on: latest_reply.conversation_id == root.message_id,
+      left_join: participants in subquery(participants_query),
+      on: participants.conversation_id == root.message_id,
       where: root.club_id == ^club_id and root.message_id == root.conversation_id,
       order_by: [desc: root.inserted_at, desc: root.message_id],
       select: %{
@@ -736,7 +770,8 @@ defmodule Memba.Messaging do
         inserted_at: root.inserted_at,
         updated_at: root.updated_at,
         reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
-        latest_replier_id: latest_reply.latest_replier_id
+        latest_replier_id: latest_reply.latest_replier_id,
+        participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
       }
   end
 

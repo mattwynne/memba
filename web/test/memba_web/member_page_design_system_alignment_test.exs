@@ -26,7 +26,7 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
     {"club home template", "lib/memba_web/controllers/page_html/club.html.heex",
      ["<.button", "<.avatar"]},
     {"message detail template", "lib/memba_web/controllers/page_html/message.html.heex",
-     ["<.button", "<.status_badge"]},
+     ["<.button"]},
     {"member invitation LiveView", "lib/memba_web/live/member_invitation_live/new.ex",
      ["<.button", "<.avatar"]},
     {"compose LiveView", "lib/memba_web/live/member_message_live/new.ex",
