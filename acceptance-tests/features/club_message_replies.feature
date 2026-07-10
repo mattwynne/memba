@@ -21,7 +21,6 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply "I can drive, three seats spare"
       And Alice should see Bob's reply in the conversation for "Trip planning night"
 
-    @todo-ui
     Scenario: Replies are shown in the order they were posted
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"

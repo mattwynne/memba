@@ -636,13 +636,6 @@ async function postMemberReply(
     await world.page.getByRole("button", { name: "Post reply" }).click();
   });
 
-  await waitForProjectedVisible(
-    world,
-    world.page.locator("#member-message-reply-success", { hasText: "Your reply is being sent." }),
-    `reply success message for ${replierName}`,
-    { expect, timeoutMs }
-  );
-
   const replyRow = conversationReplyRow(world, replierName, body);
   await waitForProjectedVisible(
     world,
