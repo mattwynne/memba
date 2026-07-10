@@ -205,7 +205,9 @@ When("{word} replies {string} to {string}", async function (senderName, body, su
 });
 
 When("{word} replies by email to {string} with:", async function (senderName, subject, body) {
-  await sendInboundClubEmailReply(this, senderName, subject, body);
+  await sendInboundClubEmailReply(this, senderName, subject, body, {
+    requireReply: Boolean(this.memberships && this.memberships[`${kootenayClubName}:${senderName}`])
+  });
 });
 
 When(

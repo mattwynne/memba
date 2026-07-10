@@ -1208,7 +1208,7 @@ async function sendInboundClubEmailReply(
   senderName,
   subject,
   body,
-  { expect = playwrightExpect, toAddress } = {}
+  { expect = playwrightExpect, requireReply = true, toAddress } = {}
 ) {
   ensureState(world);
 
@@ -1231,7 +1231,7 @@ async function sendInboundClubEmailReply(
 
   world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
 
-  await recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply: true });
+  await recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply });
 
   return world;
 }

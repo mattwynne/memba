@@ -101,7 +101,6 @@ Feature: Club message replies (conversations)
       Then Bob should see the message "Re: Trip planning night" in Kootenay Mountaineering Club
       And the conversation for "Trip planning night" should not show Bob's reply "Re: Trip planning night details."
 
-    @todo-ui
     Scenario: A non-member email reply is rejected
       When Pat replies by email to "Trip planning night" with:
         """
