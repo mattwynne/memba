@@ -149,7 +149,7 @@ Feature: Club message replies (conversations)
       When Carol replies "I'll take the old skis" to "Trip planning night"
       Then Alice's club home should list "Gear swap shelf" before "Trip planning night"
 
-  @iteration-050 @todo-ui
+  @iteration-050
   Rule: Conversation pages match the member-visible conversation design
 
     Scenario: Conversation entries omit kind badges and the duplicate sender line
