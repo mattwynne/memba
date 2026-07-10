@@ -14,6 +14,16 @@ const {
   assertMemberMessageNotAddressedTo,
   assertConversationFollowingState,
   assertConversationDoesNotShowReply,
+  assertClubHomeConversationCount,
+  assertClubHomeConversationLatestReplyFrom,
+  assertClubHomeConversationNoParticipantAvatars,
+  assertClubHomeConversationOrder,
+  assertClubHomeConversationParticipantAvatarStack,
+  assertClubHomeConversationPreview,
+  assertClubHomeConversationReplyCount,
+  assertClubHomeDoesNotShowHeading,
+  assertConversationEntryKindBadgesAbsent,
+  assertConversationDuplicateFromLineAbsent,
   assertConversationReplyOrder,
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
@@ -197,7 +207,9 @@ When("{word} replies {string} to {string}", async function (senderName, body, su
 });
 
 When("{word} replies by email to {string} with:", async function (senderName, subject, body) {
-  await sendInboundClubEmailReply(this, senderName, subject, body);
+  await sendInboundClubEmailReply(this, senderName, subject, body, {
+    requireReply: Boolean(this.memberships && this.memberships[`${kootenayClubName}:${senderName}`])
+  });
 });
 
 When(
@@ -237,6 +249,14 @@ Then(
   }
 );
 
+Then("the conversation for {string} should show Bob's reply", async function (subject) {
+  const reply = latestReplyFor(this, subject, "Bob");
+
+  await withMemberHarness(this, "Alice", (member) =>
+    assertConversationShowsReply(member, subject, "Bob", reply.body)
+  );
+});
+
 Then(
   "{word} should see {word}'s reply in the conversation for {string}",
   async function (viewerName, senderName, subject) {
@@ -253,6 +273,101 @@ Then(
   async function (subject, earlierBody, laterBody) {
     await withMemberHarness(this, "Alice", (member) =>
       assertConversationReplyOrder(member, subject, earlierBody, laterBody)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home should show the {string} conversation preview {string}",
+  async function (viewerName, subject, expectedPreview) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationPreview(member, viewerName, subject, expectedPreview)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home should not show the {string} heading",
+  async function (viewerName, heading) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeDoesNotShowHeading(member, viewerName, heading)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home should list one conversation for {string}",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationCount(member, viewerName, subject, 1)
+    );
+  }
+);
+
+Then("the {string} conversation should show {int} replies", async function (subject, replyCount) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertClubHomeConversationReplyCount(member, subject, replyCount)
+  );
+});
+
+Then(
+  "the {string} conversation should show the latest reply is from {word}",
+  async function (subject, replierName) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertClubHomeConversationLatestReplyFrom(member, subject, replierName)
+    );
+  }
+);
+
+Then("the {string} conversation should show no replies yet", async function (subject) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertClubHomeConversationReplyCount(member, subject, 0)
+  );
+});
+
+Then(
+  "{word}'s club home should list {string} before {string}",
+  async function (viewerName, earlierSubject, laterSubject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationOrder(member, viewerName, earlierSubject, laterSubject)
+    );
+  }
+);
+
+Then("the {string} conversation should show no participant avatars", async function (subject) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertClubHomeConversationNoParticipantAvatars(member, subject)
+  );
+});
+
+Then(
+  /^the "([^"]+)" conversation participant avatar-stack should show (.+?)(?:, plus (\d+) more)?$/,
+  async function (subject, participantNamesText, overflowCount) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertClubHomeConversationParticipantAvatarStack(
+        member,
+        subject,
+        parsePersonList(participantNamesText),
+        overflowCount ? Number(overflowCount) : 0
+      )
+    );
+  }
+);
+
+Then(
+  "{word} should not see conversation entry kind badges for {string}",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertConversationEntryKindBadgesAbsent(member, subject)
+    );
+  }
+);
+
+Then(
+  "{word} should not see a separate {string} line under the title for {string}",
+  async function (viewerName, fromLine, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertConversationDuplicateFromLineAbsent(member, subject, fromLine)
     );
   }
 );

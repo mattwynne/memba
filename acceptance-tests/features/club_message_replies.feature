@@ -1,4 +1,4 @@
-@not-ui @iteration-039
+@iteration-039
 Feature: Club message replies (conversations)
   Club members want to reply to a club message and keep the conversation in Memba,
   instead of replies scattering to private inboxes and never being tracked.

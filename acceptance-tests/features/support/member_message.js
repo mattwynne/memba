@@ -19,7 +19,7 @@ function clubSiteBaseDomain() {
 }
 
 function clubInboundEmailDomain() {
-  return process.env.MEMBA_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io";
+  return process.env.ACCEPTANCE_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io";
 }
 
 function clubEveryoneAddress(club) {
@@ -417,6 +417,10 @@ function conversationFollowControl(world) {
   return world.page.locator("#member-conversation-follow-control");
 }
 
+function conversationFollowToggle(world) {
+  return world.page.locator("#member-conversation-follow-toggle");
+}
+
 async function waitForProjectedFollowState(world, expectedFollowing, description, options = {}) {
   await waitForProjectedAttribute(
     world,
@@ -632,13 +636,6 @@ async function postMemberReply(
     await world.page.getByRole("button", { name: "Post reply" }).click();
   });
 
-  await waitForProjectedVisible(
-    world,
-    world.page.locator("#member-message-reply-success", { hasText: "Your reply is being sent." }),
-    `reply success message for ${replierName}`,
-    { expect, timeoutMs }
-  );
-
   const replyRow = conversationReplyRow(world, replierName, body);
   await waitForProjectedVisible(
     world,
@@ -670,6 +667,7 @@ async function followConversation(world, memberName, subject, { expect = playwri
   ensureState(world);
 
   await openMemberMessage(world, subject, { expect, timeoutMs });
+  await world.page.waitForLoadState("networkidle", { timeout: timeoutMs });
 
   const control = conversationFollowControl(world);
   await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
@@ -682,7 +680,7 @@ async function followConversation(world, memberName, subject, { expect = playwri
   }
 
   await browserInteraction(`${memberName} follows ${JSON.stringify(subject)}`, () =>
-    world.page.locator("#member-conversation-follow-button").click()
+    conversationFollowToggle(world).click()
   );
 
   await waitForProjectedFollowState(world, true, `${memberName} follows ${JSON.stringify(subject)}`, {
@@ -697,6 +695,7 @@ async function unfollowConversation(world, memberName, subject, { expect = playw
   ensureState(world);
 
   await openMemberMessage(world, subject, { expect, timeoutMs });
+  await world.page.waitForLoadState("networkidle", { timeout: timeoutMs });
 
   const control = conversationFollowControl(world);
   await waitForProjectedVisible(world, control, `conversation follow control for ${memberName}`, {
@@ -709,7 +708,7 @@ async function unfollowConversation(world, memberName, subject, { expect = playw
   }
 
   await browserInteraction(`${memberName} stops following ${JSON.stringify(subject)}`, () =>
-    world.page.locator("#member-conversation-unfollow-button").click()
+    conversationFollowToggle(world).click()
   );
 
   await waitForProjectedFollowState(world, false, `${memberName} stops following ${JSON.stringify(subject)}`, {
@@ -1209,7 +1208,7 @@ async function sendInboundClubEmailReply(
   senderName,
   subject,
   body,
-  { expect = playwrightExpect, toAddress } = {}
+  { expect = playwrightExpect, requireReply = true, toAddress } = {}
 ) {
   ensureState(world);
 
@@ -1232,7 +1231,7 @@ async function sendInboundClubEmailReply(
 
   world.replyDeliveryFactsBeforeSend = replyDeliveryFactsBeforeSend;
 
-  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
+  await recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply });
 
   return world;
 }
@@ -1257,7 +1256,7 @@ async function sendInboundClubEmailWithReplyHeaders(
     textBody: textBody ?? `${subject} details.`
   });
 
-  recordInboundReplyIfAccepted(world, providerMessageId, senderName);
+  await recordInboundReplyIfAccepted(world, providerMessageId, senderName);
 
   return world;
 }
@@ -1538,6 +1537,299 @@ async function assertMemberMessageBody(world, expectedBody, { expect = playwrigh
     normalizeDocString(expectedBody),
     `member message body for ${JSON.stringify(subject)}`,
     { expect }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationPreview(
+  world,
+  viewerName,
+  subject,
+  expectedPreview,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${viewerName}'s club-home conversation row for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  await waitForProjectedText(
+    world,
+    row.locator("[data-testid=\"message-body-preview\"]"),
+    expectedPreview,
+    `${viewerName}'s club-home conversation preview for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationCount(
+  world,
+  viewerName,
+  subject,
+  expectedCount,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", subject),
+    expectedCount,
+    `${viewerName}'s club-home conversation count for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationReplyCount(
+  world,
+  subject,
+  expectedReplyCount,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  await waitForProjectedAttribute(
+    world,
+    row.locator("[data-testid=\"message-reply-activity\"]"),
+    "data-reply-count",
+    String(expectedReplyCount),
+    `club-home conversation reply count for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationOrder(
+  world,
+  viewerName,
+  earlierSubject,
+  laterSubject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", earlierSubject),
+    `${viewerName}'s club-home conversation row for ${JSON.stringify(earlierSubject)}`,
+    { expect, timeoutMs }
+  );
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", laterSubject),
+    `${viewerName}'s club-home conversation row for ${JSON.stringify(laterSubject)}`,
+    { expect, timeoutMs }
+  );
+
+  const subjects = await rowAttributeValues(world.page.locator("[data-testid=\"club-message-row\"]"), "data-message-subject");
+  const earlierIndex = subjects.indexOf(earlierSubject);
+  const laterIndex = subjects.indexOf(laterSubject);
+
+  assertFinalBrowserState(`${viewerName}'s club-home conversation order`, () => {
+    assert.notEqual(
+      earlierIndex,
+      -1,
+      `Expected club home conversations to include ${JSON.stringify(earlierSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+    assert.notEqual(
+      laterIndex,
+      -1,
+      `Expected club home conversations to include ${JSON.stringify(laterSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+    assert.ok(
+      earlierIndex < laterIndex,
+      `Expected ${JSON.stringify(earlierSubject)} before ${JSON.stringify(laterSubject)}; saw ${JSON.stringify(subjects)}`
+    );
+  });
+
+  return world;
+}
+
+async function assertClubHomeConversationLatestReplyFrom(
+  world,
+  subject,
+  expectedReplierName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  await waitForProjectedAttribute(
+    world,
+    row.locator("[data-testid=\"message-reply-activity\"]"),
+    "data-latest-replier-name",
+    expectedReplierName,
+    `club-home conversation latest replier for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationNoParticipantAvatars(
+  world,
+  subject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  await waitForProjectedCount(
+    world,
+    row.locator("[data-testid=\"message-participant-avatar-stack\"]"),
+    0,
+    `club-home conversation participant avatar-stack for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationParticipantAvatarStack(
+  world,
+  subject,
+  expectedParticipantNames,
+  expectedOverflowCount = 0,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  const stack = row.locator("[data-testid=\"message-participant-avatar-stack\"]");
+  await waitForProjectedVisible(
+    world,
+    stack,
+    `club-home conversation participant avatar-stack for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  const avatars = stack.locator("[data-testid=\"message-participant-avatar\"]");
+  await waitForProjectedCount(
+    world,
+    avatars,
+    expectedParticipantNames.length,
+    `club-home conversation participant avatars for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  const participantNames = await rowAttributeValues(avatars, "data-participant-name");
+  assertFinalBrowserState(`participant avatar order for ${JSON.stringify(subject)}`, () =>
+    assert.deepEqual(participantNames, expectedParticipantNames)
+  );
+
+  const overflow = stack.locator("[data-testid=\"message-participant-overflow\"]");
+  await waitForProjectedCount(
+    world,
+    overflow,
+    expectedOverflowCount > 0 ? 1 : 0,
+    `club-home conversation participant overflow for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  if (expectedOverflowCount > 0) {
+    await waitForProjectedText(
+      world,
+      overflow,
+      `+${expectedOverflowCount}`,
+      `club-home conversation participant overflow count for ${JSON.stringify(subject)}`,
+      { expect, timeoutMs }
+    );
+  }
+
+  return world;
+}
+
+async function assertClubHomeDoesNotShowHeading(
+  world,
+  viewerName,
+  heading,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    world.page.getByRole("heading", { name: heading }),
+    0,
+    `${viewerName}'s club home should not show heading ${JSON.stringify(heading)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertConversationEntryKindBadgesAbsent(
+  world,
+  subject,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-conversation [data-testid=\"member-conversation-entry-label\"]"),
+    0,
+    `conversation entry kind badges for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertConversationDuplicateFromLineAbsent(
+  world,
+  subject,
+  fromLine,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-message-meta"),
+    0,
+    `duplicate conversation sender meta line for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-message-heading-row", { hasText: fromLine }),
+    0,
+    `heading row text ${JSON.stringify(fromLine)} for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
   );
 
   return world;
@@ -2946,9 +3238,14 @@ async function outboundMessageIdForSubject(world, subject, preferredRecipientNam
   return outboundMessageId;
 }
 
-function recordInboundReplyIfAccepted(world, providerMessageId, senderName) {
-  const result = serverCommands.runCommand(
-    `
+async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
+  const timeoutMs = requireReply ? projectionTimeoutMs(world) : 0;
+  const deadline = Date.now() + timeoutMs;
+  let result;
+
+  do {
+    result = serverCommands.runCommand(
+      `
 provider_message_id = Map.fetch!(payload, "providerMessageId")
 source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
 
@@ -2962,7 +3259,8 @@ message =
   source: if(source, do: %{
     status: source.status,
     messageId: source.message_id,
-    rejectionReason: source.rejection_reason
+    rejectionReason: source.rejection_reason,
+    toAddress: source.to_address
   }, else: nil),
   message: if(message, do: %{
     body: message.body,
@@ -2975,13 +3273,39 @@ message =
   }, else: nil)
 }
 `,
-    { providerMessageId }
-  );
+      { providerMessageId }
+    );
 
-  const message = result.message;
+    if (result.source && result.source.status === "rejected") {
+      if (requireReply) {
+        throw new Error(
+          `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
+        );
+      }
+
+      return;
+    }
+
+    if (result.message && result.message.replyToMessageId) {
+      break;
+    }
+
+    if (Date.now() <= deadline) {
+      await delay(projectionPollIntervalMs(world));
+    }
+  } while (Date.now() <= deadline);
+
+  const message = result && result.message;
 
   if (!message || !message.replyToMessageId) {
-    return;
+    if (!requireReply) {
+      return;
+    }
+
+    assert.ok(
+      message && message.replyToMessageId,
+      `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`
+    );
   }
 
   const reply = {
@@ -3353,6 +3677,16 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
+  assertClubHomeConversationPreview,
+  assertClubHomeConversationCount,
+  assertClubHomeConversationLatestReplyFrom,
+  assertClubHomeConversationNoParticipantAvatars,
+  assertClubHomeConversationOrder,
+  assertClubHomeConversationParticipantAvatarStack,
+  assertClubHomeConversationReplyCount,
+  assertClubHomeDoesNotShowHeading,
+  assertConversationDuplicateFromLineAbsent,
+  assertConversationEntryKindBadgesAbsent,
   assertConversationDoesNotShowReply,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailFrom,
