@@ -66,7 +66,6 @@ Feature: Club message replies (conversations)
       Then Bob should receive Alice's reply by email from Kootenay Mountaineering Club via Memba
       And Carol should not receive Alice's reply by email
 
-    @todo-ui
     Scenario: A tampered stop-follow link changes nothing
       Given Carol follows the conversation for "Trip planning night"
       When Carol follows a tampered stop-follow link for "Trip planning night"
