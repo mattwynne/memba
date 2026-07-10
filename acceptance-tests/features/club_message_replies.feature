@@ -72,7 +72,6 @@ Feature: Club message replies (conversations)
       Then Carol should be told the stop-follow link is not valid
       And Carol should be following the conversation for "Trip planning night"
 
-  @todo-ui
   Rule: Only a current member of the club can reply to its messages
 
     Scenario: A member of another club cannot reply
