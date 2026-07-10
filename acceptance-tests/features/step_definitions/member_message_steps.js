@@ -247,6 +247,14 @@ Then(
   }
 );
 
+Then("the conversation for {string} should show Bob's reply", async function (subject) {
+  const reply = latestReplyFor(this, subject, "Bob");
+
+  await withMemberHarness(this, "Alice", (member) =>
+    assertConversationShowsReply(member, subject, "Bob", reply.body)
+  );
+});
+
 Then(
   "{word} should see {word}'s reply in the conversation for {string}",
   async function (viewerName, senderName, subject) {

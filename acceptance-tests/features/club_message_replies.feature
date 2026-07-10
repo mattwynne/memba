@@ -117,7 +117,6 @@ Feature: Club message replies (conversations)
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
 
-  @todo-ui
   Rule: Email replies use the everyone address on the club email subdomain
 
     @iteration-042
