@@ -14,7 +14,6 @@ Feature: Club message replies (conversations)
     And Pat is a member of Nelson Paddling Club
     And Alice sent the message "Trip planning night" to Kootenay Mountaineering Club members
 
-  @todo-ui
   Rule: A member can reply to a club message, and the reply joins that message's conversation
 
     Scenario: Bob replies to Alice's club message
@@ -22,6 +21,7 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply "I can drive, three seats spare"
       And Alice should see Bob's reply in the conversation for "Trip planning night"
 
+    @todo-ui
     Scenario: Replies are shown in the order they were posted
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"
