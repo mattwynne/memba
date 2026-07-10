@@ -126,7 +126,7 @@ Feature: Club message replies (conversations)
       Then the conversation for "Trip planning night" should show Bob's reply
       And Alice should receive Bob's reply by email from Kootenay Mountaineering Club via Memba
 
-  @iteration-043 @todo-ui
+  @iteration-043
   Rule: On the club home, each conversation is one entry with its reply count
 
     @iteration-050
@@ -134,6 +134,7 @@ Feature: Club message replies (conversations)
       Then Alice's club home should show the "Trip planning night" conversation preview "Trip planning night details."
       And Alice's club home should not show the "Recent club messages" heading
 
+    @todo-ui
     Scenario: A replied-to message appears once, with its reply count
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"
@@ -141,10 +142,12 @@ Feature: Club message replies (conversations)
       And the "Trip planning night" conversation should show 2 replies
       And the "Trip planning night" conversation should show the latest reply is from Carol
 
+    @todo-ui
     Scenario: A message with no replies shows none yet
       Then Alice's club home should list one conversation for "Trip planning night"
       And the "Trip planning night" conversation should show no replies yet
 
+    @todo-ui
     Scenario: Conversations are ordered by original message, newest first
       Given Bob sent the message "Gear swap shelf" to Kootenay Mountaineering Club members
       When Carol replies "I'll take the old skis" to "Trip planning night"
