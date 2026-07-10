@@ -141,7 +141,6 @@ Feature: Club message replies (conversations)
       And the "Trip planning night" conversation should show 2 replies
       And the "Trip planning night" conversation should show the latest reply is from Carol
 
-    @todo-ui
     Scenario: A message with no replies shows none yet
       Then Alice's club home should list one conversation for "Trip planning night"
       And the "Trip planning night" conversation should show no replies yet

@@ -306,6 +306,12 @@ Then(
   }
 );
 
+Then("the {string} conversation should show no replies yet", async function (subject) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertClubHomeConversationReplyCount(member, subject, 0)
+  );
+});
+
 Then(
   "{word} should not see conversation entry kind badges for {string}",
   async function (viewerName, subject) {
