@@ -14,7 +14,10 @@ const {
   assertMemberMessageNotAddressedTo,
   assertConversationFollowingState,
   assertConversationDoesNotShowReply,
+  assertClubHomeConversationCount,
+  assertClubHomeConversationLatestReplyFrom,
   assertClubHomeConversationPreview,
+  assertClubHomeConversationReplyCount,
   assertClubHomeDoesNotShowHeading,
   assertConversationEntryKindBadgesAbsent,
   assertConversationDuplicateFromLineAbsent,
@@ -275,6 +278,30 @@ Then(
   async function (viewerName, heading) {
     await withMemberHarness(this, viewerName, (member) =>
       assertClubHomeDoesNotShowHeading(member, viewerName, heading)
+    );
+  }
+);
+
+Then(
+  "{word}'s club home should list one conversation for {string}",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationCount(member, viewerName, subject, 1)
+    );
+  }
+);
+
+Then("the {string} conversation should show {int} replies", async function (subject, replyCount) {
+  await withMemberHarness(this, "Alice", (member) =>
+    assertClubHomeConversationReplyCount(member, subject, replyCount)
+  );
+});
+
+Then(
+  "the {string} conversation should show the latest reply is from {word}",
+  async function (subject, replierName) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertClubHomeConversationLatestReplyFrom(member, subject, replierName)
     );
   }
 );

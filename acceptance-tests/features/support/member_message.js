@@ -1570,6 +1570,78 @@ async function assertClubHomeConversationPreview(
   return world;
 }
 
+async function assertClubHomeConversationCount(
+  world,
+  viewerName,
+  subject,
+  expectedCount,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-subject", subject),
+    expectedCount,
+    `${viewerName}'s club-home conversation count for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationReplyCount(
+  world,
+  subject,
+  expectedReplyCount,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  await waitForProjectedAttribute(
+    world,
+    row.locator("[data-testid=\"message-reply-activity\"]"),
+    "data-reply-count",
+    String(expectedReplyCount),
+    `club-home conversation reply count for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertClubHomeConversationLatestReplyFrom(
+  world,
+  subject,
+  expectedReplierName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(world, row, `club-home conversation row for ${JSON.stringify(subject)}`, {
+    expect,
+    timeoutMs
+  });
+
+  await waitForProjectedAttribute(
+    world,
+    row.locator("[data-testid=\"message-reply-activity\"]"),
+    "data-latest-replier-name",
+    expectedReplierName,
+    `club-home conversation latest replier for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
 async function assertClubHomeDoesNotShowHeading(
   world,
   viewerName,
@@ -3445,6 +3517,9 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
   assertClubHomeConversationPreview,
+  assertClubHomeConversationCount,
+  assertClubHomeConversationLatestReplyFrom,
+  assertClubHomeConversationReplyCount,
   assertClubHomeDoesNotShowHeading,
   assertConversationDoesNotShowReply,
   assertConversationDuplicateFromLineAbsent,

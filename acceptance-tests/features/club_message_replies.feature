@@ -134,7 +134,6 @@ Feature: Club message replies (conversations)
       Then Alice's club home should show the "Trip planning night" conversation preview "Trip planning night details."
       And Alice's club home should not show the "Recent club messages" heading
 
-    @todo-ui
     Scenario: A replied-to message appears once, with its reply count
       When Bob replies "I can drive, three seats spare" to "Trip planning night"
       And Carol replies "I'll bring the maps" to "Trip planning night"
