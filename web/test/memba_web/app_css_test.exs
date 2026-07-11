@@ -56,7 +56,7 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ ".avatar-stack > .avatar {"
     assert css =~ ".avatar-stack > .is-more {"
 
-    assert css =~ "grid-template-columns: 38px minmax(0, 1fr);"
+    assert css =~ "gap: 13px;"
     assert css =~ "line-clamp: 1;"
     assert css =~ "margin-left: -6px;"
     assert css =~ "font-family: var(--font-mono);"
@@ -77,6 +77,36 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ "border-radius: 999px;"
     assert css =~ "cursor: pointer;"
     assert css =~ "white-space: nowrap;"
+  end
+
+  test "app css includes the conversation message, composer, and page title rules" do
+    css = File.read!(@app_css_path)
+
+    assert css =~ ".page-title {"
+    assert css =~ ".message {"
+    assert css =~ ".message--original {"
+    assert css =~ ".message__avatar {"
+    assert css =~ ".message__body {"
+    assert css =~ ".message__head {"
+    assert css =~ ".message__name {"
+    assert css =~ ".message__time {"
+    assert css =~ ".message__text {"
+    assert css =~ ".message__menu {"
+    assert css =~ ".message__kebab {"
+    assert css =~ ".message-menu {"
+    assert css =~ ".composer {"
+    assert css =~ ".composer__head {"
+    assert css =~ ".composer__title {"
+    assert css =~ ".composer__as {"
+    assert css =~ ".composer__actions {"
+    assert css =~ ".composer__note {"
+    assert css =~ ".composer__error {"
+
+    assert css =~ "grid-template-columns: 38px minmax(0, 1fr);"
+    assert css =~ "background: var(--color-sage-50);"
+    assert css =~ "font-size: 28px;"
+    assert css =~ "resize: vertical;"
+    assert css =~ "color: var(--color-error);"
   end
 
   test "app css includes the delivery details summary, group, recipient, and status tint rules" do
