@@ -1,0 +1,123 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 58fef58..57f5f73 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
+ - [x] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+ - [x] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+-- [ ] 004 Remove the desktop club-home `Prefer email?` card/copy.
++- [x] 004 Remove the desktop club-home `Prefer email?` card/copy.
+ - [ ] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
+ - [ ] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
+ - [ ] 007 Add/update Phoenix/LiveView/rendered tests for: ported class usage on message entries/composer/title;
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index d31105b..3db7893 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -6,7 +6,6 @@ defmodule MembaWeb.PageHTML do
+   """
+   use MembaWeb, :html
+ 
+-  alias Memba.ClubInboundEmailAddress
+   alias MembaWeb.ClubSite
+ 
+   embed_templates "page_html/*"
+@@ -84,8 +83,6 @@ defmodule MembaWeb.PageHTML do
+     Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
+   end
+ 
+-  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
+-
+   defp active_member_section?(active_section, section), do: active_section == section
+ 
+   defp member_section_tab_class(active_section, section) do
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index f014b83..e97585f 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -1,6 +1,5 @@
+ <% club_id_source = assigns[:club_id_source] || "host" %>
+ <% active_section = assigns[:active_section] || "conversations" %>
+-<% inbound_email_address = club_inbound_email_address(@selected_club) %>
+ 
+ <Layouts.club_site
+   flash={@flash}
+@@ -197,27 +196,6 @@
+           </article>
+         </div>
+       </section>
+-
+-      <div
+-        :if={inbound_email_address}
+-        id="member-dashboard-inbound-email"
+-        data-inbound-address={inbound_email_address}
+-        class="mt-4 rounded-2xl border border-base-300 bg-base-100 px-4 py-3 text-sm leading-6 text-ink-2 shadow-sm"
+-      >
+-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-ink-3">
+-          Prefer email?
+-        </p>
+-        <p class="mt-1">
+-          You can also send a club-wide message to
+-          <a
+-            id="member-dashboard-inbound-email-link"
+-            href={"mailto:#{inbound_email_address}"}
+-            class="font-semibold text-primary underline decoration-primary/35 underline-offset-4 transition duration-200 hover:decoration-primary"
+-          >
+-            {inbound_email_address}
+-          </a>
+-        </p>
+-      </div>
+     </div>
+ 
+     <div
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index f90599f..80f236d 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1184,7 +1184,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "button#member-message-send-button")
+   end
+ 
+-  test "dashboard shows the selected club inbound email address", %{conn: conn} do
++  test "dashboard omits the inbound email card from the conversations panel", %{conn: conn} do
+     alice =
+       create_active_member(
+         email: "alice@example.com",
+@@ -1198,32 +1198,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> signed_in_club_host("alice@example.com", alice)
+       |> live(~p"/conversations")
+ 
+-    assert has_element?(
+-             view,
+-             "#member-section-panel-conversations " <>
+-               "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
+-           )
+-
++    refute has_element?(view, "#member-section-panel-conversations #member-dashboard-inbound-email")
+     refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
+-
+-    assert has_element?(
+-             view,
+-             "#member-section-panel-conversations #member-dashboard-inbound-email",
+-             "Prefer email?"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "#member-section-panel-conversations #member-dashboard-inbound-email",
+-             "You can also send a club-wide message to"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "#member-section-panel-conversations " <>
+-               "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
+-             "everyone@kmc.clubs.memba.io"
+-           )
++    refute has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
++    refute has_element?(view, "#member-dashboard-inbound-email", "You can also send a club-wide message to")
++    refute has_element?(view, "#member-dashboard-inbound-email-link")
+ 
+     refute has_element?(
+              view,
