@@ -60,7 +60,62 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "AA"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/conversations']",
+             "All conversations"
+           )
+  end
+
+  test "message detail applies the wireframe copy and footer decisions", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    response =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/messages/#{message.message_id}")
+      |> html_response(200)
+
+    document = LazyHTML.from_fragment(response)
+
+    assert document
+           |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "All conversations"
+
+    assert document
+           |> LazyHTML.query(
+             "#member-message-reply-composer.composer > .composer__head > " <>
+               "#member-message-reply-from.composer__as[data-sender-id='#{alice.person_id}']"
+           )
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "Replying as Alice Adams"
+
+    refute response =~ "Your reply inherits the subject and is emailed to current followers except you."
+
+    assert document
+           |> LazyHTML.query("#club-site-footer.app-foot")
+           |> Enum.any?()
+
+    assert document
+           |> LazyHTML.query("footer")
+           |> Enum.count() == 1
+
+    refute response =~ "Red Donkey Technology Corp"
+    refute response =~ "Footer navigation"
   end
 
   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
@@ -92,7 +147,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/conversations']",
+             "All conversations"
+           )
+
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
@@ -787,5 +847,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
     })
+  end
+
+  defp normalize_whitespace(text) do
+    text
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 end

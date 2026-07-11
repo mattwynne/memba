@@ -70,7 +70,16 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     assert receipt.status == "sent"
 
     assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
-    assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
+
+    assert has_element?(
+             view,
+             "#member-message-reply-success.composer__note",
+             "Your reply is being sent."
+           )
+
+    refute has_element?(view, "#member-message-reply-success.bg-success-soft")
+    refute has_element?(view, "#member-message-reply-success.text-success")
+
     assert Messaging.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(

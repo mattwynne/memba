@@ -15,6 +15,21 @@ defmodule MembaWeb.Layouts do
 
   defp git_commit_footer_link, do: Memba.BuildInfo.footer_commit()
 
+  defp hide_public_footer?(assigns) do
+    assigns
+    |> Map.get(:conn)
+    |> member_message_detail_request?()
+  end
+
+  defp member_message_detail_request?(%Plug.Conn{request_path: path}) when is_binary(path) do
+    case String.split(path, "/", trim: true) do
+      ["messages", message_id] -> message_id != "new"
+      _other_path -> false
+    end
+  end
+
+  defp member_message_detail_request?(_conn), do: false
+
   @doc """
   Renders the shared public/visitor header.
 
