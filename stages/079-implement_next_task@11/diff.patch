@@ -1,0 +1,135 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 3906a2a..37391c9 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -10,5 +10,5 @@
+ - [x] 008 Add/update Phoenix/LiveView/rendered tests for: absence of helper sentence and green success-alert styling;
+ - [x] 009 Add/update Phoenix/LiveView/rendered tests for: `All conversations` back link;
+ - [x] 010 Add/update Phoenix/LiveView/rendered tests for: no `Prefer email?` card on desktop club home;
+-- [ ] 011 Add/update Phoenix/LiveView/rendered tests for: no full public footer on member app pages while public pages retain it.
++- [x] 011 Add/update Phoenix/LiveView/rendered tests for: no full public footer on member app pages while public pages retain it.
+ - [ ] 012 Run the detailed gallery-walk validation below, then `dev check`.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index a7fcfdb..1e6e4c7 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -51,6 +51,18 @@ defmodule MembaWeb.PageControllerTest do
+     assert html |> LazyHTML.query("a[href='/get-started']") |> Enum.any?()
+   end
+ 
++  test "public GET pages retain the full public footer", %{conn: conn} do
++    for path <- [~p"/", ~p"/about", ~p"/get-started", ~p"/terms", ~p"/privacy"] do
++      response =
++        conn
++        |> recycle()
++        |> get(path)
++        |> html_response(200)
++
++      assert_full_public_footer(response)
++    end
++  end
++
+   test "GET / presents sign-in links instead of Memba staff entry points", %{conn: conn} do
+     conn = get(conn, ~p"/")
+     response = html_response(conn, 200)
+@@ -186,6 +198,8 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Memba"
+ 
++    assert_full_public_footer(response)
++
+     refute html |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']") |> Enum.any?()
+     refute html |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']") |> Enum.any?()
+   end
+@@ -1290,4 +1304,29 @@ defmodule MembaWeb.PageControllerTest do
+   defp auth_email_request_path?(path) do
+     Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
+   end
++
++  defp assert_full_public_footer(response) do
++    html = LazyHTML.from_fragment(response)
++
++    assert html
++           |> LazyHTML.query("footer")
++           |> LazyHTML.text()
++           |> String.contains?("Red Donkey Technology Corp")
++
++    assert html
++           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/about']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/terms']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/privacy']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
++           |> Enum.any?()
++  end
+ end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d917a8a..6823107 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -90,6 +90,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              |> LazyHTML.query("footer")
+              |> Enum.count() == 1
+ 
++      refute document
++             |> LazyHTML.query("footer nav[aria-label='Footer navigation']")
++             |> Enum.any?()
++
++      refute document
++             |> LazyHTML.query("footer a[href='/about']")
++             |> Enum.any?()
++
++      refute document
++             |> LazyHTML.query("footer a[href='/terms']")
++             |> Enum.any?()
++
++      refute document
++             |> LazyHTML.query("footer a[href='/privacy']")
++             |> Enum.any?()
++
++      refute document
++             |> LazyHTML.query("footer a[href='mailto:hello@memba.io']")
++             |> Enum.any?()
++
+       refute response =~ "Red Donkey Technology Corp"
+       refute response =~ "Footer navigation"
+     end
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 4b876a4..f902227 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -129,6 +129,26 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+            |> LazyHTML.query("footer")
+            |> Enum.count() == 1
+ 
++    refute document
++           |> LazyHTML.query("footer nav[aria-label='Footer navigation']")
++           |> Enum.any?()
++
++    refute document
++           |> LazyHTML.query("footer a[href='/about']")
++           |> Enum.any?()
++
++    refute document
++           |> LazyHTML.query("footer a[href='/terms']")
++           |> Enum.any?()
++
++    refute document
++           |> LazyHTML.query("footer a[href='/privacy']")
++           |> Enum.any?()
++
++    refute document
++           |> LazyHTML.query("footer a[href='mailto:hello@memba.io']")
++           |> Enum.any?()
++
+     refute response =~ "Red Donkey Technology Corp"
+     refute response =~ "Footer navigation"
+   end
