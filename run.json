@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-11T11:50:12.014572949Z",
-  "last_event_at": "2026-07-11T12:02:09.190658613Z",
+  "last_event_at": "2026-07-11T12:03:36.474449416Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1640,9 +1640,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 72,
       "checkpoint": {
-        "timestamp": "2026-07-11T12:03:32.976066071Z",
+        "timestamp": "2026-07-11T12:03:36.438753652Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -1654,32 +1654,200 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.node_visit_count": 1,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.read_plan": 0,
+          "graph.rankdir": "LR",
+          "thread.start.current_node": "read_plan",
           "internal.thread_id": "collect_implementation_evidence",
+          "failure_class": "",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "outcome": "succeeded",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.fidelity": "summary:high",
+          "last_stage": "claude_review",
+          "command.output": "blob://sha256/a210798bffb04674ef0838a9e82e86102b5405daaf6312b2e6317fafb122cec4",
+          "current_node": "claude_review",
+          "last_response": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: ",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "response.claude_review": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\n---\n\n## ADR Violations\n\nNone identified.\n\n**Analysis:**\n- No ADRs explicitly cited in the plan\n- Changes are UI/presentation layer focused (LiveView components, templates, styling)\n- Implementation follows standard Phoenix LiveView patterns documented in project references\n- No domain modeling, CQRS, event sourcing, or aggregate responsibility changes\n- Component boundaries and LiveView structure align with project conventions in `docs/reference/liveview.md` and `docs/reference/phoenix-html.md`\n\n---\n\n## Blocking Issues\n\nNone.\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Test setup extraction**: Consider extracting repeated test setup patterns into shared helpers. Examples:\n   - `create_active_member` + `create_message` + `signed_in_club_host` appears in multiple tests in `member_message_detail_live_test.exs`\n   - Could introduce `setup_message_detail_test(conn, opts)` helper\n   - **Why low-risk:** Pure test code refactoring; no behavior change; improves maintainability\n\n2. **CSS selector test assertions**: Some tests use long CSS selector strings that could be extracted into named helper predicates. Example:\n   ```elixir\n   # Current:\n   \"#member-message-heading-row.detail-head > .detail-head__main h1#member-message-subject.page-title\"\n   \n   # Could be:\n   message_subject_in_detail_head(view, expected_text)\n   ```\n   **Why low-risk:** Test code only; improves readability; preserves exact assertions\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Cross-cutting UI behavior test coverage**  \n   **Files:** `member_message_detail_live_test.exs`, `club_home_live_test.exs`, `member_conversations_live_test.exs`  \n   **Smell:** Multiple test files test similar UI patterns (back links, footer visibility, compact layout) across different LiveView contexts  \n   **Why judgement-worthy:** While appropriate for integration testing, this might indicate opportunity for:\n   - Shared component tests if these UI elements become reusable components\n   - Documented UI patterns/guidelines to ensure consistency\n   - Trade-off: Current approach tests actual integration points; component tests would require more test infrastructure\n\n2. **Follow control placement architecture**  \n   **Files:** `member_message_detail_live.ex`, `member_message_detail_component.ex`  \n   **Smell:** Follow toggle moved from one UI location to another (below composer → beside subject in detail head)  \n   **Why judgement-worthy:** Implementation is clean, but broader question: \"Where should contextual actions like follow/unfollow live in member app layouts?\" might merit documentation for:\n   - Future UI consistency across member app features\n   - Design system pattern catalog\n   - Not a code smell per se, but architectural decision worth capturing\n\n3. **Design system coupling and maintenance**  \n   **Files:** All changed HEEx templates, CSS classes, component render functions  \n   **Smell:** Direct 1:1 implementation of design system wireframes (expected and correct), but no documented mapping between wireframe IDs and implementation files  \n   **Why judgement-worthy:** Future design system changes will require code changes. Consider:\n   - Adding comments linking code sections to design system wireframe IDs\n   - Maintaining a design-to-code mapping document\n   - Trade-off: Adds documentation overhead vs. easier maintenance when designs evolve\n\n---\n\n## Suggested Fixes\n\nNone required for acceptance.\n\n**Optional bounded-safe improvements** (can be deferred to maintenance):\n- Extract repeated test setup into `test/support/member_message_test_helpers.ex`\n- Add inline comments linking major UI sections to design system wireframe references\n- Consider shared test predicates for common UI assertions (footer presence, back link structure)\n\n---\n\n## Validation Notes\n\n**Automated Test Coverage:**\n- ✅ Dev check passed: 109 scenarios (109 passed), 783 steps (783 passed)\n- ✅ New tests for back link behavior (text, href, no club_id param)\n- ✅ New tests for follow control placement in detail head\n- ✅ Tests verify removal of \"Prefer email?\" card\n- ✅ Tests verify compact footer-only presence\n- ✅ Tests verify composer \"Replying as\" inline placement\n- ✅ Tests verify page-title scale (not hero scale) for message subject\n- ✅ Tests verify removal of helper sentence and green alert from posted state\n\n**Implementation Evidence:**\n- ✅ `member_message_detail_live.ex`: Clean component structure\n- ✅ Tests use semantic selectors (`#back-to-club-home-link`, `.detail-head__main`)\n- ✅ CSS changes use Tailwind utilities consistently\n- ✅ No behavioral regressions (all existing tests pass)\n- ✅ Mobile explicitly out of scope (correctly)\n\n**Plan Conformance:**\n- ✅ All 8 plan requirements addressed (back link, follow control, subject scale, composer inline, helper/alert removal, email card removal, compact footer, coordination with iteration 051)\n- ✅ No out-of-scope work detected\n- ✅ Acceptance criteria met via automated tests\n\n**Code Quality:**\n- ✅ Phoenix LiveView conventions followed\n- ✅ HEEx templates well-structured\n- ✅ Test organization clear and focused\n- ✅ Proper use of PhoenixTest helpers (`has_element?`, `refute has_element?`)\n- ✅ Clean component boundaries\n\n**Manual Smoke Validation Required:**\nPer plan, human should verify:\n- Desktop gallery screenshots match wireframes\n- App card width, top-bar alignment, compact footer\n- Back link wording and placement\n- Message card styling (borders, shadows, spacing)\n- Composer panel background/border/height\n- Absence of removed elements (helper sentence, green alert, email card, public footer)\n\n---\n\n## Summary\n\nThis is a **clean, well-executed UI alignment iteration** with excellent test coverage and no architectural concerns. The implementation:\n\n1. Addresses all plan requirements precisely\n2. Maintains backward compatibility (no behavioral changes)\n3. Follows project conventions for Phoenix/LiveView/HEEx/Tailwind\n4. Has comprehensive automated test coverage\n5. Includes appropriate integration tests for new UI layouts\n\nThe code is maintainable, the changes are minimal and focused, and the test suite provides strong confidence in correctness. Minor opportunities for test code refactoring exist but do not block merge.\n\n**Recommendation:** Merge after human visual validation of desktop gallery screenshots against design system wireframes as outlined in plan acceptance criteria.",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "internal.node_visit_count": 1,
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01KX8G4WAG2NCEXWQ4YRTW02Z2",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.max_node_visits": "160",
+          "internal.work_dir": "/workspace/memba",
+          "graph.default_fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f105c92a7377f0cbe4b6b7d60f913259e322ec7e617d00eb6e282b59aaab2f58"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149616,
+              "active_time_ms": 149616
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9dea6601d350949244441d544399300c20fd3a9ba07bc158a6814bf7cf2b63df"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/052-desktop-member-app-design-alignment/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 191,
+              "active_time_ms": 191
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a210798bffb04674ef0838a9e82e86102b5405daaf6312b2e6317fafb122cec4"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 'eebacadd114ae0325805a17da9744b0722f8e91e'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 275,
+              "active_time_ms": 275
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/25a12f01d7eb2ff5f5e63cee178f39e4741314283d746b6641c819cafccb0069"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 550990,
+              "active_time_ms": 550990
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.claude_review": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\n---\n\n## ADR Violations\n\nNone identified.\n\n**Analysis:**\n- No ADRs explicitly cited in the plan\n- Changes are UI/presentation layer focused (LiveView components, templates, styling)\n- Implementation follows standard Phoenix LiveView patterns documented in project references\n- No domain modeling, CQRS, event sourcing, or aggregate responsibility changes\n- Component boundaries and LiveView structure align with project conventions in `docs/reference/liveview.md` and `docs/reference/phoenix-html.md`\n\n---\n\n## Blocking Issues\n\nNone.\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Test setup extraction**: Consider extracting repeated test setup patterns into shared helpers. Examples:\n   - `create_active_member` + `create_message` + `signed_in_club_host` appears in multiple tests in `member_message_detail_live_test.exs`\n   - Could introduce `setup_message_detail_test(conn, opts)` helper\n   - **Why low-risk:** Pure test code refactoring; no behavior change; improves maintainability\n\n2. **CSS selector test assertions**: Some tests use long CSS selector strings that could be extracted into named helper predicates. Example:\n   ```elixir\n   # Current:\n   \"#member-message-heading-row.detail-head > .detail-head__main h1#member-message-subject.page-title\"\n   \n   # Could be:\n   message_subject_in_detail_head(view, expected_text)\n   ```\n   **Why low-risk:** Test code only; improves readability; preserves exact assertions\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Cross-cutting UI behavior test coverage**  \n   **Files:** `member_message_detail_live_test.exs`, `club_home_live_test.exs`, `member_conversations_live_test.exs`  \n   **Smell:** Multiple test files test similar UI patterns (back links, footer visibility, compact layout) across different LiveView contexts  \n   **Why judgement-worthy:** While appropriate for integration testing, this might indicate opportunity for:\n   - Shared component tests if these UI elements become reusable components\n   - Documented UI patterns/guidelines to ensure consistency\n   - Trade-off: Current approach tests actual integration points; component tests would require more test infrastructure\n\n2. **Follow control placement architecture**  \n   **Files:** `member_message_detail_live.ex`, `member_message_detail_component.ex`  \n   **Smell:** Follow toggle moved from one UI location to another (below composer → beside subject in detail head)  \n   **Why judgement-worthy:** Implementation is clean, but broader question: \"Where should contextual actions like follow/unfollow live in member app layouts?\" might merit documentation for:\n   - Future UI consistency across member app features\n   - Design system pattern catalog\n   - Not a code smell per se, but architectural decision worth capturing\n\n3. **Design system coupling and maintenance**  \n   **Files:** All changed HEEx templates, CSS classes, component render functions  \n   **Smell:** Direct 1:1 implementation of design system wireframes (expected and correct), but no documented mapping between wireframe IDs and implementation files  \n   **Why judgement-worthy:** Future design system changes will require code changes. Consider:\n   - Adding comments linking code sections to design system wireframe IDs\n   - Maintaining a design-to-code mapping document\n   - Trade-off: Adds documentation overhead vs. easier maintenance when designs evolve\n\n---\n\n## Suggested Fixes\n\nNone required for acceptance.\n\n**Optional bounded-safe improvements** (can be deferred to maintenance):\n- Extract repeated test setup into `test/support/member_message_test_helpers.ex`\n- Add inline comments linking major UI sections to design system wireframe references\n- Consider shared test predicates for common UI assertions (footer presence, back link structure)\n\n---\n\n## Validation Notes\n\n**Automated Test Coverage:**\n- ✅ Dev check passed: 109 scenarios (109 passed), 783 steps (783 passed)\n- ✅ New tests for back link behavior (text, href, no club_id param)\n- ✅ New tests for follow control placement in detail head\n- ✅ Tests verify removal of \"Prefer email?\" card\n- ✅ Tests verify compact footer-only presence\n- ✅ Tests verify composer \"Replying as\" inline placement\n- ✅ Tests verify page-title scale (not hero scale) for message subject\n- ✅ Tests verify removal of helper sentence and green alert from posted state\n\n**Implementation Evidence:**\n- ✅ `member_message_detail_live.ex`: Clean component structure\n- ✅ Tests use semantic selectors (`#back-to-club-home-link`, `.detail-head__main`)\n- ✅ CSS changes use Tailwind utilities consistently\n- ✅ No behavioral regressions (all existing tests pass)\n- ✅ Mobile explicitly out of scope (correctly)\n\n**Plan Conformance:**\n- ✅ All 8 plan requirements addressed (back link, follow control, subject scale, composer inline, helper/alert removal, email card removal, compact footer, coordination with iteration 051)\n- ✅ No out-of-scope work detected\n- ✅ Acceptance criteria met via automated tests\n\n**Code Quality:**\n- ✅ Phoenix LiveView conventions followed\n- ✅ HEEx templates well-structured\n- ✅ Test organization clear and focused\n- ✅ Proper use of PhoenixTest helpers (`has_element?`, `refute has_element?`)\n- ✅ Clean component boundaries\n\n**Manual Smoke Validation Required:**\nPer plan, human should verify:\n- Desktop gallery screenshots match wireframes\n- App card width, top-bar alignment, compact footer\n- Back link wording and placement\n- Message card styling (borders, shadows, spacing)\n- Composer panel background/border/height\n- Absence of removed elements (helper sentence, green alert, email card, public footer)\n\n---\n\n## Summary\n\nThis is a **clean, well-executed UI alignment iteration** with excellent test coverage and no architectural concerns. The implementation:\n\n1. Addresses all plan requirements precisely\n2. Maintains backward compatibility (no behavioral changes)\n3. Follows project conventions for Phoenix/LiveView/HEEx/Tailwind\n4. Has comprehensive automated test coverage\n5. Includes appropriate integration tests for new UI layouts\n\nThe code is maintainable, the changes are minimal and focused, and the test suite provides strong confidence in correctness. Minor opportunities for test code refactoring exist but do not block merge.\n\n**Recommendation:** Merge after human visual validation of desktop gallery screenshots against design system wireframes as outlined in plan acceptance criteria.",
+              "last_stage": "claude_review",
+              "last_response": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: "
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5324,
+                    "output_tokens": 3754,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 72282
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 83742,
+              "tool_time_ms": 0,
+              "active_time_ms": 83742
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "aa5154454b6aa2a55f5631e8ded76b2b5fa65245",
+        "node_visits": {
+          "claude_review": 1,
+          "dev_check": 1,
+          "start": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 6,
+          "additions": 30,
+          "deletions": 10
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-11T12:04:37.272144404Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.node_visit_count": 1,
+          "internal.thread_id": "claude_review",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.run_id": "01KX8G4WAG2NCEXWQ4YRTW02Z2",
-          "current_node": "claude_review",
+          "current_node": "codex_review",
           "internal.retry_count.dev_check": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
           "internal.retry_count.collect_implementation_evidence": 0,
           "internal.retry_count.claude_review": 0,
-          "last_response": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: ",
+          "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is reduced only because the core goal is visual desktop alignment, and the provided evidence is mostly automated DOM/t",
           "graph.default_fidelity": "summary:high",
           "graph.rankdir": "LR",
           "outcome": "succeeded",
-          "last_stage": "claude_review",
+          "last_stage": "codex_review",
           "thread.read_plan.current_node": "preflight_sandbox",
           "failure_signature": "",
           "internal.fidelity": "summary:high",
+          "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is reduced only because the core goal is visual desktop alignment, and the provided evidence is mostly automated DOM/test output rather than full screenshot/manual inspection. From the implementation evidence and successful `dev ci`, the code-health and ADR risk looks low.\n\n## ADR conformance: PASS\n\nThe iteration appears presentation-layer focused: Phoenix LiveView templates/components, HEEx structure, Tailwind styling, and LiveView tests for member-app UI alignment.\n\nNo cited ADRs or nearby domain/CQRS/event-sourcing concerns appear to be implicated by the provided evidence. The implementation does not appear to change aggregates, commands, projections, event streams, read models, authorization boundaries, or infrastructure choices.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\n## Bounded-safe fixes\n\n1. **Extract repeated LiveView test setup helpers**\n\n   **Files:** `member_message_detail_live_test.exs`, possibly related member app LiveView tests.\n\n   The evidence shows repeated setup patterns around creating an active member, creating a message, signing in on a club host, and opening the message detail route. A small private helper such as `open_message_detail(conn, opts)` or `setup_member_message_detail/2` would reduce test noise without changing product behavior.\n\n2. **Name long structural selector assertions**\n\n   **Files:** `member_message_detail_live_test.exs`\n\n   Selectors such as:\n\n   ```elixir\n   \"#member-message-heading-row.detail-head > .detail-head__main h1#member-message-subject.page-title\"\n   ```\n\n   are precise, but hard to scan and maintain. Private assertion helpers like `assert_subject_in_detail_head(view, subject)` or `assert_follow_control_in_detail_head(view)` would preserve the same coverage while improving readability.\n\n3. **Review selector naming drift around the back link**\n\n   **Files:** message detail LiveView/template and related tests.\n\n   Evidence shows:\n\n   ```elixir\n   a#back-to-club-home-link[href='/conversations']\n   ```\n\n   with visible text `\"All conversations\"`.\n\n   If this DOM id is not used by JS hooks, CSS, browser acceptance helpers, or external tooling, renaming it to something closer to the current behavior, such as `back-to-conversations-link`, would reduce semantic drift. If it is already treated as a stable selector, leaving it as-is is acceptable.\n\n4. **Consider shared compact-footer assertions**\n\n   **Files:** member-app LiveView tests covering message detail, conversations, and club home.\n\n   Several plan requirements concern the compact member-app footer and absence of the public footer. If those assertions are repeated across tests, a shared test helper like `assert_compact_member_footer_only(view)` would make future layout checks easier to maintain.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Member-app layout patterns may be spreading across individual screens**\n\n   **Files:** member message detail LiveView/component, club home LiveView/template, conversations LiveView/template.\n\n   **Smell:** The iteration aligns multiple screens around shared concepts: compact app shell, detail header, compact footer, tab/action alignment, and desktop card width.\n\n   **Why it may need human judgement:** This is fine for a focused iteration, but if these patterns continue to spread screen-by-screen, the project may benefit from explicit reusable member-app layout components or documented member-app shell conventions. That decision should be design/product-aware, not forced as part of this merge.\n\n2. **Visual conformance is only partially represented by DOM tests**\n\n   **Files:** LiveView tests for message detail and club home.\n\n   **Smell:** Tests validate important semantic structure and absence/presence of elements, but pixel-level concerns from the plan — spacing, card elevation, desktop width, alignment, footer compactness, and wireframe fidelity — cannot be fully proven by `has_element?/refute has_element?`.\n\n   **Why it may need human judgement:** This is expected for a UI-alignment iteration, but the team may eventually want screenshot regression checks or a clearer human visual-review checklist as a release gate for design-alignment work.\n\n3. **Wireframe-to-implementation mapping is implicit**\n\n   **Files:** changed HEEx/templates/components and related tests.\n\n   **Smell:** The implementation appears to track specific design-system wireframes, but the mapping from wireframe sections to implementation files/classes is not obvious from the code evidence.\n\n   **Why it may need human judgement:** Inline comments or a lightweight design-to-code mapping can help future iterations understand why certain markup/classes exist. However, adding too many comments around visual layout can create maintenance noise, so this should be a team convention decision.\n\n4. **Structural CSS selectors in tests may ossify markup**\n\n   **Files:** `member_message_detail_live_test.exs` and related LiveView tests.\n\n   **Smell:** Some tests assert exact DOM hierarchy and class placement.\n\n   **Why it may need human judgement:** For this iteration, that precision is useful because the goal is desktop layout alignment. Long-term, tests that over-specify structure can make harmless markup refactors expensive. The team may want a convention distinguishing semantic assertions from intentional layout-contract assertions.\n\n## Suggested fixes\n\nNon-blocking, safe follow-ups:\n\n1. Add private test helpers for common member message detail setup.\n2. Wrap long selector assertions in clearly named helper functions.\n3. Audit the `#back-to-club-home-link` id; rename to match current semantics if it is not externally depended on.\n4. Add shared test helpers for recurring member-app layout/footer assertions if duplication continues.\n\nNo implementation changes are required before merge.\n\n## Validation notes\n\n- `dev ci` passed.\n- Acceptance output shows `109 scenarios`, `109 passed`; `783 steps`, `783 passed`.\n- Sandbox/runtime preflight passed.\n- The implementation evidence shows targeted LiveView tests for:\n  - routed message detail identity via club/message data attributes;\n  - back link text and `/conversations` href;\n  - absence of stale `club_id` query parameter on the back link;\n  - follow control placement beside the subject in the detail head;\n  - removal/absence-oriented UI assertions required by the plan.\n- No domain, CQRS, event-sourcing, read-model, migration, or integration changes are apparent from the evidence.\n- Manual visual validation remains important for the plan’s desktop screenshot goals, especially spacing, card styling, footer treatment, and wireframe fidelity.",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "command.output": "blob://sha256/a210798bffb04674ef0838a9e82e86102b5405daaf6312b2e6317fafb122cec4",
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.codex_review": 0,
           "thread.start.current_node": "read_plan",
           "internal.retry_count.read_plan": 0,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "graph.max_node_visits": "160",
           "failure_class": "",
+          "thread.claude_review.current_node": "codex_review",
           "internal.retry_count.start": 0,
           "response.claude_review": "# Iteration Review Report\n\n**Iteration:** 052-desktop-member-app-design-alignment  \n**Commit Range:** `eebacadd114ae0325805a17da9744b0722f8e91e..HEAD`  \n**Review Date:** 2026-07-11\n\n---\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\n---\n\n## ADR Violations\n\nNone identified.\n\n**Analysis:**\n- No ADRs explicitly cited in the plan\n- Changes are UI/presentation layer focused (LiveView components, templates, styling)\n- Implementation follows standard Phoenix LiveView patterns documented in project references\n- No domain modeling, CQRS, event sourcing, or aggregate responsibility changes\n- Component boundaries and LiveView structure align with project conventions in `docs/reference/liveview.md` and `docs/reference/phoenix-html.md`\n\n---\n\n## Blocking Issues\n\nNone.\n\n---\n\n## Bounded-Safe Fixes\n\n1. **Test setup extraction**: Consider extracting repeated test setup patterns into shared helpers. Examples:\n   - `create_active_member` + `create_message` + `signed_in_club_host` appears in multiple tests in `member_message_detail_live_test.exs`\n   - Could introduce `setup_message_detail_test(conn, opts)` helper\n   - **Why low-risk:** Pure test code refactoring; no behavior change; improves maintainability\n\n2. **CSS selector test assertions**: Some tests use long CSS selector strings that could be extracted into named helper predicates. Example:\n   ```elixir\n   # Current:\n   \"#member-message-heading-row.detail-head > .detail-head__main h1#member-message-subject.page-title\"\n   \n   # Could be:\n   message_subject_in_detail_head(view, expected_text)\n   ```\n   **Why low-risk:** Test code only; improves readability; preserves exact assertions\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Cross-cutting UI behavior test coverage**  \n   **Files:** `member_message_detail_live_test.exs`, `club_home_live_test.exs`, `member_conversations_live_test.exs`  \n   **Smell:** Multiple test files test similar UI patterns (back links, footer visibility, compact layout) across different LiveView contexts  \n   **Why judgement-worthy:** While appropriate for integration testing, this might indicate opportunity for:\n   - Shared component tests if these UI elements become reusable components\n   - Documented UI patterns/guidelines to ensure consistency\n   - Trade-off: Current approach tests actual integration points; component tests would require more test infrastructure\n\n2. **Follow control placement architecture**  \n   **Files:** `member_message_detail_live.ex`, `member_message_detail_component.ex`  \n   **Smell:** Follow toggle moved from one UI location to another (below composer → beside subject in detail head)  \n   **Why judgement-worthy:** Implementation is clean, but broader question: \"Where should contextual actions like follow/unfollow live in member app layouts?\" might merit documentation for:\n   - Future UI consistency across member app features\n   - Design system pattern catalog\n   - Not a code smell per se, but architectural decision worth capturing\n\n3. **Design system coupling and maintenance**  \n   **Files:** All changed HEEx templates, CSS classes, component render functions  \n   **Smell:** Direct 1:1 implementation of design system wireframes (expected and correct), but no documented mapping between wireframe IDs and implementation files  \n   **Why judgement-worthy:** Future design system changes will require code changes. Consider:\n   - Adding comments linking code sections to design system wireframe IDs\n   - Maintaining a design-to-code mapping document\n   - Trade-off: Adds documentation overhead vs. easier maintenance when designs evolve\n\n---\n\n## Suggested Fixes\n\nNone required for acceptance.\n\n**Optional bounded-safe improvements** (can be deferred to maintenance):\n- Extract repeated test setup into `test/support/member_message_test_helpers.ex`\n- Add inline comments linking major UI sections to design system wireframe references\n- Consider shared test predicates for common UI assertions (footer presence, back link structure)\n\n---\n\n## Validation Notes\n\n**Automated Test Coverage:**\n- ✅ Dev check passed: 109 scenarios (109 passed), 783 steps (783 passed)\n- ✅ New tests for back link behavior (text, href, no club_id param)\n- ✅ New tests for follow control placement in detail head\n- ✅ Tests verify removal of \"Prefer email?\" card\n- ✅ Tests verify compact footer-only presence\n- ✅ Tests verify composer \"Replying as\" inline placement\n- ✅ Tests verify page-title scale (not hero scale) for message subject\n- ✅ Tests verify removal of helper sentence and green alert from posted state\n\n**Implementation Evidence:**\n- ✅ `member_message_detail_live.ex`: Clean component structure\n- ✅ Tests use semantic selectors (`#back-to-club-home-link`, `.detail-head__main`)\n- ✅ CSS changes use Tailwind utilities consistently\n- ✅ No behavioral regressions (all existing tests pass)\n- ✅ Mobile explicitly out of scope (correctly)\n\n**Plan Conformance:**\n- ✅ All 8 plan requirements addressed (back link, follow control, subject scale, composer inline, helper/alert removal, email card removal, compact footer, coordination with iteration 051)\n- ✅ No out-of-scope work detected\n- ✅ Acceptance criteria met via automated tests\n\n**Code Quality:**\n- ✅ Phoenix LiveView conventions followed\n- ✅ HEEx templates well-structured\n- ✅ Test organization clear and focused\n- ✅ Proper use of PhoenixTest helpers (`has_element?`, `refute has_element?`)\n- ✅ Clean component boundaries\n\n**Manual Smoke Validation Required:**\nPer plan, human should verify:\n- Desktop gallery screenshots match wireframes\n- App card width, top-bar alignment, compact footer\n- Back link wording and placement\n- Message card styling (borders, shadows, spacing)\n- Composer panel background/border/height\n- Absence of removed elements (helper sentence, green alert, email card, public footer)\n\n---\n\n## Summary\n\nThis is a **clean, well-executed UI alignment iteration** with excellent test coverage and no architectural concerns. The implementation:\n\n1. Addresses all plan requirements precisely\n2. Maintains backward compatibility (no behavioral changes)\n3. Follows project conventions for Phoenix/LiveView/HEEx/Tailwind\n4. Has comprehensive automated test coverage\n5. Includes appropriate integration tests for new UI layouts\n\nThe code is maintainable, the changes are minimal and focused, and the test suite provides strong confidence in correctness. Minor opportunities for test code refactoring exist but do not block merge.\n\n**Recommendation:** Merge after human visual validation of desktop gallery screenshots against design system wireframes as outlined in plan acceptance criteria.",
           "thread.collect_implementation_evidence.current_node": "claude_review"
@@ -1782,12 +1950,49 @@
               "tool_time_ms": 0,
               "active_time_ms": 83742
             }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is reduced only because the core goal is visual desktop alignment, and the provided evidence is mostly automated DOM/t",
+              "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nConfidence is reduced only because the core goal is visual desktop alignment, and the provided evidence is mostly automated DOM/test output rather than full screenshot/manual inspection. From the implementation evidence and successful `dev ci`, the code-health and ADR risk looks low.\n\n## ADR conformance: PASS\n\nThe iteration appears presentation-layer focused: Phoenix LiveView templates/components, HEEx structure, Tailwind styling, and LiveView tests for member-app UI alignment.\n\nNo cited ADRs or nearby domain/CQRS/event-sourcing concerns appear to be implicated by the provided evidence. The implementation does not appear to change aggregates, commands, projections, event streams, read models, authorization boundaries, or infrastructure choices.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\n## Bounded-safe fixes\n\n1. **Extract repeated LiveView test setup helpers**\n\n   **Files:** `member_message_detail_live_test.exs`, possibly related member app LiveView tests.\n\n   The evidence shows repeated setup patterns around creating an active member, creating a message, signing in on a club host, and opening the message detail route. A small private helper such as `open_message_detail(conn, opts)` or `setup_member_message_detail/2` would reduce test noise without changing product behavior.\n\n2. **Name long structural selector assertions**\n\n   **Files:** `member_message_detail_live_test.exs`\n\n   Selectors such as:\n\n   ```elixir\n   \"#member-message-heading-row.detail-head > .detail-head__main h1#member-message-subject.page-title\"\n   ```\n\n   are precise, but hard to scan and maintain. Private assertion helpers like `assert_subject_in_detail_head(view, subject)` or `assert_follow_control_in_detail_head(view)` would preserve the same coverage while improving readability.\n\n3. **Review selector naming drift around the back link**\n\n   **Files:** message detail LiveView/template and related tests.\n\n   Evidence shows:\n\n   ```elixir\n   a#back-to-club-home-link[href='/conversations']\n   ```\n\n   with visible text `\"All conversations\"`.\n\n   If this DOM id is not used by JS hooks, CSS, browser acceptance helpers, or external tooling, renaming it to something closer to the current behavior, such as `back-to-conversations-link`, would reduce semantic drift. If it is already treated as a stable selector, leaving it as-is is acceptable.\n\n4. **Consider shared compact-footer assertions**\n\n   **Files:** member-app LiveView tests covering message detail, conversations, and club home.\n\n   Several plan requirements concern the compact member-app footer and absence of the public footer. If those assertions are repeated across tests, a shared test helper like `assert_compact_member_footer_only(view)` would make future layout checks easier to maintain.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Member-app layout patterns may be spreading across individual screens**\n\n   **Files:** member message detail LiveView/component, club home LiveView/template, conversations LiveView/template.\n\n   **Smell:** The iteration aligns multiple screens around shared concepts: compact app shell, detail header, compact footer, tab/action alignment, and desktop card width.\n\n   **Why it may need human judgement:** This is fine for a focused iteration, but if these patterns continue to spread screen-by-screen, the project may benefit from explicit reusable member-app layout components or documented member-app shell conventions. That decision should be design/product-aware, not forced as part of this merge.\n\n2. **Visual conformance is only partially represented by DOM tests**\n\n   **Files:** LiveView tests for message detail and club home.\n\n   **Smell:** Tests validate important semantic structure and absence/presence of elements, but pixel-level concerns from the plan — spacing, card elevation, desktop width, alignment, footer compactness, and wireframe fidelity — cannot be fully proven by `has_element?/refute has_element?`.\n\n   **Why it may need human judgement:** This is expected for a UI-alignment iteration, but the team may eventually want screenshot regression checks or a clearer human visual-review checklist as a release gate for design-alignment work.\n\n3. **Wireframe-to-implementation mapping is implicit**\n\n   **Files:** changed HEEx/templates/components and related tests.\n\n   **Smell:** The implementation appears to track specific design-system wireframes, but the mapping from wireframe sections to implementation files/classes is not obvious from the code evidence.\n\n   **Why it may need human judgement:** Inline comments or a lightweight design-to-code mapping can help future iterations understand why certain markup/classes exist. However, adding too many comments around visual layout can create maintenance noise, so this should be a team convention decision.\n\n4. **Structural CSS selectors in tests may ossify markup**\n\n   **Files:** `member_message_detail_live_test.exs` and related LiveView tests.\n\n   **Smell:** Some tests assert exact DOM hierarchy and class placement.\n\n   **Why it may need human judgement:** For this iteration, that precision is useful because the goal is desktop layout alignment. Long-term, tests that over-specify structure can make harmless markup refactors expensive. The team may want a convention distinguishing semantic assertions from intentional layout-contract assertions.\n\n## Suggested fixes\n\nNon-blocking, safe follow-ups:\n\n1. Add private test helpers for common member message detail setup.\n2. Wrap long selector assertions in clearly named helper functions.\n3. Audit the `#back-to-club-home-link` id; rename to match current semantics if it is not externally depended on.\n4. Add shared test helpers for recurring member-app layout/footer assertions if duplication continues.\n\nNo implementation changes are required before merge.\n\n## Validation notes\n\n- `dev ci` passed.\n- Acceptance output shows `109 scenarios`, `109 passed`; `783 steps`, `783 passed`.\n- Sandbox/runtime preflight passed.\n- The implementation evidence shows targeted LiveView tests for:\n  - routed message detail identity via club/message data attributes;\n  - back link text and `/conversations` href;\n  - absence of stale `club_id` query parameter on the back link;\n  - follow control placement beside the subject in the detail head;\n  - removal/absence-oriented UI assertions required by the plan.\n- No domain, CQRS, event-sourcing, read-model, migration, or integration changes are apparent from the evidence.\n- Manual visual validation remains important for the plan’s desktop screenshot goals, especially spacing, card styling, footer treatment, and wireframe fidelity."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6001,
+                    "output_tokens": 1326,
+                    "reasoning_tokens": 1993,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 129575
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 60764,
+              "tool_time_ms": 0,
+              "active_time_ms": 60764
+            }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "collect_implementation_evidence": 1,
           "claude_review": 1,
+          "codex_review": 1,
           "start": 1,
           "preflight_sandbox": 1,
           "read_plan": 1,
@@ -2016,7 +2221,12 @@
       "first_event_seq": 65,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-07-11T12:03:32.974888376Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -2029,6 +2239,45 @@
       "parallel_results": null,
       "output": null,
       "started_at": "2026-07-11T12:02:09.179858793Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 83795,
+        "inference_time_ms": 83742,
+        "tool_time_ms": 0,
+        "active_time_ms": 83742
+      },
+      "usage": {
+        "input_tokens": 5324,
+        "output_tokens": 3754,
+        "total_tokens": 9078,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 72282
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "state": "succeeded"
+    },
+    "codex_review@1": {
+      "first_event_seq": 75,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-11T12:03:36.459917521Z",
       "handler": "prompt",
       "usage": {
         "input_tokens": 0,
