@@ -168,3 +168,22 @@ Feature: Club message replies (conversations)
       And Elliot replies "I can bring the permit" to "Trip planning night"
       Then Alice's club home should list one conversation for "Trip planning night"
       And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana, plus 1 more
+
+  @iteration-052
+  @not-domain
+  Rule: Desktop member app pages align to the conversation wireframes
+
+    Scenario: Message detail uses the wireframe copy while preserving conversation entries
+      When Bob views the message "Trip planning night"
+      Then Bob should see the message detail back link "All conversations" for "Trip planning night"
+      And Bob should not see the old reply composer helper sentence for "Trip planning night"
+      And Bob should see the reply composer identifies him as Bob for "Trip planning night"
+      When Bob replies "I can drive, three seats spare" to "Trip planning night"
+      Then Bob should see the reply composer note "Your reply is being sent." for "Trip planning night"
+      And the conversation for "Trip planning night" should show entries with sender, timestamp, and body:
+        | sender | body                              |
+        | Alice  | Trip planning night details.      |
+        | Bob    | I can drive, three seats spare    |
+
+    Scenario: Club-home Conversations panel omits the desktop email preference card
+      Then Alice's club home Conversations panel should not show the Prefer email card

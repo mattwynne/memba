@@ -1790,6 +1790,181 @@ async function assertClubHomeDoesNotShowHeading(
   return world;
 }
 
+async function assertClubHomeConversationsPanelDoesNotShowPreferEmailCard(
+  world,
+  viewerName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-club-home #member-dashboard-inbound-email"),
+    0,
+    `${viewerName}'s club-home Conversations panel should not show the Prefer email card`,
+    { expect, timeoutMs }
+  );
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-club-home", { hasText: "Prefer email?" }),
+    0,
+    `${viewerName}'s club-home Conversations panel should not show Prefer email copy`,
+    { expect, timeoutMs }
+  );
+
+  await waitForProjectedCount(
+    world,
+    world.page.locator("#member-club-home", { hasText: "You can also send a club-wide message" }),
+    0,
+    `${viewerName}'s club-home Conversations panel should not show inbound-email helper copy`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertMessageDetailBackLink(
+  world,
+  subject,
+  expectedCopy,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedText(
+    world,
+    world.page.locator("#back-to-club-home-link"),
+    expectedCopy,
+    `message detail back link for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertReplyComposerHelperSentenceAbsent(
+  world,
+  subject,
+  helperSentence,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedCount(
+    world,
+    world.page.getByText(helperSentence, { exact: true }),
+    0,
+    `old reply composer helper sentence for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertReplyComposerIdentifiesMember(
+  world,
+  subject,
+  memberName,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  const person = world.people[memberName];
+  assert.ok(person, `Expected ${memberName} to have been created before checking the reply composer`);
+
+  await waitForProjectedText(
+    world,
+    world.page.locator(`#member-message-reply-from[data-sender-id=${cssString(person.personId)}]`),
+    `Replying as ${memberName}`,
+    `reply composer identity for ${memberName} in ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertReplyComposerNote(
+  world,
+  subject,
+  expectedNote,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  await waitForProjectedText(
+    world,
+    world.page.locator("#member-message-reply-success"),
+    expectedNote,
+    `reply composer note for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertConversationEntriesWithSenderTimestampAndBody(
+  world,
+  subject,
+  expectedEntries,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  await openMemberMessage(world, subject, { expect, timeoutMs });
+
+  for (const expectedEntry of expectedEntries) {
+    const senderName = expectedEntry.sender;
+    const body = expectedEntry.body;
+    const sender = world.people[senderName];
+    assert.ok(sender, `Expected ${senderName} to have been created before checking conversation entries`);
+
+    const row = world.page.locator(
+      `#member-conversation [data-testid=${cssString(
+        "member-conversation-entry"
+      )}][data-sender-id=${cssString(sender.personId)}]`,
+      { hasText: body }
+    );
+
+    await waitForProjectedVisible(
+      world,
+      row,
+      `${senderName}'s conversation entry for ${JSON.stringify(subject)} with body ${JSON.stringify(body)}`,
+      { expect, timeoutMs }
+    );
+
+    await waitForProjectedText(
+      world,
+      row.locator(".message__name"),
+      senderName,
+      `${senderName}'s conversation entry sender name for ${JSON.stringify(subject)}`,
+      { expect, timeoutMs }
+    );
+
+    await waitForProjectedText(
+      world,
+      row.locator(".message__text"),
+      body,
+      `${senderName}'s conversation entry body for ${JSON.stringify(subject)}`,
+      { expect, timeoutMs }
+    );
+
+    const timestamp = row.locator("[data-testid=\"member-conversation-entry-time\"]");
+    await waitForProjectedVisible(
+      world,
+      timestamp,
+      `${senderName}'s conversation entry timestamp for ${JSON.stringify(subject)}`,
+      { expect, timeoutMs }
+    );
+
+    const datetime = await timestamp.getAttribute("datetime");
+    assertFinalBrowserState(
+      `${senderName}'s conversation entry timestamp datetime for ${JSON.stringify(subject)}`,
+      () => assert.ok(datetime && datetime.trim(), "Expected conversation entry timestamp to include a datetime")
+    );
+  }
+
+  return world;
+}
+
 async function assertConversationEntryKindBadgesAbsent(
   world,
   subject,
@@ -3684,7 +3859,9 @@ module.exports = {
   assertClubHomeConversationOrder,
   assertClubHomeConversationParticipantAvatarStack,
   assertClubHomeConversationReplyCount,
+  assertClubHomeConversationsPanelDoesNotShowPreferEmailCard,
   assertClubHomeDoesNotShowHeading,
+  assertConversationEntriesWithSenderTimestampAndBody,
   assertConversationDuplicateFromLineAbsent,
   assertConversationEntryKindBadgesAbsent,
   assertConversationDoesNotShowReply,
@@ -3707,10 +3884,14 @@ module.exports = {
   assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertMessageDetailBackLink,
   assertNoAddressedMemberReceivedEmail,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
+  assertReplyComposerHelperSentenceAbsent,
+  assertReplyComposerIdentifiesMember,
+  assertReplyComposerNote,
   assertReplyEmailDeliveredToMembers,
   assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,

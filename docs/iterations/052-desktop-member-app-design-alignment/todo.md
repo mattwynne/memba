@@ -5,7 +5,7 @@
 - [x] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
 - [x] 004 Remove the desktop club-home `Prefer email?` card/copy.
 - [x] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
-- [ ] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
+- [x] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
 - [ ] 007 Add/update Phoenix/LiveView/rendered tests for: ported class usage on message entries/composer/title;
 - [ ] 008 Add/update Phoenix/LiveView/rendered tests for: absence of helper sentence and green success-alert styling;
 - [ ] 009 Add/update Phoenix/LiveView/rendered tests for: `All conversations` back link;
