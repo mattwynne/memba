@@ -1,0 +1,53 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 9f2556c..3906a2a 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -9,6 +9,6 @@
+ - [x] 007 Add/update Phoenix/LiveView/rendered tests for: ported class usage on message entries/composer/title;
+ - [x] 008 Add/update Phoenix/LiveView/rendered tests for: absence of helper sentence and green success-alert styling;
+ - [x] 009 Add/update Phoenix/LiveView/rendered tests for: `All conversations` back link;
+-- [ ] 010 Add/update Phoenix/LiveView/rendered tests for: no `Prefer email?` card on desktop club home;
++- [x] 010 Add/update Phoenix/LiveView/rendered tests for: no `Prefer email?` card on desktop club home;
+ - [ ] 011 Add/update Phoenix/LiveView/rendered tests for: no full public footer on member app pages while public pages retain it.
+ - [ ] 012 Run the detailed gallery-walk validation below, then `dev check`.
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d4a1c6f..d917a8a 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -1243,6 +1243,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              view,
+              "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
+            )
++
++    rendered_html =
++      build_conn()
++      |> signed_in_club_host("alice@example.com", alice)
++      |> get(~p"/conversations")
++      |> html_response(200)
++
++    rendered_document = LazyHTML.from_fragment(rendered_html)
++    rendered_text = LazyHTML.text(rendered_document)
++
++    refute html_has_selector?(
++             rendered_html,
++             "#member-section-panel-conversations #member-dashboard-inbound-email"
++           )
++
++    refute html_has_selector?(rendered_html, "#member-dashboard-cta #member-dashboard-inbound-email")
++    refute html_has_selector?(rendered_html, "#member-dashboard-inbound-email-link")
++
++    refute html_has_selector?(
++             rendered_html,
++             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++           )
++
++    refute html_has_selector?(
++             rendered_html,
++             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
++           )
++
++    refute String.contains?(rendered_text, "Prefer email?")
++    refute String.contains?(rendered_text, "You can also send a club-wide message to")
+   end
+ 
+   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
