@@ -11,4 +11,4 @@
 - [x] 009 Add/update Phoenix/LiveView/rendered tests for: `All conversations` back link;
 - [x] 010 Add/update Phoenix/LiveView/rendered tests for: no `Prefer email?` card on desktop club home;
 - [x] 011 Add/update Phoenix/LiveView/rendered tests for: no full public footer on member app pages while public pages retain it.
-- [ ] 012 Run the detailed gallery-walk validation below, then `dev check`.
+- [x] 012 Run the detailed gallery-walk validation below, then `dev check`.
