@@ -1243,6 +1243,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
            )
+
+    rendered_html =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/conversations")
+      |> html_response(200)
+
+    rendered_document = LazyHTML.from_fragment(rendered_html)
+    rendered_text = LazyHTML.text(rendered_document)
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-section-panel-conversations #member-dashboard-inbound-email"
+           )
+
+    refute html_has_selector?(rendered_html, "#member-dashboard-cta #member-dashboard-inbound-email")
+    refute html_has_selector?(rendered_html, "#member-dashboard-inbound-email-link")
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
+           )
+
+    refute String.contains?(rendered_text, "Prefer email?")
+    refute String.contains?(rendered_text, "You can also send a club-wide message to")
   end
 
   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
