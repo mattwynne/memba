@@ -90,6 +90,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              |> LazyHTML.query("footer")
              |> Enum.count() == 1
 
+      refute document
+             |> LazyHTML.query("footer nav[aria-label='Footer navigation']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/about']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/terms']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/privacy']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='mailto:hello@memba.io']")
+             |> Enum.any?()
+
       refute response =~ "Red Donkey Technology Corp"
       refute response =~ "Footer navigation"
     end
