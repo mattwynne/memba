@@ -104,7 +104,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            |> LazyHTML.text()
            |> normalize_whitespace() == "Replying as Alice Adams"
 
-    refute response =~ "Your reply inherits the subject and is emailed to current followers except you."
+    refute document
+           |> LazyHTML.query("#member-message-reply-composer")
+           |> LazyHTML.text()
+           |> normalize_whitespace() =~
+             "Your reply inherits the subject and is emailed to current followers except you."
 
     assert document
            |> LazyHTML.query("#club-site-footer.app-foot")
@@ -707,6 +711,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            )
 
     assert has_element?(view, "#member-message-reply-composer.composer")
+
+    refute has_element?(
+             view,
+             "#member-message-reply-composer",
+             "Your reply inherits the subject and is emailed to current followers except you."
+           )
 
     assert has_element?(
              view,
