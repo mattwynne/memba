@@ -65,6 +65,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "a#back-to-club-home-link[href='/conversations']",
              "All conversations"
            )
+
+    refute has_element?(
+             view,
+             "a#back-to-club-home-link",
+             "Club home"
+           )
   end
 
   test "message detail applies the wireframe copy and footer decisions", %{conn: conn} do
@@ -95,6 +101,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
            |> LazyHTML.text()
            |> normalize_whitespace() == "All conversations"
+
+    refute document
+           |> LazyHTML.query("a#back-to-club-home-link")
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "Club home"
 
     assert document
            |> LazyHTML.query(
