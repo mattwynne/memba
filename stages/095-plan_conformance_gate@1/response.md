@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,340p' docs/iterations/052-desktop-member-app-design-alignment/plan.md && echo '---TODO---' && sed -n '1,200p' docs/iterations/052-desktop-member-app-design-alignment/todo.md && echo '---STATUS---' && git status --short && echo '---HEAD---' && git log --oneline --decorate --max-count=20"}{"context_updates":{"plan_conformant":true,"plan_rework_available":false}}
