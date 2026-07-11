@@ -43,6 +43,7 @@ defmodule MembaWeb.Router do
   pipeline :club_member_required do
     plug MembaWeb.Plugs.ClubSiteMemberRoute
     plug :require_active_club_member
+    plug :suppress_public_footer
   end
 
   pipeline :api do
@@ -173,5 +174,9 @@ defmodule MembaWeb.Router do
 
       post "/sign-in", DevTestSupportController, :sign_in
     end
+  end
+
+  defp suppress_public_footer(conn, _opts) do
+    Plug.Conn.assign(conn, :hide_public_footer, true)
   end
 end

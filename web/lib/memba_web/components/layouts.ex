@@ -18,17 +18,11 @@ defmodule MembaWeb.Layouts do
   defp hide_public_footer?(assigns) do
     assigns
     |> Map.get(:conn)
-    |> member_message_detail_request?()
+    |> public_footer_suppressed?()
   end
 
-  defp member_message_detail_request?(%Plug.Conn{request_path: path}) when is_binary(path) do
-    case String.split(path, "/", trim: true) do
-      ["messages", message_id] -> message_id != "new"
-      _other_path -> false
-    end
-  end
-
-  defp member_message_detail_request?(_conn), do: false
+  defp public_footer_suppressed?(%Plug.Conn{assigns: %{hide_public_footer: true}}), do: true
+  defp public_footer_suppressed?(_conn), do: false
 
   @doc """
   Renders the shared public/visitor header.

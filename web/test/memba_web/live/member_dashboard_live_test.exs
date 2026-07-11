@@ -65,6 +65,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "routed dashboard member sections render only the compact member app footer" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for path <- [~p"/conversations", ~p"/members"] do
+      response =
+        build_conn()
+        |> signed_in_club_host("alice@example.com", alice)
+        |> get(path)
+        |> html_response(200)
+
+      document = LazyHTML.from_fragment(response)
+
+      assert document
+             |> LazyHTML.query("#club-site-footer.app-foot")
+             |> Enum.any?()
+
+      assert document
+             |> LazyHTML.query("footer")
+             |> Enum.count() == 1
+
+      refute response =~ "Red Donkey Technology Corp"
+      refute response =~ "Footer navigation"
+    end
+  end
+
   test "dashboard renders the section tab spine with conversations selected by default", %{
     conn: conn
   } do
