@@ -313,6 +313,37 @@ defmodule MembaWeb.LayoutsTest do
     end
   end
 
+  test "root layout suppresses the public footer when member app chrome is active", %{conn: conn} do
+    conn = Plug.Conn.assign(conn, :hide_public_footer, true)
+
+    html =
+      rendered_to_string(
+        Layouts.root(%{
+          conn: conn,
+          inner_content:
+            Phoenix.HTML.raw(
+              ~s(<footer id="club-site-footer" class="app-foot">Powered by <a href="/">Memba</a></footer>)
+            )
+        })
+      )
+
+    assert_selector(html, "#club-site-footer.app-foot")
+    assert_text(html, "#club-site-footer", "Powered by Memba")
+    assert_selector_count(html, "footer", 1)
+    refute html =~ "Red Donkey Technology Corp"
+    refute html =~ "Footer navigation"
+  end
+
+  test "root layout keeps the public footer for public pages by default", %{conn: conn} do
+    html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
+
+    assert_text(html, "footer", "Red Donkey Technology Corp")
+    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
+    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
+    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/privacy']")
+    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
+  end
+
   test "root footer shows linked git commit when enabled" do
     System.put_env("MEMBA_GIT_SHA", @sha)
     Application.put_env(:memba, :show_git_commit_in_footer, true)

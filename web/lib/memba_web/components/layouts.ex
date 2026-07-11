@@ -15,6 +15,15 @@ defmodule MembaWeb.Layouts do
 
   defp git_commit_footer_link, do: Memba.BuildInfo.footer_commit()
 
+  defp hide_public_footer?(assigns) do
+    assigns
+    |> Map.get(:conn)
+    |> public_footer_suppressed?()
+  end
+
+  defp public_footer_suppressed?(%Plug.Conn{assigns: %{hide_public_footer: true}}), do: true
+  defp public_footer_suppressed?(_conn), do: false
+
   @doc """
   Renders the shared public/visitor header.
 

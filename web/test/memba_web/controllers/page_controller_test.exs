@@ -51,6 +51,18 @@ defmodule MembaWeb.PageControllerTest do
     assert html |> LazyHTML.query("a[href='/get-started']") |> Enum.any?()
   end
 
+  test "public GET pages retain the full public footer", %{conn: conn} do
+    for path <- [~p"/", ~p"/about", ~p"/get-started", ~p"/terms", ~p"/privacy"] do
+      response =
+        conn
+        |> recycle()
+        |> get(path)
+        |> html_response(200)
+
+      assert_full_public_footer(response)
+    end
+  end
+
   test "GET / presents sign-in links instead of Memba staff entry points", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)
@@ -185,6 +197,8 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
            |> LazyHTML.text() =~ "Memba"
+
+    assert_full_public_footer(response)
 
     refute html |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']") |> Enum.any?()
     refute html |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']") |> Enum.any?()
@@ -1289,5 +1303,30 @@ defmodule MembaWeb.PageControllerTest do
 
   defp auth_email_request_path?(path) do
     Regex.match?(~r|^/auth/check-email/aer_[0-9a-f-]{36}$|, path)
+  end
+
+  defp assert_full_public_footer(response) do
+    html = LazyHTML.from_fragment(response)
+
+    assert html
+           |> LazyHTML.query("footer")
+           |> LazyHTML.text()
+           |> String.contains?("Red Donkey Technology Corp")
+
+    assert html
+           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/about']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/terms']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/privacy']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
+           |> Enum.any?()
   end
 end

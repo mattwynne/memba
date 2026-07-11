@@ -21,7 +21,9 @@ const {
   assertClubHomeConversationParticipantAvatarStack,
   assertClubHomeConversationPreview,
   assertClubHomeConversationReplyCount,
+  assertClubHomeConversationsPanelDoesNotShowPreferEmailCard,
   assertClubHomeDoesNotShowHeading,
+  assertConversationEntriesWithSenderTimestampAndBody,
   assertConversationEntryKindBadgesAbsent,
   assertConversationDuplicateFromLineAbsent,
   assertConversationReplyOrder,
@@ -32,10 +34,14 @@ const {
   assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertMessageDetailBackLink,
   assertNoAddressedMemberReceivedEmail,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
+  assertReplyComposerHelperSentenceAbsent,
+  assertReplyComposerIdentifiesMember,
+  assertReplyComposerNote,
   assertReplyEmailDeliveredToMembers,
   assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,
@@ -296,6 +302,15 @@ Then(
 );
 
 Then(
+  "{word}'s club home Conversations panel should not show the Prefer email card",
+  async function (viewerName) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertClubHomeConversationsPanelDoesNotShowPreferEmailCard(member, viewerName)
+    );
+  }
+);
+
+Then(
   "{word}'s club home should list one conversation for {string}",
   async function (viewerName, subject) {
     await withMemberHarness(this, viewerName, (member) =>
@@ -439,6 +454,55 @@ Then("{word} should not be able to reply to {string}", async function (personNam
     assertMemberCannotReplyToMessage(member, personName, subject, kootenayClubName)
   );
 });
+
+Then(
+  "{word} should see the message detail back link {string} for {string}",
+  async function (viewerName, expectedCopy, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertMessageDetailBackLink(member, subject, expectedCopy)
+    );
+  }
+);
+
+Then(
+  "{word} should not see the old reply composer helper sentence for {string}",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertReplyComposerHelperSentenceAbsent(
+        member,
+        subject,
+        "Your reply inherits the subject and is emailed to current followers except you."
+      )
+    );
+  }
+);
+
+Then(
+  /^(\w+) should see the reply composer identifies (?:him|her|them) as (\w+) for "([^"]+)"$/,
+  async function (viewerName, memberName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertReplyComposerIdentifiesMember(member, subject, memberName)
+    );
+  }
+);
+
+Then(
+  "{word} should see the reply composer note {string} for {string}",
+  async function (viewerName, expectedNote, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertReplyComposerNote(member, subject, expectedNote)
+    );
+  }
+);
+
+Then(
+  "the conversation for {string} should show entries with sender, timestamp, and body:",
+  async function (subject, dataTable) {
+    await withMemberHarness(this, "Bob", (member) =>
+      assertConversationEntriesWithSenderTimestampAndBody(member, subject, dataTable.hashes())
+    );
+  }
+);
 
 Then("{word} should be told the message body cannot be blank", async function (viewerName) {
   await memberBrowserAction(this, `blank-body validation notice for ${viewerName}`, () =>

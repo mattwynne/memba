@@ -50,6 +50,12 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
       |> signed_in_club_host("bob@example.com", %{club_id: club_id})
       |> live(~p"/messages/#{message.message_id}")
 
+    refute has_element?(
+             view,
+             "#member-message-reply-composer",
+             "Your reply inherits the subject and is emailed to current followers except you."
+           )
+
     view
     |> element("#member-message-reply-form")
     |> render_submit(%{
@@ -70,7 +76,36 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
     assert receipt.status == "sent"
 
     assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
-    assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
+
+    assert has_element?(
+             view,
+             "#member-message-reply-success.composer__note",
+             "Your reply is being sent."
+           )
+
+    success_class =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#member-message-reply-success")
+      |> LazyHTML.attribute("class")
+      |> List.first()
+
+    assert success_class == "composer__note"
+    refute success_class =~ "rounded-2xl"
+    refute success_class =~ "border-success"
+    refute success_class =~ "bg-success-soft"
+    refute success_class =~ "text-success"
+
+    refute has_element?(view, "#member-message-reply-success.bg-success-soft")
+    refute has_element?(view, "#member-message-reply-success.text-success")
+
+    refute has_element?(
+             view,
+             "#member-message-reply-composer",
+             "Your reply inherits the subject and is emailed to current followers except you."
+           )
+
     assert Messaging.following_conversation?(message.message_id, bob.person_id)
 
     assert has_element?(

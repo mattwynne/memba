@@ -65,6 +65,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "routed dashboard member sections render only the compact member app footer" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    for path <- [~p"/conversations", ~p"/members"] do
+      response =
+        build_conn()
+        |> signed_in_club_host("alice@example.com", alice)
+        |> get(path)
+        |> html_response(200)
+
+      document = LazyHTML.from_fragment(response)
+
+      assert document
+             |> LazyHTML.query("#club-site-footer.app-foot")
+             |> Enum.any?()
+
+      assert document
+             |> LazyHTML.query("footer")
+             |> Enum.count() == 1
+
+      refute document
+             |> LazyHTML.query("footer nav[aria-label='Footer navigation']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/about']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/terms']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='/privacy']")
+             |> Enum.any?()
+
+      refute document
+             |> LazyHTML.query("footer a[href='mailto:hello@memba.io']")
+             |> Enum.any?()
+
+      refute response =~ "Red Donkey Technology Corp"
+      refute response =~ "Footer navigation"
+    end
+  end
+
   test "dashboard renders the section tab spine with conversations selected by default", %{
     conn: conn
   } do
@@ -1184,7 +1234,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "button#member-message-send-button")
   end
 
-  test "dashboard shows the selected club inbound email address", %{conn: conn} do
+  test "dashboard omits the inbound email card from the conversations panel", %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -1198,32 +1248,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
-    assert has_element?(
-             view,
-             "#member-section-panel-conversations " <>
-               "#member-dashboard-inbound-email[data-inbound-address='everyone@kmc.clubs.memba.io']"
-           )
-
+    refute has_element?(view, "#member-section-panel-conversations #member-dashboard-inbound-email")
     refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
-
-    assert has_element?(
-             view,
-             "#member-section-panel-conversations #member-dashboard-inbound-email",
-             "Prefer email?"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-conversations #member-dashboard-inbound-email",
-             "You can also send a club-wide message to"
-           )
-
-    assert has_element?(
-             view,
-             "#member-section-panel-conversations " <>
-               "#member-dashboard-inbound-email-link[href='mailto:everyone@kmc.clubs.memba.io']",
-             "everyone@kmc.clubs.memba.io"
-           )
+    refute has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
+    refute has_element?(view, "#member-dashboard-inbound-email", "You can also send a club-wide message to")
+    refute has_element?(view, "#member-dashboard-inbound-email-link")
 
     refute has_element?(
              view,
@@ -1234,6 +1263,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
            )
+
+    rendered_html =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/conversations")
+      |> html_response(200)
+
+    rendered_document = LazyHTML.from_fragment(rendered_html)
+    rendered_text = LazyHTML.text(rendered_document)
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-section-panel-conversations #member-dashboard-inbound-email"
+           )
+
+    refute html_has_selector?(rendered_html, "#member-dashboard-cta #member-dashboard-inbound-email")
+    refute html_has_selector?(rendered_html, "#member-dashboard-inbound-email-link")
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    refute html_has_selector?(
+             rendered_html,
+             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']"
+           )
+
+    refute String.contains?(rendered_text, "Prefer email?")
+    refute String.contains?(rendered_text, "You can also send a club-wide message to")
   end
 
   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do

@@ -60,7 +60,97 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "AA"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/conversations']",
+             "All conversations"
+           )
+
+    refute has_element?(
+             view,
+             "a#back-to-club-home-link",
+             "Club home"
+           )
+  end
+
+  test "message detail applies the wireframe copy and footer decisions", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    response =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/messages/#{message.message_id}")
+      |> html_response(200)
+
+    document = LazyHTML.from_fragment(response)
+
+    assert document
+           |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "All conversations"
+
+    refute document
+           |> LazyHTML.query("a#back-to-club-home-link")
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "Club home"
+
+    assert document
+           |> LazyHTML.query(
+             "#member-message-reply-composer.composer > .composer__head > " <>
+               "#member-message-reply-from.composer__as[data-sender-id='#{alice.person_id}']"
+           )
+           |> LazyHTML.text()
+           |> normalize_whitespace() == "Replying as Alice Adams"
+
+    refute document
+           |> LazyHTML.query("#member-message-reply-composer")
+           |> LazyHTML.text()
+           |> normalize_whitespace() =~
+             "Your reply inherits the subject and is emailed to current followers except you."
+
+    assert document
+           |> LazyHTML.query("#club-site-footer.app-foot")
+           |> Enum.any?()
+
+    assert document
+           |> LazyHTML.query("footer")
+           |> Enum.count() == 1
+
+    refute document
+           |> LazyHTML.query("footer nav[aria-label='Footer navigation']")
+           |> Enum.any?()
+
+    refute document
+           |> LazyHTML.query("footer a[href='/about']")
+           |> Enum.any?()
+
+    refute document
+           |> LazyHTML.query("footer a[href='/terms']")
+           |> Enum.any?()
+
+    refute document
+           |> LazyHTML.query("footer a[href='/privacy']")
+           |> Enum.any?()
+
+    refute document
+           |> LazyHTML.query("footer a[href='mailto:hello@memba.io']")
+           |> Enum.any?()
+
+    refute response =~ "Red Donkey Technology Corp"
+    refute response =~ "Footer navigation"
   end
 
   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
@@ -92,7 +182,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
            )
 
-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/conversations']",
+             "All conversations"
+           )
+
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
@@ -121,7 +216,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "#member-message-heading-row.detail-head > .detail-head__main " <>
-               "h1#member-message-subject",
+               "h1#member-message-subject.page-title",
              "Trip planning night"
            )
 
@@ -133,9 +228,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> LazyHTML.attribute("class")
       |> List.first()
 
-    assert subject_class =~ "text-[38px]"
-    assert subject_class =~ "leading-[1.08]"
-    assert subject_class =~ "tracking-[-0.032em]"
+    refute subject_class =~ "text-[38px]"
+    refute subject_class =~ "leading-[1.08]"
+    refute subject_class =~ "tracking-[-0.032em]"
     refute subject_class =~ "text-4xl"
     refute subject_class =~ "sm:text-5xl"
 
@@ -302,6 +397,165 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            |> Enum.any?()
   end
 
+  test "rendered message detail uses ported design-system classes for the title, entries, and composer",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps.",
+        inserted_at: ~U[2026-06-03 07:02:00.000000Z]
+      )
+
+    reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        conversation_id: message.message_id,
+        reply_to_message_id: message.message_id,
+        subject: "Trip planning night",
+        body: "I'll bring snacks.",
+        inserted_at: ~U[2026-06-03 08:15:00.000000Z]
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("bob@example.com", bob)
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-message-heading-row .detail-head__main > " <>
+               "h1#member-message-subject.page-title",
+             "Trip planning night"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-original > " <>
+               "article#member-conversation-entry-#{message.message_id}" <>
+               ".message.message--original[data-conversation-kind='original']" <>
+               "[data-sender-id='#{alice.person_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__avatar",
+             "A"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__body > .message__head > .message__name",
+             "Alice Adams"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original " <>
+               "time.message__time[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T07:02:00.000000Z']",
+             "3 Jun, 7:02am"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original " <>
+               "p#member-message-body.message__text",
+             "Bring your maps."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-replies > " <>
+               "article#member-conversation-entry-#{reply.message_id}" <>
+               ".message[data-conversation-kind='reply']" <>
+               "[data-sender-id='#{bob.person_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message > " <>
+               ".message__avatar",
+             "B"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message > " <>
+               ".message__body > .message__head > .message__name",
+             "Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message " <>
+               "time.message__time[data-testid='member-conversation-entry-time']" <>
+               "[datetime='2026-06-03T08:15:00.000000Z']",
+             "3 Jun, 8:15am"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message " <>
+               "p#member-conversation-body-#{reply.message_id}.message__text",
+             "I'll bring snacks."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message " <>
+               "#member-conversation-entry-menu-#{reply.message_id}.message__menu " <>
+               "#member-conversation-entry-menu-button-#{reply.message_id}.message__kebab"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{reply.message_id}.message " <>
+               "#member-conversation-entry-menu-#{reply.message_id}.message__menu " <>
+               ".message-menu"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > h2.composer__title",
+             "Reply to this conversation"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > " <>
+               "#member-message-reply-from.composer__as[data-sender-id='#{bob.person_id}']",
+             "Replying as Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer " <>
+               "#member-message-reply-form .composer__actions > " <>
+               "#member-message-reply-submit-button",
+             "Post reply"
+           )
+  end
+
   test "routed message detail renders the conversation and inline reply composer", %{
     conn: conn
   } do
@@ -383,7 +637,21 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message.message--original" <>
                "[data-conversation-kind='original']" <>
                "[data-sender-id='#{alice.person_id}']",
-             "Bring your maps."
+              "Bring your maps."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__avatar",
+             "A"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__body > .message__head > .message__name",
+             "Alice Adams"
            )
 
     assert has_element?(
@@ -401,7 +669,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{bob.person_id}']",
-             "I'll bring snacks."
+              "I'll bring snacks."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{first_reply.message_id}.message > " <>
+               ".message__avatar",
+             "B"
            )
 
     refute has_element?(
@@ -466,7 +741,35 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Replying as Bob Builder"
            )
 
-    assert has_element?(view, "#member-message-reply-form")
+    assert has_element?(view, "#member-message-reply-composer.composer")
+
+    refute has_element?(
+             view,
+             "#member-message-reply-composer",
+             "Your reply inherits the subject and is emailed to current followers except you."
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > .composer__title",
+             "Reply to this conversation"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > " <>
+               "#member-message-reply-from.composer__as[data-sender-id='#{bob.person_id}']",
+             "Replying as Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer " <>
+               "#member-message-reply-form .composer__actions " <>
+               "#member-message-reply-submit-button"
+           )
+
+    assert has_element?(view, "#member-message-reply-form[phx-submit='post_reply']")
     assert has_element?(view, "#member-message-reply-body-input")
     refute has_element?(view, "#member-message-reply-subject-input")
   end
@@ -744,5 +1047,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
     })
+  end
+
+  defp normalize_whitespace(text) do
+    text
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 end

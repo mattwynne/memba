@@ -6,7 +6,6 @@ defmodule MembaWeb.PageHTML do
   """
   use MembaWeb, :html
 
-  alias Memba.ClubInboundEmailAddress
   alias MembaWeb.ClubSite
 
   embed_templates "page_html/*"
@@ -23,85 +22,58 @@ defmodule MembaWeb.PageHTML do
       data-conversation-kind={@entry.kind}
       data-message-id={@entry.message.message_id}
       data-sender-id={@entry.message.sender_id}
-      class={[
-        "message rounded-3xl border bg-base-100 p-5 shadow-sm sm:p-6",
-        @entry.kind == :original && "message--original",
-        if(@entry.kind == :original,
-          do: "border-primary/25 ring-1 ring-primary/10",
-          else: "border-base-300"
-        )
-      ]}
+      class={["message", @entry.kind == :original && "message--original"]}
     >
-      <div class="flex items-start gap-3">
-        <span class={[
-          "message__avatar grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 ring-inset",
-          if(@entry.kind == :original,
-            do: "bg-sage-100 text-sage-800 ring-primary/20",
-            else: "bg-base-200 text-base-content ring-base-300"
-          )
-        ]}>
-          {conversation_sender_initial(@entry.sender_name)}
-        </span>
-        <div class="message__body min-w-0 flex-1">
-          <div class="message__head flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <p class="message__name font-semibold text-base-content">{@entry.sender_name}</p>
-              <time
-                data-testid="member-conversation-entry-time"
-                datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
-                class="message__time text-sm font-medium text-ink-2"
+      <span class="message__avatar">
+        {conversation_sender_initial(@entry.sender_name)}
+      </span>
+      <div class="message__body">
+        <div class="message__head">
+          <p class="message__name">{@entry.sender_name}</p>
+          <time
+            data-testid="member-conversation-entry-time"
+            datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
+            class="message__time"
+          >
+            {format_message_time(@entry.message.inserted_at)}
+          </time>
+          <div
+            id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+            data-testid="member-conversation-entry-menu"
+            class="message__menu dropdown dropdown-end"
+          >
+            <button
+              id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
+              type="button"
+              tabindex="0"
+              role="button"
+              aria-haspopup="menu"
+              aria-label="Message options"
+              class="message__kebab"
+            >
+              <.icon name="hero-ellipsis-vertical" />
+            </button>
+            <div tabindex="0" role="menu" class="dropdown-content message-menu">
+              <.link
+                id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
+                data-testid="member-conversation-entry-delivery-link"
+                href={
+                  member_message_delivery_path(
+                    @entry.message.message_id,
+                    @selected_club,
+                    @club_id_source
+                  )
+                }
+                role="menuitem"
               >
-                {format_message_time(@entry.message.inserted_at)}
-              </time>
-            </div>
-            <div class="flex items-center gap-2">
-              <div
-                id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
-                data-testid="member-conversation-entry-menu"
-                class="message__menu dropdown dropdown-end"
-              >
-                <button
-                  id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
-                  type="button"
-                  tabindex="0"
-                  role="button"
-                  aria-haspopup="menu"
-                  aria-label="Message options"
-                  class="message__kebab btn btn-ghost btn-sm btn-square rounded-full text-ink-2 hover:bg-base-200 hover:text-base-content"
-                >
-                  <.icon name="hero-ellipsis-vertical" class="size-5" />
-                </button>
-                <div
-                  tabindex="0"
-                  role="menu"
-                  class="dropdown-content message-menu z-20 mt-2 min-w-48 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-lg"
-                >
-                  <.link
-                    id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
-                    data-testid="member-conversation-entry-delivery-link"
-                    href={
-                      member_message_delivery_path(
-                        @entry.message.message_id,
-                        @selected_club,
-                        @club_id_source
-                      )
-                    }
-                    role="menuitem"
-                    class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-base-content transition duration-150 hover:bg-base-200"
-                  >
-                    <.icon name="hero-envelope" class="size-4 text-primary" /> Delivery details
-                  </.link>
-                </div>
-              </div>
+                <.icon name="hero-envelope" /> Delivery details
+              </.link>
             </div>
           </div>
-          <p
-            id={conversation_entry_body_id(@entry)}
-            class="message__text mt-3 whitespace-pre-wrap text-base leading-8 text-ink-2"
-          >
-            {@entry.message.body}
-          </p>
         </div>
+        <p id={conversation_entry_body_id(@entry)} class="message__text">
+          {@entry.message.body}
+        </p>
       </div>
     </article>
     """
@@ -110,8 +82,6 @@ defmodule MembaWeb.PageHTML do
   defp format_message_time(%DateTime{} = inserted_at) do
     Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
   end
-
-  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
   defp active_member_section?(active_section, section), do: active_section == section
 
