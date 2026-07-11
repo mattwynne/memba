@@ -1,0 +1,336 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index e0a3439..3dd9141 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
++- [x] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
+ - [ ] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+ - [ ] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+ - [ ] 004 Remove the desktop club-home `Prefer email?` card/copy.
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index d10ffc6..b29b171 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -759,6 +759,269 @@ h1, h2, h3, h4 {
+   white-space: nowrap;
+ }
+ 
++/* ============================================================
++   Conversation detail messages and reply composer.
++
++   Ported from the design-system member-conversation mirror so
++   the Phoenix app can use the same page-title / message /
++   composer vocabulary as the static wireframe.
++   ============================================================ */
++.page-title {
++  color: var(--color-ink);
++  font-size: 28px;
++  font-weight: 700;
++  letter-spacing: -0.024em;
++  line-height: 1.12;
++  margin: 4px 0 0;
++}
++
++.message {
++  display: flex;
++  align-items: flex-start;
++  gap: 13px;
++  padding: 16px;
++  border: 1px solid var(--color-line);
++  border-radius: 14px;
++  background: var(--color-paper);
++  color: var(--color-ink);
++  box-shadow: 0 1px 2px rgb(21 32 28 / 0.05);
++}
++
++.message > .flex {
++  width: 100%;
++}
++
++.message + .message {
++  margin-top: 9px;
++}
++
++.message--original {
++  border-color: var(--color-sage-200);
++  background: var(--color-sage-50);
++  box-shadow:
++    0 1px 2px rgb(21 32 28 / 0.05),
++    inset 0 0 0 1px rgb(255 255 255 / 0.42);
++}
++
++.message__avatar {
++  width: 38px;
++  height: 38px;
++  border-radius: 999px;
++  background: var(--color-sage-200);
++  color: var(--color-sage-800);
++  display: grid;
++  place-items: center;
++  flex: none;
++  font-size: 12px;
++  font-weight: 700;
++  letter-spacing: 0.02em;
++  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.42);
++}
++
++.message__body {
++  min-width: 0;
++}
++
++.message__head {
++  min-height: 30px;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++
++.message__name {
++  min-width: 0;
++  color: var(--color-ink);
++  font-size: 14px;
++  font-weight: 700;
++  letter-spacing: -0.01em;
++  line-height: 1.25;
++}
++
++.message__time {
++  flex: none;
++  color: var(--color-ink-3);
++  font-size: 12.5px;
++  font-weight: 500;
++  line-height: 1.35;
++  white-space: nowrap;
++  font-variant-numeric: tabular-nums;
++}
++
++.message__text {
++  margin: 5px 0 0;
++  color: var(--color-ink-2);
++  font-size: 15px;
++  font-weight: 500;
++  line-height: 1.6;
++  white-space: pre-wrap;
++}
++
++.message__menu {
++  margin-left: auto;
++  flex: none;
++}
++
++.message__kebab {
++  width: 30px;
++  height: 30px;
++  border: 0;
++  border-radius: 999px;
++  background: transparent;
++  color: var(--color-ink-3);
++  cursor: pointer;
++  display: grid;
++  place-items: center;
++  padding: 0;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.message__kebab:hover,
++.message__kebab:focus-visible {
++  background: var(--color-base-200);
++  color: var(--color-ink);
++}
++
++.message__kebab:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.message__kebab svg {
++  width: 18px;
++  height: 18px;
++}
++
++.message-menu {
++  min-width: 180px;
++  margin-top: 8px;
++  padding: 6px;
++  border: 1px solid var(--color-line);
++  border-radius: 12px;
++  background: var(--color-paper);
++  color: var(--color-ink);
++  box-shadow: 0 14px 40px rgb(21 32 28 / 0.18);
++  z-index: 20;
++}
++
++.message-menu a {
++  color: inherit;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  border-radius: 9px;
++  padding: 8px 10px;
++  font-size: 13px;
++  font-weight: 600;
++  text-decoration: none;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.message-menu a:hover,
++.message-menu a:focus-visible {
++  background: var(--color-sage-50);
++  color: var(--color-sage-700);
++}
++
++.message-menu a:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.message-menu svg {
++  width: 16px;
++  height: 16px;
++  flex: none;
++  fill: none;
++  stroke: currentColor;
++  stroke-width: 2;
++  stroke-linecap: round;
++  stroke-linejoin: round;
++}
++
++.composer {
++  margin: 18px 0 0;
++  padding: 16px;
++  border: 1px solid var(--color-line);
++  border-radius: 14px;
++  background: var(--color-paper);
++  color: var(--color-ink);
++  box-shadow: 0 1px 2px rgb(21 32 28 / 0.05);
++}
++
++.composer__head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  flex-wrap: wrap;
++  gap: 8px 12px;
++  margin-bottom: 12px;
++}
++
++.composer__title {
++  color: var(--color-ink);
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  font-size: 15px;
++  font-weight: 700;
++  letter-spacing: -0.01em;
++  line-height: 1.25;
++}
++
++.composer__title svg {
++  width: 18px;
++  height: 18px;
++  fill: none;
++  stroke: currentColor;
++  stroke-width: 2;
++  stroke-linecap: round;
++  stroke-linejoin: round;
++}
++
++.composer__as {
++  color: var(--color-ink-3);
++  font-size: 13px;
++  font-weight: 500;
++  line-height: 1.35;
++}
++
++.composer__as strong {
++  color: var(--color-ink-2);
++  font-weight: 600;
++}
++
++.composer textarea {
++  width: 100%;
++  resize: vertical;
++}
++
++.composer__actions {
++  display: flex;
++  justify-content: flex-end;
++  margin-top: 12px;
++}
++
++.composer__note,
++.composer__error {
++  margin: 0 0 10px;
++  font-size: 13px;
++  font-weight: 600;
++  line-height: 1.4;
++}
++
++.composer__note {
++  color: var(--color-ink-2);
++}
++
++.composer__error {
++  color: var(--color-error);
++}
++
+ /* ============================================================
+    Delivery details page.
+ 
+diff --git a/web/test/memba_web/app_css_test.exs b/web/test/memba_web/app_css_test.exs
+index 8819cf0..7226961 100644
+--- a/web/test/memba_web/app_css_test.exs
++++ b/web/test/memba_web/app_css_test.exs
+@@ -56,7 +56,7 @@ defmodule MembaWeb.AppCssTest do
+     assert css =~ ".avatar-stack > .avatar {"
+     assert css =~ ".avatar-stack > .is-more {"
+ 
+-    assert css =~ "grid-template-columns: 38px minmax(0, 1fr);"
++    assert css =~ "gap: 13px;"
+     assert css =~ "line-clamp: 1;"
+     assert css =~ "margin-left: -6px;"
+     assert css =~ "font-family: var(--font-mono);"
+@@ -79,6 +79,36 @@ defmodule MembaWeb.AppCssTest do
+     assert css =~ "white-space: nowrap;"
+   end
+ 
++  test "app css includes the conversation message, composer, and page title rules" do
++    css = File.read!(@app_css_path)
++
++    assert css =~ ".page-title {"
++    assert css =~ ".message {"
++    assert css =~ ".message--original {"
++    assert css =~ ".message__avatar {"
++    assert css =~ ".message__body {"
++    assert css =~ ".message__head {"
++    assert css =~ ".message__name {"
++    assert css =~ ".message__time {"
++    assert css =~ ".message__text {"
++    assert css =~ ".message__menu {"
++    assert css =~ ".message__kebab {"
++    assert css =~ ".message-menu {"
++    assert css =~ ".composer {"
++    assert css =~ ".composer__head {"
++    assert css =~ ".composer__title {"
++    assert css =~ ".composer__as {"
++    assert css =~ ".composer__actions {"
++    assert css =~ ".composer__note {"
++    assert css =~ ".composer__error {"
++
++    assert css =~ "grid-template-columns: 38px minmax(0, 1fr);"
++    assert css =~ "background: var(--color-sage-50);"
++    assert css =~ "font-size: 28px;"
++    assert css =~ "resize: vertical;"
++    assert css =~ "color: var(--color-error);"
++  end
++
+   test "app css includes the delivery details summary, group, recipient, and status tint rules" do
+     css = File.read!(@app_css_path)
+ 
