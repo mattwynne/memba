@@ -1,0 +1,142 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 57f5f73..eaa9821 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+ - [x] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+ - [x] 004 Remove the desktop club-home `Prefer email?` card/copy.
+-- [ ] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
++- [x] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
+ - [ ] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
+ - [ ] 007 Add/update Phoenix/LiveView/rendered tests for: ported class usage on message entries/composer/title;
+ - [ ] 008 Add/update Phoenix/LiveView/rendered tests for: absence of helper sentence and green success-alert styling;
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 425c044..c4bf362 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -18,17 +18,11 @@ defmodule MembaWeb.Layouts do
+   defp hide_public_footer?(assigns) do
+     assigns
+     |> Map.get(:conn)
+-    |> member_message_detail_request?()
++    |> public_footer_suppressed?()
+   end
+ 
+-  defp member_message_detail_request?(%Plug.Conn{request_path: path}) when is_binary(path) do
+-    case String.split(path, "/", trim: true) do
+-      ["messages", message_id] -> message_id != "new"
+-      _other_path -> false
+-    end
+-  end
+-
+-  defp member_message_detail_request?(_conn), do: false
++  defp public_footer_suppressed?(%Plug.Conn{assigns: %{hide_public_footer: true}}), do: true
++  defp public_footer_suppressed?(_conn), do: false
+ 
+   @doc """
+   Renders the shared public/visitor header.
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 9df2c5f..715db02 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -43,6 +43,7 @@ defmodule MembaWeb.Router do
+   pipeline :club_member_required do
+     plug MembaWeb.Plugs.ClubSiteMemberRoute
+     plug :require_active_club_member
++    plug :suppress_public_footer
+   end
+ 
+   pipeline :api do
+@@ -174,4 +175,8 @@ defmodule MembaWeb.Router do
+       post "/sign-in", DevTestSupportController, :sign_in
+     end
+   end
++
++  defp suppress_public_footer(conn, _opts) do
++    Plug.Conn.assign(conn, :hide_public_footer, true)
++  end
+ end
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index fa00738..5180d3e 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -313,6 +313,37 @@ defmodule MembaWeb.LayoutsTest do
+     end
+   end
+ 
++  test "root layout suppresses the public footer when member app chrome is active", %{conn: conn} do
++    conn = Plug.Conn.assign(conn, :hide_public_footer, true)
++
++    html =
++      rendered_to_string(
++        Layouts.root(%{
++          conn: conn,
++          inner_content:
++            Phoenix.HTML.raw(
++              ~s(<footer id="club-site-footer" class="app-foot">Powered by <a href="/">Memba</a></footer>)
++            )
++        })
++      )
++
++    assert_selector(html, "#club-site-footer.app-foot")
++    assert_text(html, "#club-site-footer", "Powered by Memba")
++    assert_selector_count(html, "footer", 1)
++    refute html =~ "Red Donkey Technology Corp"
++    refute html =~ "Footer navigation"
++  end
++
++  test "root layout keeps the public footer for public pages by default", %{conn: conn} do
++    html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
++
++    assert_text(html, "footer", "Red Donkey Technology Corp")
++    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
++    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
++    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/privacy']")
++    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
++  end
++
+   test "root footer shows linked git commit when enabled" do
+     System.put_env("MEMBA_GIT_SHA", @sha)
+     Application.put_env(:memba, :show_git_commit_in_footer, true)
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 80f236d..d4a1c6f 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -65,6 +65,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(view, "#club-member-#{bob.person_id}")
+   end
+ 
++  test "routed dashboard member sections render only the compact member app footer" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    for path <- [~p"/conversations", ~p"/members"] do
++      response =
++        build_conn()
++        |> signed_in_club_host("alice@example.com", alice)
++        |> get(path)
++        |> html_response(200)
++
++      document = LazyHTML.from_fragment(response)
++
++      assert document
++             |> LazyHTML.query("#club-site-footer.app-foot")
++             |> Enum.any?()
++
++      assert document
++             |> LazyHTML.query("footer")
++             |> Enum.count() == 1
++
++      refute response =~ "Red Donkey Technology Corp"
++      refute response =~ "Footer navigation"
++    end
++  end
++
+   test "dashboard renders the section tab spine with conversations selected by default", %{
+     conn: conn
+   } do
