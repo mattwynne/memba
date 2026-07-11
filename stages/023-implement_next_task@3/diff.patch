@@ -1,0 +1,255 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 914f5d8..58fef58 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
+ - [x] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+-- [ ] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
++- [x] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+ - [ ] 004 Remove the desktop club-home `Prefer email?` card/copy.
+ - [ ] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
+ - [ ] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 6f17c7b..425c044 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -15,6 +15,21 @@ defmodule MembaWeb.Layouts do
+ 
+   defp git_commit_footer_link, do: Memba.BuildInfo.footer_commit()
+ 
++  defp hide_public_footer?(assigns) do
++    assigns
++    |> Map.get(:conn)
++    |> member_message_detail_request?()
++  end
++
++  defp member_message_detail_request?(%Plug.Conn{request_path: path}) when is_binary(path) do
++    case String.split(path, "/", trim: true) do
++      ["messages", message_id] -> message_id != "new"
++      _other_path -> false
++    end
++  end
++
++  defp member_message_detail_request?(_conn), do: false
++
+   @doc """
+   Renders the shared public/visitor header.
+ 
+diff --git a/web/lib/memba_web/components/layouts/root.html.heex b/web/lib/memba_web/components/layouts/root.html.heex
+index 31ba81f..22dd5ba 100644
+--- a/web/lib/memba_web/components/layouts/root.html.heex
++++ b/web/lib/memba_web/components/layouts/root.html.heex
+@@ -19,37 +19,39 @@
+   <body>
+     <% git_commit = git_commit_footer_link() %>
+     {@inner_content}
+-    <footer class="border-t border-line bg-paper px-6 py-8 text-sm text-ink-2 lg:px-8">
+-      <div class="mx-auto flex max-w-7xl flex-col gap-4">
+-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+-          <p>
+-            © {Date.utc_today().year}
+-            <a href="https://donkey.red" class="transition hover:text-ink">
+-              Red Donkey Technology Corp
+-            </a>
+-          </p>
+-          <nav class="flex flex-wrap gap-x-6 gap-y-2" aria-label="Footer navigation">
+-            <a href={~p"/about"} class="transition hover:text-ink">About</a>
+-            <a href={~p"/terms"} class="transition hover:text-ink">Terms</a>
+-            <a href={~p"/privacy"} class="transition hover:text-ink">Privacy</a>
+-            <a href="mailto:hello@memba.io" class="transition hover:text-ink">Contact</a>
+-          </nav>
+-        </div>
+-        <div class="flex flex-col gap-2 text-ink-3 sm:flex-row sm:items-center sm:justify-between">
+-          <p class="inline-flex items-center gap-1.5">
+-            Built with <.icon name="hero-heart-mini" class="size-4 bg-ink-3" aria-hidden="true" />
+-            in Nelson, BC.
+-          </p>
+-          <%= if git_commit do %>
++    <%= unless hide_public_footer?(assigns) do %>
++      <footer class="border-t border-line bg-paper px-6 py-8 text-sm text-ink-2 lg:px-8">
++        <div class="mx-auto flex max-w-7xl flex-col gap-4">
++          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+             <p>
+-              Commit
+-              <a href={git_commit.url} class="font-mono transition hover:text-ink">
+-                {git_commit.short_sha}
++              © {Date.utc_today().year}
++              <a href="https://donkey.red" class="transition hover:text-ink">
++                Red Donkey Technology Corp
+               </a>
+             </p>
+-          <% end %>
++            <nav class="flex flex-wrap gap-x-6 gap-y-2" aria-label="Footer navigation">
++              <a href={~p"/about"} class="transition hover:text-ink">About</a>
++              <a href={~p"/terms"} class="transition hover:text-ink">Terms</a>
++              <a href={~p"/privacy"} class="transition hover:text-ink">Privacy</a>
++              <a href="mailto:hello@memba.io" class="transition hover:text-ink">Contact</a>
++            </nav>
++          </div>
++          <div class="flex flex-col gap-2 text-ink-3 sm:flex-row sm:items-center sm:justify-between">
++            <p class="inline-flex items-center gap-1.5">
++              Built with <.icon name="hero-heart-mini" class="size-4 bg-ink-3" aria-hidden="true" />
++              in Nelson, BC.
++            </p>
++            <%= if git_commit do %>
++              <p>
++                Commit
++                <a href={git_commit.url} class="font-mono transition hover:text-ink">
++                  {git_commit.short_sha}
++                </a>
++              </p>
++            <% end %>
++          </div>
+         </div>
+-      </div>
+-    </footer>
++      </footer>
++    <% end %>
+   </body>
+ </html>
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index ef05731..1fb6f01 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -17,7 +17,7 @@
+       href={member_club_home_path(@selected_club, Map.get(@route_params, "club_id_source"))}
+       class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
+     >
+-      <.icon name="hero-arrow-left" class="size-4" /> Club home
++      <.icon name="hero-arrow-left" class="size-4" /> All conversations
+     </.link>
+ 
+     <section class="mt-5 border-b border-base-300 pb-8">
+@@ -134,14 +134,10 @@
+             Replying as <strong>{@current_member.name}</strong>
+           </p>
+         </div>
+-        <p class="text-sm leading-6 text-ink-2">
+-          Your reply inherits the subject and is emailed to current followers except you.
+-        </p>
+-
+         <p
+           :if={@reply_state == :posted}
+           id="member-message-reply-success"
+-          class="mt-4 rounded-2xl border border-success/20 bg-success-soft px-4 py-3 text-sm font-semibold text-success"
++          class="composer__note"
+         >
+           Your reply is being sent.
+         </p>
+diff --git a/web/test/memba_web/live/member_message_live/show_reply_test.exs b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+index f133dd3..5093572 100644
+--- a/web/test/memba_web/live/member_message_live/show_reply_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_reply_test.exs
+@@ -70,7 +70,16 @@ defmodule MembaWeb.MemberMessageLive.ShowReplyTest do
+     assert receipt.status == "sent"
+ 
+     assert has_element?(view, "#member-message-detail[data-reply-state='posted']")
+-    assert has_element?(view, "#member-message-reply-success", "Your reply is being sent.")
++
++    assert has_element?(
++             view,
++             "#member-message-reply-success.composer__note",
++             "Your reply is being sent."
++           )
++
++    refute has_element?(view, "#member-message-reply-success.bg-success-soft")
++    refute has_element?(view, "#member-message-reply-success.text-success")
++
+     assert Messaging.following_conversation?(message.message_id, bob.person_id)
+ 
+     assert has_element?(
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index a92ae72..b9f9ff0 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -60,7 +60,62 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "AA"
+            )
+ 
+-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
++    assert has_element?(
++             view,
++             "a#back-to-club-home-link[href='/conversations']",
++             "All conversations"
++           )
++  end
++
++  test "message detail applies the wireframe copy and footer decisions", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    response =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> get(~p"/messages/#{message.message_id}")
++      |> html_response(200)
++
++    document = LazyHTML.from_fragment(response)
++
++    assert document
++           |> LazyHTML.query("a#back-to-club-home-link[href='/conversations']")
++           |> LazyHTML.text()
++           |> normalize_whitespace() == "All conversations"
++
++    assert document
++           |> LazyHTML.query(
++             "#member-message-reply-composer.composer > .composer__head > " <>
++               "#member-message-reply-from.composer__as[data-sender-id='#{alice.person_id}']"
++           )
++           |> LazyHTML.text()
++           |> normalize_whitespace() == "Replying as Alice Adams"
++
++    refute response =~ "Your reply inherits the subject and is emailed to current followers except you."
++
++    assert document
++           |> LazyHTML.query("#club-site-footer.app-foot")
++           |> Enum.any?()
++
++    assert document
++           |> LazyHTML.query("footer")
++           |> Enum.count() == 1
++
++    refute response =~ "Red Donkey Technology Corp"
++    refute response =~ "Footer navigation"
+   end
+ 
+   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
+@@ -92,7 +147,12 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
+            )
+ 
+-    assert has_element?(view, "a#back-to-club-home-link[href='/conversations']")
++    assert has_element?(
++             view,
++             "a#back-to-club-home-link[href='/conversations']",
++             "All conversations"
++           )
++
+     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
+   end
+ 
+@@ -788,4 +848,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       status: Keyword.fetch!(attrs, :status)
+     })
+   end
++
++  defp normalize_whitespace(text) do
++    text
++    |> String.replace(~r/\s+/, " ")
++    |> String.trim()
++  end
+ end
