@@ -121,7 +121,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "#member-message-heading-row.detail-head > .detail-head__main " <>
-               "h1#member-message-subject",
+               "h1#member-message-subject.page-title",
              "Trip planning night"
            )
 
@@ -133,9 +133,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> LazyHTML.attribute("class")
       |> List.first()
 
-    assert subject_class =~ "text-[38px]"
-    assert subject_class =~ "leading-[1.08]"
-    assert subject_class =~ "tracking-[-0.032em]"
+    refute subject_class =~ "text-[38px]"
+    refute subject_class =~ "leading-[1.08]"
+    refute subject_class =~ "tracking-[-0.032em]"
     refute subject_class =~ "text-4xl"
     refute subject_class =~ "sm:text-5xl"
 
@@ -383,7 +383,21 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message.message--original" <>
                "[data-conversation-kind='original']" <>
                "[data-sender-id='#{alice.person_id}']",
-             "Bring your maps."
+              "Bring your maps."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__avatar",
+             "A"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
+               ".message__body > .message__head > .message__name",
+             "Alice Adams"
            )
 
     assert has_element?(
@@ -401,7 +415,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{bob.person_id}']",
-             "I'll bring snacks."
+              "I'll bring snacks."
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-#{first_reply.message_id}.message > " <>
+               ".message__avatar",
+             "B"
            )
 
     refute has_element?(
@@ -466,7 +487,29 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Replying as Bob Builder"
            )
 
-    assert has_element?(view, "#member-message-reply-form")
+    assert has_element?(view, "#member-message-reply-composer.composer")
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > .composer__title",
+             "Reply to this conversation"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer > .composer__head > " <>
+               "#member-message-reply-from.composer__as[data-sender-id='#{bob.person_id}']",
+             "Replying as Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-reply-composer.composer " <>
+               "#member-message-reply-form .composer__actions " <>
+               "#member-message-reply-submit-button"
+           )
+
+    assert has_element?(view, "#member-message-reply-form[phx-submit='post_reply']")
     assert has_element?(view, "#member-message-reply-body-input")
     refute has_element?(view, "#member-message-reply-subject-input")
   end

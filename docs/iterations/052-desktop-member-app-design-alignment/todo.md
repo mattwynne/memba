@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
-- [ ] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+- [x] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
 - [ ] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
 - [ ] 004 Remove the desktop club-home `Prefer email?` card/copy.
 - [ ] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
