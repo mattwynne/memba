@@ -6,7 +6,6 @@ defmodule MembaWeb.PageHTML do
   """
   use MembaWeb, :html
 
-  alias Memba.ClubInboundEmailAddress
   alias MembaWeb.ClubSite
 
   embed_templates "page_html/*"
@@ -83,8 +82,6 @@ defmodule MembaWeb.PageHTML do
   defp format_message_time(%DateTime{} = inserted_at) do
     Calendar.strftime(inserted_at, "%-d %b, %-I:%M%P")
   end
-
-  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
   defp active_member_section?(active_section, section), do: active_section == section
 
