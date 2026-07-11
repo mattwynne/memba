@@ -1,0 +1,331 @@
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index 3dd9141..914f5d8 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current design-system CSS definitions for `.message*`, `.composer*`, and `.page-title` and port them into `web/assets/css/app.css` using exact class names.
+-- [ ] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
++- [x] 002 Rewrite the message detail HEEx/component markup to use the ported semantic classes while preserving IDs/test hooks and LiveView events needed by existing tests.
+ - [ ] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+ - [ ] 004 Remove the desktop club-home `Prefer email?` card/copy.
+ - [ ] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index b29b171..68b6bf9 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -820,6 +820,7 @@ h1, h2, h3, h4 {
+ 
+ .message__body {
+   min-width: 0;
++  flex: 1 1 auto;
+ }
+ 
+ .message__head {
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index dc09ff6..d31105b 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -23,85 +23,58 @@ defmodule MembaWeb.PageHTML do
+       data-conversation-kind={@entry.kind}
+       data-message-id={@entry.message.message_id}
+       data-sender-id={@entry.message.sender_id}
+-      class={[
+-        "message rounded-3xl border bg-base-100 p-5 shadow-sm sm:p-6",
+-        @entry.kind == :original && "message--original",
+-        if(@entry.kind == :original,
+-          do: "border-primary/25 ring-1 ring-primary/10",
+-          else: "border-base-300"
+-        )
+-      ]}
++      class={["message", @entry.kind == :original && "message--original"]}
+     >
+-      <div class="flex items-start gap-3">
+-        <span class={[
+-          "message__avatar grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 ring-inset",
+-          if(@entry.kind == :original,
+-            do: "bg-sage-100 text-sage-800 ring-primary/20",
+-            else: "bg-base-200 text-base-content ring-base-300"
+-          )
+-        ]}>
+-          {conversation_sender_initial(@entry.sender_name)}
+-        </span>
+-        <div class="message__body min-w-0 flex-1">
+-          <div class="message__head flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+-            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+-              <p class="message__name font-semibold text-base-content">{@entry.sender_name}</p>
+-              <time
+-                data-testid="member-conversation-entry-time"
+-                datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
+-                class="message__time text-sm font-medium text-ink-2"
+-              >
+-                {format_message_time(@entry.message.inserted_at)}
+-              </time>
+-            </div>
+-            <div class="flex items-center gap-2">
+-              <div
+-                id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+-                data-testid="member-conversation-entry-menu"
+-                class="message__menu dropdown dropdown-end"
++      <span class="message__avatar">
++        {conversation_sender_initial(@entry.sender_name)}
++      </span>
++      <div class="message__body">
++        <div class="message__head">
++          <p class="message__name">{@entry.sender_name}</p>
++          <time
++            data-testid="member-conversation-entry-time"
++            datetime={DateTime.to_iso8601(@entry.message.inserted_at)}
++            class="message__time"
++          >
++            {format_message_time(@entry.message.inserted_at)}
++          </time>
++          <div
++            id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
++            data-testid="member-conversation-entry-menu"
++            class="message__menu dropdown dropdown-end"
++          >
++            <button
++              id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
++              type="button"
++              tabindex="0"
++              role="button"
++              aria-haspopup="menu"
++              aria-label="Message options"
++              class="message__kebab"
++            >
++              <.icon name="hero-ellipsis-vertical" />
++            </button>
++            <div tabindex="0" role="menu" class="dropdown-content message-menu">
++              <.link
++                id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
++                data-testid="member-conversation-entry-delivery-link"
++                href={
++                  member_message_delivery_path(
++                    @entry.message.message_id,
++                    @selected_club,
++                    @club_id_source
++                  )
++                }
++                role="menuitem"
+               >
+-                <button
+-                  id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
+-                  type="button"
+-                  tabindex="0"
+-                  role="button"
+-                  aria-haspopup="menu"
+-                  aria-label="Message options"
+-                  class="message__kebab btn btn-ghost btn-sm btn-square rounded-full text-ink-2 hover:bg-base-200 hover:text-base-content"
+-                >
+-                  <.icon name="hero-ellipsis-vertical" class="size-5" />
+-                </button>
+-                <div
+-                  tabindex="0"
+-                  role="menu"
+-                  class="dropdown-content message-menu z-20 mt-2 min-w-48 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-lg"
+-                >
+-                  <.link
+-                    id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
+-                    data-testid="member-conversation-entry-delivery-link"
+-                    href={
+-                      member_message_delivery_path(
+-                        @entry.message.message_id,
+-                        @selected_club,
+-                        @club_id_source
+-                      )
+-                    }
+-                    role="menuitem"
+-                    class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-base-content transition duration-150 hover:bg-base-200"
+-                  >
+-                    <.icon name="hero-envelope" class="size-4 text-primary" /> Delivery details
+-                  </.link>
+-                </div>
+-              </div>
++                <.icon name="hero-envelope" /> Delivery details
++              </.link>
+             </div>
+           </div>
+-          <p
+-            id={conversation_entry_body_id(@entry)}
+-            class="message__text mt-3 whitespace-pre-wrap text-base leading-8 text-ink-2"
+-          >
+-            {@entry.message.body}
+-          </p>
+         </div>
++        <p id={conversation_entry_body_id(@entry)} class="message__text">
++          {@entry.message.body}
++        </p>
+       </div>
+     </article>
+     """
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 46935bb..ef05731 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -28,7 +28,7 @@
+         <div class="detail-head__main">
+           <h1
+             id="member-message-subject"
+-            class="text-[38px] font-semibold leading-[1.08] tracking-[-0.032em] text-base-content"
++            class="page-title"
+           >
+             {@message.subject}
+           </h1>
+@@ -118,27 +118,25 @@
+ 
+       <section
+         id="member-message-reply-composer"
+-        class="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-sm sm:p-6"
++        class="composer"
+       >
+-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+-          <div>
+-            <h2 class="flex items-center gap-2 text-base font-semibold text-base-content">
+-              <.icon name="hero-chat-bubble-left-right" class="size-5 text-primary" />
+-              Reply to this conversation
+-            </h2>
+-            <p class="mt-1 text-sm leading-6 text-ink-2">
+-              Your reply inherits the subject and is emailed to current followers except you.
+-            </p>
+-          </div>
++        <div class="composer__head">
++          <h2 class="composer__title">
++            <.icon name="hero-chat-bubble-left-right" />
++            Reply to this conversation
++          </h2>
+           <p
+             :if={@current_member}
+             id="member-message-reply-from"
+             data-sender-id={@current_member.id}
+-            class="w-fit rounded-full border border-base-300 bg-base-100 px-3 py-1 text-sm font-semibold text-ink-2"
++            class="composer__as"
+           >
+-            Replying as <span class="text-base-content">{@current_member.name}</span>
++            Replying as <strong>{@current_member.name}</strong>
+           </p>
+         </div>
++        <p class="text-sm leading-6 text-ink-2">
++          Your reply inherits the subject and is emailed to current followers except you.
++        </p>
+ 
+         <p
+           :if={@reply_state == :posted}
+@@ -170,17 +168,17 @@
+             type="textarea"
+             placeholder="Write your reply to the club."
+             rows="5"
+-            class="min-h-32 w-full resize-y rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-base-content placeholder:text-ink-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
++            class="textarea"
+           />
+           <p
+             :if={@reply_body_error}
+             id="member-message-reply-body-error"
+-            class="text-sm font-semibold text-error"
++            class="composer__error"
+           >
+             {@reply_body_error}
+           </p>
+ 
+-          <div class="flex flex-col gap-3 sm:flex-row">
++          <div class="composer__actions">
+             <.button
+               id="member-message-reply-submit-button"
+               type="submit"
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 56a67bb..a92ae72 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -121,7 +121,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(
+              view,
+              "#member-message-heading-row.detail-head > .detail-head__main " <>
+-               "h1#member-message-subject",
++               "h1#member-message-subject.page-title",
+              "Trip planning night"
+            )
+ 
+@@ -133,9 +133,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       |> LazyHTML.attribute("class")
+       |> List.first()
+ 
+-    assert subject_class =~ "text-[38px]"
+-    assert subject_class =~ "leading-[1.08]"
+-    assert subject_class =~ "tracking-[-0.032em]"
++    refute subject_class =~ "text-[38px]"
++    refute subject_class =~ "leading-[1.08]"
++    refute subject_class =~ "tracking-[-0.032em]"
+     refute subject_class =~ "text-4xl"
+     refute subject_class =~ "sm:text-5xl"
+ 
+@@ -383,7 +383,21 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+                ".message.message--original" <>
+                "[data-conversation-kind='original']" <>
+                "[data-sender-id='#{alice.person_id}']",
+-             "Bring your maps."
++              "Bring your maps."
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
++               ".message__avatar",
++             "A"
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-entry-#{message.message_id}.message.message--original > " <>
++               ".message__body > .message__head > .message__name",
++             "Alice Adams"
+            )
+ 
+     assert has_element?(
+@@ -401,7 +415,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+                ".message" <>
+                "[data-conversation-kind='reply']" <>
+                "[data-sender-id='#{bob.person_id}']",
+-             "I'll bring snacks."
++              "I'll bring snacks."
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-entry-#{first_reply.message_id}.message > " <>
++               ".message__avatar",
++             "B"
+            )
+ 
+     refute has_element?(
+@@ -466,7 +487,29 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "Replying as Bob Builder"
+            )
+ 
+-    assert has_element?(view, "#member-message-reply-form")
++    assert has_element?(view, "#member-message-reply-composer.composer")
++
++    assert has_element?(
++             view,
++             "#member-message-reply-composer.composer > .composer__head > .composer__title",
++             "Reply to this conversation"
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-reply-composer.composer > .composer__head > " <>
++               "#member-message-reply-from.composer__as[data-sender-id='#{bob.person_id}']",
++             "Replying as Bob Builder"
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-reply-composer.composer " <>
++               "#member-message-reply-form .composer__actions " <>
++               "#member-message-reply-submit-button"
++           )
++
++    assert has_element?(view, "#member-message-reply-form[phx-submit='post_reply']")
+     assert has_element?(view, "#member-message-reply-body-input")
+     refute has_element?(view, "#member-message-reply-subject-input")
+   end
