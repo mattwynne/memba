@@ -1,0 +1,352 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index d1cfb24..4b36fd4 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -168,3 +168,22 @@ Feature: Club message replies (conversations)
+       And Elliot replies "I can bring the permit" to "Trip planning night"
+       Then Alice's club home should list one conversation for "Trip planning night"
+       And the "Trip planning night" conversation participant avatar-stack should show Bob, Carol, and Dana, plus 1 more
++
++  @iteration-052
++  @not-domain
++  Rule: Desktop member app pages align to the conversation wireframes
++
++    Scenario: Message detail uses the wireframe copy while preserving conversation entries
++      When Bob views the message "Trip planning night"
++      Then Bob should see the message detail back link "All conversations" for "Trip planning night"
++      And Bob should not see the old reply composer helper sentence for "Trip planning night"
++      And Bob should see the reply composer identifies him as Bob for "Trip planning night"
++      When Bob replies "I can drive, three seats spare" to "Trip planning night"
++      Then Bob should see the reply composer note "Your reply is being sent." for "Trip planning night"
++      And the conversation for "Trip planning night" should show entries with sender, timestamp, and body:
++        | sender | body                              |
++        | Alice  | Trip planning night details.      |
++        | Bob    | I can drive, three seats spare    |
++
++    Scenario: Club-home Conversations panel omits the desktop email preference card
++      Then Alice's club home Conversations panel should not show the Prefer email card
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index 6640ea4..03d788c 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -21,7 +21,9 @@ const {
+   assertClubHomeConversationParticipantAvatarStack,
+   assertClubHomeConversationPreview,
+   assertClubHomeConversationReplyCount,
++  assertClubHomeConversationsPanelDoesNotShowPreferEmailCard,
+   assertClubHomeDoesNotShowHeading,
++  assertConversationEntriesWithSenderTimestampAndBody,
+   assertConversationEntryKindBadgesAbsent,
+   assertConversationDuplicateFromLineAbsent,
+   assertConversationReplyOrder,
+@@ -32,10 +34,14 @@ const {
+   assertMemberWasToldMessageBodyCannotBeBlank,
+   assertMemberWasToldMessageWasNotSent,
+   assertMemberWasToldToContactSupport,
++  assertMessageDetailBackLink,
+   assertNoAddressedMemberReceivedEmail,
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
++  assertReplyComposerHelperSentenceAbsent,
++  assertReplyComposerIdentifiesMember,
++  assertReplyComposerNote,
+   assertReplyEmailDeliveredToMembers,
+   assertReplyEmailNotDeliveredToMembers,
+   assertReplyEmailNotDeliveredToAuthor,
+@@ -295,6 +301,15 @@ Then(
+   }
+ );
+ 
++Then(
++  "{word}'s club home Conversations panel should not show the Prefer email card",
++  async function (viewerName) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertClubHomeConversationsPanelDoesNotShowPreferEmailCard(member, viewerName)
++    );
++  }
++);
++
+ Then(
+   "{word}'s club home should list one conversation for {string}",
+   async function (viewerName, subject) {
+@@ -440,6 +455,55 @@ Then("{word} should not be able to reply to {string}", async function (personNam
+   );
+ });
+ 
++Then(
++  "{word} should see the message detail back link {string} for {string}",
++  async function (viewerName, expectedCopy, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertMessageDetailBackLink(member, subject, expectedCopy)
++    );
++  }
++);
++
++Then(
++  "{word} should not see the old reply composer helper sentence for {string}",
++  async function (viewerName, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertReplyComposerHelperSentenceAbsent(
++        member,
++        subject,
++        "Your reply inherits the subject and is emailed to current followers except you."
++      )
++    );
++  }
++);
++
++Then(
++  /^(\w+) should see the reply composer identifies (?:him|her|them) as (\w+) for "([^"]+)"$/,
++  async function (viewerName, memberName, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertReplyComposerIdentifiesMember(member, subject, memberName)
++    );
++  }
++);
++
++Then(
++  "{word} should see the reply composer note {string} for {string}",
++  async function (viewerName, expectedNote, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertReplyComposerNote(member, subject, expectedNote)
++    );
++  }
++);
++
++Then(
++  "the conversation for {string} should show entries with sender, timestamp, and body:",
++  async function (subject, dataTable) {
++    await withMemberHarness(this, "Bob", (member) =>
++      assertConversationEntriesWithSenderTimestampAndBody(member, subject, dataTable.hashes())
++    );
++  }
++);
++
+ Then("{word} should be told the message body cannot be blank", async function (viewerName) {
+   await memberBrowserAction(this, `blank-body validation notice for ${viewerName}`, () =>
+     assertMemberWasToldMessageBodyCannotBeBlank(this)
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 8c5126c..ee6a71f 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1790,6 +1790,181 @@ async function assertClubHomeDoesNotShowHeading(
+   return world;
+ }
+ 
++async function assertClubHomeConversationsPanelDoesNotShowPreferEmailCard(
++  world,
++  viewerName,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberClubHome(world, kootenayClubName, { expect, timeoutMs });
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-club-home #member-dashboard-inbound-email"),
++    0,
++    `${viewerName}'s club-home Conversations panel should not show the Prefer email card`,
++    { expect, timeoutMs }
++  );
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-club-home", { hasText: "Prefer email?" }),
++    0,
++    `${viewerName}'s club-home Conversations panel should not show Prefer email copy`,
++    { expect, timeoutMs }
++  );
++
++  await waitForProjectedCount(
++    world,
++    world.page.locator("#member-club-home", { hasText: "You can also send a club-wide message" }),
++    0,
++    `${viewerName}'s club-home Conversations panel should not show inbound-email helper copy`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertMessageDetailBackLink(
++  world,
++  subject,
++  expectedCopy,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedText(
++    world,
++    world.page.locator("#back-to-club-home-link"),
++    expectedCopy,
++    `message detail back link for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertReplyComposerHelperSentenceAbsent(
++  world,
++  subject,
++  helperSentence,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedCount(
++    world,
++    world.page.getByText(helperSentence, { exact: true }),
++    0,
++    `old reply composer helper sentence for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertReplyComposerIdentifiesMember(
++  world,
++  subject,
++  memberName,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  const person = world.people[memberName];
++  assert.ok(person, `Expected ${memberName} to have been created before checking the reply composer`);
++
++  await waitForProjectedText(
++    world,
++    world.page.locator(`#member-message-reply-from[data-sender-id=${cssString(person.personId)}]`),
++    `Replying as ${memberName}`,
++    `reply composer identity for ${memberName} in ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertReplyComposerNote(
++  world,
++  subject,
++  expectedNote,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  await waitForProjectedText(
++    world,
++    world.page.locator("#member-message-reply-success"),
++    expectedNote,
++    `reply composer note for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++
++  return world;
++}
++
++async function assertConversationEntriesWithSenderTimestampAndBody(
++  world,
++  subject,
++  expectedEntries,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  await openMemberMessage(world, subject, { expect, timeoutMs });
++
++  for (const expectedEntry of expectedEntries) {
++    const senderName = expectedEntry.sender;
++    const body = expectedEntry.body;
++    const sender = world.people[senderName];
++    assert.ok(sender, `Expected ${senderName} to have been created before checking conversation entries`);
++
++    const row = world.page.locator(
++      `#member-conversation [data-testid=${cssString(
++        "member-conversation-entry"
++      )}][data-sender-id=${cssString(sender.personId)}]`,
++      { hasText: body }
++    );
++
++    await waitForProjectedVisible(
++      world,
++      row,
++      `${senderName}'s conversation entry for ${JSON.stringify(subject)} with body ${JSON.stringify(body)}`,
++      { expect, timeoutMs }
++    );
++
++    await waitForProjectedText(
++      world,
++      row.locator(".message__name"),
++      senderName,
++      `${senderName}'s conversation entry sender name for ${JSON.stringify(subject)}`,
++      { expect, timeoutMs }
++    );
++
++    await waitForProjectedText(
++      world,
++      row.locator(".message__text"),
++      body,
++      `${senderName}'s conversation entry body for ${JSON.stringify(subject)}`,
++      { expect, timeoutMs }
++    );
++
++    const timestamp = row.locator("[data-testid=\"member-conversation-entry-time\"]");
++    await waitForProjectedVisible(
++      world,
++      timestamp,
++      `${senderName}'s conversation entry timestamp for ${JSON.stringify(subject)}`,
++      { expect, timeoutMs }
++    );
++
++    const datetime = await timestamp.getAttribute("datetime");
++    assertFinalBrowserState(
++      `${senderName}'s conversation entry timestamp datetime for ${JSON.stringify(subject)}`,
++      () => assert.ok(datetime && datetime.trim(), "Expected conversation entry timestamp to include a datetime")
++    );
++  }
++
++  return world;
++}
++
+ async function assertConversationEntryKindBadgesAbsent(
+   world,
+   subject,
+@@ -3684,7 +3859,9 @@ module.exports = {
+   assertClubHomeConversationOrder,
+   assertClubHomeConversationParticipantAvatarStack,
+   assertClubHomeConversationReplyCount,
++  assertClubHomeConversationsPanelDoesNotShowPreferEmailCard,
+   assertClubHomeDoesNotShowHeading,
++  assertConversationEntriesWithSenderTimestampAndBody,
+   assertConversationDuplicateFromLineAbsent,
+   assertConversationEntryKindBadgesAbsent,
+   assertConversationDoesNotShowReply,
+@@ -3707,10 +3884,14 @@ module.exports = {
+   assertMemberWasToldMessageBodyCannotBeBlank,
+   assertMemberWasToldMessageWasNotSent,
+   assertMemberWasToldToContactSupport,
++  assertMessageDetailBackLink,
+   assertNoAddressedMemberReceivedEmail,
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
++  assertReplyComposerHelperSentenceAbsent,
++  assertReplyComposerIdentifiesMember,
++  assertReplyComposerNote,
+   assertReplyEmailDeliveredToMembers,
+   assertReplyEmailNotDeliveredToMembers,
+   assertReplyEmailNotDeliveredToAuthor,
+diff --git a/docs/iterations/052-desktop-member-app-design-alignment/todo.md b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+index eaa9821..46d6c31 100644
+--- a/docs/iterations/052-desktop-member-app-design-alignment/todo.md
++++ b/docs/iterations/052-desktop-member-app-design-alignment/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Apply the five message-detail decisions: `All conversations`, no helper sentence, inline `Replying as`, quiet posted note, compact member-app footer only.
+ - [x] 004 Remove the desktop club-home `Prefer email?` card/copy.
+ - [x] 005 Adjust shared member app layout/footer rendering so authenticated member app pages use only the compact app footer and public/marketing/legal pages keep the full public footer.
+-- [ ] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
++- [x] 006 Add/update the allowed `@iteration-052` Cucumber scenarios and supporting step definitions if needed.
+ - [ ] 007 Add/update Phoenix/LiveView/rendered tests for: ported class usage on message entries/composer/title;
+ - [ ] 008 Add/update Phoenix/LiveView/rendered tests for: absence of helper sentence and green success-alert styling;
+ - [ ] 009 Add/update Phoenix/LiveView/rendered tests for: `All conversations` back link;
