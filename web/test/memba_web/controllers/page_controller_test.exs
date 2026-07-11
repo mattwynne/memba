@@ -1326,7 +1326,9 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
+           |> LazyHTML.query(
+             "footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']"
+           )
            |> Enum.any?()
   end
 end

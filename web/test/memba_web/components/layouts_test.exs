@@ -341,7 +341,11 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/privacy']")
-    assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']")
+
+    assert_selector(
+      html,
+      "footer nav[aria-label='Footer navigation'] a[href='mailto:hello@memba.io']"
+    )
   end
 
   test "root footer shows linked git commit when enabled" do

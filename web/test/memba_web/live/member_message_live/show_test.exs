@@ -637,7 +637,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message.message--original" <>
                "[data-conversation-kind='original']" <>
                "[data-sender-id='#{alice.person_id}']",
-              "Bring your maps."
+             "Bring your maps."
            )
 
     assert has_element?(
@@ -669,7 +669,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                ".message" <>
                "[data-conversation-kind='reply']" <>
                "[data-sender-id='#{bob.person_id}']",
-              "I'll bring snacks."
+             "I'll bring snacks."
            )
 
     assert has_element?(

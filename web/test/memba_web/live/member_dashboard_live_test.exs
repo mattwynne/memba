@@ -1248,10 +1248,20 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/conversations")
 
-    refute has_element?(view, "#member-section-panel-conversations #member-dashboard-inbound-email")
+    refute has_element?(
+             view,
+             "#member-section-panel-conversations #member-dashboard-inbound-email"
+           )
+
     refute has_element?(view, "#member-dashboard-cta #member-dashboard-inbound-email")
     refute has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
-    refute has_element?(view, "#member-dashboard-inbound-email", "You can also send a club-wide message to")
+
+    refute has_element?(
+             view,
+             "#member-dashboard-inbound-email",
+             "You can also send a club-wide message to"
+           )
+
     refute has_element?(view, "#member-dashboard-inbound-email-link")
 
     refute has_element?(
@@ -1278,7 +1288,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-section-panel-conversations #member-dashboard-inbound-email"
            )
 
-    refute html_has_selector?(rendered_html, "#member-dashboard-cta #member-dashboard-inbound-email")
+    refute html_has_selector?(
+             rendered_html,
+             "#member-dashboard-cta #member-dashboard-inbound-email"
+           )
+
     refute html_has_selector?(rendered_html, "#member-dashboard-inbound-email-link")
 
     refute html_has_selector?(
