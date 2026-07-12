@@ -62,7 +62,7 @@ green than before.
 | 050 | 2026-07-09 | merged | Club home conversation & member-list fidelity fixes | [plan](050-club-home-conversation-and-member-row-fidelity/plan.md) |
 | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |
 | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |
-| 053 | 2026-07-11 | ready | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
+| 053 | 2026-07-11 | validated | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
 
 Status notes:
 
