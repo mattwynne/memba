@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-12T00:34:00.566900249Z",
-  "last_event_at": "2026-07-12T00:36:58.021361735Z",
+  "last_event_at": "2026-07-12T00:37:03.686634050Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1571,9 +1571,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 112,
       "checkpoint": {
-        "timestamp": "2026-07-12T00:37:00.223113713Z",
+        "timestamp": "2026-07-12T00:37:03.686536986Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -1586,57 +1586,57 @@
         ],
         "node_retries": {},
         "context_values": {
-          "current_node": "publish_ready",
-          "internal.retry_count.start": 0,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "plan_needs_human": false,
-          "thread.claude_review.current_node": "codex_review",
-          "internal.thread_id": "synthesis_gate",
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "graph.rankdir": "LR",
-          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the wording around sign-in with a pending known address. The acceptance criteria say it “may verify” the address, while the scenario summaries and validation plan say it verifies the address. Prefer “does verify” if that is the intended rule.\n2. Specify the intended token expiry/one-use policy more concretely if the project wants deterministic validation beyond “invalid/expired” handling.\n3. Name the likely domain/context modules and migration locations if known, to reduce implementation discovery time.\n4. Add an explicit expected behavior for unauthenticated access to `/my/settings`, such as redirecting to sign-in.\n5. Consider adding explicit criteria for duplicate normalized email addresses already attached to the same Person, not only another Person.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: add verified/pending state for Person email addresses, backfill existing rows as verified, add `/my/settings` for signed-in People, allow members to add a pending email address, send/consume a verification link, and prevent pending addresses from becoming primary or being used for inbound identity. Primary switching, removal, resend, and live-refresh are valuable but could be follow-up slices if implementation risk needs to be reduced.\n\nThat said, the current plan is still coherent as one behaviour-facing iteration because all included work supports the single outcome: members can safely manage their own verified email addresses.\n\n## Required plan edits\n\nNone required for readiness.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests covering:\n   - existing addresses backfilled as verified;\n   - newly added addresses becoming pending;\n   - pending addresses blocked from primary delivery and inbound identity;\n   - verification link success;\n   - old/removed/replaced link rejection;\n   - duplicate normalized address rejection;\n   - primary removal prevention;\n   - sign-in-link verification for pending known addresses.\n\n2. LiveView/controller tests covering:\n   - avatar menu link and separator;\n   - `/my/settings` visibility for signed-in People;\n   - Person basics, memberships, and email-address rows;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - PubSub/live refresh after verification.\n\n3. Acceptance coverage in `acceptance-tests/features/person_email_addresses.feature` for the listed `@iteration-053` scenarios, with temporary `@todo-domain` / `@todo-ui` tags removed or narrowed as behavior becomes executable.\n\n4. Full project validation with `dev check`.\n\n5. Manual demo confirming:\n   - member opens Account settings;\n   - adds a pending email;\n   - cannot make it primary before verification;\n   - verifies via emailed link;\n   - settings page updates;\n   - verified address can become primary;\n   - old non-primary address can be removed;\n   - future club-message delivery uses the new verified primary address.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "thread.start.current_node": "gemini_review",
-          "internal.retry_count.gemini_review": 0,
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify that address” with deterministic wording such as “**does** verify that address,” matching the implementation plan and scenario summary.\n2. Consider clarifying the unauthorized `/my/settings` behavior for signed-in identities that do not resolve to a Membership Person, e.g. no menu link plus redirect/404/flash behavior if visited directly.\n3. The “Open Technical Decisions” section is acceptable for implementation readiness, but the implementer should resolve and document the chosen token storage, command/event shape, verification-state ownership, and PubSub topic/message shape during implementation.\n4. The scope is coherent but large. If implementation risk grows, defer live PubSub refresh or staff-edit compatibility polish only if doing so does not weaken the core safety rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: a signed-in Membership Person can access `/my/settings`, view their email addresses with verified/pending/primary state, add a pending address, receive and open a verification link, and then make the verified address primary while pending addresses remain blocked from primary delivery, sign-in identity, and inbound identity.\n\nRemoval, resend, avatar-menu polish, and live-update behavior are important for the full planned experience, but the core useful outcome is safe self-service addition and verification of alternate email addresses.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Migration/backfill tests confirming existing email-address rows become verified.\n2. Domain tests for adding pending addresses, duplicate rejection, verification, removed-token invalidation, primary restrictions, removal restrictions, sign-in-as-verification, inbound rejection, and club-message delivery to verified primary only.\n3. LiveView/controller tests for avatar-menu navigation, `/my/settings` rendering, add/resend/remove/make-primary flows, verification success, invalid/expired verification links, and live refresh.\n4. Updated Cucumber feature coverage in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary todo tags removed or narrowed as behavior becomes executable.\n5. Manual demo covering account settings access, add pending address, verify via emailed link, live UI update, make primary, remove non-primary, and confirm future club-message delivery uses the new primary address.\n6. Final `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "codex_review_confidence": "High",
-          "codex_review_blocking_gap_count": 0,
-          "thread.codex_review.current_node": "synthesize",
-          "outcome": "succeeded",
-          "claude_review_blocking_gap_count": 0,
-          "internal.retry_count.codex_review": 0,
-          "claude_review_required_edits": "None",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "command.output": "blob://sha256/f9dfbda5a9a496f919b6b86776ecd35163901f3cb00b2c593573e14b2f6d9b01",
-          "internal.work_dir": "/workspace/memba",
-          "graph.default_fidelity": "summary:high",
+          "gemini_review_blocking_gap_count": 0,
           "claude_review_confidence": "High",
-          "internal.retry_count.claude_review": 0,
-          "thread.synthesize.current_node": "synthesis_gate",
-          "internal.retry_count.publish_ready": 0,
-          "thread.synthesis_gate.current_node": "publish_ready",
+          "command.output": "blob://sha256/f9dfbda5a9a496f919b6b86776ecd35163901f3cb00b2c593573e14b2f6d9b01",
+          "internal.run_id": "01KX9VXDV097P22BXM9A5850AS",
+          "internal.retry_count.codex_review": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "gemini_review_decision": "READY",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "claude_review_blocking_gaps": "None",
+          "codex_review_blocking_gap_count": 0,
+          "gemini_review_blocking_gaps": "None",
           "gemini_review_confidence": "High",
-          "claude_review_decision": "READY",
-          "codex_review_blocking_gaps": "None",
-          "internal.fidelity": "summary:high",
+          "internal.retry_count.publish_ready": 0,
           "internal.retry_count.synthesize": 0,
-          "thread.gemini_review.current_node": "claude_review",
+          "internal.thread_id": "synthesis_gate",
+          "outcome": "succeeded",
+          "gemini_review_required_edits": "None",
+          "codex_review_blocking_gaps": "None",
+          "codex_review_confidence": "High",
+          "codex_review_required_edits": "None",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "thread.start.current_node": "gemini_review",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the wording around sign-in with a pending known address. The acceptance criteria say it “may verify” the address, while the scenario summaries and validation plan say it verifies the address. Prefer “does verify” if that is the intended rule.\n2. Specify the intended token expiry/one-use policy more concretely if the project wants deterministic validation beyond “invalid/expired” handling.\n3. Name the likely domain/context modules and migration locations if known, to reduce implementation discovery time.\n4. Add an explicit expected behavior for unauthenticated access to `/my/settings`, such as redirecting to sign-in.\n5. Consider adding explicit criteria for duplicate normalized email addresses already attached to the same Person, not only another Person.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: add verified/pending state for Person email addresses, backfill existing rows as verified, add `/my/settings` for signed-in People, allow members to add a pending email address, send/consume a verification link, and prevent pending addresses from becoming primary or being used for inbound identity. Primary switching, removal, resend, and live-refresh are valuable but could be follow-up slices if implementation risk needs to be reduced.\n\nThat said, the current plan is still coherent as one behaviour-facing iteration because all included work supports the single outcome: members can safely manage their own verified email addresses.\n\n## Required plan edits\n\nNone required for readiness.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests covering:\n   - existing addresses backfilled as verified;\n   - newly added addresses becoming pending;\n   - pending addresses blocked from primary delivery and inbound identity;\n   - verification link success;\n   - old/removed/replaced link rejection;\n   - duplicate normalized address rejection;\n   - primary removal prevention;\n   - sign-in-link verification for pending known addresses.\n\n2. LiveView/controller tests covering:\n   - avatar menu link and separator;\n   - `/my/settings` visibility for signed-in People;\n   - Person basics, memberships, and email-address rows;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - PubSub/live refresh after verification.\n\n3. Acceptance coverage in `acceptance-tests/features/person_email_addresses.feature` for the listed `@iteration-053` scenarios, with temporary `@todo-domain` / `@todo-ui` tags removed or narrowed as behavior becomes executable.\n\n4. Full project validation with `dev check`.\n\n5. Manual demo confirming:\n   - member opens Account settings;\n   - adds a pending email;\n   - cannot make it primary before verification;\n   - verifies via emailed link;\n   - settings page updates;\n   - verified address can become primary;\n   - old non-primary address can be removed;\n   - future club-message delivery uses the new verified primary address.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "internal.retry_count.start": 0,
+          "thread.codex_review.current_node": "synthesize",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.gemini_review": 0,
+          "failure_class": "",
+          "internal.retry_count.synthesis_gate": 0,
+          "response.claude_review": "Now I'll review this plan against all five readiness criteria.\n\n# Iteration 053 Plan Review\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is thorough, well-structured, and ready for implementation. It demonstrates careful domain modeling, clear boundaries, and comprehensive coverage of business rules, technical decisions, and validation.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Token expiry duration**: While the plan mentions \"one-use/expiring\" tokens, consider specifying a reasonable expiry window (e.g., 24 hours, 7 days) to help implementers make consistent decisions.\n\n2. **Verification email \"from\" address**: Consider noting whether verification emails should use club-specific from addresses or a global Memba system address, for consistency with existing transactional email patterns.\n\n3. **Rate limiting follow-up**: The plan explicitly scopes out rate limiting for this iteration. Consider logging or capturing a follow-up note about when anti-abuse controls become necessary (e.g., after user count threshold, observed abuse patterns).\n\n4. **Migration backfill timing**: The plan states existing rows are backfilled as verified but doesn't specify whether this happens in the migration itself or as a post-migration data task. This is likely clear enough from implementation context, but could be made explicit.\n\n## Smallest viable iteration\n\nThe plan is already well-scoped to a minimal useful slice. If forced to reduce scope further, you could defer:\n\n- Resend verification (users could add the address again)\n- Live PubSub refresh of open settings page (require manual refresh)\n\nHowever, **I do not recommend reducing scope**. The current iteration is coherent, focused, and delivers a complete member-facing capability. Removing features would degrade UX without meaningful risk reduction.\n\n## Required plan edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation plan\n\nThe plan includes a comprehensive validation strategy:\n\n### Automated validation\n- **Domain/context tests** covering all critical invariants: verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection\n- **LiveView/controller tests** covering navigation, rendering, all user flows, verification callbacks, and live updates\n- **Acceptance tests** with 9 named scenarios in `person_email_addresses.feature` tagged `@iteration-053`\n- **`dev check`** as the final gate\n\n### Manual validation\n10-step manual demo script covering the complete user journey from opening settings through adding, verifying, making primary, and removing addresses, plus confirming downstream message delivery.\n\n### Success criteria\nClear stop condition: All acceptance criteria met, all tests passing, `dev check` green, manual demo successful.\n\n---\n\n## Detailed readiness assessment\n\n### 1. Goal clarity ✅\n\n**Goal is clear and outcome-focused.**\n\nThe plan states both user outcomes (\"a signed-in member can...\") and business/system outcomes (\"members can manage their own verified email addresses\"). The beneficiary is explicit: signed-in club members who are Membership Persons. The goal distinguishes between what users can do (9 bullet points) and what the system gains (verification enforcement, safe identity handling).\n\n### 2. Scope focus ✅\n\n**Scope is coherent and minimal.**\n\nThe iteration delivers one complete capability: member self-service email-address management with verification. Everything in scope serves this goal. The 9-point out-of-scope section demonstrates clear boundaries: no Account aggregate, no club settings, no get-started-only identities, no anti-abuse controls, no name changes.\n\nThe iteration could not be smaller while remaining useful. Removing verification would leave the security hole open. Removing self-service would fail to deliver member value. Removing primary management would leave members unable to control their outbound identity.\n\n### 3. Acceptance criteria, BDD scenario decision, and business decisions ✅\n\n**Acceptance criteria are concrete, complete, and testable.**\n\nThe plan includes 27 acceptance criteria covering:\n- **Happy paths**: open settings, add address, verify, make primary, remove\n- **Edge cases**: duplicate addresses, old verification links, removed addresses\n- **Permissions/restrictions**: pending cannot be primary, primary cannot be removed, settings only for Person identities\n- **Error states**: invalid verification links, duplicate address rejection\n- **Data/state changes**: backfill verification, immediate primary update, session preservation, inbound rejection\n\n**BDD scenario decision is explicit and justified.**\n\nThe plan classifies as \"Behaviour-facing\" (line 78), justifies why BDD is required (lines 90-92: \"changes member-visible identity and email-address policy... business rules that benefit from stakeholder-readable examples\"), and names 9 specific scenarios with personas in `person_email_addresses.feature` (lines 96-108).\n\n**Business decisions are resolved.**\n\nLine 165: \"None known.\" The plan is explicit about verification policy (pending addresses cannot be primary/trusted), primary rules (exactly one, cannot remove), duplicate handling (reject with clear copy), and session preservation (removing session email doesn't break session).\n\n### 4. Implementation plan and technical decisions ✅\n\n**Implementation steps are clear, ordered, and specific.**\n\nThe 17-step plan follows a logical sequence:\n1. Inspect current state\n2. Add verification schema/migration\n3. Model write-side commands/events\n4. Preserve staff edit compatibility\n5-9. Token infrastructure and email delivery\n10-13. UI implementation\n14-16. Testing at all levels\n17. `dev check`\n\n**Likely files and integration points are named:**\n- `acceptance-tests/features/person_email_addresses.feature`\n- `web/lib/memba_web/components/layouts.ex` (Layouts.club_site/1, avatar menu)\n- `web/lib/memba_web/live/admin/people_live/edit.ex` (staff edit compatibility)\n- Routes: `/my/settings`, verification callback route\n- Design references: mobile-club-home, invite-a-member, profile-completion wireframes\n\n**Data model changes are clear:**\n- Add verification state to Person email-address projection\n- Backfill existing rows as verified\n- New addresses default to pending\n- Token storage for verification links\n\n**Technical decisions are appropriately open.**\n\nLines 188-194 list 4 open technical decisions that cannot be resolved without inspecting code:\n- Token storage mechanism (reuse auth tokens vs. new store)\n- Command/event shape (individual actions vs. set replacement)\n- Verification state location (projection vs. aggregate value object)\n- PubSub topic/message shape\n\nThese are legitimate implementation-time decisions. The plan constrains them with preferences (\"Prefer aggregate enforcement for primary/removal rules\") and safety requirements (\"avoid exposing sensitive email details unnecessarily\") without over-specifying.\n\n### 5. Expected capability and validation ✅\n\n**New capability is clear.**\n\nLines 196-197: \"Members can manage their own verified email addresses from a global personal settings page. Memba can distinguish verified and pending Person email addresses and prevent pending addresses from being used for primary delivery or inbound identity until mailbox control is proven.\"\n\n**Success proof is comprehensive.**\n\nThe validation plan (lines 199-233) includes:\n- Automated tests at three layers (domain, LiveView/controller, acceptance)\n- 10-step manual demo script\n- `dev check` as final gate\n\n**Stop condition is clear.**\n\nIteration succeeds when all acceptance criteria are met, all tests pass, `dev check` is green, and the manual demo completes successfully.\n\n---\n\n## Summary\n\nThis plan demonstrates excellent iteration planning:\n\n- **Domain sophistication**: Carefully preserves existing aggregate semantics while adding new verification rules\n- **Risk awareness**: Identifies 5 follow-up risks including staff edit compatibility, sign-in/verification interaction, and household email addresses\n- **Problem linkage**: Explicitly resolves one documented problem and partially addresses another, with clear follow-up scope\n- **Design grounding**: References existing design system components and acknowledges that DesignSync review may add dedicated previews\n- **Testing rigor**: Three-layer test strategy with named acceptance scenarios\n- **Boundary clarity**: 9-point out-of-scope section prevents scope creep\n\nThe plan is ready for implementation without modification.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "last_stage": "synthesize",
           "internal.node_visit_count": 1,
           "plan_ready": true,
-          "internal.retry_count.synthesis_gate": 0,
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify that address” with deterministic wording such as “**does** verify that address,” matching the implementation plan and scenario summary.\n2. Consider clarifying the unauthorized `/my/settings` behavior for signed-in identities that do not resolve to a Membership Person, e.g. no menu link plus redirect/404/flash behavior if visited directly.\n3. The “Open Technical Decisions” section is acceptable for implementation readiness, but the implementer should resolve and document the chosen token storage, command/event shape, verification-state ownership, and PubSub topic/message shape during implementation.\n4. The scope is coherent but large. If implementation risk grows, defer live PubSub refresh or staff-edit compatibility polish only if doing so does not weaken the core safety rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: a signed-in Membership Person can access `/my/settings`, view their email addresses with verified/pending/primary state, add a pending address, receive and open a verification link, and then make the verified address primary while pending addresses remain blocked from primary delivery, sign-in identity, and inbound identity.\n\nRemoval, resend, avatar-menu polish, and live-update behavior are important for the full planned experience, but the core useful outcome is safe self-service addition and verification of alternate email addresses.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Migration/backfill tests confirming existing email-address rows become verified.\n2. Domain tests for adding pending addresses, duplicate rejection, verification, removed-token invalidation, primary restrictions, removal restrictions, sign-in-as-verification, inbound rejection, and club-message delivery to verified primary only.\n3. LiveView/controller tests for avatar-menu navigation, `/my/settings` rendering, add/resend/remove/make-primary flows, verification success, invalid/expired verification links, and live refresh.\n4. Updated Cucumber feature coverage in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary todo tags removed or narrowed as behavior becomes executable.\n5. Manual demo covering account settings access, add pending address, verify via emailed link, live UI update, make primary, remove non-primary, and confirm future club-message delivery uses the new primary address.\n6. Final `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "internal.retry_count.claude_review": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "thread.gemini_review.current_node": "claude_review",
+          "current_node": "publish_ready",
+          "claude_review_required_edits": "None",
           "failure_signature": "",
-          "gemini_review_blocking_gap_count": 0,
-          "last_stage": "synthesize",
-          "claude_review_blocking_gaps": "None",
-          "response.claude_review": "Now I'll review this plan against all five readiness criteria.\n\n# Iteration 053 Plan Review\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is thorough, well-structured, and ready for implementation. It demonstrates careful domain modeling, clear boundaries, and comprehensive coverage of business rules, technical decisions, and validation.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Token expiry duration**: While the plan mentions \"one-use/expiring\" tokens, consider specifying a reasonable expiry window (e.g., 24 hours, 7 days) to help implementers make consistent decisions.\n\n2. **Verification email \"from\" address**: Consider noting whether verification emails should use club-specific from addresses or a global Memba system address, for consistency with existing transactional email patterns.\n\n3. **Rate limiting follow-up**: The plan explicitly scopes out rate limiting for this iteration. Consider logging or capturing a follow-up note about when anti-abuse controls become necessary (e.g., after user count threshold, observed abuse patterns).\n\n4. **Migration backfill timing**: The plan states existing rows are backfilled as verified but doesn't specify whether this happens in the migration itself or as a post-migration data task. This is likely clear enough from implementation context, but could be made explicit.\n\n## Smallest viable iteration\n\nThe plan is already well-scoped to a minimal useful slice. If forced to reduce scope further, you could defer:\n\n- Resend verification (users could add the address again)\n- Live PubSub refresh of open settings page (require manual refresh)\n\nHowever, **I do not recommend reducing scope**. The current iteration is coherent, focused, and delivers a complete member-facing capability. Removing features would degrade UX without meaningful risk reduction.\n\n## Required plan edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation plan\n\nThe plan includes a comprehensive validation strategy:\n\n### Automated validation\n- **Domain/context tests** covering all critical invariants: verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection\n- **LiveView/controller tests** covering navigation, rendering, all user flows, verification callbacks, and live updates\n- **Acceptance tests** with 9 named scenarios in `person_email_addresses.feature` tagged `@iteration-053`\n- **`dev check`** as the final gate\n\n### Manual validation\n10-step manual demo script covering the complete user journey from opening settings through adding, verifying, making primary, and removing addresses, plus confirming downstream message delivery.\n\n### Success criteria\nClear stop condition: All acceptance criteria met, all tests passing, `dev check` green, manual demo successful.\n\n---\n\n## Detailed readiness assessment\n\n### 1. Goal clarity ✅\n\n**Goal is clear and outcome-focused.**\n\nThe plan states both user outcomes (\"a signed-in member can...\") and business/system outcomes (\"members can manage their own verified email addresses\"). The beneficiary is explicit: signed-in club members who are Membership Persons. The goal distinguishes between what users can do (9 bullet points) and what the system gains (verification enforcement, safe identity handling).\n\n### 2. Scope focus ✅\n\n**Scope is coherent and minimal.**\n\nThe iteration delivers one complete capability: member self-service email-address management with verification. Everything in scope serves this goal. The 9-point out-of-scope section demonstrates clear boundaries: no Account aggregate, no club settings, no get-started-only identities, no anti-abuse controls, no name changes.\n\nThe iteration could not be smaller while remaining useful. Removing verification would leave the security hole open. Removing self-service would fail to deliver member value. Removing primary management would leave members unable to control their outbound identity.\n\n### 3. Acceptance criteria, BDD scenario decision, and business decisions ✅\n\n**Acceptance criteria are concrete, complete, and testable.**\n\nThe plan includes 27 acceptance criteria covering:\n- **Happy paths**: open settings, add address, verify, make primary, remove\n- **Edge cases**: duplicate addresses, old verification links, removed addresses\n- **Permissions/restrictions**: pending cannot be primary, primary cannot be removed, settings only for Person identities\n- **Error states**: invalid verification links, duplicate address rejection\n- **Data/state changes**: backfill verification, immediate primary update, session preservation, inbound rejection\n\n**BDD scenario decision is explicit and justified.**\n\nThe plan classifies as \"Behaviour-facing\" (line 78), justifies why BDD is required (lines 90-92: \"changes member-visible identity and email-address policy... business rules that benefit from stakeholder-readable examples\"), and names 9 specific scenarios with personas in `person_email_addresses.feature` (lines 96-108).\n\n**Business decisions are resolved.**\n\nLine 165: \"None known.\" The plan is explicit about verification policy (pending addresses cannot be primary/trusted), primary rules (exactly one, cannot remove), duplicate handling (reject with clear copy), and session preservation (removing session email doesn't break session).\n\n### 4. Implementation plan and technical decisions ✅\n\n**Implementation steps are clear, ordered, and specific.**\n\nThe 17-step plan follows a logical sequence:\n1. Inspect current state\n2. Add verification schema/migration\n3. Model write-side commands/events\n4. Preserve staff edit compatibility\n5-9. Token infrastructure and email delivery\n10-13. UI implementation\n14-16. Testing at all levels\n17. `dev check`\n\n**Likely files and integration points are named:**\n- `acceptance-tests/features/person_email_addresses.feature`\n- `web/lib/memba_web/components/layouts.ex` (Layouts.club_site/1, avatar menu)\n- `web/lib/memba_web/live/admin/people_live/edit.ex` (staff edit compatibility)\n- Routes: `/my/settings`, verification callback route\n- Design references: mobile-club-home, invite-a-member, profile-completion wireframes\n\n**Data model changes are clear:**\n- Add verification state to Person email-address projection\n- Backfill existing rows as verified\n- New addresses default to pending\n- Token storage for verification links\n\n**Technical decisions are appropriately open.**\n\nLines 188-194 list 4 open technical decisions that cannot be resolved without inspecting code:\n- Token storage mechanism (reuse auth tokens vs. new store)\n- Command/event shape (individual actions vs. set replacement)\n- Verification state location (projection vs. aggregate value object)\n- PubSub topic/message shape\n\nThese are legitimate implementation-time decisions. The plan constrains them with preferences (\"Prefer aggregate enforcement for primary/removal rules\") and safety requirements (\"avoid exposing sensitive email details unnecessarily\") without over-specifying.\n\n### 5. Expected capability and validation ✅\n\n**New capability is clear.**\n\nLines 196-197: \"Members can manage their own verified email addresses from a global personal settings page. Memba can distinguish verified and pending Person email addresses and prevent pending addresses from being used for primary delivery or inbound identity until mailbox control is proven.\"\n\n**Success proof is comprehensive.**\n\nThe validation plan (lines 199-233) includes:\n- Automated tests at three layers (domain, LiveView/controller, acceptance)\n- 10-step manual demo script\n- `dev check` as final gate\n\n**Stop condition is clear.**\n\nIteration succeeds when all acceptance criteria are met, all tests pass, `dev check` is green, and the manual demo completes successfully.\n\n---\n\n## Summary\n\nThis plan demonstrates excellent iteration planning:\n\n- **Domain sophistication**: Carefully preserves existing aggregate semantics while adding new verification rules\n- **Risk awareness**: Identifies 5 follow-up risks including staff edit compatibility, sign-in/verification interaction, and household email addresses\n- **Problem linkage**: Explicitly resolves one documented problem and partially addresses another, with clear follow-up scope\n- **Design grounding**: References existing design system components and acknowledges that DesignSync review may add dedicated previews\n- **Testing rigor**: Three-layer test strategy with named acceptance scenarios\n- **Boundary clarity**: 9-point out-of-scope section prevents scope creep\n\nThe plan is ready for implementation without modification.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "gemini_review_required_edits": "None",
-          "codex_review_required_edits": "None",
-          "gemini_review_decision": "READY",
-          "internal.run_id": "01KX9VXDV097P22BXM9A5850AS",
-          "gemini_review_blocking_gaps": "None",
-          "plan_needs_fix": false,
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "claude_review_blocking_gap_count": 0,
+          "internal.fidelity": "summary:high",
           "codex_review_decision": "READY",
-          "failure_class": ""
+          "plan_needs_human": false,
+          "claude_review_decision": "READY",
+          "plan_needs_fix": false,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
         },
         "node_outcomes": {
           "claude_review": {
@@ -1682,46 +1682,14 @@
               "active_time_ms": 59050
             }
           },
-          "codex_review": {
+          "start": {
             "status": "succeeded",
-            "context_updates": {
-              "codex_review_blocking_gaps": "None",
-              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify that address” with deterministic wording such as “**does** verify that address,” matching the implementation plan and scenario summary.\n2. Consider clarifying the unauthorized `/my/settings` behavior for signed-in identities that do not resolve to a Membership Person, e.g. no menu link plus redirect/404/flash behavior if visited directly.\n3. The “Open Technical Decisions” section is acceptable for implementation readiness, but the implementer should resolve and document the chosen token storage, command/event shape, verification-state ownership, and PubSub topic/message shape during implementation.\n4. The scope is coherent but large. If implementation risk grows, defer live PubSub refresh or staff-edit compatibility polish only if doing so does not weaken the core safety rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: a signed-in Membership Person can access `/my/settings`, view their email addresses with verified/pending/primary state, add a pending address, receive and open a verification link, and then make the verified address primary while pending addresses remain blocked from primary delivery, sign-in identity, and inbound identity.\n\nRemoval, resend, avatar-menu polish, and live-update behavior are important for the full planned experience, but the core useful outcome is safe self-service addition and verification of alternate email addresses.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Migration/backfill tests confirming existing email-address rows become verified.\n2. Domain tests for adding pending addresses, duplicate rejection, verification, removed-token invalidation, primary restrictions, removal restrictions, sign-in-as-verification, inbound rejection, and club-message delivery to verified primary only.\n3. LiveView/controller tests for avatar-menu navigation, `/my/settings` rendering, add/resend/remove/make-primary flows, verification success, invalid/expired verification links, and live refresh.\n4. Updated Cucumber feature coverage in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary todo tags removed or narrowed as behavior becomes executable.\n5. Manual demo covering account settings access, add pending address, verify via emailed link, live UI update, make primary, remove non-primary, and confirm future club-message delivery uses the new primary address.\n6. Final `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify th",
-              "codex_review_confidence": "High",
-              "codex_review_blocking_gap_count": 0,
-              "codex_review_required_edits": "None",
-              "last_stage": "codex_review",
-              "codex_review_decision": "READY"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 11588,
-                    "output_tokens": 606,
-                    "reasoning_tokens": 862,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 101980
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 28824,
-              "tool_time_ms": 47,
-              "active_time_ms": 28871
-            }
+            "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "synthesize": {
             "status": "succeeded",
@@ -1776,15 +1744,6 @@
               "active_time_ms": 2177
             }
           },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1825,23 +1784,176 @@
               "tool_time_ms": 56,
               "active_time_ms": 53799
             }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gaps": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify that address” with deterministic wording such as “**does** verify that address,” matching the implementation plan and scenario summary.\n2. Consider clarifying the unauthorized `/my/settings` behavior for signed-in identities that do not resolve to a Membership Person, e.g. no menu link plus redirect/404/flash behavior if visited directly.\n3. The “Open Technical Decisions” section is acceptable for implementation readiness, but the implementer should resolve and document the chosen token storage, command/event shape, verification-state ownership, and PubSub topic/message shape during implementation.\n4. The scope is coherent but large. If implementation risk grows, defer live PubSub refresh or staff-edit compatibility polish only if doing so does not weaken the core safety rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is: a signed-in Membership Person can access `/my/settings`, view their email addresses with verified/pending/primary state, add a pending address, receive and open a verification link, and then make the verified address primary while pending addresses remain blocked from primary delivery, sign-in identity, and inbound identity.\n\nRemoval, resend, avatar-menu polish, and live-update behavior are important for the full planned experience, but the core useful outcome is safe self-service addition and verification of alternate email addresses.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Migration/backfill tests confirming existing email-address rows become verified.\n2. Domain tests for adding pending addresses, duplicate rejection, verification, removed-token invalidation, primary restrictions, removal restrictions, sign-in-as-verification, inbound rejection, and club-message delivery to verified primary only.\n3. LiveView/controller tests for avatar-menu navigation, `/my/settings` rendering, add/resend/remove/make-primary flows, verification success, invalid/expired verification links, and live refresh.\n4. Updated Cucumber feature coverage in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary todo tags removed or narrowed as behavior becomes executable.\n5. Manual demo covering account settings access, add pending address, verify via emailed link, live UI update, make primary, remove non-primary, and confirm future club-message delivery uses the new primary address.\n6. Final `dev check` passing after implementation.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Replace the acceptance criterion wording “Signing in with a pending known address **may** verify th",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_required_edits": "None",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 11588,
+                    "output_tokens": 606,
+                    "reasoning_tokens": 862,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101980
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 28824,
+              "tool_time_ms": 47,
+              "active_time_ms": 28871
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "bc86239adea5cce8017ed3c45f0fa5f8f6e1a02d",
         "node_visits": {
           "codex_review": 1,
           "gemini_review": 1,
-          "synthesize": 1,
-          "synthesis_gate": 1,
           "publish_ready": 1,
           "start": 1,
-          "claude_review": 1
+          "synthesize": 1,
+          "claude_review": 1,
+          "synthesis_gate": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/053-my-settings-email-addresses/plan.md b/docs/iterations/053-my-settings-email-addresses/plan.md\nindex 338cfd3..e7af19f 100644\n--- a/docs/iterations/053-my-settings-email-addresses/plan.md\n+++ b/docs/iterations/053-my-settings-email-addresses/plan.md\n@@ -1,7 +1,7 @@\n # My settings email-address management\n \n Date: 2026-07-11\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex e3b2f7f..7404ef8 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -62,7 +62,7 @@ green than before.\n | 050 | 2026-07-09 | merged | Club home conversation & member-list fidelity fixes | [plan](050-club-home-conversation-and-member-row-fidelity/plan.md) |\n | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |\n | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |\n-| 053 | 2026-07-11 | ready | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |\n+| 053 | 2026-07-11 | validated | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-07-12T00:37:03.806447760Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 183125,
+      "inference_time_ms": 156268,
+      "tool_time_ms": 2331,
+      "active_time_ms": 158599
+    },
+    "final_git_commit_sha": "bc86239adea5cce8017ed3c45f0fa5f8f6e1a02d",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 54215,
+          "inference_time_ms": 53743,
+          "tool_time_ms": 56,
+          "active_time_ms": 53799
+        },
+        "billing_usd_micros": 141495,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 59417,
+          "inference_time_ms": 58999,
+          "tool_time_ms": 51,
+          "active_time_ms": 59050
+        },
+        "billing_usd_micros": 76548,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 29252,
+          "inference_time_ms": 28824,
+          "tool_time_ms": 47,
+          "active_time_ms": 28871
+        },
+        "billing_usd_micros": 101980,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 14740,
+          "inference_time_ms": 14702,
+          "tool_time_ms": 0,
+          "active_time_ms": 14702
+        },
+        "billing_usd_micros": 48935,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 2200,
+          "inference_time_ms": 0,
+          "tool_time_ms": 2177,
+          "active_time_ms": 2177
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 35312,
+      "output_tokens": 3465,
+      "total_tokens": 53552,
+      "reasoning_tokens": 3629,
+      "cache_read_tokens": 4941,
+      "cache_write_tokens": 6205,
+      "total_usd_micros": 368958
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -1861,84 +1973,6 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
-    "synthesize@1": {
-      "first_event_seq": 87,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: synthesize",
-        "failure_reason": null,
-        "timestamp": "2026-07-12T00:36:50.582318604Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-07-12T00:36:35.841683286Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 14740,
-        "inference_time_ms": 14702,
-        "tool_time_ms": 0,
-        "active_time_ms": 14702
-      },
-      "usage": {
-        "input_tokens": 5593,
-        "output_tokens": 33,
-        "total_tokens": 6292,
-        "reasoning_tokens": 666,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 48935
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "state": "succeeded"
-    },
-    "synthesis_gate@1": {
-      "first_event_seq": 97,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Conditional node evaluated: synthesis_gate",
-        "failure_reason": null,
-        "timestamp": "2026-07-12T00:36:54.184447449Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-07-12T00:36:54.184353972Z",
-      "handler": "conditional",
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
     "claude_review@1": {
       "first_event_seq": 43,
       "prompt": null,
@@ -2178,67 +2212,6 @@
       },
       "state": "succeeded"
     },
-    "start@1": {
-      "first_event_seq": 17,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-07-12T00:34:02.571827304Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-07-12T00:34:02.571770657Z",
-      "handler": "start",
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "publish_ready@1": {
-      "first_event_seq": 105,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
-        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
-        "language": "shell"
-      },
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-07-12T00:36:58.021318169Z",
-      "handler": "command",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "running"
-    },
     "codex_review@1": {
       "first_event_seq": 65,
       "prompt": null,
@@ -2448,6 +2421,200 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 97,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-07-12T00:36:54.184447449Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-12T00:36:54.184353972Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "start@1": {
+      "first_event_seq": 17,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-07-12T00:34:02.571827304Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-12T00:34:02.571770657Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 115,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-07-12T00:37:03.686634050Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-12T00:37:03.686618884Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "publish_ready@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-07-12T00:37:00.222045524Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/f9dfbda5a9a496f919b6b86776ecd35163901f3cb00b2c593573e14b2f6d9b01",
+        "exit_code": 0,
+        "duration_ms": 2177,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-07-12T00:36:58.021318169Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 2200,
+        "inference_time_ms": 0,
+        "tool_time_ms": 2177,
+        "active_time_ms": 2177
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "synthesize@1": {
+      "first_event_seq": 87,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-07-12T00:36:50.582318604Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-12T00:36:35.841683286Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 14740,
+        "inference_time_ms": 14702,
+        "tool_time_ms": 0,
+        "active_time_ms": 14702
+      },
+      "usage": {
+        "input_tokens": 5593,
+        "output_tokens": 33,
+        "total_tokens": 6292,
+        "reasoning_tokens": 666,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 48935
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
       },
       "state": "succeeded"
     },
