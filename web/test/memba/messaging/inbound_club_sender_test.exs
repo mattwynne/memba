@@ -4,6 +4,7 @@ defmodule Memba.Messaging.InboundClubSenderTest do
   alias Memba.Messaging
   alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
+  alias Memba.Membership.Projections.PersonEmailAddress
 
   describe "resolve_inbound_club_email_sender/1" do
     test "resolves a sender from a person's primary email address" do
@@ -15,6 +16,8 @@ defmodule Memba.Messaging.InboundClubSenderTest do
             %{email: "alice@work.example", is_primary: false}
           ]
         )
+
+      verify_all_email_addresses!()
 
       assert {:ok,
               %InboundClubSender{
@@ -33,6 +36,8 @@ defmodule Memba.Messaging.InboundClubSenderTest do
             %{email: "Alice.Work@Example.COM", is_primary: false}
           ]
         )
+
+      verify_all_email_addresses!()
 
       inbound_email = %InboundEmail{
         provider: "resend",
@@ -60,5 +65,33 @@ defmodule Memba.Messaging.InboundClubSenderTest do
       assert {:error, :unknown_sender, nil} ==
                Messaging.resolve_inbound_club_email_sender(nil)
     end
+
+    test "rejects a pending known email address as an unknown sender" do
+      insert_membership_person!(
+        name: "Alice Example",
+        email_addresses: [
+          %{email: "alice@example.com", is_primary: true},
+          %{email: "Alice.Pending@Example.COM", is_primary: false}
+        ]
+      )
+
+      verify_email_address!("alice@example.com")
+
+      assert {:error, :unknown_sender, "alice.pending@example.com"} ==
+               Messaging.resolve_inbound_club_email_sender(" Alice.Pending@Example.COM ")
+    end
+  end
+
+  defp verify_all_email_addresses! do
+    Repo.update_all(PersonEmailAddress, set: [verified_at: DateTime.utc_now(:microsecond)])
+  end
+
+  defp verify_email_address!(email) do
+    Repo.update_all(
+      from(email_address in PersonEmailAddress,
+        where: email_address.normalized_email == ^String.downcase(email)
+      ),
+      set: [verified_at: DateTime.utc_now(:microsecond)]
+    )
   end
 end

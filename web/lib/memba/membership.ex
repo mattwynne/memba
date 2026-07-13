@@ -556,6 +556,30 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a projected person read model by a verified email address.
+
+  This mirrors `get_person_by_email/1`, but only treats email addresses whose
+  projected `verified_at` is present as identity-bearing. Invalid, blank,
+  unknown, and pending/unverified addresses return `nil`.
+  """
+  def get_verified_person_by_email(email) do
+    case normalize_email(email) do
+      nil ->
+        nil
+
+      normalized_email ->
+        Person
+        |> join(:inner, [person], email_address in PersonEmailAddress,
+          on: email_address.person_id == person.person_id
+        )
+        |> where([_person, email_address], email_address.normalized_email == ^normalized_email)
+        |> where([_person, email_address], not is_nil(email_address.verified_at))
+        |> limit(1)
+        |> Repo.one()
+    end
+  end
+
+  @doc """
   List projected clubs for the browser-facing membership flows.
 
   Results are ordered by name and ID for stable browser/test output.

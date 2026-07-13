@@ -14,7 +14,7 @@
 - [x] 012 Add the verification callback route/page.
 - [x] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
 - [x] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
-- [ ] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
+- [x] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
 - [ ] 016 Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page, with `/my/settings/profile`, `/my/settings/clubs`, and `/my/settings/emails` sub-routes so the selected tab is URL-addressable via `handle_params/3` per ADR 0023 (see Designs — do not implement tab switching as client-side-only JS).
 - [ ] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
 - [ ] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
