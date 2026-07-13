@@ -11,7 +11,7 @@
 - [x] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
 - [x] 010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.
 - [x] 011 Add a general verification email template using existing transactional email delivery conventions.
-- [ ] 012 Add the verification callback route/page.
+- [x] 012 Add the verification callback route/page.
 - [ ] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
 - [ ] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
 - [ ] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.

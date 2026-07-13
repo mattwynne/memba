@@ -94,6 +94,11 @@ defmodule MembaWeb.Router do
     end
 
     get "/auth/sign-in/:token", AuthController, :callback
+
+    get "/my/settings/email-verifications/:token",
+        PersonEmailAddressVerificationController,
+        :callback
+
     get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
     post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
     get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
