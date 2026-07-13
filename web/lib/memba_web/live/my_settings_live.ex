@@ -14,6 +14,7 @@ defmodule MembaWeb.MySettingsLive do
   alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.Membership.PersonEmailAddressVerificationEmail
   alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
@@ -34,6 +35,7 @@ defmodule MembaWeb.MySettingsLive do
          current_person_email_addresses:
            Membership.list_person_email_addresses(current_person.person_id),
          add_email_form: to_form(%{"email" => ""}, as: :email_address),
+         add_email_error: nil,
          active_tab: :profile
        )}
     else
@@ -60,6 +62,72 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
+  def handle_event(
+        "add_email_address",
+        %{"email_address" => %{"email" => email}},
+        %{assigns: %{current_person: current_person}} = socket
+      ) do
+    attrs = %{person_id: current_person.person_id, email: email}
+
+    case add_pending_email_address_and_deliver_verification(socket, attrs) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Verification email sent.")
+         |> assign(:add_email_error, nil)
+         |> assign(:add_email_form, to_form(%{"email" => ""}, as: :email_address))
+         |> refresh_person_email_addresses()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, add_email_error_message(reason))
+         |> assign(:add_email_error, add_email_error_message(reason))
+         |> assign(:add_email_form, to_form(%{"email" => email}, as: :email_address))}
+    end
+  end
+
+  def handle_event("resend_verification", %{"email" => email}, socket) do
+    case deliver_person_email_address_verification(socket, email) do
+      :ok ->
+        {:noreply, put_flash(socket, :info, "Verification email sent.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
+    end
+  end
+
+  def handle_event("make_primary", %{"email" => email}, socket) do
+    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+
+    case Membership.make_person_email_address_primary(attrs, consistency: :strong) do
+      :ok ->
+        {:noreply, refresh_person_email_addresses(socket)}
+
+      {:ok, _result} ->
+        {:noreply, refresh_person_email_addresses(socket)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
+    end
+  end
+
+  def handle_event("remove_email", %{"email" => email}, socket) do
+    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+
+    case Membership.remove_person_email_address(attrs, consistency: :strong) do
+      :ok ->
+        {:noreply, refresh_person_email_addresses(socket)}
+
+      {:ok, _result} ->
+        {:noreply, refresh_person_email_addresses(socket)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
+    end
+  end
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -250,6 +318,8 @@ defmodule MembaWeb.MySettingsLive do
                             id={"my-settings-make-primary-#{email_dom_id(email_address)}"}
                             class="btn btn-soft btn-sm"
                             type="button"
+                            phx-click="make_primary"
+                            phx-value-email={email_address.email}
                           >
                             Make primary
                           </button>
@@ -258,6 +328,8 @@ defmodule MembaWeb.MySettingsLive do
                             id={"my-settings-resend-verification-#{email_dom_id(email_address)}"}
                             class="btn btn-soft btn-sm"
                             type="button"
+                            phx-click="resend_verification"
+                            phx-value-email={email_address.email}
                           >
                             Resend verification
                           </button>
@@ -265,6 +337,8 @@ defmodule MembaWeb.MySettingsLive do
                             id={"my-settings-remove-email-#{email_dom_id(email_address)}"}
                             class="btn btn-ghost btn-sm"
                             type="button"
+                            phx-click="remove_email"
+                            phx-value-email={email_address.email}
                           >
                             Remove
                           </button>
@@ -276,6 +350,7 @@ defmodule MembaWeb.MySettingsLive do
                       for={@add_email_form}
                       id="my-settings-add-email-form"
                       class="mt-4 flex flex-wrap items-end gap-3"
+                      phx-submit="add_email_address"
                     >
                       <div class="min-w-60 flex-1">
                         <.input
@@ -289,11 +364,19 @@ defmodule MembaWeb.MySettingsLive do
                       <button
                         id="my-settings-add-email-button"
                         class="btn btn-primary btn-sm mb-1"
-                        type="button"
+                        type="submit"
                       >
                         Add email address
                       </button>
                     </.form>
+
+                    <p
+                      :if={@add_email_error}
+                      id="my-settings-add-email-error"
+                      class="mt-2 text-sm font-semibold text-error"
+                    >
+                      {@add_email_error}
+                    </p>
                   </div>
                 </div>
               </section>
@@ -350,6 +433,48 @@ defmodule MembaWeb.MySettingsLive do
       Membership.list_person_email_addresses(socket.assigns.current_person.person_id)
     )
   end
+
+  defp add_pending_email_address_and_deliver_verification(socket, attrs) do
+    with :ok <-
+           normalize_context_result(
+             Membership.add_person_email_address(attrs, consistency: :strong)
+           ),
+         :ok <- deliver_person_email_address_verification(socket, attrs.email) do
+      :ok
+    end
+  end
+
+  defp deliver_person_email_address_verification(socket, email) do
+    attrs = %{person_id: socket.assigns.current_person.person_id, email: email}
+
+    with {:ok, %{issuer_result: %{token: token}}} <-
+           Membership.resend_person_email_address_verification(attrs),
+         :ok <-
+           PersonEmailAddressVerificationEmail.deliver(%{
+             person_id: attrs.person_id,
+             email: email,
+             verification_url: url(~p"/my/settings/email-verifications/#{token}")
+           }) do
+      :ok
+    end
+  end
+
+  defp normalize_context_result(:ok), do: :ok
+  defp normalize_context_result({:ok, _result}), do: :ok
+  defp normalize_context_result({:error, _reason} = error), do: error
+
+  defp add_email_error_message(:email_address_taken),
+    do: "That email address is already in use by another Memba user."
+
+  defp add_email_error_message({:error, reason}), do: add_email_error_message(reason)
+
+  defp add_email_error_message(_reason),
+    do: "We could not add that email address. Please check it and try again."
+
+  defp email_action_error_message({:error, reason}), do: email_action_error_message(reason)
+
+  defp email_action_error_message(_reason),
+    do: "We could not update that email address. Please try again."
 
   defp person_email_address_change_for_person?(
          %PersonEmailAddressAdded{person_id: person_id},
