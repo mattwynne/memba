@@ -6,6 +6,7 @@ defmodule MembaWeb.MySettingsLiveTest do
 
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.ReadModelChanges
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -205,6 +206,56 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(view, "#my-settings-panel-clubs[hidden]")
   end
 
+  test "refreshes email rows after a matching person email-address read-model notification", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Refresh Settings Club", slug: "refresh-settings")
+
+    member =
+      create_active_member(club,
+        email: "refresh.settings@example.com",
+        name: "Refresh Settings"
+      )
+
+    other_member =
+      create_active_member(club,
+        email: "other.refresh.settings@example.com",
+        name: "Other Refresh"
+      )
+
+    insert_membership_person_email_address!(
+      person_id: member.person_id,
+      email: "refresh.pending@example.com",
+      is_primary: false
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host(club, member.email)
+      |> live(~p"/my/settings/emails")
+
+    pending_row = "#my-settings-email-row-refresh-pending-example-com"
+    assert has_element?(view, "#{pending_row}[data-state='pending']")
+    assert has_element?(view, "#my-settings-resend-verification-refresh-pending-example-com")
+
+    verified_at = ~U[2026-07-03 12:00:00Z]
+    mark_email_verified!(member.person_id, "refresh.pending@example.com", verified_at)
+
+    broadcast_email_verified!(other_member.person_id, "other.refresh.settings@example.com")
+
+    assert has_element?(view, "#{pending_row}[data-state='pending']")
+    assert has_element?(view, "#my-settings-resend-verification-refresh-pending-example-com")
+
+    broadcast_email_verified!(member.person_id, "refresh.pending@example.com",
+      verified_at: verified_at
+    )
+
+    assert has_element?(view, "#{pending_row}[data-state='verified']")
+    assert has_element?(view, "#{pending_row} .my-settings-verified-badge", "Verified")
+    refute has_element?(view, "#my-settings-resend-verification-refresh-pending-example-com")
+    assert has_element?(view, "#my-settings-make-primary-refresh-pending-example-com")
+  end
+
   defp signed_in_club_host(conn, club, email) do
     conn
     |> club_host(club)
@@ -248,5 +299,27 @@ defmodule MembaWeb.MySettingsLiveTest do
       )
 
     :ok
+  end
+
+  defp broadcast_email_verified!(person_id, email, opts \\ []) do
+    normalized_email = String.downcase(email)
+    verified_at = Keyword.get(opts, :verified_at, ~U[2026-07-03 12:00:00Z])
+
+    Phoenix.PubSub.broadcast!(
+      Memba.PubSub,
+      ReadModelChanges.topic(),
+      {:read_model_changed,
+       %{
+         projector: Memba.Membership.Projectors.Person,
+         source_event: %Memba.Membership.Events.PersonEmailAddressVerified{
+           person_id: person_id,
+           email: email,
+           normalized_email: normalized_email,
+           verified_at: verified_at
+         },
+         metadata: %{},
+         changes: %{person_id: person_id}
+       }}
+    )
   end
 end

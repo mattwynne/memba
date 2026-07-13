@@ -9,11 +9,21 @@ defmodule MembaWeb.MySettingsLive do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonEmailAddressRemoved
+  alias Memba.Membership.Events.PersonEmailAddressVerified
+  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
   def mount(_params, session, socket) do
     with {:ok, selected_club} <- selected_club(session),
          {:ok, current_person} <- current_person(socket.assigns[:current_identity]) do
+      if connected?(socket) do
+        Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+      end
+
       {:ok,
        assign(socket,
          page_title: "Account settings",
@@ -35,6 +45,21 @@ defmodule MembaWeb.MySettingsLive do
   def handle_params(_params, _uri, socket) do
     {:noreply, assign(socket, :active_tab, active_tab(socket.assigns.live_action))}
   end
+
+  @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed,
+         %{projector: Memba.Membership.Projectors.Person, source_event: event}},
+        %{assigns: %{current_person: current_person}} = socket
+      ) do
+    if person_email_address_change_for_person?(event, current_person.person_id) do
+      {:noreply, refresh_person_email_addresses(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -317,6 +342,46 @@ defmodule MembaWeb.MySettingsLive do
   end
 
   defp current_person(_identity), do: {:error, :forbidden}
+
+  defp refresh_person_email_addresses(socket) do
+    assign(
+      socket,
+      :current_person_email_addresses,
+      Membership.list_person_email_addresses(socket.assigns.current_person.person_id)
+    )
+  end
+
+  defp person_email_address_change_for_person?(
+         %PersonEmailAddressAdded{person_id: person_id},
+         person_id
+       ),
+       do: true
+
+  defp person_email_address_change_for_person?(
+         %PersonEmailAddressVerified{person_id: person_id},
+         person_id
+       ),
+       do: true
+
+  defp person_email_address_change_for_person?(
+         %PersonPrimaryEmailAddressChanged{person_id: person_id},
+         person_id
+       ),
+       do: true
+
+  defp person_email_address_change_for_person?(
+         %PersonEmailAddressRemoved{person_id: person_id},
+         person_id
+       ),
+       do: true
+
+  defp person_email_address_change_for_person?(
+         %PersonEmailAddressesReplaced{person_id: person_id},
+         person_id
+       ),
+       do: true
+
+  defp person_email_address_change_for_person?(_event, _person_id), do: false
 
   defp active_tab(:clubs), do: :clubs
   defp active_tab(:emails), do: :emails
