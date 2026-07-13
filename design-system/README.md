@@ -1,6 +1,29 @@
 # Design-system previews
 
-Files in this directory are repo-side previews for the cloud design system. Author them as self-contained static HTML documents that can render without the Phoenix app build.
+Files in this directory are repo-side previews for the cloud design system
+(`claude.ai/design`, project `bc97cfc3-436c-471e-a939-7ba222859282` — see the
+root `CLAUDE.md`). Author them as self-contained static HTML documents that can
+render without the Phoenix app build.
+
+## Folder map
+
+The golden rule: **a local folder name must always match the cloud category it
+mirrors.** Never flatten two different cloud categories into one same-named
+local folder — that's what caused this project's `wireframes/`↔`templates/`
+confusion (fixed 2026-07-12; see `.design-sync/NOTES.md`).
+
+| Folder | Cloud category | What goes here |
+|---|---|---|
+| `templates/` | Templates (High Fidelity) | Full, polished, page-level reference screens — one per real route. See `templates/README.md`. |
+| `wireframes/` | Wireframes (low fidelity) | Rough, phone-form-factor sketches only. See `wireframes/README.md` — it's smaller than you'd expect. |
+| `components/` | Components | Isolated reusable UI pieces (badges, buttons, avatars, cards, forms), shown out of page context. |
+| `guidelines/` | Guidelines | Design tokens and standards (color, type, spacing, motion, brand voice) — not screens. |
+| `emails/` | Emails | Email templates. |
+
+If you're not sure which a new mockup belongs in: does it represent one whole
+page/route, built with real tokens and ready to hand to a dev as a spec? →
+`templates/`. Is it a rough sketch you haven't decided on yet? → `wireframes/`.
+Is it one small reusable piece with no page around it? → `components/`.
 
 ## Static preview CSS conventions
 

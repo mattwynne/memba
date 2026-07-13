@@ -1,7 +1,7 @@
 # My settings email-address management
 
 Date: 2026-07-11
-Status: validated
+Status: needs-revision
 
 ## Goal
 
@@ -111,27 +111,35 @@ New/changed scenario summaries:
 
 ## Designs
 
-This iteration changes visible member surfaces and needs design coverage.
+This iteration changes visible member surfaces and now has a dedicated design-system reference.
 
-Existing checked-in design sources are sufficient for a first implementation plan, because the page can reuse established member app shell, card, form, badge, avatar-menu, and simple confirmation patterns:
+Claude Code reviewed the plan's originally-listed design sources, found real gaps against them (no avatar-menu item/divider pattern, no display-only email-row-with-actions pattern, no standalone confirmation-page shape, and `Layouts.club_site/1` is club-scoped by construction while this page is global), and built a dedicated template: [`design-system/templates/account-settings.html`](../../../design-system/templates/account-settings.html) (pushed to the cloud design system as `templates/account-settings/`). Matt then iterated on it directly in the Claude Design canvas. **Treat this template as the primary design reference for `/my/settings` — the sources below are supporting structural reference, not the final layout.**
+
+Design sources still relevant for structure/tone:
 
 - Club-site app shell and avatar dropdown: `web/lib/memba_web/components/layouts.ex` (`Layouts.club_site/1`, `club-site-identity-menu`).
-- Member app chrome and compact personal/avatar treatment: `design-system/wireframes/mobile-club-home.html`.
-- Member-management form/card treatment: `design-system/wireframes/invite-a-member.html`.
-- Profile/verification completion and calm confirmation page language: `design-system/wireframes/profile-completion.html` plus current auth check-email page styling.
-- Existing staff email-address form behaviour for rows, primary selection, add/remove patterns: `web/lib/memba_web/live/admin/people_live/edit.ex`.
+- Existing staff email-address form behaviour for primary selection / add / remove concepts: `web/lib/memba_web/live/admin/people_live/edit.ex` — structurally different from the settings page, though: that route is an *edit-mode form* (radio buttons, text inputs); the settings page uses *display rows* with status badges and contextual action buttons instead.
 
-No dedicated `/my/settings` design-system card exists yet. Because this plan is authored in Pi, DesignSync is unavailable. Claude Code should review the plan/design decision before delivery and may create a fast-follow design-system preview for `/my/settings` and the verification confirmation page if the checked-in sources above are not enough.
+Final `/my/settings` layout, from the template:
 
-Implementation should keep the UI simple and app-like:
+- Page opens with an `Account settings` title and a `‹ Back to club` link.
+- Content is organised as three side tabs — **Profile**, **Clubs**, **Emails** — not stacked cards. Only one tab's content is visible at a time.
+- Profile tab: avatar circle + name only.
+- Clubs tab: one chip per current club membership (club name + "Member since …") — shown as chips specifically so the page reads as cross-club/global, not scoped to one club.
+- Emails tab: one grouped list of email rows (a single bordered list with dividers, not separate boxes per row):
+  - Primary row: address + `Primary` badge + `Verified` badge (checkmark icon, not a plain dot) on one line, no actions. Do not add copy explaining that the primary address can't be removed — the missing Remove action already makes that obvious; Matt confirmed spelling it out is noise.
+  - Verified non-primary rows: address + `Verified` badge on one line, `Make primary` / `Remove` actions on the line below.
+  - Pending rows: address + `Pending verification` badge (plain dot, not a checkmark) on one line, `Resend verification` / `Remove` actions on the line below.
+  - "Add an email address" field + button below the list.
+  - Duplicate-address error: `That email address is already in use by another Memba user.`
+- Avatar menu: `Account settings` item above a divider, above the existing `Sign out` — new `.app-menu__item` / `.app-menu__divider` classes, not yet in `styles.css`/`app.css`; promote them (not new names) as part of implementing this link.
+- Verification success and invalid-link pages: standalone confirmation-page shape (brand header, centered card, icon) — not a toast layered over a form. Success copy is exactly `Email verified, you can close this browser.`
 
-- Avatar menu order: `Account settings`, separator, `Sign out`.
-- `/my/settings` title: `Account settings`.
-- Email address rows clearly show `Primary`, `Verified`, and `Pending verification` states.
-- Pending rows expose `Resend verification` and `Remove` actions.
-- Verified non-primary rows expose `Make primary` and `Remove` actions.
-- Primary row explains that primary is used for club-message delivery and cannot be removed.
-- Verification success page copy: `Email verified, you can close this browser.`
+**Known, deliberate placeholder — do not treat as a requirement:** the settings-page app-bar in the template currently shows the club name ("Kootenay Alpine Club") rather than "Account settings" or a global Memba header. Matt confirmed this is provisional pending a separate future iteration that introduces a Memba-level global app bar; it is not a signal that `/my/settings` should read as club-scoped.
+
+### Implementation-architecture note (not a design decision)
+
+The template's Profile/Clubs/Emails tab switching is implemented with plain client-side JavaScript (a `<script>` block at the bottom of the file), purely so the tabs are visibly switchable inside a standalone static HTML file. **Do not copy that mechanism into the real page.** Per [ADR 0015](../../adr/0015-use-liveview-for-member-application-pages.md), `/my/settings` is a member application surface and must be a LiveView, not a controller template plus client JS. Per [ADR 0023](../../adr/0023-use-url-addressable-liveview-state.md), the selected tab is visible application state and must be URL-addressable via `handle_params/3` and `<.link patch={...}>` / `push_patch/2` (e.g. `/my/settings/profile`, `/my/settings/clubs`, `/my/settings/emails`) — the same pattern already used for club-home's Conversations/Members tabs, not client-side-only show/hide.
 
 ## Acceptance Criteria
 
@@ -142,6 +150,7 @@ Implementation should keep the UI simple and app-like:
 - A signed-in get-started-only identity that does not resolve to a Person is not given a new settings workflow in this iteration.
 - The settings page shows the Person name and current club memberships.
 - The settings page lists all Person email addresses with primary and verification state.
+- The settings page's Profile/Clubs/Emails tab selection is reflected in the URL (e.g. `/my/settings/emails`) and is restorable on refresh, browser back/forward, and a direct link, per ADR 0023.
 - Existing email-address rows are migrated/backfilled as verified.
 - Adding a new email address creates a pending/unverified row immediately.
 - Adding a duplicate address owned by another Person fails with `That email address is already in use by another Memba user.`
@@ -176,9 +185,9 @@ None known.
 7. Add the verification callback route/page. A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
 8. Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
 9. Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
-10. Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page.
-11. Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`.
-12. Build the settings UI using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
+10. Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page, with `/my/settings/profile`, `/my/settings/clubs`, and `/my/settings/emails` sub-routes so the selected tab is URL-addressable via `handle_params/3` per ADR 0023 (see Designs — do not implement tab switching as client-side-only JS).
+11. Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
+12. Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
 13. Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
 14. Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
 15. Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
@@ -213,6 +222,7 @@ Members can manage their own verified email addresses from a global personal set
 - LiveView/controller tests:
   - avatar menu contains Account settings, separator, and Sign out;
   - `/my/settings` renders Person basics, club memberships, and email rows;
+  - selecting a Profile/Clubs/Emails tab patches the URL and the correct tab restores on refresh/back-forward/direct link;
   - add/resend/remove/make-primary flows update UI and domain state;
   - verification callback shows success copy;
   - invalid/expired callback shows invalid/expired copy;
@@ -238,4 +248,4 @@ Members can manage their own verified email addresses from a global personal set
 - The invalid/expired verification page should be calm, but a fuller recovery path may be needed later.
 - Inbound rejection from an unverified known address is safe but may confuse members; follow-up captured in `docs/problems/2026-07-11-unverified-email-inbound-rejection-confusion.md`.
 - Shared household email addresses remain out of scope and may require revisiting the global uniqueness invariant.
-- Claude/DesignSync should review whether the existing design references are enough or whether a dedicated `/my/settings` preview should be added before delivery.
+- ~~Claude/DesignSync should review whether the existing design references are enough or whether a dedicated `/my/settings` preview should be added before delivery.~~ Resolved: built and iterated — see `design-system/templates/account-settings.html` in Designs.

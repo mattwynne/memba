@@ -1,0 +1,526 @@
+<!-- @dsCard group="Member App" viewport="1320x1680" name="Account settings" subtitle="/my/settings — global personal settings, the avatar-menu entry point, and email verification confirmation pages" -->
+<!-- @template name="Account settings" description="Global signed-in Person settings: profile basics, club memberships, and self-service email-address verification (iteration 053)" -->
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>Account settings · Memba</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../../brand/favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+  <!-- Tracked design-system source for .app-frame/.app-card/.app-bar/.app-menu/.app-foot. -->
+  <link rel="stylesheet" href="../../styles.css">
+
+  <!-- daisyUI component CSS, prebuilt — renders the app's real components with no build step. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5">
+
+  <style>
+    /* daisyUI "light" theme — copied verbatim from web/assets/css/app.css. */
+    :root {
+      color-scheme: light;
+      --color-base-100:#fffef9; --color-base-200:#f6f5ea; --color-base-300:#e8e6d4; --color-base-content:#25291d;
+      --color-primary:#5a7050; --color-primary-content:#f6f5ea;
+      --color-secondary:#555a47; --color-secondary-content:#f6f5ea;
+      --color-accent:#d2925a; --color-accent-content:#25291d;
+      --color-neutral:#25291d; --color-neutral-content:#f6f5ea;
+      --color-info:#4f6b78; --color-info-content:#f6f5ea;
+      --color-success:#5f7a4f; --color-success-content:#f6f5ea;
+      --color-warning:#a8772e; --color-warning-content:#f6f5ea;
+      --color-error:#a8503a; --color-error-content:#f6f5ea;
+      --radius-selector:0.375rem; --radius-field:0.375rem; --radius-box:0.75rem;
+      --size-selector:0.25rem; --size-field:0.25rem; --border:1px; --depth:0; --noise:0;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--color-base-200);
+      color: var(--color-base-content);
+      font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, p { margin: 0; }
+
+    /* ---- Preview scaffold (this file is not part of the tracked shell). ---- */
+    .preview-shell { display: grid; gap: 28px; padding: 28px; }
+    .preview-title {
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 18px;
+      max-width: 1264px; margin: 0 auto; width: 100%;
+    }
+    .preview-title__eyebrow {
+      color: var(--color-ink-3); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+    }
+    .preview-title h1 {
+      color: var(--color-ink); font-size: 34px; font-weight: 700;
+      letter-spacing: -0.035em; line-height: 1.05; margin-top: 5px;
+    }
+    .preview-title p {
+      color: var(--color-ink-2); font-size: 14px; line-height: 1.45; max-width: 68ch; margin-top: 8px;
+    }
+    .variant-label {
+      border: 1px solid var(--color-line-strong); border-radius: 999px; color: var(--color-ink-2);
+      font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; padding: 7px 10px; white-space: nowrap;
+    }
+    .surface-caption {
+      background: var(--color-sage-800); color: var(--color-cream);
+      display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px;
+    }
+    .surface-caption strong { font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
+    .surface-caption span { color: rgb(246 245 234 / 0.68); font-family: "JetBrains Mono", monospace; font-size: 10px; }
+    .surface-card {
+      background: var(--color-paper); border: 1px solid var(--color-line-strong); border-radius: 24px;
+      box-shadow: 0 16px 40px rgb(37 41 29 / 0.08); overflow: hidden; min-width: 0;
+    }
+
+    .mockup-grid { display: grid; gap: 24px; max-width: 1264px; margin: 0 auto; width: 100%; }
+    .mockup-grid__row { display: grid; gap: 24px; }
+    .mockup-grid__row--split { grid-template-columns: minmax(0, 0.7fr) minmax(0, 0.3fr); }
+    .mockup-grid__row--thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 1080px) {
+      .mockup-grid__row--split, .mockup-grid__row--thirds { grid-template-columns: 1fr; }
+    }
+
+    /* ============================================================
+       NEW pattern: avatar-menu item + divider.
+
+       .app-menu currently only defines .app-menu__status and
+       .app-menu__signout (see styles.css / app.css). These two
+       classes are proposed additions for iteration 053's
+       "Account settings" entry — not yet in the tracked shell.
+       Fabro should promote them into styles.css + app.css
+       (kept byte-identical by app_shell_css_test.exs) as part
+       of implementing the avatar-menu link, not invent new names.
+       ============================================================ */
+    .app-menu__item {
+      width: 100%; border: 0; border-radius: 9px; background: transparent; color: var(--color-ink);
+      cursor: pointer; display: flex; align-items: center; justify-content: flex-start;
+      font: inherit; font-size: 13px; font-weight: 600; padding: 9px 10px; text-align: left;
+      transition: background-color 120ms cubic-bezier(0.22,0.61,0.36,1), color 120ms cubic-bezier(0.22,0.61,0.36,1);
+    }
+    .app-menu__item:hover, .app-menu__item:focus-visible {
+      background: var(--color-sage-50); color: var(--color-sage-700);
+    }
+    .app-menu__divider { height: 1px; background: var(--color-line); margin: 4px 6px; }
+    .menu-context-note {
+      color: var(--color-ink-3); font-size: 12px; line-height: 1.5; padding: 16px 18px 0;
+    }
+
+    /* ---- /my/settings page-local classes. ---- */
+    .settings-main { padding: 28px 24px 40px; }
+    .settings-stack { display: grid; gap: 20px; max-width: 860px; margin: 0 auto; }
+
+    /* ---- Side-tab layout: Profile / Clubs / Emails ---- */
+    .settings-layout { display: flex; gap: 28px; align-items: flex-start; }
+    .settings-tabs { display: flex; flex-direction: column; gap: 2px; flex: 0 0 176px; }
+    .settings-tab {
+      background: transparent; border: 0; border-radius: 9px; color: var(--color-ink-2);
+      cursor: pointer; font: inherit; font-size: 14px; font-weight: 650; padding: 10px 12px; text-align: left;
+      transition: background-color 120ms cubic-bezier(0.22,0.61,0.36,1), color 120ms cubic-bezier(0.22,0.61,0.36,1);
+    }
+    .settings-tab:hover { background: var(--color-base-200); color: var(--color-ink); }
+    .settings-tab.is-active { background: var(--color-sage-50); color: var(--color-sage-700); }
+    .settings-panels { display: grid; flex: 1 1 auto; gap: 20px; min-width: 0; }
+    .settings-panel { display: none; gap: 20px; }
+    .settings-panel.is-active { display: grid; }
+
+    .settings-back {
+      display: inline-flex; align-items: center; gap: 4px; color: var(--color-ink-3);
+      font-size: 13px; font-weight: 600; text-decoration: none;
+    }
+    .settings-back:hover { color: var(--color-sage-700); }
+    .settings-title {
+      color: var(--color-ink); font-size: 30px; font-weight: 700; letter-spacing: -0.03em; margin-top: 5px;
+    }
+    .settings-intro { color: var(--color-ink-2); font-size: 14px; line-height: 1.55; margin-top: 8px; max-width: 56ch; }
+
+    .settings-summary-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (max-width: 620px) { .settings-summary-grid { grid-template-columns: 1fr; } }
+    .settings-card {
+      background: var(--color-paper); border: 1px solid var(--color-line); border-radius: 20px;
+      box-shadow: 0 1px 2px rgb(37 41 29 / 0.05); overflow: hidden;
+    }
+    .settings-card__head { border-bottom: 1px solid var(--color-line); padding: 16px 18px; }
+    .settings-card__title { color: var(--color-ink); font-size: 16px; font-weight: 700; }
+    .settings-card__meta { color: var(--color-ink-3); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+    .settings-card__body { padding: 18px; display: grid; gap: 6px; }
+    .settings-card__body--compact { padding: 14px 18px; }
+
+    .profile-identity { display: flex; align-items: center; gap: 12px; }
+    .profile-avatar {
+      width: 40px; height: 40px; border-radius: 50%; background: var(--color-sage-400); color: #fff;
+      display: grid; place-items: center; flex: none; font-size: 14px; font-weight: 700;
+    }
+    .profile-name { color: var(--color-ink); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+    .profile-note { color: var(--color-ink-2); font-size: 13px; line-height: 1.5; }
+
+    .club-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .club-chip {
+      display: inline-flex; align-items: center; gap: 6px; background: var(--color-base-200);
+      border: 1px solid var(--color-base-300); border-radius: 999px; padding: 6px 12px 6px 6px;
+    }
+    .club-chip__avatar {
+      width: 22px; height: 22px; border-radius: 999px; background: var(--color-sage-200); color: var(--color-sage-800);
+      display: grid; place-items: center; font-size: 10px; font-weight: 700;
+    }
+    .club-chip__name { font-size: 13px; font-weight: 650; color: var(--color-ink); }
+    .club-chip__meta { font-size: 11px; color: var(--color-ink-3); }
+
+    /* Two-line rows: address+status share the top line, actions sit on their own line below. */
+    .email-list {
+      display: flex; flex-direction: column;
+      background: var(--color-base-200); border: 1px solid var(--color-base-300); border-radius: 16px; overflow: hidden;
+    }
+    .email-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--color-base-300); }
+    .email-row:first-child { border-top: none; }
+    .email-row__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .email-row__address-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+    .email-row__address { font-size: 14px; font-weight: 650; color: var(--color-ink); word-break: break-word; }
+    .email-row__note { color: var(--color-ink-3); font-size: 12px; line-height: 1.4; max-width: 40ch; }
+    .email-row__actions-cell { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; display: inline-block; }
+    .badge-check { flex: none; }
+
+    .add-email-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .add-email-row .input-wrap { flex: 1 1 240px; }
+    .add-email-row .btn { height: 2.5rem; min-height: 2.5rem; }
+    .field-label { color: var(--color-ink); display: block; font-size: 13px; font-weight: 650; margin-bottom: 6px; }
+    .input { width: 100%; }
+
+    .state-row { display: grid; gap: 9px; margin-top: 4px; }
+    .state-row .alert { align-items: flex-start; border-radius: 14px; font-size: 13px; line-height: 1.35; padding: 10px 12px; }
+
+    /* ---- Standalone confirmation-page shape (success / invalid link). ---- */
+    .confirm-chrome { background: var(--color-base-200); min-height: 560px; }
+    .confirm-header { background: var(--color-paper); border-bottom: 1px solid var(--color-line); padding: 16px 22px; }
+    .confirm-header__inner { align-items: center; display: flex; gap: 14px; }
+    .confirm-brand { align-items: center; display: inline-flex; gap: 8px; }
+    .confirm-sprig { color: var(--color-sage-600); display: block; height: 22px; width: 22px; }
+    .confirm-wordmark { color: var(--color-ink); font-size: 18px; font-weight: 650; letter-spacing: -0.03em; text-transform: lowercase; }
+
+    .confirm-main { padding: 56px 24px; display: flex; justify-content: center; }
+    .confirm-card {
+      background: var(--color-paper); border: 1px solid var(--color-line); border-radius: 24px;
+      box-shadow: 0 1px 2px rgb(37 41 29 / 0.05); max-width: 440px; padding: 32px; text-align: center; width: 100%;
+    }
+    .confirm-icon {
+      width: 48px; height: 48px; border-radius: 999px; margin: 0 auto 18px; display: grid; place-items: center;
+    }
+    .confirm-icon--success { background: var(--color-success-soft, #e9eedd); color: var(--color-success); }
+    .confirm-icon--neutral { background: var(--color-base-200); color: var(--color-ink-3); border: 1px solid var(--color-base-300); }
+    .confirm-title { color: var(--color-ink); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+    .confirm-copy { color: var(--color-ink-2); font-size: 15px; line-height: 1.6; margin-top: 10px; }
+    .confirm-secondary { color: var(--color-ink-3); font-size: 13px; line-height: 1.5; margin-top: 18px; }
+    .confirm-secondary a { color: var(--color-sage-600); font-weight: 650; }
+    .confirm-secondary a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <header class="preview-title">
+      <div>
+        <p class="preview-title__eyebrow">Design-system catch-up · iteration 053</p>
+        <h1>Account settings</h1>
+        <p>
+          Global signed-in Person settings at <code>/my/settings</code>: profile basics, current club
+          memberships (deliberately cross-club, not scoped to one club), and self-service email-address
+          verification. Bundled with the avatar-menu entry point and the two new confirmation-page states
+          it introduces.
+        </p>
+      </div>
+      <span class="variant-label">repo: templates/account-settings.html</span>
+    </header>
+
+    <div class="mockup-grid">
+      <!-- Row 1: the settings page itself, plus the avatar menu that opens it. -->
+      <div class="mockup-grid__row mockup-grid__row--split">
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Account settings — page</strong>
+            <span>/my/settings</span>
+          </div>
+
+          <div id="club-site-layout" data-surface="club-site" class="app-frame" style="min-height:auto; padding:20px;">
+            <div class="app-card">
+              <header>
+                <div class="app-bar">
+                  <div class="app-bar__brand">
+                    <span class="app-bar__club" data-comment-anchor="5301845616-span">Kootenay Alpine Club</span>
+                  </div>
+                  <div class="app-bar__id dropdown dropdown-end">
+                    <button tabindex="0" role="button" class="app-bar__me">
+                      <div class="app-bar__avatar">LT</div>
+                      <span class="app-bar__who">Lou Thirgood</span>
+                    </button>
+                  </div>
+                </div>
+              </header>
+
+              <main class="settings-main">
+                <div class="settings-stack">
+                  <div>
+                    <a href="#" class="settings-back">‹ Back to club</a>
+                    <h2 class="settings-title">Account settings</h2>
+                  </div>
+
+                  <div class="settings-layout">
+                    <nav class="settings-tabs" role="tablist" aria-label="Account settings sections">
+                      <button type="button" class="settings-tab is-active" data-tab="profile" role="tab" aria-selected="true">Profile</button>
+                      <button type="button" class="settings-tab" data-tab="clubs" role="tab" aria-selected="false">Clubs</button>
+                      <button type="button" class="settings-tab" data-tab="emails" role="tab" aria-selected="false">Emails</button>
+                    </nav>
+
+                    <div class="settings-panels">
+                      <section id="settings-profile-card" class="settings-panel is-active" data-panel="profile">
+                        <div class="settings-card">
+                          <div class="settings-card__head">
+                            <h3 class="settings-card__title">Profile</h3>
+                          </div>
+                          <div class="settings-card__body">
+                            <div class="profile-identity">
+                              <div class="profile-avatar">LT</div>
+                              <p class="profile-name">Lou Thirgood</p>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section id="settings-memberships-card" class="settings-panel" data-panel="clubs">
+                        <div class="settings-card">
+                          <div class="settings-card__head">
+                            <h3 class="settings-card__title">Current clubs</h3>
+                          </div>
+                          <div class="settings-card__body settings-card__body--compact">
+                            <div class="club-chip-list">
+                              <span class="club-chip">
+                                <span class="club-chip__avatar">KA</span>
+                                <span>
+                                  <span class="club-chip__name">Kootenay Alpine Club</span><br>
+                                  <span class="club-chip__meta">Member since Jan 2022</span>
+                                </span>
+                              </span>
+                              <span class="club-chip">
+                                <span class="club-chip__avatar">RC</span>
+                                <span>
+                                  <span class="club-chip__name">Rockies Cycling Co-op</span><br>
+                                  <span class="club-chip__meta">Member since Mar 2024</span>
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section id="settings-email-addresses-card" class="settings-panel" data-panel="emails">
+                        <div class="settings-card">
+                          <div class="settings-card__head">
+                            <h3 class="settings-card__title">Email addresses</h3>
+                            <p class="settings-card__meta">Your primary address is the one we'll send emails to. We'll accept incoming emails from your other addresses.</p>
+                          </div>
+                          <div class="settings-card__body">
+                            <div class="email-list">
+                              <div class="email-row" data-testid="person-email-row" data-state="primary">
+                                <div class="email-row__top">
+                                  <div class="email-row__address-line">
+                                    <span class="email-row__address">lou@example.org</span>
+                                    <span class="badge badge-primary badge-soft">Primary</span>
+                                  </div>
+                                  <span class="badge badge-success badge-soft"><svg class="badge-check" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Verified</span>
+                                </div>
+                                <p class="email-row__note">This is the address we'll send emails to.</p>
+                              </div>
+
+                              <div class="email-row" data-testid="person-email-row" data-state="verified">
+                                <div class="email-row__top">
+                                  <div class="email-row__address-line">
+                                    <span class="email-row__address">lou.thirgood@work.example</span>
+                                  </div>
+                                  <span class="badge badge-success badge-soft"><svg class="badge-check" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Verified</span>
+                                </div>
+                                <div class="email-row__actions-cell">
+                                  <button class="btn btn-soft btn-sm" type="button">Make primary</button>
+                                  <button class="btn btn-ghost btn-sm" type="button">Remove</button>
+                                </div>
+                              </div>
+
+                              <div class="email-row" data-testid="person-email-row" data-state="pending">
+                                <div class="email-row__top">
+                                  <div class="email-row__address-line">
+                                    <span class="email-row__address">lou.new@example.org</span>
+                                  </div>
+                                  <span class="badge badge-warning badge-soft"><span class="dot"></span>Pending verification</span>
+                                </div>
+                                <div class="email-row__actions-cell">
+                                  <button class="btn btn-soft btn-sm" type="button">Resend verification</button>
+                                  <button class="btn btn-ghost btn-sm" type="button">Remove</button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="add-email-row">
+                              <div class="input-wrap">
+                                <label for="settings-add-email-input" class="field-label">Add an email address</label>
+                                <input id="settings-add-email-input" class="input" type="email" placeholder="dana@example.com">
+                              </div>
+                              <button class="btn btn-primary btn-sm" type="button">Add email address</button>
+                            </div>
+
+                            <div class="state-row" aria-label="Email address feedback states">
+                              <div class="alert alert-error">That email address is already in use by another Memba user.</div>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+
+            <footer class="app-foot">
+              Powered by
+              <a href="../marketing-homepage/index.html">Memba</a>
+            </footer>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Avatar menu — new entry</strong>
+            <span>Layouts.club_site/1</span>
+          </div>
+
+          <div style="background:var(--color-sage-700); padding:24px 20px 40px; min-height:100%;">
+            <div class="app-bar" style="border-radius:14px;">
+              <div class="app-bar__brand">
+                <span class="app-bar__club">Kootenay Alpine Club</span>
+              </div>
+              <div class="app-bar__id" style="position:relative;">
+                <button tabindex="0" role="button" class="app-bar__me">
+                  <div class="app-bar__avatar">LT</div>
+                  <span class="app-bar__who">Lou Thirgood</span>
+                </button>
+                <div class="app-menu app-menu--id" style="position:absolute;">
+                  <button id="account-settings-menu-item" class="app-menu__item">Account settings</button>
+                  <div class="app-menu__divider"></div>
+                  <button class="app-menu__signout">Sign out</button>
+                </div>
+              </div>
+            </div>
+            <p class="menu-context-note" style="color:var(--color-cream); opacity:0.75;">
+              New: <code>.app-menu__item</code> above a new <code>.app-menu__divider</code>, before the
+              existing <code>.app-menu__signout</code>. Both classes are proposed additions —
+              not yet in <code>styles.css</code>/<code>app.css</code>.
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <!-- Row 2: the two confirmation pages this iteration introduces. -->
+      <div class="mockup-grid__row mockup-grid__row--thirds" style="grid-template-columns: repeat(2, minmax(0,1fr));">
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Verification success</strong>
+            <span>GET /my/settings/email-verifications/:token</span>
+          </div>
+
+          <div class="confirm-chrome">
+            <header class="confirm-header">
+              <div class="confirm-header__inner">
+                <span class="confirm-brand">
+                  <svg viewBox="0 0 64 64" fill="none" class="confirm-sprig" aria-hidden="true">
+                    <path d="M32 51 C32 43 32 36 32 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+                    <path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+                    <circle cx="32" cy="15" r="3" fill="#d2925a"/>
+                  </svg>
+                  <span class="confirm-wordmark">memba</span>
+                </span>
+              </div>
+            </header>
+            <main class="confirm-main">
+              <div id="email-verification-success" class="confirm-card">
+                <div class="confirm-icon confirm-icon--success" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <h2 class="confirm-title">Email verified, you can close this browser.</h2>
+              </div>
+            </main>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Invalid or expired link</strong>
+            <span>GET /my/settings/email-verifications/:token</span>
+          </div>
+
+          <div class="confirm-chrome">
+            <header class="confirm-header">
+              <div class="confirm-header__inner">
+                <span class="confirm-brand">
+                  <svg viewBox="0 0 64 64" fill="none" class="confirm-sprig" aria-hidden="true">
+                    <path d="M32 51 C32 43 32 36 32 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+                    <path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+                    <circle cx="32" cy="15" r="3" fill="#d2925a"/>
+                  </svg>
+                  <span class="confirm-wordmark">memba</span>
+                </span>
+              </div>
+            </header>
+            <main class="confirm-main">
+              <div id="email-verification-invalid" class="confirm-card">
+                <div class="confirm-icon confirm-icon--neutral" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                </div>
+                <h2 class="confirm-title">This verification link is no longer valid.</h2>
+                <p class="confirm-copy">
+                  It may already have been used, or the email address it was for has since been removed.
+                </p>
+                <p class="confirm-secondary">
+                  Open <a href="#">Account settings</a> to check its status or send a new link.
+                </p>
+              </div>
+            </main>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+  <!--
+    NOT A REAL IMPLEMENTATION PATTERN: the vanilla JS below is a static-preview
+    convenience only, so the Profile/Clubs/Emails tabs are visibly switchable
+    in this standalone HTML file. It must not be copied into the real page.
+
+    Per docs/adr/0015-use-liveview-for-member-application-pages.md, /my/settings
+    is a member application surface and must be a LiveView, not a controller
+    template + client JS. Per docs/adr/0023-use-url-addressable-liveview-state.md,
+    the selected tab is visible application state and must be URL-addressable —
+    model it with handle_params/3 and <.link patch={...}> / push_patch/2 (e.g.
+    /my/settings/profile, /my/settings/clubs, /my/settings/emails), the same way
+    club-home's Conversations/Members tabs work, not with client-side-only
+    show/hide toggling.
+  -->
+  <script>
+    document.querySelectorAll('.settings-tabs').forEach(function (nav) {
+      var panels = nav.closest('.settings-layout').querySelector('.settings-panels');
+      nav.addEventListener('click', function (e) {
+        var btn = e.target.closest('.settings-tab');
+        if (!btn) return;
+        nav.querySelectorAll('.settings-tab').forEach(function (t) {
+          t.classList.toggle('is-active', t === btn);
+          t.setAttribute('aria-selected', t === btn ? 'true' : 'false');
+        });
+        panels.querySelectorAll('.settings-panel').forEach(function (p) {
+          p.classList.toggle('is-active', p.dataset.panel === btn.dataset.tab);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
