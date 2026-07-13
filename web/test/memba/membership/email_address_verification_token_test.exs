@@ -15,6 +15,10 @@ defmodule Memba.Membership.EmailAddressVerificationTokenTest do
   test "verification token table stores only hashed token material and person email-address scope" do
     columns = verification_token_columns()
 
+    allowed_columns =
+      ~w(id person_id normalized_email token_hash expires_at consumed_at revoked_at inserted_at updated_at)
+
+    assert columns |> Map.keys() |> Enum.sort() == Enum.sort(allowed_columns)
     assert columns["person_id"] == %{data_type: "text", nullable?: false}
     assert columns["normalized_email"] == %{data_type: "text", nullable?: false}
     assert columns["token_hash"] == %{data_type: "bytea", nullable?: false}
@@ -27,6 +31,22 @@ defmodule Memba.Membership.EmailAddressVerificationTokenTest do
     refute Map.has_key?(columns, "token")
     refute Map.has_key?(columns, "plaintext_token")
     refute Map.has_key?(columns, "email")
+  end
+
+  test "verification token changeset only accepts SHA-256 token hashes" do
+    person_id = Memba.ID.generate(:person)
+    expires_at = DateTime.utc_now() |> DateTime.add(15, :minute)
+
+    changeset =
+      EmailAddressVerificationToken.create_changeset(%{
+        person_id: person_id,
+        normalized_email: "alice@example.com",
+        token_hash: "plaintext-token",
+        expires_at: expires_at
+      })
+
+    refute changeset.valid?
+    assert {"must be a SHA-256 digest", _metadata} = changeset.errors[:token_hash]
   end
 
   test "verification token table indexes token hashes and person address scope" do

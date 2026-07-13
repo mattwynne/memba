@@ -30,6 +30,7 @@ defmodule Memba.Membership.EmailAddressVerificationToken do
     |> validate_required([:person_id, :normalized_email, :token_hash, :expires_at])
     |> validate_person_id()
     |> validate_normalized_email()
+    |> validate_token_hash()
     |> foreign_key_constraint(:person_id)
     |> unique_constraint(:token_hash,
       name: :membership_person_email_address_verification_tokens_token_hash_index
@@ -65,6 +66,19 @@ defmodule Memba.Membership.EmailAddressVerificationToken do
           {:error, :invalid_email} ->
             add_error(changeset, :normalized_email, "is invalid")
         end
+    end
+  end
+
+  defp validate_token_hash(changeset) do
+    case get_field(changeset, :token_hash) do
+      nil ->
+        changeset
+
+      token_hash when is_binary(token_hash) and byte_size(token_hash) == 32 ->
+        changeset
+
+      _token_hash ->
+        add_error(changeset, :token_hash, "must be a SHA-256 digest")
     end
   end
 end
