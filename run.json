@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-13T06:29:27.056174907Z",
-  "last_event_at": "2026-07-13T06:36:17.616370732Z",
+  "last_event_at": "2026-07-13T06:36:23.117309904Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1064,70 +1064,110 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 93,
       "checkpoint": {
-        "timestamp": "2026-07-13T06:36:19.441720391Z",
-        "current_node": "synthesis_gate",
+        "timestamp": "2026-07-13T06:36:19.439099319Z",
+        "current_node": "synthesize",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize",
-          "synthesis_gate"
+          "synthesize"
         ],
         "node_retries": {},
         "context_values": {
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.claude_review": 0,
+          "claude_review_confidence": "High",
+          "internal.run_id": "01KXD2MZKDB0X6XGSYM6WD2GH1",
+          "codex_review_blocking_gap_count": 0,
+          "graph.default_fidelity": "summary:high",
+          "thread.codex_review.current_node": "synthesize",
           "claude_review_blocking_gaps": "None",
           "plan_ready": true,
-          "thread.start.current_node": "gemini_review",
-          "internal.work_dir": "/workspace/memba",
-          "internal.fidelity": "summary:high",
-          "graph.rankdir": "LR",
-          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "gemini_review_blocking_gaps": "None",
-          "thread.claude_review.current_node": "codex_review",
-          "codex_review_decision": "READY",
-          "codex_review_required_edits": "None",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "plan_needs_fix": false,
-          "gemini_review_blocking_gap_count": 0,
-          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "graph.default_fidelity": "summary:high",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "gemini_review_confidence": "High",
-          "thread.codex_review.current_node": "synthesize",
-          "claude_review_required_edits": "None",
-          "current_node": "synthesis_gate",
-          "claude_review_confidence": "High",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "internal.retry_count.gemini_review": 0,
-          "internal.retry_count.claude_review": 0,
-          "internal.retry_count.start": 0,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.retry_count.codex_review": 0,
-          "internal.node_visit_count": 1,
-          "codex_review_blocking_gaps": "None",
-          "plan_needs_human": false,
           "thread.gemini_review.current_node": "claude_review",
           "claude_review_decision": "READY",
-          "internal.retry_count.synthesis_gate": 0,
-          "codex_review_blocking_gap_count": 0,
-          "gemini_review_required_edits": "None",
-          "internal.retry_count.synthesize": 0,
-          "outcome": "succeeded",
+          "codex_review_blocking_gaps": "None",
+          "gemini_review_confidence": "High",
+          "plan_needs_human": false,
+          "gemini_review_blocking_gap_count": 0,
           "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-blocking improvements\n\n1. **Token expiry specification:** Step 5 mentions \"expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse.\" While this is pragmatic and allows implementation flexibility, consider stating an explicit initial TTL value (e.g., \"24 hours\") so reviewers and future maintainers know the intended security boundary without cross-referencing sign-in token behavior.\n\n2. **Migration guidance:** Step 2 says \"with all existing rows backfilled as verified\" but doesn't specify whether this is a data migration script or handled within the migration itself. Consider clarifying whether this is `ALTER TABLE ... UPDATE` or a separate backfill task.\n\n3. **Non-primary definition clarity in AC:** Acceptance criteria repeat \"non-primary address\" several times but never explicitly state that every Person must have exactly one primary address at all times (though Technical Decisions does). Consider adding one explicit AC like: \"Every Person always has exactly one primary email address.\"\n\n### Smallest viable iteration\n\nThe plan is already well-scoped. A smaller slice would be:\n\n**Option A (verification-only):** Just add verification state and verification flow without the full `/my/settings` UI—member adds via existing staff surface, verification email is sent, verification proves mailbox control. But this would leave the \"member-facing management\" goal undelivered.\n\n**Option B (read-only settings first):** Build `/my/settings` with Profile/Clubs/Emails display but defer add/resend/remove/make-primary actions to a follow-up. But this would leave verification incomplete and the member \"safely manage their own email addresses\" goal undelivered.\n\nNeither is clearly better than the current plan. The plan is already minimal for the stated goal: a member can open settings and manage verified/pending email addresses safely. Splitting would create incomplete capability without meaningful risk reduction.\n\n**Recommendation:** Ship as planned.\n\n### Required plan edits\n\nNone. The plan is implementation-ready.\n\n### Analysis by Readiness Question\n\n#### 1. Goal clarity ✓\n\n- **Goal articulated:** Yes—\"members can review their profile basics and manage their own email addresses safely.\"\n- **User/business outcome:** Clear—member self-service reduces support burden, verification proves mailbox control before allowing identity/delivery use.\n- **Beneficiary clear:** Signed-in club members (resolves to Membership Person).\n- **Deliverable capability list:** Lines 10-19 enumerate exactly what a member can do after this iteration.\n\n#### 2. Scope focus ✓\n\n- **One coherent outcome:** Yes—member email-address management with verification.\n- **Could it be smaller:** Not meaningfully (see \"Smallest viable iteration\" above). The plan explicitly defers rate limiting, rich rejection UX, name/profile changes, and shared email addresses.\n- **Non-goals clear:** Lines 65-74 enumerate 8 explicit out-of-scope items.\n- **Boundaries clear:** In-scope section (lines 38-63) is concrete and comprehensive.\n\n#### 3. Acceptance criteria, BDD scenario decision, and business decisions ✓\n\n- **AC concrete and testable:** Lines 146-171 provide 26 acceptance criteria covering happy paths (add/verify/make-primary), edge cases (duplicate addresses, removed pending address cannot verify), permissions (primary cannot be removed), error states (expired verification link), and state changes (verification updates open LiveView).\n- **Coverage complete:** AC addresses primary restrictions, pending restrictions, verification success/failure, removal rules, sign-in-as-verification, inbound rejection, session preservation, and LiveView live refresh.\n- **Iteration classified:** Line 77 explicitly states \"Behaviour-facing.\"\n- **BDD decision:** Lines 88-110 provide detailed rationale—\"required\" because the iteration changes member-visible identity and email-address policy—and names the specific feature file (`acceptance-tests/features/person_email_addresses.feature`) plus 9 scenario summaries with tagging strategy (`@iteration-053 @todo-domain @todo-ui`).\n- **Business decisions unresolved:** Line 175 states \"None known.\"\n\n#### 4. Implementation plan and technical decisions ✓\n\n- **Steps clear and ordered:** Lines 179-196 provide 17 specific implementation steps in logical dependency order (inspect → model verification → commands/events → staff compatibility → tokens → email → callbacks → sign-in update → inbound rejection → LiveView → UI → tests → acceptance → `dev check`).\n- **Files/modules named:** \n  - `Layouts.club_site/1` and club-site-identity-menu (line 120)\n  - `design-system/templates/account-settings.html` (line 116)\n  - `acceptance-tests/features/person_email_addresses.feature` (line 94)\n  - `auth_sign_in_tokens` (line 185)\n  - `Memba.ReadModelChanges` (line 203)\n  - `app_shell_css_test.exs` (line 189)\n- **Data model changes clear:** Add verification state to Person email-address read model/projection, add dedicated verification-token table (lines 180-181, 185-186, 198-199).\n- **API/UI/workflow clear:** Lines 123-137 detail the UI layout (three tabs, email row structure, badges, actions). Lines 10-19 enumerate the complete user workflow.\n- **Integration points clear:** PubSub notification via `Memba.ReadModelChanges` (line 203), sign-in callback handling (line 187), inbound email sender resolution (line 189).\n- **Technical decisions unresolved:** Lines 198-204 document four resolved technical decisions (verification-token storage, command/event shape, invariant enforcement, sign-in-as-verification, PubSub refresh). No unresolved decisions stated.\n\n#### 5. Expected capability and validation ✓\n\n- **What we can do after:** Lines 205-207 state the new capability—\"Members can manage their own verified email addresses from a global personal settings page\" and \"distinguish verified and pending Person email addresses.\"\n- **How to prove success:** Lines 209-243 provide comprehensive validation:\n  - `dev check` must pass\n  - 10 domain/context test scenarios\n  - 7 LiveView/controller test scenarios\n  - Acceptance test implementation with specific feature file\n  - 10-step manual demo script\n- **Stop condition clear:** All acceptance criteria pass, `dev check` passes, and manual demo completes successfully.\n\n### Validation Plan\n\nAfter implementation is complete:\n\n1. **`dev check` passes** on the exact committed state\n2. **Domain tests confirm:**\n   - Backfilled rows are verified\n   - New addresses start pending\n   - Pending cannot become primary\n   - Verified non-primary can become primary\n   - Primary cannot be removed\n   - Duplicate address rejection\n   - Sign-in verifies pending address\n   - Inbound rejects pending address\n3. **LiveView tests confirm:**\n   - Avatar menu structure (Account settings, divider, Sign out)\n   - `/my/settings` renders correctly\n   - Tab selection is URL-addressable and restorable\n   - Add/resend/remove/make-primary flows work\n   - Verification success/invalid pages show correct copy\n   - Live refresh on verification PubSub\n4. **Acceptance tests:** All `@iteration-053` scenarios in `person_email_addresses.feature` pass with `@todo-domain @todo-ui` tags removed or narrowed\n5. **Manual demo:** Complete the 10-step demo script (lines 233-243) in a staging environment\n\nSuccess is achieved when all tests pass, `dev check` is green, and the manual demo script executes without error or unexpected behavior.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "internal.fidelity": "summary:high",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_decision": "READY",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.node_visit_count": 1,
           "gemini_review_decision": "READY",
-          "claude_review_blocking_gap_count": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "current_node": "synthesize",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "codex_review_confidence": "High",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "last_stage": "synthesize",
-          "internal.run_id": "01KXD2MZKDB0X6XGSYM6WD2GH1",
-          "failure_class": "",
+          "outcome": "succeeded",
+          "codex_review_confidence": "High",
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.synthesize": 0,
+          "gemini_review_required_edits": "None",
           "failure_signature": "",
-          "internal.thread_id": "synthesize"
+          "graph.rankdir": "LR",
+          "thread.start.current_node": "gemini_review",
+          "internal.work_dir": "/workspace/memba",
+          "internal.thread_id": "codex_review",
+          "codex_review_required_edits": "None",
+          "internal.retry_count.codex_review": 0,
+          "failure_class": "",
+          "claude_review_required_edits": "None",
+          "claude_review_blocking_gap_count": 0
         },
         "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_required_edits": "None",
+              "last_response": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-",
+              "claude_review_decision": "READY",
+              "claude_review_blocking_gaps": "None",
+              "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-blocking improvements\n\n1. **Token expiry specification:** Step 5 mentions \"expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse.\" While this is pragmatic and allows implementation flexibility, consider stating an explicit initial TTL value (e.g., \"24 hours\") so reviewers and future maintainers know the intended security boundary without cross-referencing sign-in token behavior.\n\n2. **Migration guidance:** Step 2 says \"with all existing rows backfilled as verified\" but doesn't specify whether this is a data migration script or handled within the migration itself. Consider clarifying whether this is `ALTER TABLE ... UPDATE` or a separate backfill task.\n\n3. **Non-primary definition clarity in AC:** Acceptance criteria repeat \"non-primary address\" several times but never explicitly state that every Person must have exactly one primary address at all times (though Technical Decisions does). Consider adding one explicit AC like: \"Every Person always has exactly one primary email address.\"\n\n### Smallest viable iteration\n\nThe plan is already well-scoped. A smaller slice would be:\n\n**Option A (verification-only):** Just add verification state and verification flow without the full `/my/settings` UI—member adds via existing staff surface, verification email is sent, verification proves mailbox control. But this would leave the \"member-facing management\" goal undelivered.\n\n**Option B (read-only settings first):** Build `/my/settings` with Profile/Clubs/Emails display but defer add/resend/remove/make-primary actions to a follow-up. But this would leave verification incomplete and the member \"safely manage their own email addresses\" goal undelivered.\n\nNeither is clearly better than the current plan. The plan is already minimal for the stated goal: a member can open settings and manage verified/pending email addresses safely. Splitting would create incomplete capability without meaningful risk reduction.\n\n**Recommendation:** Ship as planned.\n\n### Required plan edits\n\nNone. The plan is implementation-ready.\n\n### Analysis by Readiness Question\n\n#### 1. Goal clarity ✓\n\n- **Goal articulated:** Yes—\"members can review their profile basics and manage their own email addresses safely.\"\n- **User/business outcome:** Clear—member self-service reduces support burden, verification proves mailbox control before allowing identity/delivery use.\n- **Beneficiary clear:** Signed-in club members (resolves to Membership Person).\n- **Deliverable capability list:** Lines 10-19 enumerate exactly what a member can do after this iteration.\n\n#### 2. Scope focus ✓\n\n- **One coherent outcome:** Yes—member email-address management with verification.\n- **Could it be smaller:** Not meaningfully (see \"Smallest viable iteration\" above). The plan explicitly defers rate limiting, rich rejection UX, name/profile changes, and shared email addresses.\n- **Non-goals clear:** Lines 65-74 enumerate 8 explicit out-of-scope items.\n- **Boundaries clear:** In-scope section (lines 38-63) is concrete and comprehensive.\n\n#### 3. Acceptance criteria, BDD scenario decision, and business decisions ✓\n\n- **AC concrete and testable:** Lines 146-171 provide 26 acceptance criteria covering happy paths (add/verify/make-primary), edge cases (duplicate addresses, removed pending address cannot verify), permissions (primary cannot be removed), error states (expired verification link), and state changes (verification updates open LiveView).\n- **Coverage complete:** AC addresses primary restrictions, pending restrictions, verification success/failure, removal rules, sign-in-as-verification, inbound rejection, session preservation, and LiveView live refresh.\n- **Iteration classified:** Line 77 explicitly states \"Behaviour-facing.\"\n- **BDD decision:** Lines 88-110 provide detailed rationale—\"required\" because the iteration changes member-visible identity and email-address policy—and names the specific feature file (`acceptance-tests/features/person_email_addresses.feature`) plus 9 scenario summaries with tagging strategy (`@iteration-053 @todo-domain @todo-ui`).\n- **Business decisions unresolved:** Line 175 states \"None known.\"\n\n#### 4. Implementation plan and technical decisions ✓\n\n- **Steps clear and ordered:** Lines 179-196 provide 17 specific implementation steps in logical dependency order (inspect → model verification → commands/events → staff compatibility → tokens → email → callbacks → sign-in update → inbound rejection → LiveView → UI → tests → acceptance → `dev check`).\n- **Files/modules named:** \n  - `Layouts.club_site/1` and club-site-identity-menu (line 120)\n  - `design-system/templates/account-settings.html` (line 116)\n  - `acceptance-tests/features/person_email_addresses.feature` (line 94)\n  - `auth_sign_in_tokens` (line 185)\n  - `Memba.ReadModelChanges` (line 203)\n  - `app_shell_css_test.exs` (line 189)\n- **Data model changes clear:** Add verification state to Person email-address read model/projection, add dedicated verification-token table (lines 180-181, 185-186, 198-199).\n- **API/UI/workflow clear:** Lines 123-137 detail the UI layout (three tabs, email row structure, badges, actions). Lines 10-19 enumerate the complete user workflow.\n- **Integration points clear:** PubSub notification via `Memba.ReadModelChanges` (line 203), sign-in callback handling (line 187), inbound email sender resolution (line 189).\n- **Technical decisions unresolved:** Lines 198-204 document four resolved technical decisions (verification-token storage, command/event shape, invariant enforcement, sign-in-as-verification, PubSub refresh). No unresolved decisions stated.\n\n#### 5. Expected capability and validation ✓\n\n- **What we can do after:** Lines 205-207 state the new capability—\"Members can manage their own verified email addresses from a global personal settings page\" and \"distinguish verified and pending Person email addresses.\"\n- **How to prove success:** Lines 209-243 provide comprehensive validation:\n  - `dev check` must pass\n  - 10 domain/context test scenarios\n  - 7 LiveView/controller test scenarios\n  - Acceptance test implementation with specific feature file\n  - 10-step manual demo script\n- **Stop condition clear:** All acceptance criteria pass, `dev check` passes, and manual demo completes successfully.\n\n### Validation Plan\n\nAfter implementation is complete:\n\n1. **`dev check` passes** on the exact committed state\n2. **Domain tests confirm:**\n   - Backfilled rows are verified\n   - New addresses start pending\n   - Pending cannot become primary\n   - Verified non-primary can become primary\n   - Primary cannot be removed\n   - Duplicate address rejection\n   - Sign-in verifies pending address\n   - Inbound rejects pending address\n3. **LiveView tests confirm:**\n   - Avatar menu structure (Account settings, divider, Sign out)\n   - `/my/settings` renders correctly\n   - Tab selection is URL-addressable and restorable\n   - Add/resend/remove/make-primary flows work\n   - Verification success/invalid pages show correct copy\n   - Live refresh on verification PubSub\n4. **Acceptance tests:** All `@iteration-053` scenarios in `person_email_addresses.feature` pass with `@todo-domain @todo-ui` tags removed or narrowed\n5. **Manual demo:** Complete the 10-step demo script (lines 233-243) in a staging environment\n\nSuccess is achieved when all tests pass, `dev check` is green, and the manual demo script executes without error or unexpected behavior.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8015,
+                    "output_tokens": 2099,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 5015,
+                    "cache_write_tokens": 6282
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6282,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 80591
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 53411,
+              "tool_time_ms": 55,
+              "active_time_ms": 53466
+            }
+          },
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1167,6 +1207,438 @@
               "active_time_ms": 4378
             }
           },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-",
+              "codex_review_required_edits": "None"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12978,
+                    "output_tokens": 828,
+                    "reasoning_tokens": 949,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 118200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 34085,
+              "tool_time_ms": 61,
+              "active_time_ms": 34146
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nN",
+              "gemini_review_decision": "READY",
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "last_stage": "gemini_review",
+              "gemini_review_blocking_gap_count": 0,
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12830,
+                    "output_tokens": 667,
+                    "reasoning_tokens": 1189,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 119830
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 302528,
+              "tool_time_ms": 57,
+              "active_time_ms": 302585
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "9e64928f167bd89c1e35dbced444ab12ca6ebab1",
+        "node_visits": {
+          "synthesize": 1,
+          "codex_review": 1,
+          "start": 1,
+          "claude_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 101,
+      "checkpoint": {
+        "timestamp": "2026-07-13T06:36:23.113967416Z",
+        "current_node": "synthesis_gate",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "claude_review_confidence": "High",
+          "codex_review_blocking_gap_count": 0,
+          "codex_review_blocking_gaps": "None",
+          "codex_review_decision": "READY",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.gemini_review": 0,
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "gemini_review_decision": "READY",
+          "codex_review_confidence": "High",
+          "claude_review_required_edits": "None",
+          "internal.thread_id": "synthesize",
+          "last_stage": "synthesize",
+          "internal.work_dir": "/workspace/memba",
+          "internal.run_id": "01KXD2MZKDB0X6XGSYM6WD2GH1",
+          "plan_needs_human": false,
+          "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-blocking improvements\n\n1. **Token expiry specification:** Step 5 mentions \"expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse.\" While this is pragmatic and allows implementation flexibility, consider stating an explicit initial TTL value (e.g., \"24 hours\") so reviewers and future maintainers know the intended security boundary without cross-referencing sign-in token behavior.\n\n2. **Migration guidance:** Step 2 says \"with all existing rows backfilled as verified\" but doesn't specify whether this is a data migration script or handled within the migration itself. Consider clarifying whether this is `ALTER TABLE ... UPDATE` or a separate backfill task.\n\n3. **Non-primary definition clarity in AC:** Acceptance criteria repeat \"non-primary address\" several times but never explicitly state that every Person must have exactly one primary address at all times (though Technical Decisions does). Consider adding one explicit AC like: \"Every Person always has exactly one primary email address.\"\n\n### Smallest viable iteration\n\nThe plan is already well-scoped. A smaller slice would be:\n\n**Option A (verification-only):** Just add verification state and verification flow without the full `/my/settings` UI—member adds via existing staff surface, verification email is sent, verification proves mailbox control. But this would leave the \"member-facing management\" goal undelivered.\n\n**Option B (read-only settings first):** Build `/my/settings` with Profile/Clubs/Emails display but defer add/resend/remove/make-primary actions to a follow-up. But this would leave verification incomplete and the member \"safely manage their own email addresses\" goal undelivered.\n\nNeither is clearly better than the current plan. The plan is already minimal for the stated goal: a member can open settings and manage verified/pending email addresses safely. Splitting would create incomplete capability without meaningful risk reduction.\n\n**Recommendation:** Ship as planned.\n\n### Required plan edits\n\nNone. The plan is implementation-ready.\n\n### Analysis by Readiness Question\n\n#### 1. Goal clarity ✓\n\n- **Goal articulated:** Yes—\"members can review their profile basics and manage their own email addresses safely.\"\n- **User/business outcome:** Clear—member self-service reduces support burden, verification proves mailbox control before allowing identity/delivery use.\n- **Beneficiary clear:** Signed-in club members (resolves to Membership Person).\n- **Deliverable capability list:** Lines 10-19 enumerate exactly what a member can do after this iteration.\n\n#### 2. Scope focus ✓\n\n- **One coherent outcome:** Yes—member email-address management with verification.\n- **Could it be smaller:** Not meaningfully (see \"Smallest viable iteration\" above). The plan explicitly defers rate limiting, rich rejection UX, name/profile changes, and shared email addresses.\n- **Non-goals clear:** Lines 65-74 enumerate 8 explicit out-of-scope items.\n- **Boundaries clear:** In-scope section (lines 38-63) is concrete and comprehensive.\n\n#### 3. Acceptance criteria, BDD scenario decision, and business decisions ✓\n\n- **AC concrete and testable:** Lines 146-171 provide 26 acceptance criteria covering happy paths (add/verify/make-primary), edge cases (duplicate addresses, removed pending address cannot verify), permissions (primary cannot be removed), error states (expired verification link), and state changes (verification updates open LiveView).\n- **Coverage complete:** AC addresses primary restrictions, pending restrictions, verification success/failure, removal rules, sign-in-as-verification, inbound rejection, session preservation, and LiveView live refresh.\n- **Iteration classified:** Line 77 explicitly states \"Behaviour-facing.\"\n- **BDD decision:** Lines 88-110 provide detailed rationale—\"required\" because the iteration changes member-visible identity and email-address policy—and names the specific feature file (`acceptance-tests/features/person_email_addresses.feature`) plus 9 scenario summaries with tagging strategy (`@iteration-053 @todo-domain @todo-ui`).\n- **Business decisions unresolved:** Line 175 states \"None known.\"\n\n#### 4. Implementation plan and technical decisions ✓\n\n- **Steps clear and ordered:** Lines 179-196 provide 17 specific implementation steps in logical dependency order (inspect → model verification → commands/events → staff compatibility → tokens → email → callbacks → sign-in update → inbound rejection → LiveView → UI → tests → acceptance → `dev check`).\n- **Files/modules named:** \n  - `Layouts.club_site/1` and club-site-identity-menu (line 120)\n  - `design-system/templates/account-settings.html` (line 116)\n  - `acceptance-tests/features/person_email_addresses.feature` (line 94)\n  - `auth_sign_in_tokens` (line 185)\n  - `Memba.ReadModelChanges` (line 203)\n  - `app_shell_css_test.exs` (line 189)\n- **Data model changes clear:** Add verification state to Person email-address read model/projection, add dedicated verification-token table (lines 180-181, 185-186, 198-199).\n- **API/UI/workflow clear:** Lines 123-137 detail the UI layout (three tabs, email row structure, badges, actions). Lines 10-19 enumerate the complete user workflow.\n- **Integration points clear:** PubSub notification via `Memba.ReadModelChanges` (line 203), sign-in callback handling (line 187), inbound email sender resolution (line 189).\n- **Technical decisions unresolved:** Lines 198-204 document four resolved technical decisions (verification-token storage, command/event shape, invariant enforcement, sign-in-as-verification, PubSub refresh). No unresolved decisions stated.\n\n#### 5. Expected capability and validation ✓\n\n- **What we can do after:** Lines 205-207 state the new capability—\"Members can manage their own verified email addresses from a global personal settings page\" and \"distinguish verified and pending Person email addresses.\"\n- **How to prove success:** Lines 209-243 provide comprehensive validation:\n  - `dev check` must pass\n  - 10 domain/context test scenarios\n  - 7 LiveView/controller test scenarios\n  - Acceptance test implementation with specific feature file\n  - 10-step manual demo script\n- **Stop condition clear:** All acceptance criteria pass, `dev check` passes, and manual demo completes successfully.\n\n### Validation Plan\n\nAfter implementation is complete:\n\n1. **`dev check` passes** on the exact committed state\n2. **Domain tests confirm:**\n   - Backfilled rows are verified\n   - New addresses start pending\n   - Pending cannot become primary\n   - Verified non-primary can become primary\n   - Primary cannot be removed\n   - Duplicate address rejection\n   - Sign-in verifies pending address\n   - Inbound rejects pending address\n3. **LiveView tests confirm:**\n   - Avatar menu structure (Account settings, divider, Sign out)\n   - `/my/settings` renders correctly\n   - Tab selection is URL-addressable and restorable\n   - Add/resend/remove/make-primary flows work\n   - Verification success/invalid pages show correct copy\n   - Live refresh on verification PubSub\n4. **Acceptance tests:** All `@iteration-053` scenarios in `person_email_addresses.feature` pass with `@todo-domain @todo-ui` tags removed or narrowed\n5. **Manual demo:** Complete the 10-step demo script (lines 233-243) in a staging environment\n\nSuccess is achieved when all tests pass, `dev check` is green, and the manual demo script executes without error or unexpected behavior.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "thread.codex_review.current_node": "synthesize",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "graph.default_fidelity": "summary:high",
+          "gemini_review_confidence": "High",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "plan_needs_fix": false,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "thread.claude_review.current_node": "codex_review",
+          "current_node": "synthesis_gate",
+          "claude_review_blocking_gap_count": 0,
+          "internal.fidelity": "summary:high",
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "claude_review_decision": "READY",
+          "failure_signature": "",
+          "claude_review_blocking_gaps": "None",
+          "gemini_review_blocking_gap_count": 0,
+          "failure_class": "",
+          "gemini_review_required_edits": "None",
+          "codex_review_required_edits": "None",
+          "internal.retry_count.synthesize": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "outcome": "succeeded",
+          "plan_ready": true,
+          "thread.start.current_node": "gemini_review",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_fix": false,
+              "last_stage": "synthesize",
+              "plan_ready": true,
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_human": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5655,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 156,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 33945
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4378,
+              "tool_time_ms": 0,
+              "active_time_ms": 4378
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_required_edits": "None",
+              "last_response": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-",
+              "claude_review_decision": "READY",
+              "claude_review_blocking_gaps": "None",
+              "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-blocking improvements\n\n1. **Token expiry specification:** Step 5 mentions \"expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse.\" While this is pragmatic and allows implementation flexibility, consider stating an explicit initial TTL value (e.g., \"24 hours\") so reviewers and future maintainers know the intended security boundary without cross-referencing sign-in token behavior.\n\n2. **Migration guidance:** Step 2 says \"with all existing rows backfilled as verified\" but doesn't specify whether this is a data migration script or handled within the migration itself. Consider clarifying whether this is `ALTER TABLE ... UPDATE` or a separate backfill task.\n\n3. **Non-primary definition clarity in AC:** Acceptance criteria repeat \"non-primary address\" several times but never explicitly state that every Person must have exactly one primary address at all times (though Technical Decisions does). Consider adding one explicit AC like: \"Every Person always has exactly one primary email address.\"\n\n### Smallest viable iteration\n\nThe plan is already well-scoped. A smaller slice would be:\n\n**Option A (verification-only):** Just add verification state and verification flow without the full `/my/settings` UI—member adds via existing staff surface, verification email is sent, verification proves mailbox control. But this would leave the \"member-facing management\" goal undelivered.\n\n**Option B (read-only settings first):** Build `/my/settings` with Profile/Clubs/Emails display but defer add/resend/remove/make-primary actions to a follow-up. But this would leave verification incomplete and the member \"safely manage their own email addresses\" goal undelivered.\n\nNeither is clearly better than the current plan. The plan is already minimal for the stated goal: a member can open settings and manage verified/pending email addresses safely. Splitting would create incomplete capability without meaningful risk reduction.\n\n**Recommendation:** Ship as planned.\n\n### Required plan edits\n\nNone. The plan is implementation-ready.\n\n### Analysis by Readiness Question\n\n#### 1. Goal clarity ✓\n\n- **Goal articulated:** Yes—\"members can review their profile basics and manage their own email addresses safely.\"\n- **User/business outcome:** Clear—member self-service reduces support burden, verification proves mailbox control before allowing identity/delivery use.\n- **Beneficiary clear:** Signed-in club members (resolves to Membership Person).\n- **Deliverable capability list:** Lines 10-19 enumerate exactly what a member can do after this iteration.\n\n#### 2. Scope focus ✓\n\n- **One coherent outcome:** Yes—member email-address management with verification.\n- **Could it be smaller:** Not meaningfully (see \"Smallest viable iteration\" above). The plan explicitly defers rate limiting, rich rejection UX, name/profile changes, and shared email addresses.\n- **Non-goals clear:** Lines 65-74 enumerate 8 explicit out-of-scope items.\n- **Boundaries clear:** In-scope section (lines 38-63) is concrete and comprehensive.\n\n#### 3. Acceptance criteria, BDD scenario decision, and business decisions ✓\n\n- **AC concrete and testable:** Lines 146-171 provide 26 acceptance criteria covering happy paths (add/verify/make-primary), edge cases (duplicate addresses, removed pending address cannot verify), permissions (primary cannot be removed), error states (expired verification link), and state changes (verification updates open LiveView).\n- **Coverage complete:** AC addresses primary restrictions, pending restrictions, verification success/failure, removal rules, sign-in-as-verification, inbound rejection, session preservation, and LiveView live refresh.\n- **Iteration classified:** Line 77 explicitly states \"Behaviour-facing.\"\n- **BDD decision:** Lines 88-110 provide detailed rationale—\"required\" because the iteration changes member-visible identity and email-address policy—and names the specific feature file (`acceptance-tests/features/person_email_addresses.feature`) plus 9 scenario summaries with tagging strategy (`@iteration-053 @todo-domain @todo-ui`).\n- **Business decisions unresolved:** Line 175 states \"None known.\"\n\n#### 4. Implementation plan and technical decisions ✓\n\n- **Steps clear and ordered:** Lines 179-196 provide 17 specific implementation steps in logical dependency order (inspect → model verification → commands/events → staff compatibility → tokens → email → callbacks → sign-in update → inbound rejection → LiveView → UI → tests → acceptance → `dev check`).\n- **Files/modules named:** \n  - `Layouts.club_site/1` and club-site-identity-menu (line 120)\n  - `design-system/templates/account-settings.html` (line 116)\n  - `acceptance-tests/features/person_email_addresses.feature` (line 94)\n  - `auth_sign_in_tokens` (line 185)\n  - `Memba.ReadModelChanges` (line 203)\n  - `app_shell_css_test.exs` (line 189)\n- **Data model changes clear:** Add verification state to Person email-address read model/projection, add dedicated verification-token table (lines 180-181, 185-186, 198-199).\n- **API/UI/workflow clear:** Lines 123-137 detail the UI layout (three tabs, email row structure, badges, actions). Lines 10-19 enumerate the complete user workflow.\n- **Integration points clear:** PubSub notification via `Memba.ReadModelChanges` (line 203), sign-in callback handling (line 187), inbound email sender resolution (line 189).\n- **Technical decisions unresolved:** Lines 198-204 document four resolved technical decisions (verification-token storage, command/event shape, invariant enforcement, sign-in-as-verification, PubSub refresh). No unresolved decisions stated.\n\n#### 5. Expected capability and validation ✓\n\n- **What we can do after:** Lines 205-207 state the new capability—\"Members can manage their own verified email addresses from a global personal settings page\" and \"distinguish verified and pending Person email addresses.\"\n- **How to prove success:** Lines 209-243 provide comprehensive validation:\n  - `dev check` must pass\n  - 10 domain/context test scenarios\n  - 7 LiveView/controller test scenarios\n  - Acceptance test implementation with specific feature file\n  - 10-step manual demo script\n- **Stop condition clear:** All acceptance criteria pass, `dev check` passes, and manual demo completes successfully.\n\n### Validation Plan\n\nAfter implementation is complete:\n\n1. **`dev check` passes** on the exact committed state\n2. **Domain tests confirm:**\n   - Backfilled rows are verified\n   - New addresses start pending\n   - Pending cannot become primary\n   - Verified non-primary can become primary\n   - Primary cannot be removed\n   - Duplicate address rejection\n   - Sign-in verifies pending address\n   - Inbound rejects pending address\n3. **LiveView tests confirm:**\n   - Avatar menu structure (Account settings, divider, Sign out)\n   - `/my/settings` renders correctly\n   - Tab selection is URL-addressable and restorable\n   - Add/resend/remove/make-primary flows work\n   - Verification success/invalid pages show correct copy\n   - Live refresh on verification PubSub\n4. **Acceptance tests:** All `@iteration-053` scenarios in `person_email_addresses.feature` pass with `@todo-domain @todo-ui` tags removed or narrowed\n5. **Manual demo:** Complete the 10-step demo script (lines 233-243) in a staging environment\n\nSuccess is achieved when all tests pass, `dev check` is green, and the manual demo script executes without error or unexpected behavior.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8015,
+                    "output_tokens": 2099,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 5015,
+                    "cache_write_tokens": 6282
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6282,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 80591
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 53411,
+              "tool_time_ms": 55,
+              "active_time_ms": 53466
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None",
+              "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-",
+              "codex_review_required_edits": "None"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12978,
+                    "output_tokens": 828,
+                    "reasoning_tokens": 949,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 118200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 34085,
+              "tool_time_ms": 61,
+              "active_time_ms": 34146
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nN",
+              "gemini_review_decision": "READY",
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "last_stage": "gemini_review",
+              "gemini_review_blocking_gap_count": 0,
+              "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12830,
+                    "output_tokens": 667,
+                    "reasoning_tokens": 1189,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 119830
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 302528,
+              "tool_time_ms": 57,
+              "active_time_ms": 302585
+            }
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "e1d03ceb789de0e544492b13bfe4c8438909a3b6",
+        "node_visits": {
+          "start": 1,
+          "codex_review": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "claude_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-13T06:36:25.315558363Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "claude_review_blocking_gaps": "None",
+          "plan_ready": true,
+          "thread.start.current_node": "gemini_review",
+          "internal.work_dir": "/workspace/memba",
+          "internal.fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "response.gemini_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` lines 1–252. No files were edited.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify same-Person duplicate handling when a member tries to add an email address already attached to their own Person record, especially if it is already pending or verified.\n2. Optionally state the exact UX for direct access to `/my/settings` by a signed-in identity that does not resolve to a Membership Person, e.g. redirect, 404, or existing onboarding flow.\n3. Optionally name the intended verification-token TTL or explicitly reference the existing sign-in-link TTL constant if one exists.\n4. Optionally define the exact invalid/expired verification-link copy if product wants consistency beyond “calm invalid/expired state.”\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view Person basics and memberships, manage email addresses, verify newly added addresses, make verified addresses primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/sign-in/inbound identity until verified.\n\nA smaller read-only settings page or email-management UI without verification enforcement would not deliver the stated safety/business outcome.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Running `dev check`.\n2. Passing domain/context tests for:\n   - existing email addresses backfilled as verified;\n   - newly added addresses created pending;\n   - pending addresses blocked from primary status;\n   - verified alternates allowed to become primary;\n   - primary address removal blocked;\n   - non-primary removal allowed, including the session-starting address;\n   - duplicate address handling;\n   - removed pending address not verified by old token;\n   - sign-in link for pending known address verifies without changing primary/session semantics;\n   - inbound identity rejection for pending addresses.\n3. Passing LiveView/controller tests for:\n   - avatar menu Account settings link, divider, and Sign out;\n   - `/my/settings` rendering Person basics, memberships, and email rows;\n   - URL-addressable Profile/Clubs/Emails tabs;\n   - add/resend/remove/make-primary flows;\n   - verification success and invalid/expired pages;\n   - live refresh after verification PubSub notification.\n4. Updating/executing the planned `acceptance-tests/features/person_email_addresses.feature` scenarios and removing/narrowing temporary `@todo-domain @todo-ui` tags as implementation support lands.\n5. Manual demo of the end-to-end member flow from avatar menu through adding, verifying, making primary, removing old alternate, and confirming delivery uses the new verified primary.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "gemini_review_blocking_gaps": "None",
+          "thread.claude_review.current_node": "codex_review",
+          "codex_review_decision": "READY",
+          "codex_review_required_edits": "None",
+          "plan_needs_fix": false,
+          "gemini_review_blocking_gap_count": 0,
+          "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read `docs/iterations/053-my-settings-email-addresses/plan.md` completely with file-reading tools. I did not edit files.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Consider naming the exact verification-token TTL or the existing constant that should be reused. The current “short TTL aligned with sign-in links unless implementation finds an existing project constant” is probably implementable, but an exact value would reduce implementation ambiguity.\n2. Consider clarifying the UX for adding an email address that is already attached to the same Person, especially if it is already verified or already pending. The plan clearly covers duplicates owned by another Person, but same-Person duplicate handling could be made explicit.\n3. Consider stating the expected response for `/my/settings` when a signed-in identity does not resolve to a Membership Person, such as redirecting to onboarding/request flow or returning not found. The boundary is clear, but the concrete route behavior is not specified.\n4. Consider naming likely module/test files during implementation, though the current implementation plan is already specific enough to proceed.\n\n## Smallest viable iteration\n\nThe smallest useful slice is essentially the current coherent slice: a signed-in member can reach global Account settings, view profile/club/email state, add a pending email, verify it, make a verified alternate primary, remove non-primary addresses, and have pending addresses excluded from primary delivery/inbound identity until verified.\n\nI would not split out verification from email management, because safely adding addresses depends on pending/verified state and mailbox-control proof. If scope pressure appears during implementation, the most plausible defer candidates are polish/follow-up items such as richer invalid-link recovery UX or resend throttling, both already out of scope.\n\n## Required plan edits\n\nNone.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests for:\n   - existing email rows backfilled as verified;\n   - newly added addresses starting pending;\n   - pending addresses blocked from becoming primary;\n   - verified non-primary addresses becoming primary;\n   - primary removal being rejected;\n   - non-primary removal succeeding;\n   - old links for removed/replaced pending addresses not verifying anything;\n   - duplicate normalized addresses owned by another Person being rejected;\n   - pending known-address sign-in verifying the address without changing primary/session semantics;\n   - inbound email from pending known addresses being rejected.\n\n2. LiveView/controller tests for:\n   - avatar menu showing Account settings, separator, and Sign out;\n   - `/my/settings` rendering Person basics, club memberships, and email rows;\n   - Profile/Clubs/Emails tab state being URL-addressable and restorable;\n   - add, resend, remove, and make-primary flows;\n   - verification success and invalid/expired pages;\n   - open settings LiveView refreshing after verification PubSub notification.\n\n3. Acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature` for the named `@iteration-053` scenarios, with temporary `@todo-domain @todo-ui` tags removed or narrowed as implementation lands.\n\n4. Manual demo of the full member workflow:\n   - sign in;\n   - open Account settings from avatar menu;\n   - add a pending email;\n   - confirm it cannot be primary;\n   - verify via emailed link;\n   - observe live settings update;\n   - make the verified address primary;\n   - remove the old non-primary;\n   - confirm future club-message delivery uses the new verified primary address.\n\n5. Final stop condition: `dev check` passes after implementation with the intended tests and acceptance coverage updated.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "graph.default_fidelity": "summary:high",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "gemini_review_confidence": "High",
+          "thread.codex_review.current_node": "synthesize",
+          "claude_review_required_edits": "None",
+          "current_node": "publish_ready",
+          "claude_review_confidence": "High",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.claude_review": 0,
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "internal.retry_count.start": 0,
+          "command.output": "blob://sha256/e79b9a212270dda7c97cb0880eba9b155b3556404df6c4fcc9c5f950e8221859",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.codex_review": 0,
+          "internal.node_visit_count": 1,
+          "codex_review_blocking_gaps": "None",
+          "plan_needs_human": false,
+          "thread.gemini_review.current_node": "claude_review",
+          "claude_review_decision": "READY",
+          "internal.retry_count.synthesis_gate": 0,
+          "codex_review_blocking_gap_count": 0,
+          "gemini_review_required_edits": "None",
+          "internal.retry_count.synthesize": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.publish_ready": 0,
+          "response.claude_review": "Now I'll review the plan against the five readiness questions.\n\n## Iteration Plan Review: 053-my-settings-email-addresses\n\n**Decision:** READY\n\n**Confidence:** High\n\n### Blocking gaps\n\nNone.\n\n### Non-blocking improvements\n\n1. **Token expiry specification:** Step 5 mentions \"expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse.\" While this is pragmatic and allows implementation flexibility, consider stating an explicit initial TTL value (e.g., \"24 hours\") so reviewers and future maintainers know the intended security boundary without cross-referencing sign-in token behavior.\n\n2. **Migration guidance:** Step 2 says \"with all existing rows backfilled as verified\" but doesn't specify whether this is a data migration script or handled within the migration itself. Consider clarifying whether this is `ALTER TABLE ... UPDATE` or a separate backfill task.\n\n3. **Non-primary definition clarity in AC:** Acceptance criteria repeat \"non-primary address\" several times but never explicitly state that every Person must have exactly one primary address at all times (though Technical Decisions does). Consider adding one explicit AC like: \"Every Person always has exactly one primary email address.\"\n\n### Smallest viable iteration\n\nThe plan is already well-scoped. A smaller slice would be:\n\n**Option A (verification-only):** Just add verification state and verification flow without the full `/my/settings` UI—member adds via existing staff surface, verification email is sent, verification proves mailbox control. But this would leave the \"member-facing management\" goal undelivered.\n\n**Option B (read-only settings first):** Build `/my/settings` with Profile/Clubs/Emails display but defer add/resend/remove/make-primary actions to a follow-up. But this would leave verification incomplete and the member \"safely manage their own email addresses\" goal undelivered.\n\nNeither is clearly better than the current plan. The plan is already minimal for the stated goal: a member can open settings and manage verified/pending email addresses safely. Splitting would create incomplete capability without meaningful risk reduction.\n\n**Recommendation:** Ship as planned.\n\n### Required plan edits\n\nNone. The plan is implementation-ready.\n\n### Analysis by Readiness Question\n\n#### 1. Goal clarity ✓\n\n- **Goal articulated:** Yes—\"members can review their profile basics and manage their own email addresses safely.\"\n- **User/business outcome:** Clear—member self-service reduces support burden, verification proves mailbox control before allowing identity/delivery use.\n- **Beneficiary clear:** Signed-in club members (resolves to Membership Person).\n- **Deliverable capability list:** Lines 10-19 enumerate exactly what a member can do after this iteration.\n\n#### 2. Scope focus ✓\n\n- **One coherent outcome:** Yes—member email-address management with verification.\n- **Could it be smaller:** Not meaningfully (see \"Smallest viable iteration\" above). The plan explicitly defers rate limiting, rich rejection UX, name/profile changes, and shared email addresses.\n- **Non-goals clear:** Lines 65-74 enumerate 8 explicit out-of-scope items.\n- **Boundaries clear:** In-scope section (lines 38-63) is concrete and comprehensive.\n\n#### 3. Acceptance criteria, BDD scenario decision, and business decisions ✓\n\n- **AC concrete and testable:** Lines 146-171 provide 26 acceptance criteria covering happy paths (add/verify/make-primary), edge cases (duplicate addresses, removed pending address cannot verify), permissions (primary cannot be removed), error states (expired verification link), and state changes (verification updates open LiveView).\n- **Coverage complete:** AC addresses primary restrictions, pending restrictions, verification success/failure, removal rules, sign-in-as-verification, inbound rejection, session preservation, and LiveView live refresh.\n- **Iteration classified:** Line 77 explicitly states \"Behaviour-facing.\"\n- **BDD decision:** Lines 88-110 provide detailed rationale—\"required\" because the iteration changes member-visible identity and email-address policy—and names the specific feature file (`acceptance-tests/features/person_email_addresses.feature`) plus 9 scenario summaries with tagging strategy (`@iteration-053 @todo-domain @todo-ui`).\n- **Business decisions unresolved:** Line 175 states \"None known.\"\n\n#### 4. Implementation plan and technical decisions ✓\n\n- **Steps clear and ordered:** Lines 179-196 provide 17 specific implementation steps in logical dependency order (inspect → model verification → commands/events → staff compatibility → tokens → email → callbacks → sign-in update → inbound rejection → LiveView → UI → tests → acceptance → `dev check`).\n- **Files/modules named:** \n  - `Layouts.club_site/1` and club-site-identity-menu (line 120)\n  - `design-system/templates/account-settings.html` (line 116)\n  - `acceptance-tests/features/person_email_addresses.feature` (line 94)\n  - `auth_sign_in_tokens` (line 185)\n  - `Memba.ReadModelChanges` (line 203)\n  - `app_shell_css_test.exs` (line 189)\n- **Data model changes clear:** Add verification state to Person email-address read model/projection, add dedicated verification-token table (lines 180-181, 185-186, 198-199).\n- **API/UI/workflow clear:** Lines 123-137 detail the UI layout (three tabs, email row structure, badges, actions). Lines 10-19 enumerate the complete user workflow.\n- **Integration points clear:** PubSub notification via `Memba.ReadModelChanges` (line 203), sign-in callback handling (line 187), inbound email sender resolution (line 189).\n- **Technical decisions unresolved:** Lines 198-204 document four resolved technical decisions (verification-token storage, command/event shape, invariant enforcement, sign-in-as-verification, PubSub refresh). No unresolved decisions stated.\n\n#### 5. Expected capability and validation ✓\n\n- **What we can do after:** Lines 205-207 state the new capability—\"Members can manage their own verified email addresses from a global personal settings page\" and \"distinguish verified and pending Person email addresses.\"\n- **How to prove success:** Lines 209-243 provide comprehensive validation:\n  - `dev check` must pass\n  - 10 domain/context test scenarios\n  - 7 LiveView/controller test scenarios\n  - Acceptance test implementation with specific feature file\n  - 10-step manual demo script\n- **Stop condition clear:** All acceptance criteria pass, `dev check` passes, and manual demo completes successfully.\n\n### Validation Plan\n\nAfter implementation is complete:\n\n1. **`dev check` passes** on the exact committed state\n2. **Domain tests confirm:**\n   - Backfilled rows are verified\n   - New addresses start pending\n   - Pending cannot become primary\n   - Verified non-primary can become primary\n   - Primary cannot be removed\n   - Duplicate address rejection\n   - Sign-in verifies pending address\n   - Inbound rejects pending address\n3. **LiveView tests confirm:**\n   - Avatar menu structure (Account settings, divider, Sign out)\n   - `/my/settings` renders correctly\n   - Tab selection is URL-addressable and restorable\n   - Add/resend/remove/make-primary flows work\n   - Verification success/invalid pages show correct copy\n   - Live refresh on verification PubSub\n4. **Acceptance tests:** All `@iteration-053` scenarios in `person_email_addresses.feature` pass with `@todo-domain @todo-ui` tags removed or narrowed\n5. **Manual demo:** Complete the 10-step demo script (lines 233-243) in a staging environment\n\nSuccess is achieved when all tests pass, `dev check` is green, and the manual demo script executes without error or unexpected behavior.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "gemini_review_decision": "READY",
+          "claude_review_blocking_gap_count": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_confidence": "High",
+          "last_stage": "synthesize",
+          "internal.run_id": "01KXD2MZKDB0X6XGSYM6WD2GH1",
+          "failure_class": "",
+          "failure_signature": "",
+          "internal.thread_id": "synthesis_gate"
+        },
+        "node_outcomes": {
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1251,13 +1723,66 @@
               "active_time_ms": 53466
             }
           },
-          "synthesis_gate": {
+          "publish_ready": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
+            "context_updates": {
+              "command.output": "blob://sha256/e79b9a212270dda7c97cb0880eba9b155b3556404df6c4fcc9c5f950e8221859"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2173,
+              "active_time_ms": 2173
+            }
           },
           "start": {
             "status": "succeeded",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_fix": false,
+              "last_stage": "synthesize",
+              "plan_ready": true,
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_needs_human": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5655,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 156,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 33945
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4378,
+              "tool_time_ms": 0,
+              "active_time_ms": 4378
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
             "usage": null
           },
           "gemini_review": {
@@ -1302,12 +1827,13 @@
             }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "synthesize": 1,
           "synthesis_gate": 1,
           "claude_review": 1,
           "codex_review": 1,
+          "publish_ready": 1,
           "start": 1,
           "gemini_review": 1
         }
@@ -1335,6 +1861,33 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "publish_ready@1": {
+      "first_event_seq": 104,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/053-my-settings-email-addresses/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T06:36:23.117252184Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "synthesize@1": {
       "first_event_seq": 86,
       "prompt": null,
@@ -1588,6 +2141,40 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 96,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-07-13T06:36:19.441630080Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T06:36:19.439531466Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 2,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     },
