@@ -173,6 +173,18 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
+  describe "my settings routes" do
+    test "routes /my/settings through the required club member pipeline to the settings LiveView" do
+      assert_my_settings_live_route("/my/settings", "/my/settings", %{}, :profile)
+    end
+
+    test "routes URL-addressable settings tabs through the settings LiveView" do
+      assert_my_settings_live_route("/my/settings/profile", "/my/settings/profile", %{}, :profile)
+      assert_my_settings_live_route("/my/settings/clubs", "/my/settings/clubs", %{}, :clubs)
+      assert_my_settings_live_route("/my/settings/emails", "/my/settings/emails", %{}, :emails)
+    end
+  end
+
   describe "removed public harness routes" do
     test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
       Enum.each(@old_harness_paths, fn path ->
@@ -196,5 +208,22 @@ defmodule MembaWeb.RouterTest do
              path_params: ^path_params,
              route: ^route_pattern
            } = Phoenix.Router.route_info(MembaWeb.Router, "GET", path, "localhost")
+  end
+
+  defp assert_my_settings_live_route(path, route_pattern, path_params, live_action) do
+    assert %{
+             path_params: ^path_params,
+             pipe_through: [:browser, :club_member_required],
+             phoenix_live_view: {MembaWeb.MySettingsLive, ^live_action, _opts, _live_session},
+             plug: Phoenix.LiveView.Plug,
+             plug_opts: ^live_action,
+             route: ^route_pattern
+           } =
+             Phoenix.Router.route_info(
+               MembaWeb.Router,
+               "GET",
+               path,
+               "localhost"
+             )
   end
 end
