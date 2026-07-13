@@ -545,6 +545,77 @@ defmodule Memba.Membership.PublicApiTest do
            )
   end
 
+  test "resend_person_email_address_verification/2 issues for pending address without appending a domain event" do
+    person_id = Memba.ID.generate(:person)
+    parent = self()
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: " Alice+New@Example.COM "},
+               consistency: :strong
+             )
+
+    events_before = count_events()
+
+    verification_issuer = fn request ->
+      send(parent, {:verification_issued, request})
+      {:ok, %{verification_token: "fresh-token"}}
+    end
+
+    assert {:ok,
+            %{
+              person_id: ^person_id,
+              email: "Alice+New@Example.COM",
+              normalized_email: "alice+new@example.com",
+              issuer_result: %{verification_token: "fresh-token"}
+            }} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: " alice+new@example.com "},
+               verification_issuer: verification_issuer
+             )
+
+    assert_received {:verification_issued,
+                     %{
+                       person_id: ^person_id,
+                       email: "Alice+New@Example.COM",
+                       normalized_email: "alice+new@example.com"
+                     }}
+
+    assert count_events() == events_before
+
+    assert %PersonEmailAddress{verified_at: nil} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+new@example.com"
+             )
+  end
+
+  test "resend_person_email_address_verification/2 rejects non-pending addresses before issuing" do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    verification_issuer = fn _request ->
+      flunk("verified primary addresses must not receive verification email")
+    end
+
+    assert {:error, :email_address_already_verified} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: "alice@example.com"},
+               verification_issuer: verification_issuer
+             )
+  end
+
   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
@@ -1004,5 +1075,11 @@ defmodule Memba.Membership.PublicApiTest do
              )
 
     refute Membership.person_has_club_permission?(club_id, person_id, permission)
+  end
+
+  defp count_events do
+    %{rows: [[count]]} = Repo.query!(~S|SELECT count(*) FROM "event_store"."events"|)
+
+    count
   end
 end

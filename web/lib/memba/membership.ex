@@ -110,6 +110,29 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Resend verification for an already-pending person email address.
+
+  This is an application-service side effect, not a Membership domain-state
+  transition: it validates that the projected email address still belongs to the
+  person and is still pending, then asks the configured issuer to create/deliver
+  a fresh verification link. No Membership command is dispatched unless a future
+  state-changing verification step succeeds.
+  """
+  def resend_person_email_address_verification(attrs, opts \\ [])
+      when is_map(attrs) and is_list(opts) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, person_id} <- cast_person_id(person_id),
+         {:ok, email} <- fetch_required(attrs, :email),
+         {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email),
+         {:ok, email_address} <-
+           pending_person_email_address_for_verification(person_id, normalized_email) do
+      email_address
+      |> person_email_address_verification_request()
+      |> issue_person_email_address_verification(opts)
+    end
+  end
+
+  @doc """
   Mark a pending person email address as verified.
 
   The caller supplies the person aggregate identity as `:person_id` or
@@ -1192,6 +1215,25 @@ defmodule Memba.Membership do
     end
   end
 
+  defp pending_person_email_address_for_verification(person_id, normalized_email) do
+    PersonEmailAddress
+    |> where([email_address], email_address.person_id == ^person_id)
+    |> where([email_address], email_address.normalized_email == ^normalized_email)
+    |> limit(1)
+    |> Repo.one()
+    |> ensure_pending_person_email_address()
+  end
+
+  defp ensure_pending_person_email_address(nil), do: {:error, :pending_email_address_not_found}
+
+  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: nil} = email_address) do
+    {:ok, email_address}
+  end
+
+  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: %DateTime{}}) do
+    {:error, :email_address_already_verified}
+  end
+
   defp ensure_membership_administrator_removal_keeps_an_administrator(
          %RemoveMemberRole{} = command
        ) do
@@ -1269,6 +1311,39 @@ defmodule Memba.Membership do
     with {:ok, normalized_email_address} <- EmailAddresses.normalize_email(email) do
       {:ok, [normalized_email_address]}
     end
+  end
+
+  defp person_email_address_verification_request(%PersonEmailAddress{} = email_address) do
+    %{
+      person_id: email_address.person_id,
+      email: email_address.email,
+      normalized_email: email_address.normalized_email
+    }
+  end
+
+  defp issue_person_email_address_verification(request, opts) do
+    issuer =
+      Keyword.get(opts, :verification_issuer, &default_person_email_address_verification_issuer/1)
+
+    case issue_person_email_address_verification_with(issuer, request) do
+      :ok -> {:ok, request}
+      {:ok, issuer_result} -> {:ok, Map.put(request, :issuer_result, issuer_result)}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:unexpected_email_address_verification_issuer_result, other}}
+    end
+  end
+
+  defp issue_person_email_address_verification_with(issuer, request)
+       when is_function(issuer, 1) do
+    issuer.(request)
+  end
+
+  defp issue_person_email_address_verification_with(_issuer, _request) do
+    {:error, :invalid_email_address_verification_issuer}
+  end
+
+  defp default_person_email_address_verification_issuer(_request) do
+    {:ok, %{verification_token: InvitationToken.generate_token()}}
   end
 
   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
