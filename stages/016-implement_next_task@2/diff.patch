@@ -1,0 +1,439 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 25794da..a6f15b1 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
+ - [x] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
+-- [ ] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
++- [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
+ - [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
+ - [ ] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
+ - [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+diff --git a/web/lib/memba/membership/email_addresses.ex b/web/lib/memba/membership/email_addresses.ex
+index 63941bb..1f91c70 100644
+--- a/web/lib/memba/membership/email_addresses.ex
++++ b/web/lib/memba/membership/email_addresses.ex
+@@ -10,6 +10,13 @@ defmodule Memba.Membership.EmailAddresses do
+           is_primary: boolean()
+         }
+ 
++  @type address_state :: %{
++          email: String.t(),
++          normalized_email: String.t(),
++          is_primary: boolean(),
++          verified_at: DateTime.t() | nil
++        }
++
+   @doc """
+   Validate and normalize a replace-all email-address set.
+ 
+@@ -59,6 +66,87 @@ defmodule Memba.Membership.EmailAddresses do
+ 
+   def normalize_email(_email), do: {:error, :invalid_email}
+ 
++  @doc """
++  Normalize a legacy replace-all email-address set as verified write-side state.
++
++  This preserves the current compatibility meaning of historical create/replace
++  events while the member-facing lifecycle moves toward explicit add, verify,
++  primary-change, and removal events.
++  """
++  @spec mark_all_verified(term(), DateTime.t()) :: {:ok, [address_state()]} | {:error, atom()}
++  def mark_all_verified(email_addresses, %DateTime{} = verified_at) do
++    with {:ok, email_addresses} <- validate_set(email_addresses) do
++      {:ok, Enum.map(email_addresses, &Map.put(&1, :verified_at, verified_at))}
++    end
++  end
++
++  def mark_all_verified(_email_addresses, _verified_at), do: {:error, :invalid_verified_at}
++
++  @doc """
++  Add an email address to aggregate state as pending verification.
++
++  Pending addresses are always non-primary. They can become primary only after a
++  later explicit verification transition.
++  """
++  @spec add_pending(term(), term()) :: {:ok, [address_state()]} | {:error, atom()}
++  def add_pending(email_addresses, email) do
++    with {:ok, email_addresses} <- validate_state_set(email_addresses),
++         {:ok, email_address} <- normalize_email(email),
++         :ok <- reject_duplicate_normalized_email(email_addresses, email_address.normalized_email) do
++      {:ok, email_addresses ++ [Map.merge(email_address, %{is_primary: false, verified_at: nil})]}
++    end
++  end
++
++  @doc """
++  Mark a still-pending email address as verified.
++  """
++  @spec verify(term(), term(), DateTime.t()) :: {:ok, [address_state()]} | {:error, atom()}
++  def verify(email_addresses, email, %DateTime{} = verified_at) do
++    with {:ok, email_addresses} <- validate_state_set(email_addresses),
++         {:ok, normalized_email} <- normalize_lookup_email(email),
++         {:ok, email_address} <- fetch_address(email_addresses, normalized_email),
++         :ok <- require_pending(email_address) do
++      {:ok,
++       update_address(email_addresses, normalized_email, fn email_address ->
++         %{email_address | verified_at: verified_at}
++       end)}
++    end
++  end
++
++  def verify(_email_addresses, _email, _verified_at), do: {:error, :invalid_verified_at}
++
++  @doc """
++  Make a verified email address primary.
++  """
++  @spec make_primary(term(), term()) :: {:ok, [address_state()]} | {:error, atom()}
++  def make_primary(email_addresses, email) do
++    with {:ok, email_addresses} <- validate_state_set(email_addresses),
++         {:ok, normalized_email} <- normalize_lookup_email(email),
++         {:ok, email_address} <- fetch_address(email_addresses, normalized_email),
++         :ok <- require_verified(email_address) do
++      {:ok,
++       Enum.map(email_addresses, fn email_address ->
++         %{email_address | is_primary: email_address.normalized_email == normalized_email}
++       end)}
++    end
++  end
++
++  @doc """
++  Remove a non-primary email address from aggregate state.
++  """
++  @spec remove_non_primary(term(), term()) :: {:ok, [address_state()]} | {:error, atom()}
++  def remove_non_primary(email_addresses, email) do
++    with {:ok, email_addresses} <- validate_state_set(email_addresses),
++         {:ok, normalized_email} <- normalize_lookup_email(email),
++         {:ok, email_address} <- fetch_address(email_addresses, normalized_email),
++         :ok <- reject_primary_removal(email_address) do
++      {:ok,
++       Enum.reject(email_addresses, fn email_address ->
++         email_address.normalized_email == normalized_email
++       end)}
++    end
++  end
++
+   defp require_at_least_one([]), do: {:error, :email_address_required}
+   defp require_at_least_one(_email_addresses), do: :ok
+ 
+@@ -122,6 +210,101 @@ defmodule Memba.Membership.EmailAddresses do
+     end
+   end
+ 
++  defp reject_duplicate_normalized_email(email_addresses, normalized_email) do
++    if Enum.any?(email_addresses, &(&1.normalized_email == normalized_email)) do
++      {:error, :duplicate_email_address}
++    else
++      :ok
++    end
++  end
++
++  defp validate_state_set(email_addresses) when is_list(email_addresses) do
++    with :ok <- require_at_least_one(email_addresses),
++         {:ok, email_addresses} <- normalize_state_entries(email_addresses),
++         :ok <- require_exactly_one_primary(email_addresses),
++         :ok <- reject_duplicate_normalized_emails(email_addresses),
++         :ok <- require_primary_verified(email_addresses) do
++      {:ok, email_addresses}
++    end
++  end
++
++  defp validate_state_set(_email_addresses), do: {:error, :invalid_email_addresses}
++
++  defp normalize_state_entries(email_addresses) do
++    email_addresses
++    |> Enum.reduce_while({:ok, []}, fn email_address, {:ok, normalized_email_addresses} ->
++      case normalize_state_entry(email_address) do
++        {:ok, normalized_email_address} ->
++          {:cont, {:ok, [normalized_email_address | normalized_email_addresses]}}
++
++        {:error, reason} ->
++          {:halt, {:error, reason}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_email_addresses} -> {:ok, Enum.reverse(normalized_email_addresses)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_state_entry(email_address) when is_map(email_address) do
++    with {:ok, normalized_email_address} <- normalize_entry(email_address),
++         {:ok, verified_at} <- fetch_verified_at(email_address) do
++      {:ok, Map.put(normalized_email_address, :verified_at, verified_at)}
++    end
++  end
++
++  defp normalize_state_entry(_email_address), do: {:error, :invalid_email_address}
++
++  defp fetch_verified_at(%{verified_at: verified_at}), do: cast_verified_at(verified_at)
++  defp fetch_verified_at(%{"verified_at" => verified_at}), do: cast_verified_at(verified_at)
++  defp fetch_verified_at(_email_address), do: {:error, :invalid_verified_at}
++
++  defp cast_verified_at(nil), do: {:ok, nil}
++  defp cast_verified_at(%DateTime{} = verified_at), do: {:ok, verified_at}
++  defp cast_verified_at(_verified_at), do: {:error, :invalid_verified_at}
++
++  defp require_primary_verified(email_addresses) do
++    case Enum.find(email_addresses, & &1.is_primary) do
++      %{verified_at: %DateTime{}} -> :ok
++      %{verified_at: nil} -> {:error, :primary_email_address_not_verified}
++    end
++  end
++
++  defp normalize_lookup_email(email) do
++    with {:ok, %{normalized_email: normalized_email}} <- normalize_email(email) do
++      {:ok, normalized_email}
++    end
++  end
++
++  defp fetch_address(email_addresses, normalized_email) do
++    case Enum.find(email_addresses, &(&1.normalized_email == normalized_email)) do
++      nil -> {:error, :email_address_not_found}
++      email_address -> {:ok, email_address}
++    end
++  end
++
++  defp require_pending(%{verified_at: nil}), do: :ok
++  defp require_pending(%{verified_at: %DateTime{}}), do: {:error, :email_address_already_verified}
++
++  defp require_verified(%{verified_at: %DateTime{}}), do: :ok
++  defp require_verified(%{verified_at: nil}), do: {:error, :email_address_not_verified}
++
++  defp reject_primary_removal(%{is_primary: true}),
++    do: {:error, :primary_email_address_cannot_be_removed}
++
++  defp reject_primary_removal(%{is_primary: false}), do: :ok
++
++  defp update_address(email_addresses, normalized_email, update_fun) do
++    Enum.map(email_addresses, fn email_address ->
++      if email_address.normalized_email == normalized_email do
++        update_fun.(email_address)
++      else
++        email_address
++      end
++    end)
++  end
++
+   defp valid_email?(email) do
+     Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, email)
+   end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index 6552b6c..d4f0ea6 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Membership.Person do
+   alias Memba.Membership.Events.PersonCreated
+ 
+   @behaviour Aggregate
++  @legacy_verified_at ~U[1970-01-01 00:00:00Z]
+ 
+   defstruct [:person_id, :name, :email, :email_addresses]
+ 
+@@ -69,9 +70,10 @@ defmodule Memba.Membership.Person do
+       | person_id: event.person_id,
+         name: event.name,
+         email: event.email,
+-        email_addresses: [
+-          %{email: event.email, normalized_email: event.email, is_primary: true}
+-        ]
++        email_addresses:
++          mark_all_verified!([
++            %{email: event.email, is_primary: true}
++          ])
+     }
+   end
+ 
+@@ -79,7 +81,7 @@ defmodule Memba.Membership.Person do
+     %__MODULE__{
+       person
+       | email: event.primary_email,
+-        email_addresses: event.email_addresses
++        email_addresses: mark_all_verified!(event.email_addresses)
+     }
+   end
+ 
+@@ -153,4 +155,11 @@ defmodule Memba.Membership.Person do
+       _email_address -> {:error, :exactly_one_primary_email_required}
+     end
+   end
++
++  defp mark_all_verified!(email_addresses) do
++    case EmailAddresses.mark_all_verified(email_addresses, @legacy_verified_at) do
++      {:ok, email_addresses} -> email_addresses
++      {:error, _reason} -> email_addresses
++    end
++  end
+ end
+diff --git a/web/test/memba/membership/email_addresses_test.exs b/web/test/memba/membership/email_addresses_test.exs
+index 60231fe..c2e66aa 100644
+--- a/web/test/memba/membership/email_addresses_test.exs
++++ b/web/test/memba/membership/email_addresses_test.exs
+@@ -66,4 +66,111 @@ defmodule Memba.Membership.EmailAddressesTest do
+ 
+     assert {:error, :invalid_email} = EmailAddresses.normalize_primary_email("alice.example.com")
+   end
++
++  describe "write-side address state transitions" do
++    test "marks a legacy replace-all set as verified aggregate state" do
++      verified_at = ~U[2026-07-13 17:00:00Z]
++
++      assert {:ok,
++              [
++                %{
++                  email: "Alice@Example.COM",
++                  normalized_email: "alice@example.com",
++                  is_primary: true,
++                  verified_at: ^verified_at
++                },
++                %{
++                  email: "alice@work.example",
++                  normalized_email: "alice@work.example",
++                  is_primary: false,
++                  verified_at: ^verified_at
++                }
++              ]} =
++               EmailAddresses.mark_all_verified(
++                 [
++                   %{email: " Alice@Example.COM ", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
++                 ],
++                 verified_at
++               )
++    end
++
++    test "adds a new address as pending and non-primary" do
++      verified_at = ~U[2026-07-13 17:00:00Z]
++      {:ok, addresses} = verified_addresses(verified_at)
++
++      assert {:ok,
++              [
++                %{
++                  normalized_email: "alice@example.com",
++                  is_primary: true,
++                  verified_at: ^verified_at
++                },
++                %{
++                  email: "Alice+New@Example.COM",
++                  normalized_email: "alice+new@example.com",
++                  is_primary: false,
++                  verified_at: nil
++                }
++              ]} = EmailAddresses.add_pending(addresses, " Alice+New@Example.COM ")
++    end
++
++    test "rejects duplicate pending additions within the aggregate state" do
++      {:ok, addresses} = verified_addresses()
++
++      assert {:error, :duplicate_email_address} =
++               EmailAddresses.add_pending(addresses, " ALICE@EXAMPLE.COM ")
++    end
++
++    test "verifies a still-pending address by normalized address" do
++      verified_at = ~U[2026-07-13 17:00:00Z]
++      {:ok, addresses} = verified_addresses()
++      {:ok, addresses} = EmailAddresses.add_pending(addresses, "Alice+New@Example.COM")
++
++      assert {:ok,
++              [
++                %{normalized_email: "alice@example.com", verified_at: %DateTime{}},
++                %{
++                  normalized_email: "alice+new@example.com",
++                  is_primary: false,
++                  verified_at: ^verified_at
++                }
++              ]} = EmailAddresses.verify(addresses, " alice+new@example.com ", verified_at)
++    end
++
++    test "only verified addresses can become primary" do
++      verified_at = ~U[2026-07-13 17:00:00Z]
++      {:ok, addresses} = verified_addresses(verified_at)
++      {:ok, addresses} = EmailAddresses.add_pending(addresses, "alice+new@example.com")
++
++      assert {:error, :email_address_not_verified} =
++               EmailAddresses.make_primary(addresses, "alice+new@example.com")
++
++      {:ok, addresses} = EmailAddresses.verify(addresses, "alice+new@example.com", verified_at)
++
++      assert {:ok,
++              [
++                %{normalized_email: "alice@example.com", is_primary: false},
++                %{normalized_email: "alice+new@example.com", is_primary: true}
++              ]} = EmailAddresses.make_primary(addresses, "alice+new@example.com")
++    end
++
++    test "removes non-primary addresses but keeps the primary address" do
++      {:ok, addresses} = verified_addresses()
++      {:ok, addresses} = EmailAddresses.add_pending(addresses, "alice+new@example.com")
++
++      assert {:error, :primary_email_address_cannot_be_removed} =
++               EmailAddresses.remove_non_primary(addresses, "alice@example.com")
++
++      assert {:ok, [%{normalized_email: "alice@example.com", is_primary: true}]} =
++               EmailAddresses.remove_non_primary(addresses, "alice+new@example.com")
++    end
++  end
++
++  defp verified_addresses(verified_at \\ ~U[2026-07-13 16:00:00Z]) do
++    EmailAddresses.mark_all_verified(
++      [%{email: "alice@example.com", is_primary: true}],
++      verified_at
++    )
++  end
+ end
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index 5e191ba..7f867cf 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -230,11 +230,20 @@ defmodule Memba.Membership.PersonTest do
+ 
+   test "apply/2 records the created person identity, name, and email" do
+     person_id = Memba.ID.generate(:person)
++    legacy_verified_at = ~U[1970-01-01 00:00:00Z]
+ 
+     assert %Person{
+              person_id: ^person_id,
+              name: "Alice",
+-             email: "alice@example.com"
++             email: "alice@example.com",
++             email_addresses: [
++               %{
++                 email: "alice@example.com",
++                 normalized_email: "alice@example.com",
++                 is_primary: true,
++                 verified_at: ^legacy_verified_at
++               }
++             ]
+            } =
+              Person.apply(%Person{}, %PersonCreated{
+                person_id: person_id,
+@@ -245,6 +254,7 @@ defmodule Memba.Membership.PersonTest do
+ 
+   test "apply/2 records replaced email addresses and primary email" do
+     person_id = Memba.ID.generate(:person)
++    legacy_verified_at = ~U[1970-01-01 00:00:00Z]
+ 
+     person =
+       Person.apply(%Person{}, %PersonCreated{
+@@ -254,8 +264,18 @@ defmodule Memba.Membership.PersonTest do
+       })
+ 
+     email_addresses = [
+-      %{email: "alice@example.com", normalized_email: "alice@example.com", is_primary: false},
+-      %{email: "alice@work.example", normalized_email: "alice@work.example", is_primary: true}
++      %{
++        email: "alice@example.com",
++        normalized_email: "alice@example.com",
++        is_primary: false,
++        verified_at: legacy_verified_at
++      },
++      %{
++        email: "alice@work.example",
++        normalized_email: "alice@work.example",
++        is_primary: true,
++        verified_at: legacy_verified_at
++      }
+     ]
+ 
+     assert %Person{
