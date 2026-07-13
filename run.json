@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-13T16:03:44.929555389Z",
-  "last_event_at": "2026-07-13T19:06:22.397821029Z",
+  "last_event_at": "2026-07-13T19:06:44.904557817Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -22231,9 +22231,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 3685,
       "checkpoint": {
-        "timestamp": "2026-07-13T19:06:40.635054890Z",
+        "timestamp": "2026-07-13T19:06:44.896335658Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -22311,11 +22311,362 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "failure_class": "",
+          "internal.run_id": "01KXE3F0WV0J6NJX60AXBK8NZM",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.resume_gate": 0,
+          "task_retry_available": false,
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `011 Add a general verification email template using existing transactional email delivery conventions.`\n\n2. **Changes ma",
+          "internal.retry_count.task_gate": 0,
+          "outcome": "succeeded",
+          "internal.fidelity": "summary:high",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean tree at implementation checkpoint `59cfe87`.\n  - Live checks show a clean working tree: `git status --short`, `git diff --stat`, and `git diff --name-only` are empty.\n  - Recent history shows `59cfe87 fabro(...): implement_next_task (succeeded)` followed by `8f931e4 ... pre_validate_snapshot`.\n  - `git show 59cfe87 -- docs/iterations/053-my-settings-email-addresses/todo.md` shows exactly one ordinary task changed:\n    - `010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links ...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001`–`009` checked and `010` as the first unchecked task.\n\n- **Implementation artifacts found.**\n  - `web/lib/memba/membership.ex`\n    - Adds `consume_person_email_address_verification_token/2`.\n    - Uses SHA-256 token hashes and a `15 * 60` second TTL aligned with sign-in links.\n    - Scopes token consumption to a still-pending Person/email-address projection.\n    - Revokes outstanding pending verification tokens when pending addresses are removed/replaced.\n  - `web/lib/memba/membership/email_address_verification_token.ex`\n    - Adds insert, locked consume, expiration/consumed/revoked checks, and revoke-pending operations.\n  - `web/test/memba/membership/public_api_test.exs`\n    - Adds coverage for stored scoped 15-minute one-use tokens, consumed-token rejection, expired-token rejection, already-verified/non-pending rejection, and removed/re-added pending address stale-token rejection.\n  - No acceptance feature files were edited in the implementation checkpoint.\n\n- **Tests run/results found.**\n  - Focused validation rerun live:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/public_api_test.exs test/memba/membership/email_address_verification_token_test.exs test/memba/membership/no_crud_spike_test.exs`\n    - Passed: `35 tests, 0 failures`.\n  - Working tree remained clean after the test run.\n\n- **ADR/plan conformance notes.**\n  - Matches plan implementation step 5 / todo 010: one-use, scoped, short-lived verification tokens that cannot verify removed/replaced addresses.\n  - Keeps the work in the existing Membership/Person email-address model; no Account aggregate or unrelated bounded context introduced.\n  - ADR 0015/0023 LiveView URL-state constraints are not implicated by this token-lifecycle-only slice.\n  - Scope is appropriately small and independently checkpointed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "graph.max_node_visits": "80",
+          "failure_signature": "",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.todo_readable": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "current_node": "implement_next_task",
+          "task_valid": true,
+          "internal.retry_count.wip_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `011 Add a general verification email template using existing transactional email delivery conventions.`\n\n2. **Changes made**\n   - Added `web/lib/memba/membership/person_email_address_verification_email.ex`\n     - New `Memba.Membership.PersonEmailAddressVerificationEmail` delivery module.\n     - Uses existing Swoosh/Mailer conventions.\n     - Uses `Memba.Accounts.AuthEmailConfig` for auth-style sender/message stream configuration.\n     - Uses shared `Memba.EmailTemplates` shell, Memba header/footer, trust footer, primary action button, escaped fallback URL.\n     - Provides general copy and subject:\n       - `Verify this email address for your Memba account`\n     - Supports Postmark-style `:message_stream` provider option.\n     - Supports Resend tags:\n       - `memba_email_kind=person_email_address_verification`\n       - `memba_auth_email_stream=...`\n       - optional `memba_person_id=...`\n     - Validates recipient email and verification URL before Swoosh handoff.\n   - Added `web/test/memba/membership/person_email_address_verification_email_test.exs`\n     - Covers successful delivery, HTML/text copy, URL escaping, provider options/tags, invalid inputs, and missing config.\n   - Checked off only the selected todo line.\n\n3. **Focused validation run**\n   - TDD failing test first:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs`\n     - Failed as expected because `Memba.Membership.PersonEmailAddressVerificationEmail` did not exist yet.\n   - Focused test after implementation:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - Related email regression tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs test/memba/membership/club_member_invitation_email_test.exs test/memba/accounts/auth_email_test.exs test/memba/email_templates_test.exs`\n     - Passed: `26 tests, 0 failures`.\n   - Formatting check:\n     - `cd web && mix format --check-formatted lib/memba/membership/person_email_address_verification_email.ex test/memba/membership/person_email_address_verification_email_test.exs`\n     - Passed.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `990 tests, 0 failures`.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 011 Add a general verification email template using existing transactional email delivery conventions.`\n   - To:\n     - `- [x] 011 Add a general verification email template using existing transactional email delivery conventions.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - Read ADR 0015 and ADR 0023 as referenced by the plan.\n   - This task only adds a transactional email delivery/template module; it does not add member routes, LiveViews, URL-addressable UI state, or client-side tab behavior.\n   - The implementation stays within the existing Membership/Person email-address model and does not introduce an Account aggregate or new bounded context.",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 10,
+          "internal.retry_count.start": 0,
           "internal.thread_id": "all_tasks_done",
+          "last_stage": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.read_plan": 0,
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.validate_task": 0,
+          "graph.default_fidelity": "summary:high",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "command.output": "blob://sha256/c4f39945871f5e02a26d570e7cff9f748b17ec24dd99e2586955fac420aeb8d6"
+        },
+        "node_outcomes": {
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f6e2a2313bc129ebc327e233e3b6f3ac1511fd69ca24cdf1535acb78735acc50"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 262,
+              "active_time_ms": 262
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ca6f33d4918410014e2a5fe222f98ed215ec9f5254dc54ab71c06e22b2a5622f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean tree at implementation checkpoint `59cfe87`.\n  - Live chec",
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "task_valid": true,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean tree at implementation checkpoint `59cfe87`.\n  - Live checks show a clean working tree: `git status --short`, `git diff --stat`, and `git diff --name-only` are empty.\n  - Recent history shows `59cfe87 fabro(...): implement_next_task (succeeded)` followed by `8f931e4 ... pre_validate_snapshot`.\n  - `git show 59cfe87 -- docs/iterations/053-my-settings-email-addresses/todo.md` shows exactly one ordinary task changed:\n    - `010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links ...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001`–`009` checked and `010` as the first unchecked task.\n\n- **Implementation artifacts found.**\n  - `web/lib/memba/membership.ex`\n    - Adds `consume_person_email_address_verification_token/2`.\n    - Uses SHA-256 token hashes and a `15 * 60` second TTL aligned with sign-in links.\n    - Scopes token consumption to a still-pending Person/email-address projection.\n    - Revokes outstanding pending verification tokens when pending addresses are removed/replaced.\n  - `web/lib/memba/membership/email_address_verification_token.ex`\n    - Adds insert, locked consume, expiration/consumed/revoked checks, and revoke-pending operations.\n  - `web/test/memba/membership/public_api_test.exs`\n    - Adds coverage for stored scoped 15-minute one-use tokens, consumed-token rejection, expired-token rejection, already-verified/non-pending rejection, and removed/re-added pending address stale-token rejection.\n  - No acceptance feature files were edited in the implementation checkpoint.\n\n- **Tests run/results found.**\n  - Focused validation rerun live:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/public_api_test.exs test/memba/membership/email_address_verification_token_test.exs test/memba/membership/no_crud_spike_test.exs`\n    - Passed: `35 tests, 0 failures`.\n  - Working tree remained clean after the test run.\n\n- **ADR/plan conformance notes.**\n  - Matches plan implementation step 5 / todo 010: one-use, scoped, short-lived verification tokens that cannot verify removed/replaced addresses.\n  - Keeps the work in the existing Membership/Person email-address model; no Account aggregate or unrelated bounded context introduced.\n  - ADR 0015/0023 LiveView URL-state constraints are not implicated by this token-lifecycle-only slice.\n  - Scope is appropriately small and independently checkpointed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 247902,
+                    "output_tokens": 1870,
+                    "reasoning_tokens": 530,
+                    "cache_read_tokens": 346624,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1484822
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 64989,
+              "tool_time_ms": 10500,
+              "active_time_ms": 75489
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0b202e0cfd857345a6d2be953297634e06620d9eb04dde69a0bc62e858701c7d"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 212,
+              "active_time_ms": 212
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4eea4e9df0177f6412296115ed58b087ebb7866aab41b7bc29f6dbe1d7de616f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/76a3b19ad139c01b9fda7fd1118e25b66e8d377b64ad236582de4d70d4c2e34a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1951,
+              "active_time_ms": 1951
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c4f39945871f5e02a26d570e7cff9f748b17ec24dd99e2586955fac420aeb8d6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `011 Add a general verification email template using existing transactional email delivery conventions.`\n\n2. **Changes made**\n   - Added `web/lib/memba/membership/person_email_address_verification_email.ex`\n     - New `Memba.Membership.PersonEmailAddressVerificationEmail` delivery module.\n     - Uses existing Swoosh/Mailer conventions.\n     - Uses `Memba.Accounts.AuthEmailConfig` for auth-style sender/message stream configuration.\n     - Uses shared `Memba.EmailTemplates` shell, Memba header/footer, trust footer, primary action button, escaped fallback URL.\n     - Provides general copy and subject:\n       - `Verify this email address for your Memba account`\n     - Supports Postmark-style `:message_stream` provider option.\n     - Supports Resend tags:\n       - `memba_email_kind=person_email_address_verification`\n       - `memba_auth_email_stream=...`\n       - optional `memba_person_id=...`\n     - Validates recipient email and verification URL before Swoosh handoff.\n   - Added `web/test/memba/membership/person_email_address_verification_email_test.exs`\n     - Covers successful delivery, HTML/text copy, URL escaping, provider options/tags, invalid inputs, and missing config.\n   - Checked off only the selected todo line.\n\n3. **Focused validation run**\n   - TDD failing test first:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs`\n     - Failed as expected because `Memba.Membership.PersonEmailAddressVerificationEmail` did not exist yet.\n   - Focused test after implementation:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - Related email regression tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_email_address_verification_email_test.exs test/memba/membership/club_member_invitation_email_test.exs test/memba/accounts/auth_email_test.exs test/memba/email_templates_test.exs`\n     - Passed: `26 tests, 0 failures`.\n   - Formatting check:\n     - `cd web && mix format --check-formatted lib/memba/membership/person_email_address_verification_email.ex test/memba/membership/person_email_address_verification_email_test.exs`\n     - Passed.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `990 tests, 0 failures`.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 011 Add a general verification email template using existing transactional email delivery conventions.`\n   - To:\n     - `- [x] 011 Add a general verification email template using existing transactional email delivery conventions.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - Read ADR 0015 and ADR 0023 as referenced by the plan.\n   - This task only adds a transactional email delivery/template module; it does not add member routes, LiveViews, URL-addressable UI state, or client-side tab behavior.\n   - The implementation stays within the existing Membership/Person email-address model and does not introduce an Account aggregate or new bounded context.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `011 Add a general verification email template using existing transactional email delivery conventions.`\n\n2. **Changes ma"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 629050,
+                    "output_tokens": 8919,
+                    "reasoning_tokens": 3071,
+                    "cache_read_tokens": 5215232,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6112566
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 374006,
+              "tool_time_ms": 105278,
+              "active_time_ms": 479284
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d77077ebd3ecf0d89cc40f6982d5a4e117ef5f5cffc420cb1131c0838c612178"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/03c7af70c87478e38a4e4cab2c1a699bf629a3c414ebc0337b1ce16ccb94a3f3"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149323,
+              "active_time_ms": 149323
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "0872887985b7c9286709acc2644b196b6f771a49",
+        "node_visits": {
+          "todo_readable": 10,
+          "read_plan": 1,
+          "start": 1,
+          "validate_task": 9,
+          "task_gate": 9,
+          "pre_validate_snapshot": 9,
+          "all_tasks_done": 10,
+          "preflight_sandbox": 1,
+          "resume_gate": 1,
+          "sync_task_list": 10,
+          "wip_gate": 1,
+          "implement_next_task": 10
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md\nindex a6bc0d4..8937b81 100644\n--- a/docs/iterations/053-my-settings-email-addresses/todo.md\n+++ b/docs/iterations/053-my-settings-email-addresses/todo.md\n@@ -10,7 +10,7 @@\n - [x] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.\n - [x] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.\n - [x] 010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.\n-- [ ] 011 Add a general verification email template using existing transactional email delivery conventions.\n+- [x] 011 Add a general verification email template using existing transactional email delivery conventions.\n - [ ] 012 Add the verification callback route/page.\n - [ ] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.\n - [ ] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.\ndiff --git a/web/lib/memba/membership/person_email_address_verification_email.ex b/web/lib/memba/membership/person_email_address_verification_email.ex\nnew file mode 100644\nindex 0000000..415318b\n--- /dev/null\n+++ b/web/lib/memba/membership/person_email_address_verification_email.ex\n@@ -0,0 +1,224 @@\n+defmodule Memba.Membership.PersonEmailAddressVerificationEmail do\n+  @moduledoc \"\"\"\n+  Person email-address verification email delivery.\n+\n+  The verification link is built by the web layer once the callback route exists;\n+  this module owns the provider-neutral email composition and handoff to\n+  `Memba.Mailer`. Verification emails intentionally use the auth email sender\n+  configuration because the link proves mailbox control for a signed-in identity.\n+  \"\"\"\n+\n+  import Swoosh.Email\n+\n+  alias Memba.Accounts.AuthEmailConfig\n+  alias Memba.EmailTemplates\n+  alias Memba.ID\n+  alias Memba.Membership.EmailAddresses\n+\n+  @subject \"Verify this email address for your Memba account\"\n+\n+  @doc \"\"\"\n+  Deliver a person email-address verification email.\n+\n+  Required attributes are:\n+\n+    * `:email` / `\"email\"` - recipient email address being verified\n+    * `:verification_url` / `\"verification_url\"` - one-use verification link\n+\n+  Optional `:person_id` / `\"person_id\"` is used only for provider metadata/tags\n+  when available.\n+  \"\"\"\n+  def deliver(attrs) when is_map(attrs) do\n+    with {:ok, recipient_email} <- recipient_email(attrs),\n+         {:ok, verification_url} <- verification_url(attrs),\n+         {:ok, %AuthEmailConfig{} = config} <- auth_email_config() do\n+      context = verification_context(attrs)\n+\n+      recipient_email\n+      |> verification_email(context, verification_url, config)\n+      |> deliver_email()\n+    end\n+  rescue\n+    exception ->\n+      {:error,\n+       {:person_email_address_verification_email_delivery_exception, exception.__struct__,\n+        Exception.message(exception)}}\n+  end\n+\n+  def deliver(_attrs), do: {:error, :invalid_person_email_address_verification_email_attrs}\n+\n+  defp recipient_email(attrs) do\n+    attrs\n+    |> option_value([:email, :recipient_email])\n+    |> EmailAddresses.normalize_email()\n+    |> case do\n+      {:ok, %{normalized_email: normalized_email}} -> {:ok, normalized_email}\n+      {:error, :invalid_email} -> {:error, :invalid_email}\n+    end\n+  end\n+\n+  defp verification_url(attrs) do\n+    attrs\n+    |> option_value([:verification_url, :url, :callback_url])\n+    |> normalize_verification_url()\n+  end\n+\n+  defp normalize_verification_url(url) when is_binary(url) do\n+    case String.trim(url) do\n+      \"\" -> {:error, :invalid_verification_url}\n+      url -> {:ok, url}\n+    end\n+  end\n+\n+  defp normalize_verification_url(_url), do: {:error, :invalid_verification_url}\n+\n+  defp auth_email_config do\n+    case AuthEmailConfig.from_application_env() do\n+      {:ok, config} ->\n+        {:ok, config}\n+\n+      {:error, message} ->\n+        {:error, {:person_email_address_verification_email_configuration_error, message}}\n+    end\n+  end\n+\n+  defp verification_context(attrs) do\n+    %{person_id: attrs |> option_value([:person_id]) |> cast_person_id()}\n+  end\n+\n+  defp cast_person_id(value) when is_binary(value) do\n+    value\n+    |> String.trim()\n+    |> then(fn value ->\n+      case ID.cast(:person, value) do\n+        {:ok, person_id} -> person_id\n+        :error -> \"\"\n+      end\n+    end)\n+  end\n+\n+  defp cast_person_id(_value), do: \"\"\n+\n+  defp verification_email(recipient_email, context, verification_url, %AuthEmailConfig{} = config) do\n+    new()\n+    |> from({\"Memba\", config.from})\n+    |> to(recipient_email)\n+    |> subject(@subject)\n+    |> text_body(verification_text_body(verification_url))\n+    |> html_body(verification_html_body(recipient_email, verification_url))\n+    |> put_provider_options(config, context)\n+  end\n+\n+  defp put_provider_options(email, %AuthEmailConfig{provider: :resend} = config, context) do\n+    tags =\n+      [\n+        %{name: \"memba_email_kind\", value: \"person_email_address_verification\"},\n+        %{name: \"memba_auth_email_stream\", value: config.message_stream},\n+        optional_tag(\"memba_person_id\", context.person_id)\n+      ]\n+      |> Enum.reject(&is_nil/1)\n+\n+    put_provider_option(email, :tags, tags)\n+  end\n+\n+  defp put_provider_options(email, %AuthEmailConfig{} = config, _context) do\n+    put_provider_option(email, :message_stream, config.message_stream)\n+  end\n+\n+  defp optional_tag(_name, \"\"), do: nil\n+  defp optional_tag(name, value), do: %{name: name, value: value}\n+\n+  defp verification_text_body(verification_url) do\n+    \"\"\"\n+    Verify this email address for your Memba account.\n+\n+    Use this secure link to verify this email address:\n+\n+    #{verification_url}\n+\n+    This verification link expires in 15 minutes and can be used once. If you were not expecting this email, you can ignore it.\n+    \"\"\"\n+  end\n+\n+  defp verification_html_body(recipient_email, verification_url) do\n+    content = [\n+      EmailTemplates.memba_header(label: \"Email verification\"),\n+      EmailTemplates.card_section([\n+        EmailTemplates.heading(@subject),\n+        EmailTemplates.paragraph(\n+          \"Use the secure link below to verify this email address for your Memba account.\",\n+          margin: \"0 0 18px\"\n+        ),\n+        EmailTemplates.primary_action(\"Verify email address\", verification_url,\n+          width: \"220px\",\n+          fallback_label:\n+            \"Button not working? Copy and paste this verification link into your browser:\"\n+        ),\n+        EmailTemplates.paragraph(\n+          \"This verification link expires in 15 minutes and can be used once.\",\n+          margin: \"0 0 20px\",\n+          color: \"#7d877f\",\n+          font_size: \"13px\"\n+        ),\n+        verification_reassurance()\n+      ])\n+    ]\n+\n+    footer = [\n+      EmailTemplates.trust_footer(),\n+      EmailTemplates.memba_footer(\n+        recipient_email: recipient_email,\n+        reason: \"You're getting this because this email address was added to a Memba user.\"\n+      )\n+    ]\n+\n+    EmailTemplates.render_shell(\n+      title: @subject,\n+      preheader:\n+        \"Verify this email address for your Memba account — the link expires in 15 minutes.\",\n+      content: content,\n+      footer: footer\n+    )\n+  end\n+\n+  defp verification_reassurance do\n+    \"\"\"\n+    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>\n+      <td style=\"border-top:1px solid #e6e3dc; padding-top:16px;\">\n+        #{EmailTemplates.paragraph(\"If you were not expecting this email, you can safely ignore it — this address will not be verified unless the link above is opened.\", margin: \"0\", color: \"#7d877f\", font_size: \"13px\")}\n+      </td>\n+    </tr></table>\n+    \"\"\"\n+  end\n+\n+  defp option_value(opts, keys) when is_list(opts) do\n+    if Keyword.keyword?(opts) do\n+      Enum.find_value(keys, &Keyword.get(opts, &1))\n+    end\n+  end\n+\n+  defp option_value(%{} = opts, keys) do\n+    Enum.find_value(keys, fn key ->\n+      Map.get(opts, key) || Map.get(opts, Atom.to_string(key))\n+    end)\n+  end\n+\n+  defp option_value(_opts, _keys), do: nil\n+\n+  defp deliver_email(email) do\n+    email\n+    |> Memba.Mailer.deliver()\n+    |> normalize_delivery_result()\n+  end\n+\n+  defp normalize_delivery_result({:ok, _result}), do: :ok\n+\n+  defp normalize_delivery_result({:error, reason}),\n+    do: {:error, {:person_email_address_verification_email_delivery_error, reason}}\n+\n+  defp normalize_delivery_result(result) do\n+    {:error,\n+     {:person_email_address_verification_email_delivery_error,\n+      {:unexpected_delivery_result, result}}}\n+  end\n+end\ndiff --git a/web/test/memba/membership/person_email_address_verification_email_test.exs b/web/test/memba/membership/person_email_address_verification_email_test.exs\nnew file mode 100644\nindex 0000000..82afa29\n--- /dev/null\n+++ b/web/test/memba/membership/person_email_address_verification_email_test.exs\n@@ -0,0 +1,164 @@\n+defmodule Memba.Membership.PersonEmailAddressVerificationEmailTest do\n+  use ExUnit.Case, async: false\n+\n+  import Swoosh.TestAssertions\n+\n+  alias Memba.Accounts.AuthEmail\n+  alias Memba.Membership.PersonEmailAddressVerificationEmail\n+\n+  setup do\n+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n+    original_auth_email_config = Application.get_env(:memba, AuthEmail)\n+\n+    Application.put_env(:memba, Memba.Mailer,\n+      adapter: Swoosh.Adapters.Test,\n+      api_key: \"server-token\"\n+    )\n+\n+    on_exit(fn ->\n+      restore_env(Memba.Mailer, original_mailer_config)\n+      restore_env(AuthEmail, original_auth_email_config)\n+    end)\n+\n+    :ok\n+  end\n+\n+  test \"builds and sends a general email-address verification email\" do\n+    Application.put_env(:memba, AuthEmail,\n+      provider: :postmark,\n+      from: \"auth@mail.memba.io\",\n+      message_stream: \"outbound-authentication\"\n+    )\n+\n+    verification_url =\n+      \"https://app.memba.io/my/settings/email-addresses/verify/token-123?email=alice%40example.com\"\n+\n+    assert :ok =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \" ALICE@Example.COM \",\n+               verification_url: verification_url,\n+               person_id: \"per_00000000-0000-0000-0000-000000000011\"\n+             })\n+\n+    assert_received {:email, %Swoosh.Email{} = email}\n+\n+    assert email.from == {\"Memba\", \"auth@mail.memba.io\"}\n+    assert email.to == [{\"\", \"alice@example.com\"}]\n+    assert email.subject == \"Verify this email address for your Memba account\"\n+    assert email.provider_options == %{message_stream: \"outbound-authentication\"}\n+\n+    assert email.text_body =~ \"Verify this email address for your Memba account.\"\n+    assert email.text_body =~ \"Use this secure link to verify this email address:\"\n+    assert email.text_body =~ verification_url\n+    assert email.text_body =~ \"This verification link expires in 15 minutes and can be used once.\"\n+    assert email.text_body =~ \"If you were not expecting this email, you can ignore it.\"\n+\n+    assert email.html_body =~ \"<!doctype html>\"\n+    assert email.html_body =~ \"Verify this email address for your Memba account\"\n+    assert email.html_body =~ \"Verify email address\"\n+    assert email.html_body =~ \"This verification link expires in 15 minutes and can be used once.\"\n+    assert email.html_body =~ \"Secured by Memba\"\n+    assert email.html_body =~ \"Sent to alice@example.com.\"\n+\n+    escaped_verification_url =\n+      Phoenix.HTML.html_escape(verification_url) |> Phoenix.HTML.safe_to_string()\n+\n+    assert email.html_body =~ escaped_verification_url\n+  end\n+\n+  test \"escapes dynamic URL content in HTML while keeping headers general\" do\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.local\",\n+      message_stream: \"development-auth\"\n+    )\n+\n+    verification_url =\n+      ~s|http://localhost:4000/my/settings/emails/verify/token?next=<settings>&email=\"member@example.com\"|\n+\n+    assert :ok =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \"member@example.com\",\n+               verification_url: verification_url\n+             })\n+\n+    assert_received {:email, %Swoosh.Email{} = email}\n+\n+    assert email.from == {\"Memba\", \"auth@mail.memba.local\"}\n+    assert email.subject == \"Verify this email address for your Memba account\"\n+    refute email.subject =~ \"\\n\"\n+\n+    escaped_verification_url =\n+      Phoenix.HTML.html_escape(verification_url) |> Phoenix.HTML.safe_to_string()\n+\n+    assert email.html_body =~ escaped_verification_url\n+    refute email.html_body =~ ~s|next=<settings>|\n+    refute email.html_body =~ ~s|email=\"member@example.com\"|\n+  end\n+\n+  test \"builds a Resend-tagged verification email\" do\n+    Application.put_env(:memba, AuthEmail,\n+      provider: :resend,\n+      from: \"auth@mail.memba.io\",\n+      message_stream: \"auth\"\n+    )\n+\n+    person_id = \"per_00000000-0000-0000-0000-000000000011\"\n+\n+    assert :ok =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \"member@example.com\",\n+               person_id: person_id,\n+               verification_url: \"https://app.memba.io/my/settings/emails/verify/token-123\"\n+             })\n+\n+    assert_received {:email, %Swoosh.Email{} = email}\n+\n+    assert email.provider_options == %{\n+             tags: [\n+               %{name: \"memba_email_kind\", value: \"person_email_address_verification\"},\n+               %{name: \"memba_auth_email_stream\", value: \"auth\"},\n+               %{name: \"memba_person_id\", value: person_id}\n+             ]\n+           }\n+  end\n+\n+  test \"rejects invalid inputs before Swoosh handoff\" do\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.local\",\n+      message_stream: \"development-auth\"\n+    )\n+\n+    assert {:error, :invalid_email} =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \" \",\n+               verification_url: \"http://localhost:4000/my/settings/emails/verify/token\"\n+             })\n+\n+    assert {:error, :invalid_verification_url} =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \"member@example.com\",\n+               verification_url: \" \"\n+             })\n+\n+    assert_no_email_sent()\n+  end\n+\n+  test \"does not hand an email to Swoosh when required auth email configuration is missing\" do\n+    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)\n+    Application.put_env(:memba, AuthEmail, from: \"auth@mail.memba.io\")\n+\n+    assert {:error, {:person_email_address_verification_email_configuration_error, message}} =\n+             PersonEmailAddressVerificationEmail.deliver(%{\n+               email: \"member@example.com\",\n+               verification_url: \"https://app.memba.io/my/settings/emails/verify/token\"\n+             })\n+\n+    assert message =~ \"Auth email delivery is enabled\"\n+    assert message =~ \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\"\n+\n+    assert_no_email_sent()\n+  end\n+\n+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n+end\n",
+        "summary": {
+          "files_changed": 31,
+          "additions": 2798,
+          "deletions": 51
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-13T19:06:45.234402124Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.thread_id": "implement_next_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "task_retry_available": false,
           "internal.retry_count.validate_task": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.sync_task_list.current_node": "todo_readable",
           "outcome": "succeeded",
@@ -22354,7 +22705,7 @@
           "internal.fidelity": "summary:high",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.sync_task_list": 0,
-          "command.output": "blob://sha256/c4f39945871f5e02a26d570e7cff9f748b17ec24dd99e2586955fac420aeb8d6",
+          "command.output": "blob://sha256/065e5c35cbb653a9a1aafb057907c5ee086ac6227636e39139b9be43bae539ab",
           "internal.retry_count.wip_gate": 0
         },
         "node_outcomes": {
@@ -22417,15 +22768,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d77077ebd3ecf0d89cc40f6982d5a4e117ef5f5cffc420cb1131c0838c612178"
+              "command.output": "blob://sha256/065e5c35cbb653a9a1aafb057907c5ee086ac6227636e39139b9be43bae539ab"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 165,
-              "active_time_ms": 165
+              "tool_time_ms": 287,
+              "active_time_ms": 287
             }
           },
           "start": {
@@ -22554,7 +22905,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "todo_readable": 10,
           "sync_task_list": 10,
@@ -22566,7 +22917,7 @@
           "implement_next_task": 10,
           "validate_task": 9,
           "read_plan": 1,
-          "pre_validate_snapshot": 9,
+          "pre_validate_snapshot": 10,
           "task_gate": 9
         }
       },
@@ -23311,6 +23662,34 @@
       },
       "state": "succeeded"
     },
+    "pre_validate_snapshot@10": {
+      "first_event_seq": 3688,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T19:06:44.903806086Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "start@1": {
       "first_event_seq": 21,
       "prompt": null,
@@ -23953,7 +24332,12 @@
       "first_event_seq": 3442,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-07-13T19:06:40.634153576Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -23967,13 +24351,20 @@
       "output": null,
       "started_at": "2026-07-13T18:58:40.812421226Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 479821,
+        "inference_time_ms": 374006,
+        "tool_time_ms": 105278,
+        "active_time_ms": 479284
+      },
       "usage": {
-        "input_tokens": 626702,
-        "output_tokens": 8201,
-        "total_tokens": 5700961,
-        "reasoning_tokens": 2890,
-        "cache_read_tokens": 5063168,
-        "cache_write_tokens": 0
+        "input_tokens": 629050,
+        "output_tokens": 8919,
+        "total_tokens": 5856272,
+        "reasoning_tokens": 3071,
+        "cache_read_tokens": 5215232,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6112566
       },
       "model": {
         "provider": "openai",
@@ -24154,32 +24545,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 154118,
-        "usage_percent": 56.66102941176471,
+        "input_tokens": 154412,
+        "usage_percent": 56.76911764705882,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-07-13T19:06:22.397308763Z",
-        "event_seq": 3672,
+        "generated_at": "2026-07-13T19:06:40.630642502Z",
+        "event_seq": 3678,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1094,
-            "usage_percent": 0.4022058823529412
+            "tokens": 1090,
+            "usage_percent": 0.4007352941176471
           },
           {
             "category": "tools",
-            "tokens": 1560,
-            "usage_percent": 0.5735294117647058
+            "tokens": 1555,
+            "usage_percent": 0.5716911764705882
           },
           {
             "category": "memory",
-            "tokens": 419,
-            "usage_percent": 0.15404411764705883
+            "tokens": 418,
+            "usage_percent": 0.1536764705882353
           },
           {
             "category": "conversation",
-            "tokens": 151039,
-            "usage_percent": 55.52904411764706
+            "tokens": 151343,
+            "usage_percent": 55.64080882352941
           },
           {
             "category": "other",
@@ -24189,7 +24580,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "implement_next_task@3": {
       "first_event_seq": 835,

@@ -1,0 +1,413 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index a6bc0d4..8937b81 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.
+ - [x] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
+ - [x] 010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.
+-- [ ] 011 Add a general verification email template using existing transactional email delivery conventions.
++- [x] 011 Add a general verification email template using existing transactional email delivery conventions.
+ - [ ] 012 Add the verification callback route/page.
+ - [ ] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
+ - [ ] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
+diff --git a/web/lib/memba/membership/person_email_address_verification_email.ex b/web/lib/memba/membership/person_email_address_verification_email.ex
+new file mode 100644
+index 0000000..415318b
+--- /dev/null
++++ b/web/lib/memba/membership/person_email_address_verification_email.ex
+@@ -0,0 +1,224 @@
++defmodule Memba.Membership.PersonEmailAddressVerificationEmail do
++  @moduledoc """
++  Person email-address verification email delivery.
++
++  The verification link is built by the web layer once the callback route exists;
++  this module owns the provider-neutral email composition and handoff to
++  `Memba.Mailer`. Verification emails intentionally use the auth email sender
++  configuration because the link proves mailbox control for a signed-in identity.
++  """
++
++  import Swoosh.Email
++
++  alias Memba.Accounts.AuthEmailConfig
++  alias Memba.EmailTemplates
++  alias Memba.ID
++  alias Memba.Membership.EmailAddresses
++
++  @subject "Verify this email address for your Memba account"
++
++  @doc """
++  Deliver a person email-address verification email.
++
++  Required attributes are:
++
++    * `:email` / `"email"` - recipient email address being verified
++    * `:verification_url` / `"verification_url"` - one-use verification link
++
++  Optional `:person_id` / `"person_id"` is used only for provider metadata/tags
++  when available.
++  """
++  def deliver(attrs) when is_map(attrs) do
++    with {:ok, recipient_email} <- recipient_email(attrs),
++         {:ok, verification_url} <- verification_url(attrs),
++         {:ok, %AuthEmailConfig{} = config} <- auth_email_config() do
++      context = verification_context(attrs)
++
++      recipient_email
++      |> verification_email(context, verification_url, config)
++      |> deliver_email()
++    end
++  rescue
++    exception ->
++      {:error,
++       {:person_email_address_verification_email_delivery_exception, exception.__struct__,
++        Exception.message(exception)}}
++  end
++
++  def deliver(_attrs), do: {:error, :invalid_person_email_address_verification_email_attrs}
++
++  defp recipient_email(attrs) do
++    attrs
++    |> option_value([:email, :recipient_email])
++    |> EmailAddresses.normalize_email()
++    |> case do
++      {:ok, %{normalized_email: normalized_email}} -> {:ok, normalized_email}
++      {:error, :invalid_email} -> {:error, :invalid_email}
++    end
++  end
++
++  defp verification_url(attrs) do
++    attrs
++    |> option_value([:verification_url, :url, :callback_url])
++    |> normalize_verification_url()
++  end
++
++  defp normalize_verification_url(url) when is_binary(url) do
++    case String.trim(url) do
++      "" -> {:error, :invalid_verification_url}
++      url -> {:ok, url}
++    end
++  end
++
++  defp normalize_verification_url(_url), do: {:error, :invalid_verification_url}
++
++  defp auth_email_config do
++    case AuthEmailConfig.from_application_env() do
++      {:ok, config} ->
++        {:ok, config}
++
++      {:error, message} ->
++        {:error, {:person_email_address_verification_email_configuration_error, message}}
++    end
++  end
++
++  defp verification_context(attrs) do
++    %{person_id: attrs |> option_value([:person_id]) |> cast_person_id()}
++  end
++
++  defp cast_person_id(value) when is_binary(value) do
++    value
++    |> String.trim()
++    |> then(fn value ->
++      case ID.cast(:person, value) do
++        {:ok, person_id} -> person_id
++        :error -> ""
++      end
++    end)
++  end
++
++  defp cast_person_id(_value), do: ""
++
++  defp verification_email(recipient_email, context, verification_url, %AuthEmailConfig{} = config) do
++    new()
++    |> from({"Memba", config.from})
++    |> to(recipient_email)
++    |> subject(@subject)
++    |> text_body(verification_text_body(verification_url))
++    |> html_body(verification_html_body(recipient_email, verification_url))
++    |> put_provider_options(config, context)
++  end
++
++  defp put_provider_options(email, %AuthEmailConfig{provider: :resend} = config, context) do
++    tags =
++      [
++        %{name: "memba_email_kind", value: "person_email_address_verification"},
++        %{name: "memba_auth_email_stream", value: config.message_stream},
++        optional_tag("memba_person_id", context.person_id)
++      ]
++      |> Enum.reject(&is_nil/1)
++
++    put_provider_option(email, :tags, tags)
++  end
++
++  defp put_provider_options(email, %AuthEmailConfig{} = config, _context) do
++    put_provider_option(email, :message_stream, config.message_stream)
++  end
++
++  defp optional_tag(_name, ""), do: nil
++  defp optional_tag(name, value), do: %{name: name, value: value}
++
++  defp verification_text_body(verification_url) do
++    """
++    Verify this email address for your Memba account.
++
++    Use this secure link to verify this email address:
++
++    #{verification_url}
++
++    This verification link expires in 15 minutes and can be used once. If you were not expecting this email, you can ignore it.
++    """
++  end
++
++  defp verification_html_body(recipient_email, verification_url) do
++    content = [
++      EmailTemplates.memba_header(label: "Email verification"),
++      EmailTemplates.card_section([
++        EmailTemplates.heading(@subject),
++        EmailTemplates.paragraph(
++          "Use the secure link below to verify this email address for your Memba account.",
++          margin: "0 0 18px"
++        ),
++        EmailTemplates.primary_action("Verify email address", verification_url,
++          width: "220px",
++          fallback_label:
++            "Button not working? Copy and paste this verification link into your browser:"
++        ),
++        EmailTemplates.paragraph(
++          "This verification link expires in 15 minutes and can be used once.",
++          margin: "0 0 20px",
++          color: "#7d877f",
++          font_size: "13px"
++        ),
++        verification_reassurance()
++      ])
++    ]
++
++    footer = [
++      EmailTemplates.trust_footer(),
++      EmailTemplates.memba_footer(
++        recipient_email: recipient_email,
++        reason: "You're getting this because this email address was added to a Memba user."
++      )
++    ]
++
++    EmailTemplates.render_shell(
++      title: @subject,
++      preheader:
++        "Verify this email address for your Memba account — the link expires in 15 minutes.",
++      content: content,
++      footer: footer
++    )
++  end
++
++  defp verification_reassurance do
++    """
++    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
++      <td style="border-top:1px solid #e6e3dc; padding-top:16px;">
++        #{EmailTemplates.paragraph("If you were not expecting this email, you can safely ignore it — this address will not be verified unless the link above is opened.", margin: "0", color: "#7d877f", font_size: "13px")}
++      </td>
++    </tr></table>
++    """
++  end
++
++  defp option_value(opts, keys) when is_list(opts) do
++    if Keyword.keyword?(opts) do
++      Enum.find_value(keys, &Keyword.get(opts, &1))
++    end
++  end
++
++  defp option_value(%{} = opts, keys) do
++    Enum.find_value(keys, fn key ->
++      Map.get(opts, key) || Map.get(opts, Atom.to_string(key))
++    end)
++  end
++
++  defp option_value(_opts, _keys), do: nil
++
++  defp deliver_email(email) do
++    email
++    |> Memba.Mailer.deliver()
++    |> normalize_delivery_result()
++  end
++
++  defp normalize_delivery_result({:ok, _result}), do: :ok
++
++  defp normalize_delivery_result({:error, reason}),
++    do: {:error, {:person_email_address_verification_email_delivery_error, reason}}
++
++  defp normalize_delivery_result(result) do
++    {:error,
++     {:person_email_address_verification_email_delivery_error,
++      {:unexpected_delivery_result, result}}}
++  end
++end
+diff --git a/web/test/memba/membership/person_email_address_verification_email_test.exs b/web/test/memba/membership/person_email_address_verification_email_test.exs
+new file mode 100644
+index 0000000..82afa29
+--- /dev/null
++++ b/web/test/memba/membership/person_email_address_verification_email_test.exs
+@@ -0,0 +1,164 @@
++defmodule Memba.Membership.PersonEmailAddressVerificationEmailTest do
++  use ExUnit.Case, async: false
++
++  import Swoosh.TestAssertions
++
++  alias Memba.Accounts.AuthEmail
++  alias Memba.Membership.PersonEmailAddressVerificationEmail
++
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_auth_email_config = Application.get_env(:memba, AuthEmail)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(AuthEmail, original_auth_email_config)
++    end)
++
++    :ok
++  end
++
++  test "builds and sends a general email-address verification email" do
++    Application.put_env(:memba, AuthEmail,
++      provider: :postmark,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++
++    verification_url =
++      "https://app.memba.io/my/settings/email-addresses/verify/token-123?email=alice%40example.com"
++
++    assert :ok =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: " ALICE@Example.COM ",
++               verification_url: verification_url,
++               person_id: "per_00000000-0000-0000-0000-000000000011"
++             })
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Memba", "auth@mail.memba.io"}
++    assert email.to == [{"", "alice@example.com"}]
++    assert email.subject == "Verify this email address for your Memba account"
++    assert email.provider_options == %{message_stream: "outbound-authentication"}
++
++    assert email.text_body =~ "Verify this email address for your Memba account."
++    assert email.text_body =~ "Use this secure link to verify this email address:"
++    assert email.text_body =~ verification_url
++    assert email.text_body =~ "This verification link expires in 15 minutes and can be used once."
++    assert email.text_body =~ "If you were not expecting this email, you can ignore it."
++
++    assert email.html_body =~ "<!doctype html>"
++    assert email.html_body =~ "Verify this email address for your Memba account"
++    assert email.html_body =~ "Verify email address"
++    assert email.html_body =~ "This verification link expires in 15 minutes and can be used once."
++    assert email.html_body =~ "Secured by Memba"
++    assert email.html_body =~ "Sent to alice@example.com."
++
++    escaped_verification_url =
++      Phoenix.HTML.html_escape(verification_url) |> Phoenix.HTML.safe_to_string()
++
++    assert email.html_body =~ escaped_verification_url
++  end
++
++  test "escapes dynamic URL content in HTML while keeping headers general" do
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.local",
++      message_stream: "development-auth"
++    )
++
++    verification_url =
++      ~s|http://localhost:4000/my/settings/emails/verify/token?next=<settings>&email="member@example.com"|
++
++    assert :ok =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: "member@example.com",
++               verification_url: verification_url
++             })
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Memba", "auth@mail.memba.local"}
++    assert email.subject == "Verify this email address for your Memba account"
++    refute email.subject =~ "\n"
++
++    escaped_verification_url =
++      Phoenix.HTML.html_escape(verification_url) |> Phoenix.HTML.safe_to_string()
++
++    assert email.html_body =~ escaped_verification_url
++    refute email.html_body =~ ~s|next=<settings>|
++    refute email.html_body =~ ~s|email="member@example.com"|
++  end
++
++  test "builds a Resend-tagged verification email" do
++    Application.put_env(:memba, AuthEmail,
++      provider: :resend,
++      from: "auth@mail.memba.io",
++      message_stream: "auth"
++    )
++
++    person_id = "per_00000000-0000-0000-0000-000000000011"
++
++    assert :ok =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: "member@example.com",
++               person_id: person_id,
++               verification_url: "https://app.memba.io/my/settings/emails/verify/token-123"
++             })
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.provider_options == %{
++             tags: [
++               %{name: "memba_email_kind", value: "person_email_address_verification"},
++               %{name: "memba_auth_email_stream", value: "auth"},
++               %{name: "memba_person_id", value: person_id}
++             ]
++           }
++  end
++
++  test "rejects invalid inputs before Swoosh handoff" do
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.local",
++      message_stream: "development-auth"
++    )
++
++    assert {:error, :invalid_email} =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: " ",
++               verification_url: "http://localhost:4000/my/settings/emails/verify/token"
++             })
++
++    assert {:error, :invalid_verification_url} =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: "member@example.com",
++               verification_url: " "
++             })
++
++    assert_no_email_sent()
++  end
++
++  test "does not hand an email to Swoosh when required auth email configuration is missing" do
++    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
++    Application.put_env(:memba, AuthEmail, from: "auth@mail.memba.io")
++
++    assert {:error, {:person_email_address_verification_email_configuration_error, message}} =
++             PersonEmailAddressVerificationEmail.deliver(%{
++               email: "member@example.com",
++               verification_url: "https://app.memba.io/my/settings/emails/verify/token"
++             })
++
++    assert message =~ "Auth email delivery is enabled"
++    assert message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
++
++    assert_no_email_sent()
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
