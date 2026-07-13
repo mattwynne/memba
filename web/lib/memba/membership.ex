@@ -23,6 +23,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Commands.VerifyPersonEmailAddress
+  alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Projections.Club
@@ -35,6 +36,8 @@ defmodule Memba.Membership do
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Repo
+
+  @person_email_address_verification_token_ttl_seconds 15 * 60
 
   @doc """
   Create a club through the Membership Commanded application.
@@ -144,6 +147,32 @@ defmodule Memba.Membership do
       |> issue_person_email_address_verification(opts)
     end
   end
+
+  @doc """
+  Consume an email-address verification token exactly once.
+
+  A token is accepted only when it is known, unexpired, unconsumed, unrevoked,
+  and still scoped to a pending email address attached to the same Person.
+  """
+  def consume_person_email_address_verification_token(token, opts \\ [])
+
+  def consume_person_email_address_verification_token(token, opts)
+      when is_binary(token) and is_list(opts) do
+    token_hash = hash_person_email_address_verification_token(token)
+    now = timestamp(opts)
+
+    EmailAddressVerificationToken.consume(token_hash, now, fn verification_token ->
+      with {:ok, email_address} <-
+             pending_person_email_address_for_verification(
+               verification_token.person_id,
+               verification_token.normalized_email
+             ) do
+        {:ok, person_email_address_verification_request(email_address)}
+      end
+    end)
+  end
+
+  def consume_person_email_address_verification_token(_token, _opts), do: {:error, :not_found}
 
   @doc """
   Mark a pending person email address as verified.
@@ -1395,7 +1424,13 @@ defmodule Memba.Membership do
 
   defp issue_person_email_address_verification(request, opts) do
     issuer =
-      Keyword.get(opts, :verification_issuer, &default_person_email_address_verification_issuer/1)
+      case Keyword.fetch(opts, :verification_issuer) do
+        {:ok, issuer} ->
+          issuer
+
+        :error ->
+          fn request -> default_person_email_address_verification_issuer(request, opts) end
+      end
 
     case issue_person_email_address_verification_with(issuer, request) do
       :ok -> {:ok, request}
@@ -1414,16 +1449,35 @@ defmodule Memba.Membership do
     {:error, :invalid_email_address_verification_issuer}
   end
 
-  defp default_person_email_address_verification_issuer(_request) do
-    {:ok, %{verification_token: InvitationToken.generate_token()}}
+  defp default_person_email_address_verification_issuer(request, opts) do
+    token = InvitationToken.generate_token()
+    now = timestamp(opts)
+    expires_at = DateTime.add(now, @person_email_address_verification_token_ttl_seconds, :second)
+
+    attrs = %{
+      person_id: request.person_id,
+      normalized_email: request.normalized_email,
+      token_hash: hash_person_email_address_verification_token(token),
+      expires_at: expires_at
+    }
+
+    case EmailAddressVerificationToken.insert(attrs) do
+      {:ok, %EmailAddressVerificationToken{} = verification_token} ->
+        {:ok, %{token: token, expires_at: verification_token.expires_at}}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   defp person_email_address_verification_revoker(opts) do
-    Keyword.pop(
-      opts,
-      :verification_revoker,
-      &default_person_email_address_verification_revoker/1
-    )
+    case Keyword.pop(opts, :verification_revoker) do
+      {nil, opts} ->
+        {fn request -> default_person_email_address_verification_revoker(request, opts) end, opts}
+
+      {revoker, opts} ->
+        {revoker, opts}
+    end
   end
 
   defp revoke_removed_person_email_address_verifications(
@@ -1465,7 +1519,21 @@ defmodule Memba.Membership do
     end
   end
 
-  defp default_person_email_address_verification_revoker(_request), do: :ok
+  defp default_person_email_address_verification_revoker(request, opts) do
+    now = timestamp(opts)
+
+    with {:ok, person_id} <- cast_person_id(request.person_id),
+         {:ok, %{normalized_email: normalized_email}} <-
+           EmailAddresses.normalize_email(request.normalized_email) do
+      EmailAddressVerificationToken.revoke_pending(person_id, normalized_email, now)
+    else
+      _invalid -> {:error, :invalid_email_address_verification_request}
+    end
+  end
+
+  defp hash_person_email_address_verification_token(token) when is_binary(token) do
+    :crypto.hash(:sha256, token)
+  end
 
   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
     with {:ok, person_id} <- cast_person_id(person_id) do
@@ -1555,6 +1623,10 @@ defmodule Memba.Membership do
       {:ok, _verified_at} -> {:error, :invalid_verified_at}
       :error -> {:ok, DateTime.utc_now(:microsecond)}
     end
+  end
+
+  defp timestamp(opts) do
+    Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
   end
 
   defp create_person_email_attrs(attrs) do

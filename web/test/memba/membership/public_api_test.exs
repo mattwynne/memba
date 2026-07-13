@@ -21,6 +21,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+  alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -730,6 +731,164 @@ defmodule Memba.Membership.PublicApiTest do
              Membership.resend_person_email_address_verification(
                %{person_id: person_id, email: "alice@example.com"},
                verification_issuer: verification_issuer
+             )
+  end
+
+  test "resend_person_email_address_verification/2 stores a scoped 15-minute one-use token" do
+    person_id = Memba.ID.generate(:person)
+    now = ~U[2026-07-13 21:00:00.000000Z]
+    consumed_at = DateTime.add(now, 60, :second)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: " Alice+New@Example.COM "},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              person_id: ^person_id,
+              email: "Alice+New@Example.COM",
+              normalized_email: "alice+new@example.com",
+              issuer_result: %{
+                token: token,
+                expires_at: expires_at
+              }
+            }} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               now: now
+             )
+
+    assert is_binary(token)
+    assert expires_at == DateTime.add(now, 15 * 60, :second)
+
+    assert %EmailAddressVerificationToken{
+             person_id: ^person_id,
+             normalized_email: "alice+new@example.com",
+             token_hash: token_hash,
+             expires_at: ^expires_at,
+             consumed_at: nil,
+             revoked_at: nil
+           } =
+             Repo.get_by(EmailAddressVerificationToken,
+               person_id: person_id,
+               normalized_email: "alice+new@example.com"
+             )
+
+    assert token_hash == :crypto.hash(:sha256, token)
+    refute token_hash == token
+
+    assert {:ok,
+            %{
+              person_id: ^person_id,
+              email: "Alice+New@Example.COM",
+              normalized_email: "alice+new@example.com"
+            }} =
+             Membership.consume_person_email_address_verification_token(token, now: consumed_at)
+
+    assert %EmailAddressVerificationToken{consumed_at: ^consumed_at} =
+             Repo.get_by(EmailAddressVerificationToken, token_hash: token_hash)
+
+    assert {:error, :consumed} =
+             Membership.consume_person_email_address_verification_token(token,
+               now: DateTime.add(consumed_at, 1, :second)
+             )
+  end
+
+  test "consume_person_email_address_verification_token/2 rejects expired and non-pending tokens" do
+    person_id = Memba.ID.generate(:person)
+    issued_at = ~U[2026-07-13 21:30:00.000000Z]
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               consistency: :strong
+             )
+
+    assert {:ok, %{issuer_result: %{token: expired_token}}} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               now: issued_at
+             )
+
+    assert {:error, :expired} =
+             Membership.consume_person_email_address_verification_token(expired_token,
+               now: DateTime.add(issued_at, 15 * 60, :second)
+             )
+
+    assert {:ok, %{issuer_result: %{token: verified_token}}} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               now: issued_at
+             )
+
+    assert :ok =
+             Membership.verify_person_email_address(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               consistency: :strong
+             )
+
+    assert {:error, :email_address_already_verified} =
+             Membership.consume_person_email_address_verification_token(verified_token,
+               now: DateTime.add(issued_at, 60, :second)
+             )
+  end
+
+  test "old verification tokens cannot verify removed and re-added pending addresses" do
+    person_id = Memba.ID.generate(:person)
+    now = ~U[2026-07-13 22:00:00.000000Z]
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: "alice+stale@example.com"},
+               consistency: :strong
+             )
+
+    assert {:ok, %{issuer_result: %{token: stale_token}}} =
+             Membership.resend_person_email_address_verification(
+               %{person_id: person_id, email: "alice+stale@example.com"},
+               now: now
+             )
+
+    stale_token_hash = :crypto.hash(:sha256, stale_token)
+
+    assert :ok =
+             Membership.remove_person_email_address(
+               %{person_id: person_id, email: "alice+stale@example.com"},
+               consistency: :strong
+             )
+
+    assert %EmailAddressVerificationToken{revoked_at: %DateTime{}} =
+             Repo.get_by(EmailAddressVerificationToken, token_hash: stale_token_hash)
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: "alice+stale@example.com"},
+               consistency: :strong
+             )
+
+    assert {:error, :revoked} =
+             Membership.consume_person_email_address_verification_token(stale_token,
+               now: DateTime.add(now, 60, :second)
              )
   end
 
