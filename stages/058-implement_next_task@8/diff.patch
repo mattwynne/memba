@@ -1,0 +1,81 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 59df9c1..1282cd7 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+ - [x] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
+ - [x] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.
+-- [ ] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
++- [x] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
+ - [ ] 010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.
+ - [ ] 011 Add a general verification email template using existing transactional email delivery conventions.
+ - [ ] 012 Add the verification callback route/page.
+diff --git a/web/lib/memba/membership/email_address_verification_token.ex b/web/lib/memba/membership/email_address_verification_token.ex
+index 043fb8e..2567f38 100644
+--- a/web/lib/memba/membership/email_address_verification_token.ex
++++ b/web/lib/memba/membership/email_address_verification_token.ex
+@@ -30,6 +30,7 @@ defmodule Memba.Membership.EmailAddressVerificationToken do
+     |> validate_required([:person_id, :normalized_email, :token_hash, :expires_at])
+     |> validate_person_id()
+     |> validate_normalized_email()
++    |> validate_token_hash()
+     |> foreign_key_constraint(:person_id)
+     |> unique_constraint(:token_hash,
+       name: :membership_person_email_address_verification_tokens_token_hash_index
+@@ -67,4 +68,17 @@ defmodule Memba.Membership.EmailAddressVerificationToken do
+         end
+     end
+   end
++
++  defp validate_token_hash(changeset) do
++    case get_field(changeset, :token_hash) do
++      nil ->
++        changeset
++
++      token_hash when is_binary(token_hash) and byte_size(token_hash) == 32 ->
++        changeset
++
++      _token_hash ->
++        add_error(changeset, :token_hash, "must be a SHA-256 digest")
++    end
++  end
+ end
+diff --git a/web/test/memba/membership/email_address_verification_token_test.exs b/web/test/memba/membership/email_address_verification_token_test.exs
+index c432083..3598f27 100644
+--- a/web/test/memba/membership/email_address_verification_token_test.exs
++++ b/web/test/memba/membership/email_address_verification_token_test.exs
+@@ -15,6 +15,10 @@ defmodule Memba.Membership.EmailAddressVerificationTokenTest do
+   test "verification token table stores only hashed token material and person email-address scope" do
+     columns = verification_token_columns()
+ 
++    allowed_columns =
++      ~w(id person_id normalized_email token_hash expires_at consumed_at revoked_at inserted_at updated_at)
++
++    assert columns |> Map.keys() |> Enum.sort() == Enum.sort(allowed_columns)
+     assert columns["person_id"] == %{data_type: "text", nullable?: false}
+     assert columns["normalized_email"] == %{data_type: "text", nullable?: false}
+     assert columns["token_hash"] == %{data_type: "bytea", nullable?: false}
+@@ -29,6 +33,22 @@ defmodule Memba.Membership.EmailAddressVerificationTokenTest do
+     refute Map.has_key?(columns, "email")
+   end
+ 
++  test "verification token changeset only accepts SHA-256 token hashes" do
++    person_id = Memba.ID.generate(:person)
++    expires_at = DateTime.utc_now() |> DateTime.add(15, :minute)
++
++    changeset =
++      EmailAddressVerificationToken.create_changeset(%{
++        person_id: person_id,
++        normalized_email: "alice@example.com",
++        token_hash: "plaintext-token",
++        expires_at: expires_at
++      })
++
++    refute changeset.valid?
++    assert {"must be a SHA-256 digest", _metadata} = changeset.errors[:token_hash]
++  end
++
+   test "verification token table indexes token hashes and person address scope" do
+     index_definitions = verification_token_index_definitions()
+ 
