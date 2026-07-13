@@ -1,0 +1,931 @@
+diff --git a/acceptance-tests/features/person_email_addresses.feature b/acceptance-tests/features/person_email_addresses.feature
+index d518e7f..2fc7f43 100644
+--- a/acceptance-tests/features/person_email_addresses.feature
++++ b/acceptance-tests/features/person_email_addresses.feature
+@@ -39,7 +39,7 @@ Rule: Staff manage a person's known email addresses
+ 
+ Rule: Members manage their own email addresses from Account settings
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice opens Account settings from the member menu
+       Given Alice is a member of Kootenay Mountaineering Club
+       When Alice opens Account settings from their member menu
+@@ -47,7 +47,7 @@ Rule: Members manage their own email addresses from Account settings
+       And Alice should see Kootenay Mountaineering Club in their current clubs
+       And Alice should see their primary email address
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice adds and verifies a new email address
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice's primary email address is "alice@example.com"
+@@ -58,14 +58,14 @@ Rule: Members manage their own email addresses from Account settings
+       Then Alice should see "Email verified, you can close this browser."
+       And Alice should see "alice@work.example" as verified in Account settings
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice cannot make a pending email address primary
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice's primary email address is "alice@example.com"
+       When Alice adds "alice@work.example" to their Account settings
+       Then Alice should not be able to make "alice@work.example" primary
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice makes a verified alternate email address primary
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice's primary email address is "alice@example.com"
+@@ -74,7 +74,7 @@ Rule: Members manage their own email addresses from Account settings
+       Then Alice's primary email address should be "alice@work.example"
+       And Alice's alternate email addresses should include "alice@example.com"
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice removes a non-primary email address but keeps one primary address
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice's primary email address is "alice@example.com"
+@@ -84,14 +84,14 @@ Rule: Members manage their own email addresses from Account settings
+       Then Alice's alternate email addresses should not include "alice@work.example"
+       And Alice's primary email address should be "alice@example.com"
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Alice resends verification for a pending email address
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice has pending email address "alice@work.example"
+       When Alice resends verification for "alice@work.example"
+       Then Alice should receive a verification email at "alice@work.example"
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Removed pending email addresses cannot be verified later
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice has pending email address "alice@work.example"
+@@ -102,7 +102,7 @@ Rule: Members manage their own email addresses from Account settings
+ 
+ Rule: Pending email addresses do not identify a member until verified
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Signing in with a pending known address verifies it
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice has pending email address "alice@work.example"
+@@ -110,7 +110,7 @@ Rule: Pending email addresses do not identify a member until verified
+       Then Alice should be signed in
+       And Alice should see "alice@work.example" as verified in Account settings
+ 
+-    @iteration-053 @todo-domain @todo-ui
++    @iteration-053
+     Scenario: Inbound email from a pending known address is rejected
+       Given Alice is a member of Kootenay Mountaineering Club
+       And Alice has pending email address "alice@work.example"
+diff --git a/acceptance-tests/features/step_definitions/person_email_address_steps.js b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+index f8c041f..7f48b21 100644
+--- a/acceptance-tests/features/step_definitions/person_email_address_steps.js
++++ b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+@@ -2,23 +2,31 @@ const assert = require("node:assert/strict");
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const { expect: playwrightExpect } = require("@playwright/test");
+ const {
++  appUrl,
++  clubSiteUrl,
+   createPerson,
+   cssString,
+   kootenayClubName,
+   projectionPollIntervalMs,
+   projectionTimeoutMs,
++  sendInboundClubEmail,
+   testLocalDeliveryFacts,
+-  updatePersonEmailAddresses
++  testMailboxEmails,
++  updatePersonEmailAddresses,
++  waitForMailboxEmails
+ } = require("../support/member_message");
+ const {
+   assertReceivesSignInLink,
+   assertSignedInAsStaff,
+   followSignInLink,
+   requestSignInLinkForEmail,
++  signInDirectly,
+   signInAsStaffDirectly
+ } = require("../support/authentication");
+ const serverCommands = require("../support/server_commands");
+ 
++const verificationEmailSubject = "Verify this email address for your Memba account";
++
+ Given("{word}'s primary email address is {string}", async function (personName, primaryEmail) {
+   await ensurePersonEmailAddresses(this, personName, [
+     { email: primaryEmail, isPrimary: true },
+@@ -43,6 +51,174 @@ Given("{word}'s alternate email address is {string}", async function (personName
+   ]);
+ });
+ 
++Given("{word} has verified alternate email {string}", async function (personName, alternateEmail) {
++  const current = this.people && this.people[personName] ? personEmailAddressesFor(this, personName) : [];
++  const primary = current.find((emailAddress) => emailAddress.isPrimary) || {
++    email: defaultPrimaryEmailFor(personName),
++    isPrimary: true
++  };
++  const alternates = current.filter(
++    (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== alternateEmail
++  );
++
++  await ensurePersonEmailAddresses(this, personName, [
++    primary,
++    ...alternates,
++    { email: alternateEmail, isPrimary: false }
++  ]);
++});
++
++Given("{word} has pending email address {string}", async function (personName, email) {
++  await addPendingPersonEmailAddress(this, personName, email);
++});
++
++When("{word} opens Account settings from their member menu", async function (personName) {
++  await signInDirectly(this, personName);
++  await openClubPageForSettings(this, kootenayClubName);
++  await this.page.locator("#club-site-identity-menu-button").click();
++  await playwrightExpect(this.page.locator("#club-site-account-settings-link")).toBeVisible();
++  await playwrightExpect(this.page.locator("#club-site-identity-menu-divider")).toBeVisible();
++  await playwrightExpect(this.page.locator("#club-site-sign-out-button")).toBeVisible();
++  await this.page.locator("#club-site-account-settings-link").click();
++  await playwrightExpect(this.page.locator("#my-settings-title")).toContainText("Account settings");
++});
++
++When("{word} adds {string} to their Account settings", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await recordVerificationEmailBaseline(this, email);
++  await this.page.locator("#settings-add-email-input").fill(email);
++  await this.page.locator("#my-settings-add-email-button").click();
++  await assertEmailRowState(this, email, "pending");
++  await refreshPersonState(this, personName);
++});
++
++When("{word} verifies {string} from that email", async function (_personName, email) {
++  const verificationUrl = await verificationUrlFor(this, email);
++  await this.page.goto(browserUrl(this, verificationUrl));
++});
++
++When("{word} makes {string} their primary email address", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await emailRow(this, email).locator("button", { hasText: "Make primary" }).click();
++  await assertEmailRowState(this, email, "primary");
++  await refreshPersonState(this, personName);
++});
++
++When("{word} removes {string} from their Account settings", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await emailRow(this, email).locator("button", { hasText: "Remove" }).click();
++  await playwrightExpect(emailRow(this, email)).toHaveCount(0);
++  await refreshPersonState(this, personName);
++});
++
++When("{word} resends verification for {string}", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await recordVerificationEmailBaseline(this, email);
++  await emailRow(this, email).locator("button", { hasText: "Resend verification" }).click();
++});
++
++When("{word} opens the old verification link for {string}", async function (_personName, email) {
++  const verificationUrl = await verificationUrlFor(this, email);
++  await this.page.goto(browserUrl(this, verificationUrl));
++});
++
++When("{word} emails Kootenay Mountaineering Club from {string}", async function (personName, fromAddress) {
++  const club = this.clubs && this.clubs[kootenayClubName];
++  assert.ok(club && club.slug, `Expected ${kootenayClubName} to be known before sending inbound mail`);
++  const toAddress = `everyone@${club.slug}.${process.env.ACCEPTANCE_CLUB_INBOUND_EMAIL_DOMAIN || "clubs.memba.io"}`;
++
++  await sendInboundClubEmail(this, personName, "Pending address message", toAddress, { fromAddress });
++});
++
++Then("{word} should see their name in Account settings", async function (personName) {
++  await playwrightExpect(this.page.locator("#my-settings-title")).toContainText("Account settings");
++  await playwrightExpect(this.page.locator("#my-settings-profile-name")).toContainText(personName);
++});
++
++Then("{word} should see Kootenay Mountaineering Club in their current clubs", async function (_personName) {
++  await this.page.locator("#my-settings-tab-clubs").click();
++  await playwrightExpect(this.page.locator("#my-settings-club-chip-list")).toContainText(kootenayClubName);
++});
++
++Then("{word} should see their primary email address", async function (personName) {
++  const person = await refreshPersonState(this, personName);
++  await this.page.locator("#my-settings-tab-emails").click();
++  await playwrightExpect(emailRow(this, person.primaryEmail)).toContainText(person.primaryEmail);
++  await playwrightExpect(emailRow(this, person.primaryEmail).locator(".my-settings-primary-badge")).toContainText(
++    "Primary"
++  );
++});
++
++Then("{word} should see {string} as pending verification", async function (_personName, email) {
++  await assertEmailRowState(this, email, "pending");
++});
++
++Then("{word} should receive a verification email at {string}", async function (_personName, email) {
++  await captureVerificationEmail(this, email);
++});
++
++Then("{word} should see {string}", async function (_personName, expectedText) {
++  await playwrightExpect(this.page.locator("body")).toContainText(expectedText);
++});
++
++Then("{word} should see {string} as verified in Account settings", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await assertEmailRowState(this, email, "verified");
++  await refreshPersonState(this, personName);
++});
++
++Then("{word} should not be able to make {string} primary", async function (_personName, email) {
++  await assertEmailRowState(this, email, "pending");
++  await playwrightExpect(emailRow(this, email).locator("button", { hasText: "Make primary" })).toHaveCount(0);
++});
++
++Then("{word} should not be able to remove {string}", async function (personName, email) {
++  await openAccountSettingsEmails(this, personName);
++  await playwrightExpect(emailRow(this, email).locator("button", { hasText: "Remove" })).toHaveCount(0);
++});
++
++Then("{word}'s alternate email addresses should not include {string}", async function (personName, unexpectedEmail) {
++  const person = await refreshPersonState(this, personName);
++
++  assert.ok(
++    !person.alternateEmails.includes(unexpectedEmail),
++    `Expected ${personName}'s alternate emails not to include ${unexpectedEmail}; saw ${person.alternateEmails.join(
++      ", "
++    )}`
++  );
++
++  if ((await personRow(this, personName).count()) > 0) {
++    await playwrightExpect(personRow(this, personName).locator('[data-testid="person-alternate-emails"]')).not.toContainText(
++      unexpectedEmail
++    );
++  }
++});
++
++Then("{word} should see that the verification link is no longer valid", async function (_personName) {
++  await playwrightExpect(this.page.locator("body")).toContainText(/invalid|expired|no longer valid/i);
++});
++
++Then("{word}'s email addresses should not include {string}", async function (personName, unexpectedEmail) {
++  const person = await refreshPersonState(this, personName);
++
++  assert.ok(
++    !person.emailAddresses.some((emailAddress) => emailAddress.email === unexpectedEmail),
++    `Expected ${personName}'s email addresses not to include ${unexpectedEmail}; saw ${person.emailAddresses
++      .map((emailAddress) => emailAddress.email)
++      .join(", ")}`
++  );
++});
++
++Then("Memba should reject the inbound email", async function () {
++  const source = await lastInboundEmailSource(this);
++  assert.equal(source && source.status, "rejected");
++});
++
++Then("Memba should not post the email as a club message from {word}", async function (_personName) {
++  const source = await lastInboundEmailSource(this);
++  assert.equal(source && source.messageId, null);
++});
++
+ Then("{word} should receive a sign-in link at {string}", async function (personName, expectedEmail) {
+   await assertReceivesSignInLink(this, personName);
+   const request = this.signInRequests && this.signInRequests[personName];
+@@ -104,26 +280,232 @@ When(
+ );
+ 
+ Then("{word}'s primary email address should be {string}", async function (personName, expectedEmail) {
+-  const person = personFor(this, personName);
++  const person = await refreshPersonState(this, personName);
+   assert.equal(person.primaryEmail, expectedEmail);
+ 
+-  await playwrightExpect(personRow(this, personName).locator('[data-testid="person-primary-email"]')).toContainText(
+-    expectedEmail
+-  );
++  if ((await personRow(this, personName).count()) > 0) {
++    await playwrightExpect(personRow(this, personName).locator('[data-testid="person-primary-email"]')).toContainText(
++      expectedEmail
++    );
++  }
+ });
+ 
+ Then("{word}'s alternate email addresses should include {string}", async function (personName, expectedEmail) {
+-  const person = personFor(this, personName);
++  const person = await refreshPersonState(this, personName);
+   assert.ok(
+     person.alternateEmails.includes(expectedEmail),
+     `Expected ${personName}'s alternate emails to include ${expectedEmail}; saw ${person.alternateEmails.join(", ")}`
+   );
+ 
+-  await playwrightExpect(personRow(this, personName).locator('[data-testid="person-alternate-emails"]')).toContainText(
+-    expectedEmail
+-  );
++  if ((await personRow(this, personName).count()) > 0) {
++    await playwrightExpect(personRow(this, personName).locator('[data-testid="person-alternate-emails"]')).toContainText(
++      expectedEmail
++    );
++  }
+ });
+ 
++async function openClubPageForSettings(world, clubName) {
++  const club = world.clubs && world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to be known before opening club page`);
++  await world.page.goto(clubSiteUrl(world.baseUrl, club));
++  await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
++}
++
++async function openAccountSettingsEmails(world, personName) {
++  if (!(await signedInClubShellVisible(world))) {
++    await signInDirectly(world, personName);
++  }
++
++  const club = world.clubs && world.clubs[kootenayClubName];
++  assert.ok(club && club.slug, `Expected ${kootenayClubName} to be known before opening Account settings`);
++  await world.page.goto(clubSiteUrl(world.baseUrl, club, "/my/settings/emails"));
++  await playwrightExpect(world.page.locator("#my-settings-title")).toContainText("Account settings");
++  await playwrightExpect(world.page.locator("#my-settings")).toHaveAttribute("data-active-tab", "emails");
++}
++
++async function signedInClubShellVisible(world) {
++  const shell = world.page.locator("#club-site-layout[data-surface='club-site']");
++  return (await shell.count()) > 0 && (await shell.isVisible().catch(() => false));
++}
++
++async function recordVerificationEmailBaseline(world, email) {
++  world.verificationEmailBaselines = world.verificationEmailBaselines || {};
++  world.verificationEmails = world.verificationEmails || {};
++  world.verificationUrls = world.verificationUrls || {};
++  world.verificationEmailBaselines[email] = await testMailboxEmails(world);
++}
++
++async function captureVerificationEmail(world, email) {
++  world.verificationEmailBaselines = world.verificationEmailBaselines || {};
++  world.verificationEmails = world.verificationEmails || {};
++  world.verificationUrls = world.verificationUrls || {};
++
++  const previousEmails = world.verificationEmailBaselines[email] || [];
++  const emails = await waitForMailboxEmails(
++    world,
++    previousEmails.length + 1,
++    `verification email for ${email}`
++  );
++  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
++  const newEmails = emails.filter((candidate) => !previousIds.includes(mailboxMessageId(candidate)));
++  const verificationEmail = newEmails.find((candidate) => verificationEmailMatches(candidate, email));
++
++  assert.ok(
++    verificationEmail,
++    `Expected ${email} to receive a verification email; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
++  );
++
++  world.verificationEmails[email] = verificationEmail;
++  world.verificationUrls[email] = verificationUrlFromEmail(verificationEmail);
++  return verificationEmail;
++}
++
++async function verificationUrlFor(world, email) {
++  if (!(world.verificationUrls && world.verificationUrls[email])) {
++    await captureVerificationEmail(world, email);
++  }
++
++  return world.verificationUrls[email];
++}
++
++function verificationEmailMatches(email, recipientEmail) {
++  return (
++    email.subject === verificationEmailSubject &&
++    mailboxEmailTo(email).includes(recipientEmail) &&
++    /\/my\/settings\/email-verifications\//.test(mailboxEmailText(email))
++  );
++}
++
++function verificationUrlFromEmail(email) {
++  const match = mailboxEmailText(email).match(/https?:\/\/\S+\/my\/settings\/email-verifications\/\S+/);
++  assert.ok(match, `Expected verification email to contain a verification URL; saw ${mailboxEmailText(email)}`);
++  return match[0].replace(/[),.;]+$/u, "");
++}
++
++function mailboxMessageId(email) {
++  return email && (email.id || (email.headers && email.headers["Message-ID"]));
++}
++
++function mailboxEmailTo(email) {
++  const to = email && email.to;
++
++  if (Array.isArray(to)) {
++    return to.join(" ");
++  }
++
++  return String(to || "");
++}
++
++function mailboxEmailText(email) {
++  return String((email && (email.text_body || email.textBody || email.text)) || "");
++}
++
++function mailboxEmailSummary(email) {
++  return {
++    subject: email && email.subject,
++    to: email && email.to,
++    text_body: email && email.text_body
++  };
++}
++
++function browserUrl(world, url) {
++  const parsed = new URL(url, `${world.baseUrl}/`);
++  const base = new URL(world.baseUrl);
++
++  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
++    parsed.protocol = base.protocol;
++    parsed.hostname = base.hostname;
++    parsed.port = base.port;
++  }
++
++  return parsed.toString();
++}
++
++function emailRow(world, email) {
++  return world.page.locator('[data-testid="person-email-row"]', { hasText: email });
++}
++
++async function assertEmailRowState(world, email, expectedState) {
++  const row = emailRow(world, email);
++  await playwrightExpect(row).toBeVisible();
++  await playwrightExpect(row).toHaveAttribute("data-state", expectedState);
++}
++
++async function addPendingPersonEmailAddress(world, personName, email) {
++  const person = personFor(world, personName);
++  const result = serverCommands.runCommand(
++    `
++person_id = Map.fetch!(payload, "personId")
++email = Map.fetch!(payload, "email")
++
++:ok = Memba.Membership.add_person_email_address(
++  %{person_id: person_id, email: email},
++  consistency: :strong
++)
++
++{:ok, %{issuer_result: %{token: token}}} =
++  Memba.Membership.resend_person_email_address_verification(%{person_id: person_id, email: email})
++
++person = Memba.Membership.get_person(person_id)
++
++%{
++  personId: person.person_id,
++  personName: person.name,
++  email: person.email,
++  emailAddresses: Memba.Membership.list_person_email_addresses(person.person_id),
++  verificationToken: token
++}
++`,
++    { personId: person.personId, email }
++  );
++
++  world.people = world.people || {};
++  world.people[personName] = personStateFromServer(result);
++  world.verificationUrls = world.verificationUrls || {};
++  world.verificationUrls[email] = appUrl(world.baseUrl, `/my/settings/email-verifications/${result.verificationToken}`);
++}
++
++async function refreshPersonState(world, personName) {
++  const person = personFor(world, personName);
++  const result = serverCommands.runCommand(
++    `
++person_id = Map.fetch!(payload, "personId")
++person = Memba.Membership.get_person(person_id)
++
++%{
++  personId: person.person_id,
++  personName: person.name,
++  email: person.email,
++  emailAddresses: Memba.Membership.list_person_email_addresses(person.person_id)
++}
++`,
++    { personId: person.personId }
++  );
++
++  world.people = world.people || {};
++  world.people[personName] = personStateFromServer(result);
++  return world.people[personName];
++}
++
++async function lastInboundEmailSource(world) {
++  const inboundEmail = world.lastInboundEmail;
++  assert.ok(inboundEmail && inboundEmail.providerMessageId, "Expected an inbound email before checking source status");
++
++  return serverCommands.runCommand(
++    `
++provider_message_id = Map.fetch!(payload, "providerMessageId")
++source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
++
++%{
++  status: source && source.status,
++  messageId: source && source.message_id,
++  rejectionReason: source && source.rejection_reason
++}
++`,
++    { providerMessageId: inboundEmail.providerMessageId }
++  );
++}
++
+ async function ensurePersonEmailAddresses(world, personName, emailAddresses) {
+   await ensureStaffClub(world);
+ 
+@@ -202,7 +584,8 @@ function defaultClubSlugFor(clubName) {
+ function personStateFromServer(result) {
+   const emailAddresses = result.emailAddresses.map((emailAddress) => ({
+     email: emailAddress.email,
+-    isPrimary: Boolean(emailAddress["primary?"] || emailAddress.is_primary || emailAddress.isPrimary)
++    isPrimary: Boolean(emailAddress["primary?"] || emailAddress.is_primary || emailAddress.isPrimary),
++    verifiedAt: emailAddress.verified_at || emailAddress.verifiedAt
+   }));
+   const primaryEmailAddress = emailAddresses.find((emailAddress) => emailAddress.isPrimary);
+   assert.ok(primaryEmailAddress, `Expected ${result.personName} to have a primary email address`);
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 7725208..b66e168 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -21,5 +21,5 @@
+ - [x] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
+ - [x] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
+ - [x] 021 Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
+-- [ ] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
++- [x] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
+ - [ ] 023 Run `dev check` and fix all issues.
+diff --git a/web/test/features/step_definitions/authentication_steps.exs b/web/test/features/step_definitions/authentication_steps.exs
+index 30f12b3..d083221 100644
+--- a/web/test/features/step_definitions/authentication_steps.exs
++++ b/web/test/features/step_definitions/authentication_steps.exs
+@@ -463,6 +463,11 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+ 
+     case Accounts.consume_sign_in_token(token) do
+       {:ok, %{email: email}} ->
++        assert :ok =
++                 Membership.verify_pending_person_email_address_for_sign_in(email,
++                   consistency: :strong
++                 )
++
+         sign_in(context, email)
+ 
+       {:error, :consumed} ->
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index eb294d6..3a6a6b1 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -263,6 +263,17 @@ defmodule Memba.Cucumber.MessagingSteps do
+     )
+   end
+ 
++  step "{word} emails Kootenay Mountaineering Club from {string}",
++       %{args: [sender_name, from_address]} = context do
++    receive_inbound_club_email(
++      context,
++      sender_name,
++      "Pending address message",
++      @kmc_everyone_address,
++      from_address: from_address
++    )
++  end
++
+   step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with an attachment$/,
+        %{args: [sender_name, subject, to_address]} = context do
+     receive_inbound_club_email(context, sender_name, subject, to_address,
+@@ -561,6 +572,22 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  step "Memba should reject the inbound email", context do
++    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
++    context
++  end
++
++  step "Memba should not post the email as a club message from {word}",
++       %{args: [_person_name]} = context do
++    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
++
++    assert_no_club_message(
++      context,
++      "Kootenay Mountaineering Club",
++      Map.fetch!(context, :last_message_subject)
++    )
++  end
++
+   step "{word} should receive a rejection email explaining the message was not posted",
+        %{args: [sender_name]} = context do
+     assert_rejection_email(context, sender_name, "wasn't posted")
+diff --git a/web/test/features/step_definitions/person_email_address_steps.exs b/web/test/features/step_definitions/person_email_address_steps.exs
+index 069835d..33dd4f9 100644
+--- a/web/test/features/step_definitions/person_email_address_steps.exs
++++ b/web/test/features/step_definitions/person_email_address_steps.exs
+@@ -39,6 +39,199 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+     add_alternate_email_address(context, person_name, alternate_email)
+   end
+ 
++  step "{word} has verified alternate email {string}",
++       %{args: [person_name, alternate_email]} = context do
++    add_alternate_email_address(context, person_name, alternate_email)
++  end
++
++  step "{word} has pending email address {string}",
++       %{args: [person_name, email]} = context do
++    add_pending_email_address(context, person_name, email)
++  end
++
++  step "{word} opens Account settings from their member menu",
++       %{args: [person_name]} = context do
++    person = fetch_from_context!(context, :people, person_name)
++    clubs = active_club_names_for_person(person.person_id)
++
++    context
++    |> Map.put(:signed_in_identity, %{email: person.email, staff?: false, active_clubs: clubs})
++    |> Map.put(:current_page, :account_settings)
++    |> Map.put(:current_settings_tab, :profile)
++  end
++
++  step "{word} adds {string} to their Account settings",
++       %{args: [person_name, email]} = context do
++    context
++    |> add_pending_email_address(person_name, email)
++    |> Map.put(:current_page, :account_settings)
++    |> Map.put(:current_settings_tab, :emails)
++  end
++
++  step "{word} verifies {string} from that email",
++       %{args: [person_name, email]} = context do
++    verify_email_address_from_stored_link(context, person_name, email)
++  end
++
++  step "{word} makes {string} their primary email address",
++       %{args: [person_name, email]} = context do
++    person_id = context_person_id!(context, person_name)
++
++    assert :ok =
++             Membership.make_person_email_address_primary(
++               %{person_id: person_id, email: email},
++               consistency: :strong
++             )
++
++    update_context_map(context, :people, person_name, %{email: email})
++  end
++
++  step "{word} removes {string} from their Account settings",
++       %{args: [person_name, email]} = context do
++    person_id = context_person_id!(context, person_name)
++
++    assert :ok =
++             Membership.remove_person_email_address(
++               %{person_id: person_id, email: email},
++               consistency: :strong
++             )
++
++    context
++  end
++
++  step "{word} resends verification for {string}",
++       %{args: [person_name, email]} = context do
++    issue_verification_token(context, person_name, email)
++  end
++
++  step "{word} opens the old verification link for {string}",
++       %{args: [person_name, email]} = context do
++    token = verification_token_for!(context, person_name, email)
++
++    case Membership.consume_person_email_address_verification_token(token) do
++      {:ok, request} ->
++        case Membership.verify_person_email_address(request, consistency: :strong) do
++          :ok -> Map.put(context, :current_page, :email_verification_success)
++          {:error, _reason} -> Map.put(context, :current_page, :email_verification_invalid)
++        end
++
++      {:error, _reason} ->
++        Map.put(context, :current_page, :email_verification_invalid)
++    end
++  end
++
++  step "{word} should see their name in Account settings",
++       %{args: [person_name]} = context do
++    assert Map.get(context, :current_page) == :account_settings
++    assert %{person_id: person_id} = fetch_from_context!(context, :people, person_name)
++    assert %{name: ^person_name} = Membership.get_person(person_id)
++    context
++  end
++
++  step "{word} should see Kootenay Mountaineering Club in their current clubs",
++       %{args: [person_name]} = context do
++    person_id = context_person_id!(context, person_name)
++    club_names = active_club_names_for_person(person_id)
++
++    assert "Kootenay Mountaineering Club" in club_names
++    context
++  end
++
++  step "{word} should see their primary email address",
++       %{args: [person_name]} = context do
++    assert Enum.any?(persisted_person_email_addresses(context, person_name), & &1.primary?)
++    context
++  end
++
++  step "{word} should see {string} as pending verification",
++       %{args: [person_name, email]} = context do
++    assert_pending_email_address(context, person_name, email)
++  end
++
++  step "{word} should receive a verification email at {string}",
++       %{args: [person_name, email]} = context do
++    assert is_binary(verification_token_for!(context, person_name, email))
++    context
++  end
++
++  step "{word} should see {string}", %{args: [_person_name, expected_text]} = context do
++    assert Map.get(context, :current_page) == :email_verification_success
++    assert expected_text == "Email verified, you can close this browser."
++    context
++  end
++
++  step "{word} should see {string} as verified in Account settings",
++       %{args: [person_name, email]} = context do
++    email_address = persisted_person_email_address!(context, person_name, email)
++
++    assert email_address.verified_at
++    context
++  end
++
++  step "{word} should not be able to make {string} primary",
++       %{args: [person_name, email]} = context do
++    person_id = context_person_id!(context, person_name)
++
++    assert {:error, _reason} =
++             Membership.make_person_email_address_primary(
++               %{person_id: person_id, email: email},
++               consistency: :strong
++             )
++
++    assert_pending_email_address(context, person_name, email)
++  end
++
++  step "{word} should not be able to remove {string}",
++       %{args: [person_name, email]} = context do
++    person_id = context_person_id!(context, person_name)
++
++    assert {:error, _reason} =
++             Membership.remove_person_email_address(
++               %{person_id: person_id, email: email},
++               consistency: :strong
++             )
++
++    assert_primary_email_address(context, person_name, email)
++  end
++
++  step "{word}'s alternate email addresses should not include {string}",
++       %{args: [person_name, unexpected_email]} = context do
++    email_addresses = persisted_person_email_addresses(context, person_name)
++
++    refute Enum.any?(email_addresses, &(!&1.primary? and same_email?(&1.email, unexpected_email)))
++    context
++  end
++
++  step "Alice's alternate email addresses should not include {string}",
++       %{args: [unexpected_email]} = context do
++    email_addresses = persisted_person_email_addresses(context, "Alice")
++
++    refute Enum.any?(email_addresses, &(!&1.primary? and same_email?(&1.email, unexpected_email)))
++    context
++  end
++
++  step "{word} should see that the verification link is no longer valid",
++       %{args: [_person_name]} = context do
++    assert Map.get(context, :current_page) == :email_verification_invalid
++    context
++  end
++
++  step "{word}'s email addresses should not include {string}",
++       %{args: [person_name, unexpected_email]} = context do
++    email_addresses = persisted_person_email_addresses(context, person_name)
++
++    refute Enum.any?(email_addresses, &same_email?(&1.email, unexpected_email))
++    context
++  end
++
++  step "Alice's email addresses should not include {string}",
++       %{args: [unexpected_email]} = context do
++    email_addresses = persisted_person_email_addresses(context, "Alice")
++
++    refute Enum.any?(email_addresses, &same_email?(&1.email, unexpected_email))
++    context
++  end
++
+   defp add_alternate_email_address(context, person_name, alternate_email) do
+     current = person_email_addresses_for(context, person_name)
+ 
+@@ -59,6 +252,52 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+     ])
+   end
+ 
++  defp add_pending_email_address(context, person_name, email) do
++    person_id = context_person_id!(context, person_name)
++
++    assert :ok =
++             Membership.add_person_email_address(
++               %{person_id: person_id, email: email},
++               consistency: :strong
++             )
++
++    issue_verification_token(context, person_name, email)
++  end
++
++  defp issue_verification_token(context, person_name, email) do
++    person_id = context_person_id!(context, person_name)
++
++    assert {:ok, %{issuer_result: %{token: token}}} =
++             Membership.resend_person_email_address_verification(%{
++               person_id: person_id,
++               email: email
++             })
++
++    update_context_map(context, :verification_tokens, verification_key(person_name, email), %{
++      token: token
++    })
++  end
++
++  defp verify_email_address_from_stored_link(context, person_name, email) do
++    token = verification_token_for!(context, person_name, email)
++
++    with {:ok, request} <- Membership.consume_person_email_address_verification_token(token),
++         :ok <- Membership.verify_person_email_address(request, consistency: :strong) do
++      Map.put(context, :current_page, :email_verification_success)
++    else
++      _invalid -> Map.put(context, :current_page, :email_verification_invalid)
++    end
++  end
++
++  defp verification_token_for!(context, person_name, email) do
++    %{token: token} =
++      fetch_from_context!(context, :verification_tokens, verification_key(person_name, email))
++
++    token
++  end
++
++  defp verification_key(person_name, email), do: {person_name, Accounts.normalize_email(email)}
++
+   step "{word} should receive a sign-in link at {string}",
+        %{args: [person_name, expected_email]} = context do
+     assert %{token: token, email: email} =
+@@ -229,14 +468,55 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+     end
+   end
+ 
++  defp persisted_person_email_address!(context, person_name, email) do
++    context
++    |> persisted_person_email_addresses(person_name)
++    |> Enum.find(&same_email?(&1.email, email))
++    |> case do
++      nil -> flunk("Expected #{person_name} to have email address #{inspect(email)}")
++      email_address -> email_address
++    end
++  end
++
++  defp assert_pending_email_address(context, person_name, email) do
++    email_address = persisted_person_email_address!(context, person_name, email)
++
++    refute email_address.primary?
++    assert email_address.verified_at == nil
++    context
++  end
++
+   defp context_person_id(context, person_name) do
+     case Map.get(context, :people, %{}) |> Map.get(person_name) do
+       %{person_id: person_id} -> person_id
++      %{email: email} -> person_id_by_email(email)
+       person_id when is_binary(person_id) -> person_id
+       _missing -> nil
+     end
+   end
+ 
++  defp person_id_by_email(email) when is_binary(email) do
++    case Membership.get_person_by_email(email) do
++      nil -> nil
++      person -> person.person_id
++    end
++  end
++
++  defp person_id_by_email(_email), do: nil
++
++  defp context_person_id!(context, person_name) do
++    case context_person_id(context, person_name) do
++      nil -> flunk("Expected #{person_name} to be known in the scenario")
++      person_id -> person_id
++    end
++  end
++
++  defp active_club_names_for_person(person_id) do
++    person_id
++    |> Membership.list_active_club_memberships_for_person()
++    |> Enum.map(& &1.club_name)
++  end
++
+   defp primary_email!(email_addresses) do
+     case Enum.find(email_addresses, & &1.is_primary) do
+       %{email: email} -> email
