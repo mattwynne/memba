@@ -1,7 +1,7 @@
 # My settings email-address management
 
 Date: 2026-07-11
-Status: validated
+Status: implementing
 
 ## Goal
 
