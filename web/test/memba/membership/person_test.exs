@@ -230,11 +230,20 @@ defmodule Memba.Membership.PersonTest do
 
   test "apply/2 records the created person identity, name, and email" do
     person_id = Memba.ID.generate(:person)
+    legacy_verified_at = ~U[1970-01-01 00:00:00Z]
 
     assert %Person{
              person_id: ^person_id,
              name: "Alice",
-             email: "alice@example.com"
+             email: "alice@example.com",
+             email_addresses: [
+               %{
+                 email: "alice@example.com",
+                 normalized_email: "alice@example.com",
+                 is_primary: true,
+                 verified_at: ^legacy_verified_at
+               }
+             ]
            } =
              Person.apply(%Person{}, %PersonCreated{
                person_id: person_id,
@@ -245,6 +254,7 @@ defmodule Memba.Membership.PersonTest do
 
   test "apply/2 records replaced email addresses and primary email" do
     person_id = Memba.ID.generate(:person)
+    legacy_verified_at = ~U[1970-01-01 00:00:00Z]
 
     person =
       Person.apply(%Person{}, %PersonCreated{
@@ -254,8 +264,18 @@ defmodule Memba.Membership.PersonTest do
       })
 
     email_addresses = [
-      %{email: "alice@example.com", normalized_email: "alice@example.com", is_primary: false},
-      %{email: "alice@work.example", normalized_email: "alice@work.example", is_primary: true}
+      %{
+        email: "alice@example.com",
+        normalized_email: "alice@example.com",
+        is_primary: false,
+        verified_at: legacy_verified_at
+      },
+      %{
+        email: "alice@work.example",
+        normalized_email: "alice@work.example",
+        is_primary: true,
+        verified_at: legacy_verified_at
+      }
     ]
 
     assert %Person{

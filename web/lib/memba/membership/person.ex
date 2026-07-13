@@ -12,6 +12,7 @@ defmodule Memba.Membership.Person do
   alias Memba.Membership.Events.PersonCreated
 
   @behaviour Aggregate
+  @legacy_verified_at ~U[1970-01-01 00:00:00Z]
 
   defstruct [:person_id, :name, :email, :email_addresses]
 
@@ -69,9 +70,10 @@ defmodule Memba.Membership.Person do
       | person_id: event.person_id,
         name: event.name,
         email: event.email,
-        email_addresses: [
-          %{email: event.email, normalized_email: event.email, is_primary: true}
-        ]
+        email_addresses:
+          mark_all_verified!([
+            %{email: event.email, is_primary: true}
+          ])
     }
   end
 
@@ -79,7 +81,7 @@ defmodule Memba.Membership.Person do
     %__MODULE__{
       person
       | email: event.primary_email,
-        email_addresses: event.email_addresses
+        email_addresses: mark_all_verified!(event.email_addresses)
     }
   end
 
@@ -151,6 +153,13 @@ defmodule Memba.Membership.Person do
       %{normalized_email: normalized_email} -> {:ok, normalized_email}
       %{"normalized_email" => normalized_email} -> {:ok, normalized_email}
       _email_address -> {:error, :exactly_one_primary_email_required}
+    end
+  end
+
+  defp mark_all_verified!(email_addresses) do
+    case EmailAddresses.mark_all_verified(email_addresses, @legacy_verified_at) do
+      {:ok, email_addresses} -> email_addresses
+      {:error, _reason} -> email_addresses
     end
   end
 end
