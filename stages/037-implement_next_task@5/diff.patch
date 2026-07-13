@@ -1,0 +1,489 @@
+diff --git a/acceptance-tests/features/support/server_commands.js b/acceptance-tests/features/support/server_commands.js
+index efcd082..26b6f6e 100644
+--- a/acceptance-tests/features/support/server_commands.js
++++ b/acceptance-tests/features/support/server_commands.js
+@@ -387,6 +387,28 @@ primary_email_address = Enum.find(email_addresses, &Map.fetch!(&1, "is_primary")
+ primary_email = Map.fetch!(primary_email_address, "email")
+ existing_person = if person_id, do: Memba.Membership.get_person(person_id), else: Memba.Membership.get_person_by_email(primary_email)
+ 
++same_email? = fn left, right ->
++  String.downcase(String.trim(left)) == String.downcase(String.trim(right))
++end
++
++ensure_desired_addresses_are_verified = fn person_id ->
++  current_email_addresses = Memba.Membership.list_person_email_addresses(person_id)
++
++  Enum.each(email_addresses, fn %{"email" => email} ->
++    unless Enum.any?(current_email_addresses, &same_email?.(&1.email, email)) do
++      :ok = Memba.Membership.add_person_email_address(
++        %{person_id: person_id, email: email},
++        consistency: :strong
++      )
++
++      :ok = Memba.Membership.verify_person_email_address(
++        %{person_id: person_id, email: email},
++        consistency: :strong
++      )
++    end
++  end)
++end
++
+ person =
+   case existing_person do
+     nil ->
+@@ -398,6 +420,8 @@ person =
+       Memba.Membership.get_person(person_id)
+ 
+     person ->
++      ensure_desired_addresses_are_verified.(person.person_id)
++
+       :ok = Memba.Membership.replace_person_email_addresses(
+         %{person_id: person.person_id, email_addresses: email_addresses},
+         consistency: :strong
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 3945559..749b724 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
+ - [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
+ - [x] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
+-- [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
++- [x] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+ - [ ] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
+ - [ ] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.
+ - [ ] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
+diff --git a/web/lib/memba/membership/email_addresses.ex b/web/lib/memba/membership/email_addresses.ex
+index 1f91c70..ff508ba 100644
+--- a/web/lib/memba/membership/email_addresses.ex
++++ b/web/lib/memba/membership/email_addresses.ex
+@@ -82,6 +82,31 @@ defmodule Memba.Membership.EmailAddresses do
+ 
+   def mark_all_verified(_email_addresses, _verified_at), do: {:error, :invalid_verified_at}
+ 
++  @doc """
++  Normalize a full replacement set using an existing verified/pending state set.
++
++  Addresses that already belong to the person keep their verification state. New
++  addresses are introduced as pending, so they cannot be primary until an
++  explicit verification transition proves mailbox control.
++  """
++  @spec replace_preserving_verification_state(term(), term()) ::
++          {:ok, [address_state()]} | {:error, atom()}
++  def replace_preserving_verification_state(existing_email_addresses, replacement_email_addresses) do
++    with {:ok, existing_email_addresses} <- validate_state_set(existing_email_addresses),
++         {:ok, replacement_email_addresses} <- validate_set(replacement_email_addresses),
++         email_verification_state <- verification_state_by_email(existing_email_addresses),
++         replacement_email_addresses <-
++           apply_verification_state(replacement_email_addresses, email_verification_state) do
++      validate_state_set(replacement_email_addresses)
++    end
++  end
++
++  @doc """
++  Normalize a write-side email-address state set.
++  """
++  @spec validate_state(term()) :: {:ok, [address_state()]} | {:error, atom()}
++  def validate_state(email_addresses), do: validate_state_set(email_addresses)
++
+   @doc """
+   Add an email address to aggregate state as pending verification.
+ 
+@@ -262,6 +287,14 @@ defmodule Memba.Membership.EmailAddresses do
+ 
+   defp cast_verified_at(nil), do: {:ok, nil}
+   defp cast_verified_at(%DateTime{} = verified_at), do: {:ok, verified_at}
++
++  defp cast_verified_at(verified_at) when is_binary(verified_at) do
++    case DateTime.from_iso8601(verified_at) do
++      {:ok, verified_at, _offset} -> {:ok, verified_at}
++      {:error, _reason} -> {:error, :invalid_verified_at}
++    end
++  end
++
+   defp cast_verified_at(_verified_at), do: {:error, :invalid_verified_at}
+ 
+   defp require_primary_verified(email_addresses) do
+@@ -295,6 +328,22 @@ defmodule Memba.Membership.EmailAddresses do
+ 
+   defp reject_primary_removal(%{is_primary: false}), do: :ok
+ 
++  defp verification_state_by_email(email_addresses) do
++    Map.new(email_addresses, fn email_address ->
++      {email_address.normalized_email, email_address.verified_at}
++    end)
++  end
++
++  defp apply_verification_state(email_addresses, verification_state_by_email) do
++    Enum.map(email_addresses, fn email_address ->
++      Map.put(
++        email_address,
++        :verified_at,
++        Map.get(verification_state_by_email, email_address.normalized_email)
++      )
++    end)
++  end
++
+   defp update_address(email_addresses, normalized_email, update_fun) do
+     Enum.map(email_addresses, fn email_address ->
+       if email_address.normalized_email == normalized_email do
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index 4e520b7..55c99e0 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -61,7 +61,11 @@ defmodule Memba.Membership.Person do
+   def execute(%__MODULE__{} = person, %ReplacePersonEmailAddresses{} = command) do
+     with :ok <- validate_person_id(command.person_id),
+          :ok <- validate_matching_person_id(person, command),
+-         {:ok, email_addresses} <- EmailAddresses.validate_set(command.email_addresses),
++         {:ok, email_addresses} <-
++           EmailAddresses.replace_preserving_verification_state(
++             person.email_addresses,
++             command.email_addresses
++           ),
+          {:ok, primary_email} <- primary_email(email_addresses) do
+       %PersonEmailAddressesReplaced{
+         person_id: command.person_id,
+@@ -167,7 +171,7 @@ defmodule Memba.Membership.Person do
+     %__MODULE__{
+       person
+       | email: event.primary_email,
+-        email_addresses: mark_all_verified!(event.email_addresses)
++        email_addresses: replacement_email_addresses!(event.email_addresses)
+     }
+   end
+ 
+@@ -300,6 +304,21 @@ defmodule Memba.Membership.Person do
+     end
+   end
+ 
++  defp replacement_email_addresses!(email_addresses) do
++    if Enum.all?(email_addresses, &has_verified_at?/1) do
++      case EmailAddresses.validate_state(email_addresses) do
++        {:ok, email_addresses} -> email_addresses
++        {:error, _reason} -> email_addresses
++      end
++    else
++      mark_all_verified!(email_addresses)
++    end
++  end
++
++  defp has_verified_at?(%{verified_at: _verified_at}), do: true
++  defp has_verified_at?(%{"verified_at" => _verified_at}), do: true
++  defp has_verified_at?(_email_address), do: false
++
+   defp add_pending!(email_addresses, %{email: email}) do
+     case EmailAddresses.add_pending(email_addresses, email) do
+       {:ok, email_addresses} -> email_addresses
+diff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex
+index e98db2d..9f4b12a 100644
+--- a/web/lib/memba/membership/projectors/person.ex
++++ b/web/lib/memba/membership/projectors/person.ex
+@@ -128,7 +128,7 @@ defmodule Memba.Membership.Projectors.Person do
+       email: field(email_address, :email),
+       normalized_email: field(email_address, :normalized_email),
+       is_primary: field(email_address, :is_primary),
+-      verified_at: DateTime.utc_now()
++      verified_at: replacement_verified_at(email_address)
+     }
+   end
+ 
+@@ -139,6 +139,20 @@ defmodule Memba.Membership.Projectors.Person do
+     end
+   end
+ 
++  defp replacement_verified_at(email_address) do
++    if has_field?(email_address, :verified_at) do
++      email_address
++      |> field(:verified_at)
++      |> verified_at_or_nil!()
++    else
++      DateTime.utc_now()
++    end
++  end
++
++  defp has_field?(email_address, key) when is_map(email_address) do
++    Map.has_key?(email_address, key) or Map.has_key?(email_address, Atom.to_string(key))
++  end
++
+   defp person_query(person_id) do
+     Ecto.Query.from(person in PersonProjection, where: person.person_id == ^person_id)
+   end
+@@ -166,6 +180,9 @@ defmodule Memba.Membership.Projectors.Person do
+     end
+   end
+ 
++  defp verified_at_or_nil!(nil), do: nil
++  defp verified_at_or_nil!(verified_at), do: verified_at!(verified_at)
++
+   @impl Commanded.Projections.Ecto
+   def after_update(event, metadata, changes) do
+     Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+diff --git a/web/test/features/step_definitions/person_email_address_steps.exs b/web/test/features/step_definitions/person_email_address_steps.exs
+index 51711ee..069835d 100644
+--- a/web/test/features/step_definitions/person_email_address_steps.exs
++++ b/web/test/features/step_definitions/person_email_address_steps.exs
+@@ -193,6 +193,8 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+         })
+ 
+       person_id ->
++        ensure_desired_addresses_are_verified(person_id, email_addresses)
++
+         assert :ok =
+                  Membership.replace_person_email_addresses(
+                    %{person_id: person_id, email_addresses: email_addresses},
+@@ -242,6 +244,26 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
+     end
+   end
+ 
++  defp ensure_desired_addresses_are_verified(person_id, email_addresses) do
++    current_email_addresses = Membership.list_person_email_addresses(person_id)
++
++    Enum.each(email_addresses, fn %{email: email} ->
++      unless Enum.any?(current_email_addresses, &same_email?(&1.email, email)) do
++        assert :ok =
++                 Membership.add_person_email_address(
++                   %{person_id: person_id, email: email},
++                   consistency: :strong
++                 )
++
++        assert :ok =
++                 Membership.verify_person_email_address(
++                   %{person_id: person_id, email: email},
++                   consistency: :strong
++                 )
++      end
++    end)
++  end
++
+   defp same_email?(left, right),
+     do: Accounts.normalize_email(left) == Accounts.normalize_email(right)
+ 
+diff --git a/web/test/memba/membership/create_person_dispatch_test.exs b/web/test/memba/membership/create_person_dispatch_test.exs
+index 1ec9b02..edecaee 100644
+--- a/web/test/memba/membership/create_person_dispatch_test.exs
++++ b/web/test/memba/membership/create_person_dispatch_test.exs
+@@ -130,8 +130,8 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+     command = %ReplacePersonEmailAddresses{
+       person_id: person_id,
+       email_addresses: [
+-        %{email: "alice@example.com", is_primary: false},
+-        %{email: "alice@work.example", is_primary: true}
++        %{email: "alice@example.com", is_primary: true},
++        %{email: "alice@work.example", is_primary: false}
+       ]
+     }
+ 
+@@ -142,12 +142,36 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+               events: [
+                 %PersonEmailAddressesReplaced{
+                   person_id: ^person_id,
+-                  primary_email: "alice@work.example"
++                  primary_email: "alice@example.com",
++                  email_addresses: [
++                    %{
++                      normalized_email: "alice@example.com",
++                      is_primary: true,
++                      verified_at: %DateTime{}
++                    },
++                    %{
++                      normalized_email: "alice@work.example",
++                      is_primary: false,
++                      verified_at: nil
++                    }
++                  ]
+                 }
+               ],
+               aggregate_state: %Person{
+                 person_id: ^person_id,
+-                email: "alice@work.example"
++                email: "alice@example.com",
++                email_addresses: [
++                  %{
++                    normalized_email: "alice@example.com",
++                    is_primary: true,
++                    verified_at: %DateTime{}
++                  },
++                  %{
++                    normalized_email: "alice@work.example",
++                    is_primary: false,
++                    verified_at: nil
++                  }
++                ]
+               }
+             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+   end
+diff --git a/web/test/memba/membership/person_projection_test.exs b/web/test/memba/membership/person_projection_test.exs
+index 6f98388..22a5011 100644
+--- a/web/test/memba/membership/person_projection_test.exs
++++ b/web/test/memba/membership/person_projection_test.exs
+@@ -103,7 +103,10 @@ defmodule Memba.Membership.PersonProjectionTest do
+                %CreatePerson{
+                  person_id: person_id,
+                  name: "Alice",
+-                 email: "alice@example.com"
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
+                },
+                consistency: :strong
+              )
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index 5edb826..11cc6ac 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -165,7 +165,7 @@ defmodule Memba.Membership.PersonTest do
+   end
+ 
+   describe "execute/2 ReplacePersonEmailAddresses" do
+-    test "emits a replace-all email-address event for an existing person" do
++    test "preserves verification state for existing addresses and makes newly introduced addresses pending" do
+       person_id = Memba.ID.generate(:person)
+ 
+       person =
+@@ -178,29 +178,51 @@ defmodule Memba.Membership.PersonTest do
+       command = %ReplacePersonEmailAddresses{
+         person_id: person_id,
+         email_addresses: [
+-          %{email: "alice@example.com", is_primary: false},
+-          %{email: " Alice@Work.Example ", is_primary: true}
++          %{email: "alice@example.com", is_primary: true},
++          %{email: " Alice@Work.Example ", is_primary: false}
+         ]
+       }
+ 
+       assert %PersonEmailAddressesReplaced{
+                person_id: ^person_id,
+-               primary_email: "Alice@Work.Example",
++               primary_email: "alice@example.com",
+                email_addresses: [
+                  %{
+                    email: "alice@example.com",
+                    normalized_email: "alice@example.com",
+-                   is_primary: false
++                   is_primary: true,
++                   verified_at: %DateTime{}
+                  },
+                  %{
+                    email: "Alice@Work.Example",
+                    normalized_email: "alice@work.example",
+-                   is_primary: true
++                   is_primary: false,
++                   verified_at: nil
+                  }
+                ]
+              } = Person.execute(person, command)
+     end
+ 
++    test "rejects making a newly introduced pending address primary during replacement" do
++      person_id = Memba.ID.generate(:person)
++
++      person =
++        Person.apply(%Person{}, %PersonCreated{
++          person_id: person_id,
++          name: "Alice",
++          email: "alice@example.com"
++        })
++
++      assert {:error, :primary_email_address_not_verified} =
++               Person.execute(person, %ReplacePersonEmailAddresses{
++                 person_id: person_id,
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: true}
++                 ]
++               })
++    end
++
+     test "rejects replacement before the person is created" do
+       assert {:error, :person_not_created} =
+                Person.execute(%Person{}, %ReplacePersonEmailAddresses{
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index ea0f54f..a20ae35 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -331,7 +331,7 @@ defmodule Memba.Membership.PublicApiTest do
+     assert is_nil(Membership.get_person(duplicate_alternate_person_id))
+   end
+ 
+-  test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
++  test "replace_person_email_addresses/2 keeps staff-added alternate addresses pending" do
+     person_id = Memba.ID.generate(:person)
+ 
+     assert :ok =
+@@ -346,17 +346,19 @@ defmodule Memba.Membership.PublicApiTest do
+               events: [
+                 %PersonEmailAddressesReplaced{
+                   person_id: ^person_id,
+-                  primary_email: "alice@work.example",
++                  primary_email: "alice@example.com",
+                   email_addresses: [
+                     %{
+                       email: "alice@example.com",
+                       normalized_email: "alice@example.com",
+-                      is_primary: false
++                      is_primary: true,
++                      verified_at: %DateTime{}
+                     },
+                     %{
+                       email: "alice@work.example",
+                       normalized_email: "alice@work.example",
+-                      is_primary: true
++                      is_primary: false,
++                      verified_at: nil
+                     }
+                   ]
+                 }
+@@ -366,8 +368,8 @@ defmodule Memba.Membership.PublicApiTest do
+                %{
+                  person_id: person_id,
+                  email_addresses: [
+-                   %{email: "alice@example.com", is_primary: false},
+-                   %{email: "alice@work.example", is_primary: true}
++                   %{email: "alice@example.com", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
+                  ]
+                },
+                returning: :execution_result,
+@@ -378,14 +380,37 @@ defmodule Memba.Membership.PublicApiTest do
+              Repo.get_by(PersonEmailAddress,
+                person_id: person_id,
+                normalized_email: "alice@example.com",
+-               is_primary: false
++               is_primary: true
+              )
+ 
+-    assert %PersonEmailAddress{verified_at: %DateTime{}} =
++    assert %PersonEmailAddress{verified_at: nil} =
+              Repo.get_by(PersonEmailAddress,
+                person_id: person_id,
+                normalized_email: "alice@work.example",
+-               is_primary: true
++               is_primary: false
++             )
++  end
++
++  test "replace_person_email_addresses/2 rejects a newly introduced primary address" do
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert {:error, :primary_email_address_not_verified} =
++             Membership.replace_person_email_addresses(
++               %{
++                 person_id: person_id,
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: true}
++                 ]
++               },
++               returning: :execution_result,
++               consistency: :strong
+              )
+   end
+ 
