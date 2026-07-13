@@ -1,7 +1,7 @@
 # My settings email-address management
 
 Date: 2026-07-11
-Status: needs-revision
+Status: ready
 
 ## Goal
 
@@ -58,7 +58,7 @@ User-facing copy may use the familiar phrase **Account settings**, but implement
 - Allow removing non-primary addresses, including the address that was used to start the current browser session.
 - Prevent removing the current primary address so every Person keeps exactly one primary email address.
 - Prevent making pending/unverified addresses primary.
-- Prevent pending/unverified addresses from being used for sign-in identity and inbound email identity until verified, except that opening a sign-in link sent to a pending known address may itself verify that address.
+- Prevent pending/unverified addresses from being used for ordinary sign-in identity and inbound email identity until verified. Opening a valid sign-in link sent to a pending known Person email address verifies that address without making it primary or changing the Person session semantics.
 - Reject duplicate normalized email addresses already attached to another Person with privacy-safe clear copy: `That email address is already in use by another Memba user.`
 - Preserve the current one-normalized-email-address-per-Person assumption.
 
@@ -165,7 +165,7 @@ The template's Profile/Clubs/Emails tab switching is implemented with plain clie
 - Opening a valid verification link for a still-pending address marks that address verified and shows `Email verified, you can close this browser.`
 - Opening an old verification link for a removed/replaced address does not verify or recreate that address and shows an invalid/expired state.
 - An open settings LiveView updates when an address is verified elsewhere.
-- Signing in with a pending known address may verify that address as part of proving mailbox control.
+- Opening a valid sign-in link sent to a pending known Person email address verifies that address as part of proving mailbox control, without making it primary or changing the Person session semantics.
 - Pending/unverified addresses are not accepted for inbound email identity.
 - Club-message recipient resolution continues to send only to the current verified primary email address.
 - Existing person email-address and member-message behaviours continue to pass.
@@ -178,9 +178,9 @@ None known.
 
 1. Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
 2. Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
-3. Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit where practical. Candidate behaviour names: add pending email address, verify email address, make primary email address, remove email address, resend verification request. Keep exact command/event names aligned with existing Membership aggregate style.
-4. Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
-5. Add token generation/storage for email-address verification. Tokens must be one-use/expiring if existing auth token infrastructure supports it; otherwise keep validity safely scoped to the pending Person/address pair and do not verify removed/replaced addresses.
+3. Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit. Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address. Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
+4. Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person. Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
+5. Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`. Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state. Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.
 6. Add a general verification email template using existing transactional email delivery conventions.
 7. Add the verification callback route/page. A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
 8. Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
@@ -194,12 +194,13 @@ None known.
 16. Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
 17. Run `dev check` and fix all issues.
 
-## Open Technical Decisions
+## Technical Decisions
 
-- Exact token storage mechanism: reuse existing auth token infrastructure if it cleanly supports email-address verification tokens without disturbing sessions; otherwise add a narrowly scoped verification-token store.
-- Exact command/event shape for evolving from full address-set replacement to individual self-service actions while keeping historic event replay and staff edit compatibility safe.
-- Whether verification state belongs only in the projection event payloads, or also in an aggregate-held email-address value object for invariant enforcement. Prefer aggregate enforcement for primary/removal rules.
-- Exact PubSub topic/message shape for settings refresh. It should identify the Person or opaque changed resource and avoid exposing sensitive email details unnecessarily.
+- **Verification-token storage:** add a dedicated narrowly scoped email-address verification-token table/module instead of overloading `auth_sign_in_tokens`, because verification must be scoped to a Person/address pair and must not disturb session semantics. Persist only hashed tokens, `person_id`, normalized email, expiry, and consumed/revoked state.
+- **Command/event shape:** implement explicit Membership commands/events for the domain state transitions: pending address added, email address verified, primary email address changed, and non-primary email address removed. Keep `replace_person_email_addresses/2` only as a compatibility/orchestration entry point for staff maintenance, translating set changes into the same rules rather than bypassing verification.
+- **Invariant enforcement:** verification state belongs in the Person aggregate's email-address value/state as well as projections. The aggregate enforces: exactly one primary address, primary must be verified, primary cannot be removed, removed pending addresses cannot later be verified, and duplicate normalized addresses for another Person are rejected by the application service/read-model guard before dispatch plus database uniqueness.
+- **Sign-in-as-verification:** opening a valid sign-in link for a pending known Person email address verifies that address without making it primary and without changing the Person/session model beyond the ordinary successful sign-in.
+- **PubSub/read-model refresh:** use the existing `Memba.ReadModelChanges` topic from the Person/email-address projector after committed projection updates. `/my/settings` subscribes to the shared topic and filters messages to the current Person/email-address projector changes by `person_id`; messages must not expose unnecessary email details beyond what the LiveView can reload from Membership queries.
 
 ## New Capability
 
