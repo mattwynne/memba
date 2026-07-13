@@ -1,0 +1,206 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index baec5f5..3945559 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
+ - [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
+ - [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
+-- [ ] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
++- [x] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
+ - [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+ - [ ] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
+ - [ ] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 1adde9d..7f44584 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -109,6 +109,29 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Resend verification for an already-pending person email address.
++
++  This is an application-service side effect, not a Membership domain-state
++  transition: it validates that the projected email address still belongs to the
++  person and is still pending, then asks the configured issuer to create/deliver
++  a fresh verification link. No Membership command is dispatched unless a future
++  state-changing verification step succeeds.
++  """
++  def resend_person_email_address_verification(attrs, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, person_id} <- cast_person_id(person_id),
++         {:ok, email} <- fetch_required(attrs, :email),
++         {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email),
++         {:ok, email_address} <-
++           pending_person_email_address_for_verification(person_id, normalized_email) do
++      email_address
++      |> person_email_address_verification_request()
++      |> issue_person_email_address_verification(opts)
++    end
++  end
++
+   @doc """
+   Mark a pending person email address as verified.
+ 
+@@ -1192,6 +1215,25 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp pending_person_email_address_for_verification(person_id, normalized_email) do
++    PersonEmailAddress
++    |> where([email_address], email_address.person_id == ^person_id)
++    |> where([email_address], email_address.normalized_email == ^normalized_email)
++    |> limit(1)
++    |> Repo.one()
++    |> ensure_pending_person_email_address()
++  end
++
++  defp ensure_pending_person_email_address(nil), do: {:error, :pending_email_address_not_found}
++
++  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: nil} = email_address) do
++    {:ok, email_address}
++  end
++
++  defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: %DateTime{}}) do
++    {:error, :email_address_already_verified}
++  end
++
+   defp ensure_membership_administrator_removal_keeps_an_administrator(
+          %RemoveMemberRole{} = command
+        ) do
+@@ -1271,6 +1313,39 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp person_email_address_verification_request(%PersonEmailAddress{} = email_address) do
++    %{
++      person_id: email_address.person_id,
++      email: email_address.email,
++      normalized_email: email_address.normalized_email
++    }
++  end
++
++  defp issue_person_email_address_verification(request, opts) do
++    issuer =
++      Keyword.get(opts, :verification_issuer, &default_person_email_address_verification_issuer/1)
++
++    case issue_person_email_address_verification_with(issuer, request) do
++      :ok -> {:ok, request}
++      {:ok, issuer_result} -> {:ok, Map.put(request, :issuer_result, issuer_result)}
++      {:error, reason} -> {:error, reason}
++      other -> {:error, {:unexpected_email_address_verification_issuer_result, other}}
++    end
++  end
++
++  defp issue_person_email_address_verification_with(issuer, request)
++       when is_function(issuer, 1) do
++    issuer.(request)
++  end
++
++  defp issue_person_email_address_verification_with(_issuer, _request) do
++    {:error, :invalid_email_address_verification_issuer}
++  end
++
++  defp default_person_email_address_verification_issuer(_request) do
++    {:ok, %{verification_token: InvitationToken.generate_token()}}
++  end
++
+   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
+     with {:ok, person_id} <- cast_person_id(person_id) do
+       normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index fa8afd2..ea0f54f 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -545,6 +545,77 @@ defmodule Memba.Membership.PublicApiTest do
+            )
+   end
+ 
++  test "resend_person_email_address_verification/2 issues for pending address without appending a domain event" do
++    person_id = Memba.ID.generate(:person)
++    parent = self()
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_person_email_address(
++               %{person_id: person_id, email: " Alice+New@Example.COM "},
++               consistency: :strong
++             )
++
++    events_before = count_events()
++
++    verification_issuer = fn request ->
++      send(parent, {:verification_issued, request})
++      {:ok, %{verification_token: "fresh-token"}}
++    end
++
++    assert {:ok,
++            %{
++              person_id: ^person_id,
++              email: "Alice+New@Example.COM",
++              normalized_email: "alice+new@example.com",
++              issuer_result: %{verification_token: "fresh-token"}
++            }} =
++             Membership.resend_person_email_address_verification(
++               %{person_id: person_id, email: " alice+new@example.com "},
++               verification_issuer: verification_issuer
++             )
++
++    assert_received {:verification_issued,
++                     %{
++                       person_id: ^person_id,
++                       email: "Alice+New@Example.COM",
++                       normalized_email: "alice+new@example.com"
++                     }}
++
++    assert count_events() == events_before
++
++    assert %PersonEmailAddress{verified_at: nil} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice+new@example.com"
++             )
++  end
++
++  test "resend_person_email_address_verification/2 rejects non-pending addresses before issuing" do
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    verification_issuer = fn _request ->
++      flunk("verified primary addresses must not receive verification email")
++    end
++
++    assert {:error, :email_address_already_verified} =
++             Membership.resend_person_email_address_verification(
++               %{person_id: person_id, email: "alice@example.com"},
++               verification_issuer: verification_issuer
++             )
++  end
++
+   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+@@ -1005,4 +1076,10 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+     refute Membership.person_has_club_permission?(club_id, person_id, permission)
+   end
++
++  defp count_events do
++    %{rows: [[count]]} = Repo.query!(~S|SELECT count(*) FROM "event_store"."events"|)
++
++    count
++  end
+ end
