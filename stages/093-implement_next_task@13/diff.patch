@@ -1,0 +1,207 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 11f8b5d..1575f6b 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 Add a general verification email template using existing transactional email delivery conventions.
+ - [x] 012 Add the verification callback route/page.
+ - [x] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
+-- [ ] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
++- [x] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
+ - [ ] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
+ - [ ] 016 Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page, with `/my/settings/profile`, `/my/settings/clubs`, and `/my/settings/emails` sub-routes so the selected tab is URL-addressable via `handle_params/3` per ADR 0023 (see Designs — do not implement tab switching as client-side-only JS).
+ - [ ] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 231084a..cb4939e 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -188,6 +188,29 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Mark an email address as verified when a successful sign-in link proves mailbox control.
++
++  This is intentionally a safe no-op for invalid, unknown, and already-verified
++  addresses so sign-in callback handling does not reveal account state or change
++  the existing session semantics. When the normalized email belongs to a pending
++  Person email address, the ordinary Membership verification command is
++  dispatched.
++  """
++  def verify_pending_person_email_address_for_sign_in(email, dispatch_opts \\ [])
++      when is_list(dispatch_opts) do
++    case pending_person_email_address_for_sign_in(email) do
++      {:ok, %PersonEmailAddress{} = email_address} ->
++        email_address
++        |> person_email_address_verification_request()
++        |> verify_person_email_address(dispatch_opts)
++        |> normalize_sign_in_verification_result()
++
++      :not_pending ->
++        :ok
++    end
++  end
++
+   @doc """
+   Make a verified person email address primary.
+   """
+@@ -1280,6 +1303,28 @@ defmodule Memba.Membership do
+     |> ensure_pending_person_email_address()
+   end
+ 
++  defp pending_person_email_address_for_sign_in(email) do
++    case normalize_email(email) do
++      nil ->
++        :not_pending
++
++      normalized_email ->
++        PersonEmailAddress
++        |> where([email_address], email_address.normalized_email == ^normalized_email)
++        |> where([email_address], is_nil(email_address.verified_at))
++        |> limit(1)
++        |> Repo.one()
++        |> case do
++          %PersonEmailAddress{} = email_address -> {:ok, email_address}
++          nil -> :not_pending
++        end
++    end
++  end
++
++  defp normalize_sign_in_verification_result(:ok), do: :ok
++  defp normalize_sign_in_verification_result({:ok, _result}), do: :ok
++  defp normalize_sign_in_verification_result({:error, _reason} = error), do: error
++
+   defp ensure_pending_person_email_address(nil), do: {:error, :pending_email_address_not_found}
+ 
+   defp ensure_pending_person_email_address(%PersonEmailAddress{verified_at: nil} = email_address) do
+diff --git a/web/lib/memba_web/controllers/auth_controller.ex b/web/lib/memba_web/controllers/auth_controller.ex
+index d9c17fd..c5d37e8 100644
+--- a/web/lib/memba_web/controllers/auth_controller.ex
++++ b/web/lib/memba_web/controllers/auth_controller.ex
+@@ -17,6 +17,7 @@ defmodule MembaWeb.AuthController do
+     case Accounts.consume_sign_in_token(token) do
+       {:ok, %{email: email}} ->
+         conn
++        |> verify_pending_person_email_address_for_sign_in(email)
+         |> IdentityAuth.log_in_identity(email)
+         |> maybe_store_staff_onboarding_return_to(email, return_to)
+         |> put_flash(:info, "Signed in.")
+@@ -51,6 +52,20 @@ defmodule MembaWeb.AuthController do
+ 
+   defp signed_in?(conn), do: not is_nil(Map.get(conn.assigns, :current_identity))
+ 
++  defp verify_pending_person_email_address_for_sign_in(conn, email) do
++    case Membership.verify_pending_person_email_address_for_sign_in(email, consistency: :strong) do
++      :ok ->
++        conn
++
++      {:error, reason} ->
++        Logger.warning(
++          "Could not verify pending person email address from sign-in link: #{inspect(reason)}"
++        )
++
++        conn
++    end
++  end
++
+   defp safe_return_to(return_to) when is_binary(return_to) do
+     cond do
+       String.starts_with?(return_to, "//") -> nil
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 6769854..25a8cbf 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -8,7 +8,9 @@ defmodule MembaWeb.AuthControllerTest do
+   alias Memba.Accounts.AuthEmail
+   alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
++  alias Memba.Membership, as: MembershipContext
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Repo
+   alias MembaWeb.IdentityAuth
+ 
+@@ -511,6 +513,44 @@ defmodule MembaWeb.AuthControllerTest do
+       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
+     end
+ 
++    test "signing in with a pending known person email verifies it without making it primary",
++         %{conn: conn} do
++      Memba.EventSourcedCase.reset_event_sourced_system!()
++
++      %{person_id: person_id} =
++        create_event_sourced_active_member_with_pending_email!(
++          primary_email: "alice.primary@example.com",
++          pending_email: "Alice.Pending@Example.COM"
++        )
++
++      assert %PersonEmailAddress{verified_at: nil, is_primary: false} =
++               Repo.get_by(PersonEmailAddress,
++                 person_id: person_id,
++                 normalized_email: "alice.pending@example.com"
++               )
++
++      assert {:ok, %{token: token}} = Accounts.request_sign_in_link(" ALICE.PENDING@example.com ")
++
++      conn = get(conn, ~p"/auth/sign-in/#{token}")
++
++      assert redirected_to(conn) == ~p"/"
++      assert get_session(conn, IdentityAuth.identity_session_key()) == "alice.pending@example.com"
++
++      assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: false} =
++               Repo.get_by(PersonEmailAddress,
++                 person_id: person_id,
++                 normalized_email: "alice.pending@example.com"
++               )
++
++      assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: true} =
++               Repo.get_by(PersonEmailAddress,
++                 person_id: person_id,
++                 normalized_email: "alice.primary@example.com"
++               )
++
++      assert MembershipContext.get_person_primary_email(person_id) == "alice.primary@example.com"
++    end
++
+     test "rejects unknown tokens without signing in", %{conn: conn} do
+       conn = get(conn, ~p"/auth/sign-in/unknown-token")
+ 
+@@ -771,6 +811,38 @@ defmodule MembaWeb.AuthControllerTest do
+     %{club_id: club_id, person_id: person.person_id}
+   end
+ 
++  defp create_event_sourced_active_member_with_pending_email!(attrs) do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++
++    insert_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club")
++
++    assert :ok =
++             MembershipContext.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Test Member",
++                 email: Keyword.fetch!(attrs, :primary_email)
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             MembershipContext.add_person_email_address(
++               %{person_id: person_id, email: Keyword.fetch!(attrs, :pending_email)},
++               consistency: :strong
++             )
++
++    Repo.insert!(%Membership{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    %{club_id: club_id, person_id: person_id}
++  end
++
+   defp club_attrs(attrs, club_id) do
+     base = [
+       club_id: club_id,
