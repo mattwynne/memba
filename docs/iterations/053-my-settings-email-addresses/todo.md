@@ -19,7 +19,7 @@
 - [x] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
 - [x] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
 - [x] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
-- [ ] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
+- [x] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
 - [ ] 021 Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
 - [ ] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
 - [ ] 023 Run `dev check` and fix all issues.
