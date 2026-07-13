@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
-- [ ] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
+- [x] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
 - [ ] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
 - [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
 - [ ] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.

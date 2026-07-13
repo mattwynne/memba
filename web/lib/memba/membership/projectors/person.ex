@@ -43,14 +43,16 @@ defmodule Memba.Membership.Projectors.Person do
       PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
         person_id: event.person_id,
         email: event.email,
-        is_primary: true
+        is_primary: true,
+        verified_at: DateTime.utc_now()
       })
 
     Ecto.Multi.insert(
       multi,
       :membership_person_primary_email_address,
       changeset,
-      on_conflict: {:replace, [:email, :normalized_email, :is_primary, :updated_at]},
+      on_conflict:
+        {:replace, [:email, :normalized_email, :is_primary, :verified_at, :updated_at]},
       conflict_target: {:unsafe_fragment, "(person_id) WHERE is_primary = true"}
     )
   end
@@ -72,7 +74,8 @@ defmodule Memba.Membership.Projectors.Person do
       person_id: person_id,
       email: field(email_address, :email),
       normalized_email: field(email_address, :normalized_email),
-      is_primary: field(email_address, :is_primary)
+      is_primary: field(email_address, :is_primary),
+      verified_at: DateTime.utc_now()
     }
   end
 

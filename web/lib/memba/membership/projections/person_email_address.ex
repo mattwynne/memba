@@ -16,13 +16,14 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
     field :email, :string
     field :normalized_email, :string
     field :is_primary, :boolean, default: false
+    field :verified_at, :utc_datetime_usec
 
     timestamps(type: :utc_datetime_usec)
   end
 
   def changeset(email_address, attrs) do
     email_address
-    |> cast(attrs, [:person_id, :email, :is_primary])
+    |> cast(attrs, [:person_id, :email, :is_primary, :verified_at])
     |> put_id()
     |> validate_required([:person_id, :email, :is_primary])
     |> normalize_email()
