@@ -562,14 +562,148 @@
     }
   },
   "web_url": "https://fabro.home.wynne.family/runs/01KXD2253QXPYSDV7Z58PWRNFE",
-  "start": null,
-  "status": {
-    "kind": "starting"
+  "start": {
+    "start_time": "2026-07-13T06:19:09.499640868Z",
+    "run_branch": "fabro/run/01KXD2253QXPYSDV7Z58PWRNFE",
+    "base_sha": "98b7a196ecb318e11aa48fbb13766415d01c8479"
   },
-  "status_updated_at": "2026-07-13T06:19:05.462744616Z",
-  "last_event_at": "2026-07-13T06:19:08.913821929Z",
+  "status": {
+    "kind": "running"
+  },
+  "status_updated_at": "2026-07-13T06:19:09.500046148Z",
+  "last_event_at": "2026-07-13T06:19:15.252899254Z",
   "pending_control": null,
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "seq": 20,
+      "checkpoint": {
+        "timestamp": "2026-07-13T06:19:11.539240781Z",
+        "current_node": "start",
+        "completed_nodes": [
+          "start"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.rankdir": "LR",
+          "failure_signature": "",
+          "internal.thread_id": null,
+          "failure_class": "",
+          "graph.default_fidelity": "summary:high",
+          "internal.fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.run_id": "01KXD2253QXPYSDV7Z58PWRNFE",
+          "outcome": "succeeded",
+          "internal.node_visit_count": 1,
+          "current_node": "start",
+          "internal.work_dir": "/workspace/memba"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "gemini_review",
+        "node_visits": {
+          "start": 1
+        }
+      },
+      "diff": {}
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-13T06:20:02.603723868Z",
+        "current_node": "gemini_review",
+        "completed_nodes": [
+          "start",
+          "gemini_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_blocking_gaps": "Open technical decisions affect architecture and invariants; Sign-in-as-verification rule is ambiguous between may verify and verifies; Plan status still says needs-revision",
+          "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` through line 251.\n\n## Blocking gaps\n\n1. **The plan still contains explicit open technical decisions that affect implementation architecture and invariants.**  \n   The `## Open Technical Decisions` section leaves unresolved:\n   - verification-token storage mechanism;\n   - command/event shape for individual self-service email actions vs full replacement;\n   - whether verification state is aggregate-enforced or projection-only;\n   - PubSub topic/message shape.\n\n   These are not just naming details; they affect migration shape, event replay, invariant enforcement, callback safety, and LiveView refresh design.\n\n2. **The sign-in-as-verification rule is not stated consistently/objectively in the acceptance criteria.**  \n   The plan alternates between “may verify” and “verifies”:\n   - Scope says opening a sign-in link to a pending known address “may itself verify” the address.\n   - Scenario summary says “Signing in with a pending known address verifies it.”\n   - Acceptance criteria says “may verify.”\n   - Validation plan says “sign-in with pending known address verifies it.”\n\n   Acceptance criteria should be deterministic and testable.\n\n3. **The plan status still says `needs-revision`.**  \n   Even if most content is close, the file itself is not marked as ready/validated and still signals that revision is required.\n\n## Non-blocking improvements\n\n1. The iteration is coherent but large. It combines schema changes, domain policy, token/email infrastructure, sign-in callback changes, inbound identity changes, staff-edit compatibility, a new LiveView, avatar-menu navigation, URL-addressable tabs, PubSub refresh, and acceptance tests. Consider splitting if delivery risk is high.\n\n2. Acceptance criteria could explicitly cover same-Person duplicate normalized addresses, not only duplicates owned by another Person.\n\n3. The invalid/expired verification state is described as “calm” but not with exact copy. This is probably acceptable, but exact copy would make UI validation simpler.\n\n4. The permissions boundary for `/my/settings` could be more explicit about expected redirect/error behavior for signed-out users and get-started-only identities.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be:\n\n- add verified/pending state and backfill existing addresses as verified;\n- allow signed-in members with a Membership Person to view `/my/settings/emails`;\n- add a pending email address;\n- send and consume a verification link;\n- prevent pending addresses from becoming primary or being used for inbound identity;\n- allow verified non-primary addresses to become primary;\n- prevent primary removal.\n\nProfile/Clubs tabs, live PubSub refresh, staff-edit refinements, and avatar-menu polish could be follow-up if the team needs a smaller implementation slice, though the current plan does keep them under one coherent “member account settings” outcome.\n\n## Required plan edits\n\n1. Resolve or convert the `## Open Technical Decisions` section into explicit implementation decisions/constraints, especially:\n   - token storage approach;\n   - aggregate vs projection invariant enforcement;\n   - command/event strategy for add/verify/make-primary/remove/resend;\n   - PubSub topic/message shape.\n\n2. Replace the ambiguous sign-in criterion with deterministic wording, for example:  \n   `Opening a valid sign-in link sent to a pending known Person email address verifies that address without making it primary or changing the Person session semantics.`\n\n3. Update the status from `needs-revision` once the above edits are made.\n\n## Validation plan\n\nSuccess should be proven by:\n\n- migration/domain tests showing existing rows are verified, new rows are pending, pending rows cannot become primary, verified alternates can become primary, primary rows cannot be removed, and removed pending rows cannot be verified by old links;\n- token/callback tests for valid, expired, invalid, removed, and replaced-address verification links;\n- sign-in tests proving pending known addresses become verified only after mailbox-control proof;\n- inbound sender-resolution tests proving pending/unverified known addresses are rejected;\n- LiveView/controller tests for avatar navigation, `/my/settings` rendering, URL-addressable Profile/Clubs/Emails tabs, add/resend/remove/make-primary flows, verification result pages, and live refresh;\n- updated acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature`;\n- `dev check` passing after implementation.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Open technical decisions affect architecture and invariants; Sign-in-as-verification rule is ambiguous between may verify and verifies; Plan status still says needs-revision\",\"gemini_review_required_edits\":\"Resolve token storage, command/event, aggregate/projection, and PubSub decisions; Make sign-in-as-verification acceptance criterion deterministic; Update status from needs-revision after edits\"}}",
+          "gemini_review_blocking_gap_count": 3,
+          "thread.start.current_node": "gemini_review",
+          "current_node": "gemini_review",
+          "internal.retry_count.gemini_review": 0,
+          "internal.fidelity": "truncate",
+          "internal.thread_id": "start",
+          "internal.node_visit_count": 1,
+          "graph.rankdir": "LR",
+          "outcome": "succeeded",
+          "gemini_review_required_edits": "Resolve token storage, command/event, aggregate/projection, and PubSub decisions; Make sign-in-as-verification acceptance criterion deterministic; Update status from needs-revision after edits",
+          "failure_class": "",
+          "failure_signature": "",
+          "internal.run_id": "01KXD2253QXPYSDV7Z58PWRNFE",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.start": 0,
+          "last_stage": "gemini_review",
+          "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` through line 251.\n\n## Blocking gaps\n\n1. **The plan st",
+          "gemini_review_confidence": "High",
+          "gemini_review_decision": "NOT READY"
+        },
+        "node_outcomes": {
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_required_edits": "Resolve token storage, command/event, aggregate/projection, and PubSub decisions; Make sign-in-as-verification acceptance criterion deterministic; Update status from needs-revision after edits",
+              "gemini_review_blocking_gap_count": 3,
+              "last_stage": "gemini_review",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` through line 251.\n\n## Blocking gaps\n\n1. **The plan st",
+              "response.gemini_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/053-my-settings-email-addresses/plan.md` through line 251.\n\n## Blocking gaps\n\n1. **The plan still contains explicit open technical decisions that affect implementation architecture and invariants.**  \n   The `## Open Technical Decisions` section leaves unresolved:\n   - verification-token storage mechanism;\n   - command/event shape for individual self-service email actions vs full replacement;\n   - whether verification state is aggregate-enforced or projection-only;\n   - PubSub topic/message shape.\n\n   These are not just naming details; they affect migration shape, event replay, invariant enforcement, callback safety, and LiveView refresh design.\n\n2. **The sign-in-as-verification rule is not stated consistently/objectively in the acceptance criteria.**  \n   The plan alternates between “may verify” and “verifies”:\n   - Scope says opening a sign-in link to a pending known address “may itself verify” the address.\n   - Scenario summary says “Signing in with a pending known address verifies it.”\n   - Acceptance criteria says “may verify.”\n   - Validation plan says “sign-in with pending known address verifies it.”\n\n   Acceptance criteria should be deterministic and testable.\n\n3. **The plan status still says `needs-revision`.**  \n   Even if most content is close, the file itself is not marked as ready/validated and still signals that revision is required.\n\n## Non-blocking improvements\n\n1. The iteration is coherent but large. It combines schema changes, domain policy, token/email infrastructure, sign-in callback changes, inbound identity changes, staff-edit compatibility, a new LiveView, avatar-menu navigation, URL-addressable tabs, PubSub refresh, and acceptance tests. Consider splitting if delivery risk is high.\n\n2. Acceptance criteria could explicitly cover same-Person duplicate normalized addresses, not only duplicates owned by another Person.\n\n3. The invalid/expired verification state is described as “calm” but not with exact copy. This is probably acceptable, but exact copy would make UI validation simpler.\n\n4. The permissions boundary for `/my/settings` could be more explicit about expected redirect/error behavior for signed-out users and get-started-only identities.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be:\n\n- add verified/pending state and backfill existing addresses as verified;\n- allow signed-in members with a Membership Person to view `/my/settings/emails`;\n- add a pending email address;\n- send and consume a verification link;\n- prevent pending addresses from becoming primary or being used for inbound identity;\n- allow verified non-primary addresses to become primary;\n- prevent primary removal.\n\nProfile/Clubs tabs, live PubSub refresh, staff-edit refinements, and avatar-menu polish could be follow-up if the team needs a smaller implementation slice, though the current plan does keep them under one coherent “member account settings” outcome.\n\n## Required plan edits\n\n1. Resolve or convert the `## Open Technical Decisions` section into explicit implementation decisions/constraints, especially:\n   - token storage approach;\n   - aggregate vs projection invariant enforcement;\n   - command/event strategy for add/verify/make-primary/remove/resend;\n   - PubSub topic/message shape.\n\n2. Replace the ambiguous sign-in criterion with deterministic wording, for example:  \n   `Opening a valid sign-in link sent to a pending known Person email address verifies that address without making it primary or changing the Person session semantics.`\n\n3. Update the status from `needs-revision` once the above edits are made.\n\n## Validation plan\n\nSuccess should be proven by:\n\n- migration/domain tests showing existing rows are verified, new rows are pending, pending rows cannot become primary, verified alternates can become primary, primary rows cannot be removed, and removed pending rows cannot be verified by old links;\n- token/callback tests for valid, expired, invalid, removed, and replaced-address verification links;\n- sign-in tests proving pending known addresses become verified only after mailbox-control proof;\n- inbound sender-resolution tests proving pending/unverified known addresses are rejected;\n- LiveView/controller tests for avatar navigation, `/my/settings` rendering, URL-addressable Profile/Clubs/Emails tabs, add/resend/remove/make-primary flows, verification result pages, and live refresh;\n- updated acceptance scenarios in `acceptance-tests/features/person_email_addresses.feature`;\n- `dev check` passing after implementation.\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":3,\"gemini_review_blocking_gaps\":\"Open technical decisions affect architecture and invariants; Sign-in-as-verification rule is ambiguous between may verify and verifies; Plan status still says needs-revision\",\"gemini_review_required_edits\":\"Resolve token storage, command/event, aggregate/projection, and PubSub decisions; Make sign-in-as-verification acceptance criterion deterministic; Update status from needs-revision after edits\"}}",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_blocking_gaps": "Open technical decisions affect architecture and invariants; Sign-in-as-verification rule is ambiguous between may verify and verifies; Plan status still says needs-revision"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12539,
+                    "output_tokens": 1060,
+                    "reasoning_tokens": 1592,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 142255
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 50628,
+              "tool_time_ms": 60,
+              "active_time_ms": 50688
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "claude_review",
+        "node_visits": {
+          "gemini_review": 1,
+          "start": 1
+        }
+      },
+      "diff": {}
+    }
+  ],
   "conclusion": null,
   "sandbox": {
     "provider": "docker",
@@ -589,5 +723,240 @@
   "pull_request": null,
   "superseded_by": null,
   "pending_interviews": {},
-  "stages": {}
+  "stages": {
+    "start@1": {
+      "first_event_seq": 17,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-07-13T06:19:11.539102110Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T06:19:11.539035622Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "gemini_review@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T06:19:11.539341113Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 3657,
+        "output_tokens": 46,
+        "total_tokens": 3743,
+        "reasoning_tokens": 40,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 3657,
+        "usage_percent": 1.344485294117647,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-07-13T06:19:15.190824002Z",
+        "event_seq": 29,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1000,
+            "usage_percent": 0.36764705882352944
+          },
+          {
+            "category": "tools",
+            "tokens": 1461,
+            "usage_percent": 0.5371323529411764
+          },
+          {
+            "category": "memory",
+            "tokens": 392,
+            "usage_percent": 0.14411764705882352
+          },
+          {
+            "category": "conversation",
+            "tokens": 797,
+            "usage_percent": 0.29301470588235295
+          },
+          {
+            "category": "other",
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
+    }
+  }
 }
