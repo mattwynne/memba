@@ -1,0 +1,141 @@
+# Task 001 inspection notes
+
+## ADRs reviewed
+
+- ADR 0015: `/my/settings` is a member application surface, so later UI work should start as LiveView instead of a controller-rendered page.
+- ADR 0023: the Profile/Clubs/Emails selection is visible LiveView state and should be URL-addressable with LiveView routes/patches, not custom client-side tab JavaScript.
+- ADR 0021: existing projectors publish committed read-model changes through `Memba.ReadModelChanges.after_update/3`; later settings live-refresh should subscribe to that shared topic and filter by projector/person.
+- ADR 0022: read-your-writes checks should use projection barriers where needed rather than polling or exposing browser-only synchronization endpoints.
+- ADR 0002/0009/0011 remain relevant for following tasks: Membership state changes should stay command/event/aggregate based, Ecto projection updates should remain projector-owned, and Person IDs remain caller-generated aggregate identities.
+
+## Current signed-in identity flow
+
+- `web/lib/memba_web/identity_auth.ex`
+  - The browser session stores only `"current_identity_email"`: a normalized email string.
+  - `fetch_current_identity/2` derives `%{email:, staff?:, active_clubs:}` on each request from `Memba.Accounts`, not from a persisted account/session aggregate.
+  - Active club membership gates (`require_active_club_member/2` and the LiveView `:require_active_club_member` hook) call `Accounts.active_member_of_club?(club_id, current_identity.email)`.
+  - `current_identity.email` is therefore the address that signed in, not necessarily the Person's primary address. The iteration requirement that verification/removal does not disturb the session fits this model, but later membership checks must stop trusting pending addresses.
+- `web/lib/memba_web/router.ex`
+  - Existing member LiveViews are under the club-member browser surface and use `MembaWeb.Plugs.ClubSiteMemberRoute` to derive `club_id` from the club host when present.
+  - There is not yet a global `/my/settings` route. Later routing needs to require an authenticated identity that resolves to a Membership Person, while still keeping the page global rather than club-settings scoped.
+- `web/lib/memba_web/components/layouts.ex`
+  - `Layouts.club_site/1` currently shows the identity dropdown with only the `Sign out` form.
+  - The layout has no `Account settings` link or `.app-menu__item` / `.app-menu__divider` usage yet.
+
+## Current auth-token and auth-email flow
+
+- `web/lib/memba/accounts.ex`
+  - `@sign_in_token_ttl_seconds` is 15 minutes.
+  - `request_sign_in_link/2` normalizes the requested email and creates a sign-in token only when the address is a staff email or `list_active_clubs_for_email/1` returns at least one active club.
+  - `create_sign_in_token/2` stores only the normalized requested email, token hash, expiry, and eventual consumed timestamp.
+  - `consume_sign_in_token/2` locks the token row, rejects already-consumed/expired/unknown tokens, marks valid tokens consumed, and returns `{:ok, %{email: consumed_token.email}}`.
+  - There is currently no Person/address scope on sign-in tokens and no hook that verifies a pending Person email address.
+- `web/lib/memba/accounts/sign_in_token.ex`
+  - `auth_sign_in_tokens` is intentionally narrow: `email`, `token_hash`, `expires_at`, `consumed_at`, timestamps.
+  - This table is unsuitable for the plan's dedicated email-address verification tokens because it lacks `person_id`, `normalized_email` scope, `revoked_at`, and address-still-pending semantics.
+- `web/lib/memba/accounts/auth_email_request.ex`
+  - `auth_email_requests` tracks user-facing sign-in email delivery progress and provider status, with a 30-minute progress window and seven-day retention.
+  - It is a delivery-progress/readback record, not a one-use verification-token store.
+- `web/lib/memba_web/controllers/auth_controller.ex`
+  - A successful `/auth/sign-in/:token` callback logs in the consumed token email, preserves staff onboarding return semantics, flashes `Signed in.`, and redirects.
+  - Later sign-in-as-verification should happen after a valid token proves mailbox control, but before/around redirect, without changing the fact that the session remains an email-backed signed-in identity.
+- `web/lib/memba/accounts/auth_email.ex`
+  - Existing transactional email conventions use `Swoosh.Email`, `Memba.EmailTemplates`, provider metadata/tags, and `Memba.Mailer.deliver/1`.
+  - The verification email template can reuse these conventions while using its own email kind/copy.
+
+## Current Person email-address write model
+
+- `web/lib/memba/membership/person.ex`
+  - `Memba.Membership.Person` aggregate state includes `:email` and `:email_addresses`.
+  - `CreatePerson` supports legacy single `email` or `email_addresses`; it emits `PersonCreated` and, when a multi-address set is supplied, `PersonEmailAddressesReplaced`.
+  - `ReplacePersonEmailAddresses` is replace-all: it validates the submitted complete set and emits one `PersonEmailAddressesReplaced` event.
+  - Email-address maps contain only `email`, `normalized_email`, and `is_primary`; there is no verification state and no individual add/verify/make-primary/remove event vocabulary.
+- `web/lib/memba/membership/email_addresses.ex`
+  - Validation requires at least one address, exactly one primary, valid email syntax, and no duplicate normalized addresses within the submitted set.
+  - Validation does not know about verified/pending state; any valid address can be primary today.
+- `web/lib/memba/membership/events/person_created.ex`
+  - `PersonCreated` still carries the legacy primary `:email`.
+- `web/lib/memba/membership/events/person_email_addresses_replaced.ex`
+  - `PersonEmailAddressesReplaced` carries a full `email_addresses` list and `primary_email`.
+  - Following tasks should either evolve this event carefully or add explicit business events so replay can distinguish pending address addition, verification, primary change, and removal.
+- `web/lib/memba/membership/router.ex`
+  - `CreatePerson` and `ReplacePersonEmailAddresses` are routed to the Person aggregate by `person_id`.
+
+## Current Person email-address projections and queries
+
+- `web/lib/memba/membership/projections/person_email_address.ex`
+  - `membership_person_email_addresses` has `person_id`, `email`, `normalized_email`, and `is_primary`.
+  - Database constraints include one globally unique normalized email and one primary row per person.
+  - There is no `verified_at`, status enum, or boolean verification field yet.
+- `web/lib/memba/membership/projectors/person.ex`
+  - `PersonCreated` inserts the Person projection and upserts a legacy primary email-address row.
+  - `PersonEmailAddressesReplaced` updates `membership_people.email`, deletes all existing email-address rows for the person, and inserts the submitted set.
+  - The projector already publishes `Memba.ReadModelChanges.publish/4` in `after_update/3`, so later settings live-refresh can reuse this projector/topic once committed changes include the person/address updates.
+  - The current delete-all/insert-all projection shape will discard any row-level verification fields unless later tasks preserve state at the domain/event level or project replacement events with verification data.
+- `web/lib/memba/membership.ex`
+  - `prevent_duplicate_person_email_addresses/2` rejects normalized-email collisions attached to another person before dispatch; the projection unique index also enforces this.
+  - `get_person_by_email/1`, `list_active_clubs_for_member_email/1`, and `active_member_of_club_by_email?/2` currently match any projected Person email address. These are the auth/inbound identity trust points that must filter to verified addresses, with the special sign-in-as-verification flow handled explicitly.
+  - `list_active_members_of_club/1` joins only the primary email-address row for each active member. This preserves the outbound "one current primary recipient" shape, but later work must ensure the primary row cannot be pending.
+  - `list_person_email_addresses/1` returns `%{email, normalized_email, primary?}` maps for UI/form callers; later settings UI needs verification status too.
+- `web/priv/repo/migrations/20260602023706_create_membership_person_email_addresses_projection.exs`
+  - Creates the email-address projection table with no verification state.
+- `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`
+  - Backfilled legacy `membership_people.email` rows as primary addresses. The new verification-state migration should similarly backfill all existing rows as verified.
+
+## Current staff create/edit flow
+
+- `web/lib/memba_web/live/admin/people_live/new.ex`
+  - Staff can create a Person with a complete email-address set through `PersonEmailAddressForm`.
+  - The submitted addresses go directly to `Membership.create_person/2` with `consistency: :strong`.
+  - All valid addresses are immediately trusted today because no pending/verified distinction exists.
+- `web/lib/memba_web/live/admin/people_live/edit.ex`
+  - Staff edit loads `Membership.list_person_email_addresses/1`, renders editable rows, and saves through `Membership.replace_person_email_addresses/2`.
+  - Saving replaces the full set. Removed addresses disappear immediately from the projection; newly introduced addresses are immediately usable for sign-in and inbound identity today.
+  - Later staff compatibility work should preserve existing verified rows, make newly introduced rows pending/unverified, and revoke outstanding verification tokens for removed pending rows.
+- `web/lib/memba_web/live/admin/person_email_address_form.ex`
+  - The form only tracks row email and primary selection. It has no place for verification state, pending badges, resend action, or primary-disabled state.
+  - Current copy says alternate addresses "can identify this person"; that becomes inaccurate for pending addresses and should be updated with the staff-compatibility task.
+
+## Current inbound identity flow
+
+- `web/lib/memba/messaging/inbound_club_sender.ex`
+  - Sender resolution normalizes the inbound `from_address` and calls `Membership.get_person_by_email/1`.
+  - Any known primary or alternate address is accepted as the Person identity today; unknown/invalid addresses return `:unknown_sender`.
+  - Later pending-address rejection can be implemented by changing the Membership lookup/adding a verified-only lookup and mapping pending known addresses to a rejection rather than a resolved sender.
+- `web/lib/memba/messaging/inbound_club_authorization.ex`
+  - After sender resolution, authorization checks active club membership by Person ID.
+  - This layer does not know which address resolved the person; pending-address policy belongs before or inside sender resolution.
+- `web/lib/memba/messaging.ex`
+  - `receive_inbound_club_email/2` records the inbound receipt first, resolves destination, resolves sender, authorizes, then accepts or rejects and sends a rejection email.
+  - Existing rejection reasons are stringified atoms such as `unknown_sender` and `sender_not_active_member`. A pending-address rejection can fit this path with a new typed reason.
+
+## Existing test and validation footholds for following tasks
+
+- Domain/context coverage for current Person email behaviour lives primarily in:
+  - `web/test/memba/membership/email_addresses_test.exs`
+  - `web/test/memba/membership/person_test.exs`
+  - `web/test/memba/membership/person_email_address_projection_test.exs`
+  - `web/test/memba/membership/query_test.exs`
+  - `web/test/memba/membership/public_api_test.exs`
+- Auth-token/sign-in coverage lives in:
+  - `web/test/memba/accounts_test.exs`
+  - `web/test/memba/auth_persistence_test.exs`
+  - `web/test/memba_web/controllers/auth_controller_test.exs`
+- Inbound identity coverage lives in:
+  - `web/test/memba/messaging/inbound_club_sender_test.exs`
+  - `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`
+  - provider webhook controller tests under `web/test/memba_web/controllers/`
+- Staff edit browser coverage lives in:
+  - `web/test/memba_web/live/admin_people_live_test.exs`
+  - `web/test/memba_web/live/admin/clubs_live/show_test.exs`
+
+## Implementation implications for following tasks
+
+- Keep the session model as a signed-in identity email. Do not introduce an Account aggregate or make the session depend on a specific email-address row.
+- Add verification state to the Person aggregate value/state and email-address projection before filtering auth/inbound queries; otherwise existing staff/member flows will not have state to enforce.
+- Use explicit Membership commands/events for pending-add, verify, primary-change, and removal rather than extending the current replace-all command as the only business operation.
+- Add a dedicated verification-token table/module with `person_id`, normalized email, token hash, expiry, consumed/revoked state, and one-use semantics. Reuse the 15-minute sign-in TTL if no better project constant is introduced.
+- Preserve `replace_person_email_addresses/2` as a staff compatibility entry point, but make it orchestrate or emit stateful behaviour: existing verified addresses stay verified; newly introduced addresses become pending; removed pending addresses cannot be verified later.
+- Filter ordinary sign-in eligibility, active-club-by-email gates, `get_person_by_email`-style identity lookups, and inbound sender resolution so pending addresses are not trusted. The valid sign-in-token callback is the deliberate exception that may verify a pending known address after proving mailbox control.
+- Keep outbound club-message delivery resolving through `Membership.list_active_members_of_club/1` and the current recipient shape, but enforce "primary must be verified" before a primary change can occur.
+- Reuse `Memba.ReadModelChanges` from the Person projector for `/my/settings` live refresh; do not broadcast detailed email contents beyond what the LiveView can reload through Membership queries.

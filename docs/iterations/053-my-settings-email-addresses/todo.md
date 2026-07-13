@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
+- [x] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
 - [ ] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
 - [ ] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
 - [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
