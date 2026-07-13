@@ -1,0 +1,151 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 8937b81..8f2c1c9 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.
+ - [x] 010 Verification tokens are one-use, scoped to the still-pending Person/address pair, expire on a short TTL aligned with sign-in links unless implementation finds an existing project constant to reuse, and cannot verify removed/replaced addresses.
+ - [x] 011 Add a general verification email template using existing transactional email delivery conventions.
+-- [ ] 012 Add the verification callback route/page.
++- [x] 012 Add the verification callback route/page.
+ - [ ] 013 A valid callback verifies the address, publishes a settings/read-model change notification, and renders `Email verified, you can close this browser.` Invalid/expired callbacks render a calm invalid/expired message.
+ - [ ] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
+ - [ ] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
+diff --git a/web/lib/memba_web/controllers/person_email_address_verification_controller.ex b/web/lib/memba_web/controllers/person_email_address_verification_controller.ex
+new file mode 100644
+index 0000000..f971e1f
+--- /dev/null
++++ b/web/lib/memba_web/controllers/person_email_address_verification_controller.ex
+@@ -0,0 +1,18 @@
++defmodule MembaWeb.PersonEmailAddressVerificationController do
++  use MembaWeb, :controller
++
++  @doc """
++  Render the email-address verification callback page.
++
++  Token consumption and final success/invalid states are implemented by the next
++  iteration task; this action establishes the public callback route and
++  standalone confirmation-page shell.
++  """
++  def callback(conn, %{"token" => token}) when is_binary(token) do
++    conn
++    |> assign(:hide_public_footer, true)
++    |> assign(:page_title, "Email verification")
++    |> assign(:status, :checking)
++    |> render(:callback)
++  end
++end
+diff --git a/web/lib/memba_web/controllers/person_email_address_verification_html.ex b/web/lib/memba_web/controllers/person_email_address_verification_html.ex
+new file mode 100644
+index 0000000..92afa20
+--- /dev/null
++++ b/web/lib/memba_web/controllers/person_email_address_verification_html.ex
+@@ -0,0 +1,9 @@
++defmodule MembaWeb.PersonEmailAddressVerificationHTML do
++  @moduledoc """
++  Renders Person email-address verification callback pages.
++  """
++
++  use MembaWeb, :html
++
++  embed_templates "person_email_address_verification_html/*"
++end
+diff --git a/web/lib/memba_web/controllers/person_email_address_verification_html/callback.html.heex b/web/lib/memba_web/controllers/person_email_address_verification_html/callback.html.heex
+new file mode 100644
+index 0000000..c5f9c47
+--- /dev/null
++++ b/web/lib/memba_web/controllers/person_email_address_verification_html/callback.html.heex
+@@ -0,0 +1,44 @@
++<div class="min-h-screen bg-base-200 text-ink">
++  <header class="border-b border-line bg-paper px-5 py-4">
++    <div class="mx-auto flex max-w-5xl items-center">
++      <span class="inline-flex items-center gap-2" aria-label="Memba">
++        <.sprig class="size-6 text-sage-600" />
++        <span class="text-lg font-semibold tracking-tight text-ink lowercase">memba</span>
++      </span>
++    </div>
++  </header>
++
++  <main
++    id="person-email-address-verification"
++    class="flex justify-center px-6 py-14 sm:py-20"
++    data-status={@status}
++  >
++    <section
++      id="person-email-address-verification-card"
++      class="w-full max-w-md rounded-3xl border border-line bg-paper p-8 text-center shadow-sm"
++      aria-labelledby="person-email-address-verification-title"
++    >
++      <div
++        class="mx-auto mb-5 grid size-12 place-items-center rounded-full border border-base-300 bg-base-200 text-ink-3"
++        aria-hidden="true"
++      >
++        <.icon name="hero-envelope" class="size-6 bg-current" />
++      </div>
++
++      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
++        Email verification
++      </p>
++
++      <h1
++        id="person-email-address-verification-title"
++        class="mt-3 text-2xl font-semibold tracking-tight text-ink"
++      >
++        Checking your verification link
++      </h1>
++
++      <p class="mt-4 text-base leading-7 text-ink-2">
++        We’re preparing to verify this email address for your Memba account.
++      </p>
++    </section>
++  </main>
++</div>
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 715db02..ce2f96d 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -94,6 +94,11 @@ defmodule MembaWeb.Router do
+     end
+ 
+     get "/auth/sign-in/:token", AuthController, :callback
++
++    get "/my/settings/email-verifications/:token",
++        PersonEmailAddressVerificationController,
++        :callback
++
+     get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
+     post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
+     get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
+diff --git a/web/test/memba_web/controllers/person_email_address_verification_controller_test.exs b/web/test/memba_web/controllers/person_email_address_verification_controller_test.exs
+new file mode 100644
+index 0000000..a6dfa52
+--- /dev/null
++++ b/web/test/memba_web/controllers/person_email_address_verification_controller_test.exs
+@@ -0,0 +1,27 @@
++defmodule MembaWeb.PersonEmailAddressVerificationControllerTest do
++  use MembaWeb.ConnCase, async: true
++
++  describe "GET /my/settings/email-verifications/:token" do
++    test "renders the standalone email-address verification callback page", %{conn: conn} do
++      conn = get(conn, ~p"/my/settings/email-verifications/test-token")
++
++      response = html_response(conn, 200)
++      html = LazyHTML.from_fragment(response)
++
++      assert response =~ "Email verification"
++      assert response =~ "Checking your verification link"
++
++      assert html
++             |> LazyHTML.query("main#person-email-address-verification")
++             |> Enum.any?()
++
++      assert html
++             |> LazyHTML.query("section#person-email-address-verification-card")
++             |> Enum.any?()
++
++      assert html
++             |> LazyHTML.query("[data-status='checking']")
++             |> Enum.any?()
++    end
++  end
++end
