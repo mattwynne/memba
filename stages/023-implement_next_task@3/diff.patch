@@ -1,0 +1,1149 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index a6f15b1..baec5f5 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.
+ - [x] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.
+ - [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
+-- [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
++- [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
+ - [ ] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
+ - [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+ - [ ] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index aadf70c..1adde9d 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -10,15 +10,19 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Authorization
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.InviteClubMember
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+   alias Memba.Membership.Commands.UpdateClub
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
+   alias Memba.Membership.EmailAddresses
+   alias Memba.Membership.InvitationToken
+   alias Memba.Membership.Projections.Club
+@@ -89,6 +93,56 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Add a new pending email address to a person.
++
++  The caller supplies the person aggregate identity as `:person_id` or
++  `"person_id"`. The submitted email address is rejected before dispatch when it
++  is already attached to another person.
++  """
++  def add_person_email_address(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- add_person_email_address_command(attrs),
++         {:ok, email_addresses} <- normalize_command_email_addresses(command),
++         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
++  @doc """
++  Mark a pending person email address as verified.
++
++  The caller supplies the person aggregate identity as `:person_id` or
++  `"person_id"` and the email address as `:email` or `"email"`. The optional
++  `:verified_at`/`"verified_at"` value defaults to the current UTC time.
++  """
++  def verify_person_email_address(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- verify_person_email_address_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
++  @doc """
++  Make a verified person email address primary.
++  """
++  def make_person_email_address_primary(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- make_person_email_address_primary_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
++  @doc """
++  Remove a non-primary person email address.
++  """
++  def remove_person_email_address(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- remove_person_email_address_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Add a person as an active member of a club through the Membership context.
+ 
+@@ -891,6 +945,36 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp add_person_email_address_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, email} <- fetch_required(attrs, :email) do
++      {:ok, %AddPersonEmailAddress{person_id: person_id, email: email}}
++    end
++  end
++
++  defp verify_person_email_address_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, email} <- fetch_required(attrs, :email),
++         {:ok, verified_at} <- verified_at(attrs) do
++      {:ok,
++       %VerifyPersonEmailAddress{person_id: person_id, email: email, verified_at: verified_at}}
++    end
++  end
++
++  defp make_person_email_address_primary_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, email} <- fetch_required(attrs, :email) do
++      {:ok, %MakePersonEmailAddressPrimary{person_id: person_id, email: email}}
++    end
++  end
++
++  defp remove_person_email_address_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, email} <- fetch_required(attrs, :email) do
++      {:ok, %RemovePersonEmailAddress{person_id: person_id, email: email}}
++    end
++  end
++
+   defp add_member_command(attrs) do
+     with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+          {:ok, club_id} <- fetch_required(attrs, :club_id),
+@@ -1181,6 +1265,12 @@ defmodule Memba.Membership do
+     EmailAddresses.validate_set(email_addresses)
+   end
+ 
++  defp normalize_command_email_addresses(%AddPersonEmailAddress{email: email}) do
++    with {:ok, normalized_email_address} <- EmailAddresses.normalize_email(email) do
++      {:ok, [normalized_email_address]}
++    end
++  end
++
+   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
+     with {:ok, person_id} <- cast_person_id(person_id) do
+       normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
+@@ -1263,6 +1353,14 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp verified_at(attrs) do
++    case fetch_optional(attrs, :verified_at) do
++      {:ok, %DateTime{} = verified_at} -> {:ok, verified_at}
++      {:ok, _verified_at} -> {:error, :invalid_verified_at}
++      :error -> {:ok, DateTime.utc_now(:microsecond)}
++    end
++  end
++
+   defp create_person_email_attrs(attrs) do
+     case fetch_optional(attrs, :email_addresses) do
+       {:ok, email_addresses} ->
+diff --git a/web/lib/memba/membership/commands/add_person_email_address.ex b/web/lib/memba/membership/commands/add_person_email_address.ex
+new file mode 100644
+index 0000000..7b752e5
+--- /dev/null
++++ b/web/lib/memba/membership/commands/add_person_email_address.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.AddPersonEmailAddress do
++  @moduledoc """
++  Command to add a pending email address to a person.
++  """
++
++  @enforce_keys [:person_id, :email]
++  defstruct [:person_id, :email]
++end
+diff --git a/web/lib/memba/membership/commands/make_person_email_address_primary.ex b/web/lib/memba/membership/commands/make_person_email_address_primary.ex
+new file mode 100644
+index 0000000..fd16563
+--- /dev/null
++++ b/web/lib/memba/membership/commands/make_person_email_address_primary.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.MakePersonEmailAddressPrimary do
++  @moduledoc """
++  Command to make a verified person email address primary.
++  """
++
++  @enforce_keys [:person_id, :email]
++  defstruct [:person_id, :email]
++end
+diff --git a/web/lib/memba/membership/commands/remove_person_email_address.ex b/web/lib/memba/membership/commands/remove_person_email_address.ex
+new file mode 100644
+index 0000000..e622ecc
+--- /dev/null
++++ b/web/lib/memba/membership/commands/remove_person_email_address.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.RemovePersonEmailAddress do
++  @moduledoc """
++  Command to remove a non-primary person email address.
++  """
++
++  @enforce_keys [:person_id, :email]
++  defstruct [:person_id, :email]
++end
+diff --git a/web/lib/memba/membership/commands/verify_person_email_address.ex b/web/lib/memba/membership/commands/verify_person_email_address.ex
+new file mode 100644
+index 0000000..f5de75d
+--- /dev/null
++++ b/web/lib/memba/membership/commands/verify_person_email_address.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.VerifyPersonEmailAddress do
++  @moduledoc """
++  Command to mark a pending person email address as verified.
++  """
++
++  @enforce_keys [:person_id, :email, :verified_at]
++  defstruct [:person_id, :email, :verified_at]
++end
+diff --git a/web/lib/memba/membership/events/person_email_address_added.ex b/web/lib/memba/membership/events/person_email_address_added.ex
+new file mode 100644
+index 0000000..ad746ea
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_email_address_added.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonEmailAddressAdded do
++  @moduledoc """
++  Event raised when a pending email address has been added to a person.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :email, :normalized_email]
++  defstruct [:person_id, :email, :normalized_email]
++end
+diff --git a/web/lib/memba/membership/events/person_email_address_removed.ex b/web/lib/memba/membership/events/person_email_address_removed.ex
+new file mode 100644
+index 0000000..7115c2c
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_email_address_removed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonEmailAddressRemoved do
++  @moduledoc """
++  Event raised when a non-primary email address has been removed from a person.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :email, :normalized_email]
++  defstruct [:person_id, :email, :normalized_email]
++end
+diff --git a/web/lib/memba/membership/events/person_email_address_verified.ex b/web/lib/memba/membership/events/person_email_address_verified.ex
+new file mode 100644
+index 0000000..75451c5
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_email_address_verified.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonEmailAddressVerified do
++  @moduledoc """
++  Event raised when a person's pending email address has been verified.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :email, :normalized_email, :verified_at]
++  defstruct [:person_id, :email, :normalized_email, :verified_at]
++end
+diff --git a/web/lib/memba/membership/events/person_primary_email_address_changed.ex b/web/lib/memba/membership/events/person_primary_email_address_changed.ex
+new file mode 100644
+index 0000000..6cf6ebe
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_primary_email_address_changed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonPrimaryEmailAddressChanged do
++  @moduledoc """
++  Event raised when a person's verified primary email address has changed.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :primary_email, :normalized_email]
++  defstruct [:person_id, :primary_email, :normalized_email]
++end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index d4f0ea6..4e520b7 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -5,11 +5,19 @@ defmodule Memba.Membership.Person do
+ 
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.ID
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
+   alias Memba.Membership.EmailAddresses
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Membership.Events.PersonEmailAddressRemoved
++  alias Memba.Membership.Events.PersonEmailAddressVerified
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+ 
+   @behaviour Aggregate
+   @legacy_verified_at ~U[1970-01-01 00:00:00Z]
+@@ -63,6 +71,84 @@ defmodule Memba.Membership.Person do
+     end
+   end
+ 
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %AddPersonEmailAddress{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %AddPersonEmailAddress{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         {:ok, email_addresses} <-
++           EmailAddresses.add_pending(person.email_addresses, command.email),
++         {:ok, email_address} <- find_address(email_addresses, command.email) do
++      %PersonEmailAddressAdded{
++        person_id: command.person_id,
++        email: email_address.email,
++        normalized_email: email_address.normalized_email
++      }
++    end
++  end
++
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %VerifyPersonEmailAddress{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %VerifyPersonEmailAddress{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         :ok <- validate_verified_at(command.verified_at),
++         {:ok, email_addresses} <-
++           EmailAddresses.verify(person.email_addresses, command.email, command.verified_at),
++         {:ok, email_address} <- find_address(email_addresses, command.email) do
++      %PersonEmailAddressVerified{
++        person_id: command.person_id,
++        email: email_address.email,
++        normalized_email: email_address.normalized_email,
++        verified_at: command.verified_at
++      }
++    end
++  end
++
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %MakePersonEmailAddressPrimary{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %MakePersonEmailAddressPrimary{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         {:ok, email_addresses} <-
++           EmailAddresses.make_primary(person.email_addresses, command.email),
++         {:ok, email_address} <- primary_address(email_addresses) do
++      %PersonPrimaryEmailAddressChanged{
++        person_id: command.person_id,
++        primary_email: email_address.email,
++        normalized_email: email_address.normalized_email
++      }
++    end
++  end
++
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %RemovePersonEmailAddress{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %RemovePersonEmailAddress{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         {:ok, email_address} <- find_address(person.email_addresses, command.email),
++         {:ok, _email_addresses} <-
++           EmailAddresses.remove_non_primary(person.email_addresses, command.email) do
++      %PersonEmailAddressRemoved{
++        person_id: command.person_id,
++        email: email_address.email,
++        normalized_email: email_address.normalized_email
++      }
++    end
++  end
++
+   @impl Aggregate
+   def apply(%__MODULE__{} = person, %PersonCreated{} = event) do
+     %__MODULE__{
+@@ -85,6 +171,40 @@ defmodule Memba.Membership.Person do
+     }
+   end
+ 
++  def apply(%__MODULE__{} = person, %PersonEmailAddressAdded{} = event) do
++    %__MODULE__{
++      person
++      | email_addresses:
++          add_pending!(person.email_addresses, %{
++            email: event.email,
++            normalized_email: event.normalized_email
++          })
++    }
++  end
++
++  def apply(%__MODULE__{} = person, %PersonEmailAddressVerified{} = event) do
++    %__MODULE__{
++      person
++      | email_addresses:
++          verify!(person.email_addresses, event.normalized_email, verified_at!(event.verified_at))
++    }
++  end
++
++  def apply(%__MODULE__{} = person, %PersonPrimaryEmailAddressChanged{} = event) do
++    %__MODULE__{
++      person
++      | email: event.primary_email,
++        email_addresses: make_primary!(person.email_addresses, event.normalized_email)
++    }
++  end
++
++  def apply(%__MODULE__{} = person, %PersonEmailAddressRemoved{} = event) do
++    %__MODULE__{
++      person
++      | email_addresses: remove_non_primary!(person.email_addresses, event.normalized_email)
++    }
++  end
++
+   defp validate_person_id(person_id) do
+     case ID.cast(:person, person_id) do
+       {:ok, ^person_id} -> :ok
+@@ -127,19 +247,17 @@ defmodule Memba.Membership.Person do
+     end
+   end
+ 
+-  defp validate_matching_person_id(
+-         %__MODULE__{person_id: person_id},
+-         %ReplacePersonEmailAddresses{
+-           person_id: person_id
+-         }
+-       ) do
++  defp validate_matching_person_id(%__MODULE__{person_id: person_id}, %{person_id: person_id}) do
+     :ok
+   end
+ 
+-  defp validate_matching_person_id(%__MODULE__{}, %ReplacePersonEmailAddresses{}) do
++  defp validate_matching_person_id(%__MODULE__{}, %{person_id: _person_id}) do
+     {:error, :invalid_person_id}
+   end
+ 
++  defp validate_verified_at(%DateTime{}), do: :ok
++  defp validate_verified_at(_verified_at), do: {:error, :invalid_verified_at}
++
+   defp primary_email(email_addresses) do
+     case Enum.find(email_addresses, & &1.is_primary) do
+       %{email: email} -> {:ok, email}
+@@ -156,10 +274,66 @@ defmodule Memba.Membership.Person do
+     end
+   end
+ 
++  defp primary_address(email_addresses) do
++    case Enum.find(email_addresses, & &1.is_primary) do
++      %{email: _email, normalized_email: _normalized_email} = email_address ->
++        {:ok, email_address}
++
++      _email_address ->
++        {:error, :exactly_one_primary_email_required}
++    end
++  end
++
++  defp find_address(email_addresses, email) do
++    with {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email) do
++      case Enum.find(email_addresses, &(&1.normalized_email == normalized_email)) do
++        nil -> {:error, :email_address_not_found}
++        email_address -> {:ok, email_address}
++      end
++    end
++  end
++
+   defp mark_all_verified!(email_addresses) do
+     case EmailAddresses.mark_all_verified(email_addresses, @legacy_verified_at) do
+       {:ok, email_addresses} -> email_addresses
+       {:error, _reason} -> email_addresses
+     end
+   end
++
++  defp add_pending!(email_addresses, %{email: email}) do
++    case EmailAddresses.add_pending(email_addresses, email) do
++      {:ok, email_addresses} -> email_addresses
++      {:error, _reason} -> email_addresses
++    end
++  end
++
++  defp verify!(email_addresses, normalized_email, verified_at) do
++    case EmailAddresses.verify(email_addresses, normalized_email, verified_at) do
++      {:ok, email_addresses} -> email_addresses
++      {:error, _reason} -> email_addresses
++    end
++  end
++
++  defp make_primary!(email_addresses, normalized_email) do
++    case EmailAddresses.make_primary(email_addresses, normalized_email) do
++      {:ok, email_addresses} -> email_addresses
++      {:error, _reason} -> email_addresses
++    end
++  end
++
++  defp remove_non_primary!(email_addresses, normalized_email) do
++    case EmailAddresses.remove_non_primary(email_addresses, normalized_email) do
++      {:ok, email_addresses} -> email_addresses
++      {:error, _reason} -> email_addresses
++    end
++  end
++
++  defp verified_at!(%DateTime{} = verified_at), do: verified_at
++
++  defp verified_at!(verified_at) when is_binary(verified_at) do
++    case DateTime.from_iso8601(verified_at) do
++      {:ok, verified_at, _offset} -> verified_at
++      {:error, _reason} -> @legacy_verified_at
++    end
++  end
+ end
+diff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex
+index 5338f9b..e98db2d 100644
+--- a/web/lib/memba/membership/projectors/person.ex
++++ b/web/lib/memba/membership/projectors/person.ex
+@@ -9,8 +9,12 @@ defmodule Memba.Membership.Projectors.Person do
+     name: "Memba.Membership.Projectors.Person",
+     consistency: :strong
+ 
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Membership.Events.PersonEmailAddressRemoved
++  alias Memba.Membership.Events.PersonEmailAddressVerified
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+   alias Memba.Membership.Projections.PersonEmailAddress
+ 
+@@ -38,6 +42,55 @@ defmodule Memba.Membership.Projectors.Person do
+     |> insert_email_addresses(event.person_id, event.email_addresses)
+   end)
+ 
++  project(%PersonEmailAddressAdded{} = event, fn multi ->
++    Ecto.Multi.insert(
++      multi,
++      :membership_person_email_address_added,
++      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
++        person_id: event.person_id,
++        email: event.email,
++        is_primary: false,
++        verified_at: nil
++      })
++    )
++  end)
++
++  project(%PersonEmailAddressVerified{} = event, fn multi ->
++    Ecto.Multi.update_all(
++      multi,
++      :membership_person_email_address_verified,
++      email_address_query(event.person_id, event.normalized_email),
++      set: [verified_at: verified_at!(event.verified_at), updated_at: DateTime.utc_now()]
++    )
++  end)
++
++  project(%PersonPrimaryEmailAddressChanged{} = event, fn multi ->
++    multi
++    |> Ecto.Multi.update_all(
++      :membership_person_primary_email,
++      person_query(event.person_id),
++      set: [email: event.primary_email, updated_at: DateTime.utc_now()]
++    )
++    |> Ecto.Multi.update_all(
++      :membership_person_email_addresses_non_primary,
++      email_addresses_query(event.person_id),
++      set: [is_primary: false, updated_at: DateTime.utc_now()]
++    )
++    |> Ecto.Multi.update_all(
++      :membership_person_email_address_primary,
++      email_address_query(event.person_id, event.normalized_email),
++      set: [is_primary: true, updated_at: DateTime.utc_now()]
++    )
++  end)
++
++  project(%PersonEmailAddressRemoved{} = event, fn multi ->
++    Ecto.Multi.delete_all(
++      multi,
++      :membership_person_email_address_removed,
++      email_address_query(event.person_id, event.normalized_email)
++    )
++  end)
++
+   defp upsert_legacy_primary_email_address(multi, %PersonCreated{} = event) do
+     changeset =
+       PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
+@@ -96,6 +149,23 @@ defmodule Memba.Membership.Projectors.Person do
+     )
+   end
+ 
++  defp email_address_query(person_id, normalized_email) do
++    Ecto.Query.from(email_address in PersonEmailAddress,
++      where:
++        email_address.person_id == ^person_id and
++          email_address.normalized_email == ^normalized_email
++    )
++  end
++
++  defp verified_at!(%DateTime{} = verified_at), do: verified_at
++
++  defp verified_at!(verified_at) when is_binary(verified_at) do
++    case DateTime.from_iso8601(verified_at) do
++      {:ok, verified_at, _offset} -> verified_at
++      {:error, _reason} -> DateTime.utc_now()
++    end
++  end
++
+   @impl Commanded.Projections.Ecto
+   def after_update(event, metadata, changes) do
+     Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index ea93e87..4688c33 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -11,17 +11,21 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Person
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.InviteClubMember
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+   alias Memba.Membership.Commands.UpdateClub
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
+ 
+   identify(Club, by: :club_id)
+   identify(ClubInvitation, by: :invitation_id)
+@@ -30,15 +34,19 @@ defmodule Memba.Membership.Router do
+ 
+   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)
+   dispatch(AddMember, to: Membership)
++  dispatch(AddPersonEmailAddress, to: Person)
+   dispatch(AssignMemberRole, to: Club)
+   dispatch(CreateClub, to: Club)
+   dispatch(CreatePerson, to: Person)
+   dispatch(DefineClubRole, to: Club)
+   dispatch(GrantClubRolePermission, to: Club)
+   dispatch(InviteClubMember, to: ClubInvitation)
++  dispatch(MakePersonEmailAddressPrimary, to: Person)
+   dispatch(RemoveMember, to: Membership)
+   dispatch(RemoveMemberRole, to: Club)
++  dispatch(RemovePersonEmailAddress, to: Person)
+   dispatch(ReplacePersonEmailAddresses, to: Person)
+   dispatch(ResendClubMemberInvitation, to: ClubInvitation)
+   dispatch(UpdateClub, to: Club)
++  dispatch(VerifyPersonEmailAddress, to: Person)
+ end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index fa148e0..d9c231c 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -6,17 +6,21 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.InviteClubMember
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.ResendClubMemberInvitation
+   alias Memba.Membership.Commands.UpdateClub
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+   alias Memba.Membership.Projectors.ClubInvitation, as: ClubInvitationProjector
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+@@ -78,17 +82,21 @@ defmodule Memba.Membership.AppTest do
+       MapSet.new([
+         AcceptClubMemberInvitation,
+         AddMember,
++        AddPersonEmailAddress,
+         AssignMemberRole,
+         CreateClub,
+         CreatePerson,
+         DefineClubRole,
+         GrantClubRolePermission,
+         InviteClubMember,
++        MakePersonEmailAddressPrimary,
+         RemoveMember,
+         RemoveMemberRole,
++        RemovePersonEmailAddress,
+         ReplacePersonEmailAddresses,
+         ResendClubMemberInvitation,
+-        UpdateClub
++        UpdateClub,
++        VerifyPersonEmailAddress
+       ])
+ 
+     assert MapSet.new(App.__registered_commands__()) == expected_commands
+diff --git a/web/test/memba/membership/create_person_dispatch_test.exs b/web/test/memba/membership/create_person_dispatch_test.exs
+index ea2062d..1ec9b02 100644
+--- a/web/test/memba/membership/create_person_dispatch_test.exs
++++ b/web/test/memba/membership/create_person_dispatch_test.exs
+@@ -3,10 +3,18 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Membership.Events.PersonEmailAddressRemoved
++  alias Memba.Membership.Events.PersonEmailAddressVerified
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+   alias Memba.Membership.Person
+ 
+   test "Membership app dispatch routes CreatePerson to the Person aggregate" do
+@@ -143,4 +151,108 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+               }
+             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+   end
++
++  test "Membership app dispatches individual person email-address lifecycle commands" do
++    person_id = Memba.ID.generate(:person)
++    verified_at = ~U[2026-07-13 18:30:00Z]
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 2,
++              events: [
++                %PersonEmailAddressAdded{
++                  person_id: ^person_id,
++                  email: "Alice+New@Example.COM",
++                  normalized_email: "alice+new@example.com"
++                }
++              ]
++            }} =
++             App.dispatch(
++               %AddPersonEmailAddress{
++                 person_id: person_id,
++                 email: " Alice+New@Example.COM "
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 3,
++              events: [
++                %PersonEmailAddressVerified{
++                  person_id: ^person_id,
++                  normalized_email: "alice+new@example.com",
++                  verified_at: ^verified_at
++                }
++              ]
++            }} =
++             App.dispatch(
++               %VerifyPersonEmailAddress{
++                 person_id: person_id,
++                 email: "alice+new@example.com",
++                 verified_at: verified_at
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 4,
++              events: [
++                %PersonPrimaryEmailAddressChanged{
++                  person_id: ^person_id,
++                  primary_email: "Alice+New@Example.COM",
++                  normalized_email: "alice+new@example.com"
++                }
++              ]
++            }} =
++             App.dispatch(
++               %MakePersonEmailAddressPrimary{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 5,
++              events: [
++                %PersonEmailAddressRemoved{
++                  person_id: ^person_id,
++                  normalized_email: "alice@example.com"
++                }
++              ],
++              aggregate_state: %Person{
++                person_id: ^person_id,
++                email: "Alice+New@Example.COM",
++                email_addresses: [
++                  %{
++                    email: "Alice+New@Example.COM",
++                    normalized_email: "alice+new@example.com",
++                    is_primary: true,
++                    verified_at: ^verified_at
++                  }
++                ]
++              }
++            }} =
++             App.dispatch(
++               %RemovePersonEmailAddress{person_id: person_id, email: "alice@example.com"},
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
+ end
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index 7f867cf..5edb826 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -1,10 +1,18 @@
+ defmodule Memba.Membership.PersonTest do
+   use ExUnit.Case, async: true
+ 
++  alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
++  alias Memba.Membership.Commands.RemovePersonEmailAddress
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Commands.VerifyPersonEmailAddress
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Membership.Events.PersonEmailAddressRemoved
++  alias Memba.Membership.Events.PersonEmailAddressVerified
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+   alias Memba.Membership.Person
+ 
+   describe "execute/2 CreatePerson" do
+@@ -228,6 +236,129 @@ defmodule Memba.Membership.PersonTest do
+     end
+   end
+ 
++  describe "execute/2 individual email-address commands" do
++    test "adds a pending address, verifies it, makes it primary, and removes the old non-primary address" do
++      person_id = Memba.ID.generate(:person)
++      verified_at = ~U[2026-07-13 18:00:00Z]
++      person = created_person(person_id)
++
++      assert %PersonEmailAddressAdded{
++               person_id: ^person_id,
++               email: "Alice+New@Example.COM",
++               normalized_email: "alice+new@example.com"
++             } =
++               added_event =
++               Person.execute(person, %AddPersonEmailAddress{
++                 person_id: person_id,
++                 email: " Alice+New@Example.COM "
++               })
++
++      person = Person.apply(person, added_event)
++
++      assert [
++               %{
++                 normalized_email: "alice@example.com",
++                 is_primary: true,
++                 verified_at: %DateTime{}
++               },
++               %{
++                 normalized_email: "alice+new@example.com",
++                 is_primary: false,
++                 verified_at: nil
++               }
++             ] = person.email_addresses
++
++      assert {:error, :email_address_not_verified} =
++               Person.execute(person, %MakePersonEmailAddressPrimary{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               })
++
++      assert %PersonEmailAddressVerified{
++               person_id: ^person_id,
++               email: "Alice+New@Example.COM",
++               normalized_email: "alice+new@example.com",
++               verified_at: ^verified_at
++             } =
++               verified_event =
++               Person.execute(person, %VerifyPersonEmailAddress{
++                 person_id: person_id,
++                 email: " alice+new@example.com ",
++                 verified_at: verified_at
++               })
++
++      person = Person.apply(person, verified_event)
++
++      assert %PersonPrimaryEmailAddressChanged{
++               person_id: ^person_id,
++               primary_email: "Alice+New@Example.COM",
++               normalized_email: "alice+new@example.com"
++             } =
++               primary_changed_event =
++               Person.execute(person, %MakePersonEmailAddressPrimary{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               })
++
++      person = Person.apply(person, primary_changed_event)
++
++      assert %Person{
++               email: "Alice+New@Example.COM",
++               email_addresses: [
++                 %{normalized_email: "alice@example.com", is_primary: false},
++                 %{normalized_email: "alice+new@example.com", is_primary: true}
++               ]
++             } = person
++
++      assert %PersonEmailAddressRemoved{
++               person_id: ^person_id,
++               email: "alice@example.com",
++               normalized_email: "alice@example.com"
++             } =
++               removed_event =
++               Person.execute(person, %RemovePersonEmailAddress{
++                 person_id: person_id,
++                 email: " alice@example.com "
++               })
++
++      assert %Person{
++               email: "Alice+New@Example.COM",
++               email_addresses: [
++                 %{normalized_email: "alice+new@example.com", is_primary: true}
++               ]
++             } = Person.apply(person, removed_event)
++    end
++
++    test "rejects individual email-address commands before the person is created" do
++      person_id = Memba.ID.generate(:person)
++
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %AddPersonEmailAddress{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               })
++
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %VerifyPersonEmailAddress{
++                 person_id: person_id,
++                 email: "alice+new@example.com",
++                 verified_at: ~U[2026-07-13 18:00:00Z]
++               })
++
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %MakePersonEmailAddressPrimary{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               })
++
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %RemovePersonEmailAddress{
++                 person_id: person_id,
++                 email: "alice+new@example.com"
++               })
++    end
++  end
++
+   test "apply/2 records the created person identity, name, and email" do
+     person_id = Memba.ID.generate(:person)
+     legacy_verified_at = ~U[1970-01-01 00:00:00Z]
+@@ -290,4 +421,12 @@ defmodule Memba.Membership.PersonTest do
+                primary_email: "alice@work.example"
+              })
+   end
++
++  defp created_person(person_id) do
++    Person.apply(%Person{}, %PersonCreated{
++      person_id: person_id,
++      name: "Alice",
++      email: "alice@example.com"
++    })
++  end
+ end
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 5213218..fa8afd2 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -15,8 +15,12 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.MemberRemoved
++  alias Memba.Membership.Events.PersonEmailAddressAdded
++  alias Memba.Membership.Events.PersonEmailAddressRemoved
++  alias Memba.Membership.Events.PersonEmailAddressVerified
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
+   alias Memba.Membership.InvitationToken
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+@@ -423,6 +427,124 @@ defmodule Memba.Membership.PublicApiTest do
+            ]
+   end
+ 
++  test "person email-address lifecycle APIs dispatch commands and update the read model" do
++    person_id = Memba.ID.generate(:person)
++    verified_at = ~U[2026-07-13 19:00:00.000000Z]
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonEmailAddressAdded{
++                  person_id: ^person_id,
++                  email: "Alice+New@Example.COM",
++                  normalized_email: "alice+new@example.com"
++                }
++              ]
++            }} =
++             Membership.add_person_email_address(
++               %{person_id: person_id, email: " Alice+New@Example.COM "},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %PersonEmailAddress{
++             person_id: ^person_id,
++             email: "Alice+New@Example.COM",
++             normalized_email: "alice+new@example.com",
++             is_primary: false,
++             verified_at: nil
++           } =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice+new@example.com"
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonEmailAddressVerified{
++                  person_id: ^person_id,
++                  normalized_email: "alice+new@example.com",
++                  verified_at: ^verified_at
++                }
++              ]
++            }} =
++             Membership.verify_person_email_address(
++               %{person_id: person_id, email: "alice+new@example.com", verified_at: verified_at},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %PersonEmailAddress{verified_at: ^verified_at} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice+new@example.com"
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonPrimaryEmailAddressChanged{
++                  person_id: ^person_id,
++                  primary_email: "Alice+New@Example.COM",
++                  normalized_email: "alice+new@example.com"
++                }
++              ]
++            }} =
++             Membership.make_person_email_address_primary(
++               %{person_id: person_id, email: "alice+new@example.com"},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %PersonProjection{email: "Alice+New@Example.COM"} = Membership.get_person(person_id)
++
++    assert %PersonEmailAddress{is_primary: false} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice@example.com"
++             )
++
++    assert %PersonEmailAddress{is_primary: true} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice+new@example.com"
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonEmailAddressRemoved{
++                  person_id: ^person_id,
++                  email: "alice@example.com",
++                  normalized_email: "alice@example.com"
++                }
++              ]
++            }} =
++             Membership.remove_person_email_address(
++               %{person_id: person_id, email: "alice@example.com"},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert is_nil(
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice@example.com"
++             )
++           )
++  end
++
+   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)

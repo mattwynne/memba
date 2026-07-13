@@ -1508,7 +1508,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-07-13T16:03:44.929555389Z",
-  "last_event_at": "2026-07-13T17:10:24.436105547Z",
+  "last_event_at": "2026-07-13T17:11:04.388938091Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -6348,9 +6348,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1145,
       "checkpoint": {
-        "timestamp": "2026-07-13T17:10:59.808341074Z",
+        "timestamp": "2026-07-13T17:11:04.379085793Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -6379,11 +6379,313 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.retry_count.resume_gate": 0,
+          "current_node": "implement_next_task",
+          "failure_signature": "",
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.task_gate": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "command.output": "blob://sha256/9176ed6c22c597a5a2384299671b2900211da222cacffa657404ed3a846c0f6e",
+          "internal.retry_count.start": 0,
+          "last_stage": "implement_next_task",
           "internal.thread_id": "all_tasks_done",
+          "internal.run_id": "01KXE3F0WV0J6NJX60AXBK8NZM",
+          "internal.node_visit_count": 3,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found:**\n  - Live worktree is clean.\n  - Recent checkpoint `31e7206 fabro(...): implement_next_task (succeeded)` changes exactly one ordinary todo line:\n    - `003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.`\n    - from `- [ ]` to `- [x]`.\n  - Predecessor todo state at `5fbc778` shows `003` was the first unchecked task.\n\n- **Implementation artifacts found:**\n  - `web/lib/memba/membership/email_addresses.ex`\n    - Added write-side address state including `verified_at`.\n    - Added explicit lifecycle helpers for pending add, verification, primary change, and non-primary removal.\n    - Enforces pending/verified and primary-removal constraints in write-side state validation.\n  - `web/lib/memba/membership/person.ex`\n    - Rehydrated legacy/create/replace email-address aggregate state as verified via deterministic legacy timestamp.\n  - Tests added/updated:\n    - `web/test/memba/membership/email_addresses_test.exs`\n    - `web/test/memba/membership/person_test.exs`\n  - No acceptance feature files were edited in the implementation checkpoint.\n\n- **Tests run/results found:**\n  - Live validation reran focused tests:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/person_email_address_projection_test.exs test/memba/membership/public_api_test.exs`\n    - Result: `51 tests, 0 failures`.\n  - Implementation summary also reported `dev check --quick` passing with `968 tests, 0 failures`.\n  - Repository remained clean after validation test run.\n\n- **ADR/plan conformance notes:**\n  - Matches the plan slice by modelling Membership Person email-address write-side state before later command/event integration tasks.\n  - ADR 0002 respected: behavior is in domain/write-side code, not projection CRUD.\n  - ADR 0007 respected: changes stay within Membership.\n  - ADR 0009 respected: no custom projection machinery was introduced.\n  - ADR 0011 respected: no aggregate identity/routing changes.\n  - No plan-required work was deleted, weakened, reordered, or silently deferred beyond the existing plan-preserving todo split.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a v",
+          "thread.task_gate.current_node": "sync_task_list",
+          "graph.default_fidelity": "summary:high",
+          "thread.validate_task.current_node": "task_gate",
+          "outcome": "succeeded",
+          "task_retry_available": false,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n\n2. **Changes made**\n   - Added individual Membership command modules:\n     - `AddPersonEmailAddress`\n     - `VerifyPersonEmailAddress`\n     - `MakePersonEmailAddressPrimary`\n     - `RemovePersonEmailAddress`\n   - Added corresponding domain event modules:\n     - `PersonEmailAddressAdded`\n     - `PersonEmailAddressVerified`\n     - `PersonPrimaryEmailAddressChanged`\n     - `PersonEmailAddressRemoved`\n   - Routed the new commands through `Memba.Membership.Router` to the `Person` aggregate.\n   - Updated `Memba.Membership.Person` to:\n     - execute and apply the new email-address lifecycle commands/events;\n     - enforce pending vs verified primary rules via the existing `EmailAddresses` write-side state helpers;\n     - tolerate serialized `verified_at` values during event replay.\n   - Updated `Memba.Membership.Projectors.Person` to project the new events into `membership_person_email_addresses` and `membership_people`.\n   - Added public Membership API entry points:\n     - `add_person_email_address/2`\n     - `verify_person_email_address/2`\n     - `make_person_email_address_primary/2`\n     - `remove_person_email_address/2`\n   - Added/updated tests covering aggregate behaviour, Commanded routing/registration, dispatch, projection updates, and public API flow.\n\n3. **Validation commands run and results**\n   - TDD pre-implementation check:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_test.exs test/memba/membership/create_person_dispatch_test.exs test/memba/membership/public_api_test.exs`\n     - Failed as expected with missing new command structs.\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/app_test.exs test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/create_person_dispatch_test.exs test/memba/membership/person_email_address_projection_test.exs test/memba/membership/public_api_test.exs`\n     - Result: `62 tests, 0 failures`\n   - Formatting:\n     - `cd web && mix format --check-formatted ...`\n     - Result: passed for touched files.\n   - Broad quick validation on final diff:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Result: `972 tests, 0 failures`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n   - To:\n     - `- [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: added explicit business commands/events and aggregate-side decision logic rather than CRUD updates.\n   - ADR 0007: changes stay inside the Membership bounded context.\n   - ADR 0008 / 0009: uses existing Commanded/EventStore and Commanded Ecto projection patterns.\n   - ADR 0011: commands continue routing by caller-supplied `person_id`.\n   - ADR 0021: projector remains the read-model update boundary and continues publishing committed read-model changes through the existing projector callback.",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.todo_readable": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.start.current_node": "read_plan",
+          "task_valid": true,
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "graph.max_node_visits": "80",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.read_plan.current_node": "wip_gate"
+        },
+        "node_outcomes": {
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0b202e0cfd857345a6d2be953297634e06620d9eb04dde69a0bc62e858701c7d"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 212,
+              "active_time_ms": 212
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6567a26ae8c9bf9705693b5ca6256b6066e94a7f03c54b67a890e3a244fdc057"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 172,
+              "active_time_ms": 172
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a v",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n\n2. **Changes made**\n   - Added individual Membership command modules:\n     - `AddPersonEmailAddress`\n     - `VerifyPersonEmailAddress`\n     - `MakePersonEmailAddressPrimary`\n     - `RemovePersonEmailAddress`\n   - Added corresponding domain event modules:\n     - `PersonEmailAddressAdded`\n     - `PersonEmailAddressVerified`\n     - `PersonPrimaryEmailAddressChanged`\n     - `PersonEmailAddressRemoved`\n   - Routed the new commands through `Memba.Membership.Router` to the `Person` aggregate.\n   - Updated `Memba.Membership.Person` to:\n     - execute and apply the new email-address lifecycle commands/events;\n     - enforce pending vs verified primary rules via the existing `EmailAddresses` write-side state helpers;\n     - tolerate serialized `verified_at` values during event replay.\n   - Updated `Memba.Membership.Projectors.Person` to project the new events into `membership_person_email_addresses` and `membership_people`.\n   - Added public Membership API entry points:\n     - `add_person_email_address/2`\n     - `verify_person_email_address/2`\n     - `make_person_email_address_primary/2`\n     - `remove_person_email_address/2`\n   - Added/updated tests covering aggregate behaviour, Commanded routing/registration, dispatch, projection updates, and public API flow.\n\n3. **Validation commands run and results**\n   - TDD pre-implementation check:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/person_test.exs test/memba/membership/create_person_dispatch_test.exs test/memba/membership/public_api_test.exs`\n     - Failed as expected with missing new command structs.\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/app_test.exs test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/create_person_dispatch_test.exs test/memba/membership/person_email_address_projection_test.exs test/memba/membership/public_api_test.exs`\n     - Result: `62 tests, 0 failures`\n   - Formatting:\n     - `cd web && mix format --check-formatted ...`\n     - Result: passed for touched files.\n   - Broad quick validation on final diff:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Result: `972 tests, 0 failures`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n   - To:\n     - `- [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002 / CQRS: added explicit business commands/events and aggregate-side decision logic rather than CRUD updates.\n   - ADR 0007: changes stay inside the Membership bounded context.\n   - ADR 0008 / 0009: uses existing Commanded/EventStore and Commanded Ecto projection patterns.\n   - ADR 0011: commands continue routing by caller-supplied `person_id`.\n   - ADR 0021: projector remains the read-model update boundary and continues publishing committed read-model changes through the existing projector callback.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 420009,
+                    "output_tokens": 17178,
+                    "reasoning_tokens": 7369,
+                    "cache_read_tokens": 5752832,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5712871
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 610276,
+              "tool_time_ms": 234126,
+              "active_time_ms": 844402
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found:**\n  - Live worktree is clean.\n  - Recent checkpoint `31e7206 fabro(...): implement_next_task (succeeded)` changes exactly one ordinary todo line:\n    - `003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.`\n    - from `- [ ]` to `- [x]`.\n  - Predecessor todo state at `5fbc778` shows `003` was the first unchecked task.\n\n- **Implementation artifacts found:**\n  - `web/lib/memba/membership/email_addresses.ex`\n    - Added write-side address state including `verified_at`.\n    - Added explicit lifecycle helpers for pending add, verification, primary change, and non-primary removal.\n    - Enforces pending/verified and primary-removal constraints in write-side state validation.\n  - `web/lib/memba/membership/person.ex`\n    - Rehydrated legacy/create/replace email-address aggregate state as verified via deterministic legacy timestamp.\n  - Tests added/updated:\n    - `web/test/memba/membership/email_addresses_test.exs`\n    - `web/test/memba/membership/person_test.exs`\n  - No acceptance feature files were edited in the implementation checkpoint.\n\n- **Tests run/results found:**\n  - Live validation reran focused tests:\n    - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/person_email_address_projection_test.exs test/memba/membership/public_api_test.exs`\n    - Result: `51 tests, 0 failures`.\n  - Implementation summary also reported `dev check --quick` passing with `968 tests, 0 failures`.\n  - Repository remained clean after validation test run.\n\n- **ADR/plan conformance notes:**\n  - Matches the plan slice by modelling Membership Person email-address write-side state before later command/event integration tasks.\n  - ADR 0002 respected: behavior is in domain/write-side code, not projection CRUD.\n  - ADR 0007 respected: changes stay within Membership.\n  - ADR 0009 respected: no custom projection machinery was introduced.\n  - ADR 0011 respected: no aggregate identity/routing changes.\n  - No plan-required work was deleted, weakened, reordered, or silently deferred beyond the existing plan-preserving todo split.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found:**\n  - Live worktree is clean.\n  - Recent checkpoint `31e7206 fabro(...): implement_next_task (succeeded)` changes exac",
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 144713,
+                    "output_tokens": 2168,
+                    "reasoning_tokens": 1749,
+                    "cache_read_tokens": 501248,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1091699
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 112986,
+              "tool_time_ms": 11790,
+              "active_time_ms": 124776
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/76a3b19ad139c01b9fda7fd1118e25b66e8d377b64ad236582de4d70d4c2e34a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1951,
+              "active_time_ms": 1951
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a7e1f778f87604e6eba66a8399132c75d17c7ae03e1f1b20d041ac30d0baedb0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ca6f33d4918410014e2a5fe222f98ed215ec9f5254dc54ab71c06e22b2a5622f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/03c7af70c87478e38a4e4cab2c1a699bf629a3c414ebc0337b1ce16ccb94a3f3"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149323,
+              "active_time_ms": 149323
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9176ed6c22c597a5a2384299671b2900211da222cacffa657404ed3a846c0f6e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f6e2a2313bc129ebc327e233e3b6f3ac1511fd69ca24cdf1535acb78735acc50"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 262,
+              "active_time_ms": 262
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "0af7b8eca65b2fad82f77c67ac0d614a10221396",
+        "node_visits": {
+          "validate_task": 2,
+          "preflight_sandbox": 1,
+          "sync_task_list": 3,
+          "task_gate": 2,
+          "read_plan": 1,
+          "wip_gate": 1,
+          "start": 1,
+          "resume_gate": 1,
+          "implement_next_task": 3,
+          "todo_readable": 3,
+          "pre_validate_snapshot": 2,
+          "all_tasks_done": 3
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md\nindex a6f15b1..baec5f5 100644\n--- a/docs/iterations/053-my-settings-email-addresses/todo.md\n+++ b/docs/iterations/053-my-settings-email-addresses/todo.md\n@@ -3,7 +3,7 @@\n - [x] 001 Inspect current identity, auth-token, Person email-address, and staff edit flows before changing the model.\n - [x] 002 Add verification state to the Person email-address read model/projection and database schema, with all existing rows backfilled as verified.\n - [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.\n-- [ ] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.\n+- [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.\n - [ ] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.\n - [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.\n - [ ] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.\ndiff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex aadf70c..1adde9d 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -10,15 +10,19 @@ defmodule Memba.Membership do\n   alias Memba.Membership.Authorization\n   alias Memba.Membership.Commands.AddMember\n   alias Memba.Membership.Commands.AcceptClubMemberInvitation\n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.AssignMemberRole\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Commands.InviteClubMember\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n   alias Memba.Membership.Commands.RemoveMember\n   alias Memba.Membership.Commands.RemoveMemberRole\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n   alias Memba.Membership.Commands.ResendClubMemberInvitation\n   alias Memba.Membership.Commands.UpdateClub\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n   alias Memba.Membership.EmailAddresses\n   alias Memba.Membership.InvitationToken\n   alias Memba.Membership.Projections.Club\n@@ -89,6 +93,56 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  @doc \"\"\"\n+  Add a new pending email address to a person.\n+\n+  The caller supplies the person aggregate identity as `:person_id` or\n+  `\"person_id\"`. The submitted email address is rejected before dispatch when it\n+  is already attached to another person.\n+  \"\"\"\n+  def add_person_email_address(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- add_person_email_address_command(attrs),\n+         {:ok, email_addresses} <- normalize_command_email_addresses(command),\n+         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Mark a pending person email address as verified.\n+\n+  The caller supplies the person aggregate identity as `:person_id` or\n+  `\"person_id\"` and the email address as `:email` or `\"email\"`. The optional\n+  `:verified_at`/`\"verified_at\"` value defaults to the current UTC time.\n+  \"\"\"\n+  def verify_person_email_address(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- verify_person_email_address_command(attrs) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Make a verified person email address primary.\n+  \"\"\"\n+  def make_person_email_address_primary(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- make_person_email_address_primary_command(attrs) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Remove a non-primary person email address.\n+  \"\"\"\n+  def remove_person_email_address(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- remove_person_email_address_command(attrs) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n   @doc \"\"\"\n   Add a person as an active member of a club through the Membership context.\n \n@@ -891,6 +945,36 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  defp add_person_email_address_command(attrs) do\n+    with {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, email} <- fetch_required(attrs, :email) do\n+      {:ok, %AddPersonEmailAddress{person_id: person_id, email: email}}\n+    end\n+  end\n+\n+  defp verify_person_email_address_command(attrs) do\n+    with {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, email} <- fetch_required(attrs, :email),\n+         {:ok, verified_at} <- verified_at(attrs) do\n+      {:ok,\n+       %VerifyPersonEmailAddress{person_id: person_id, email: email, verified_at: verified_at}}\n+    end\n+  end\n+\n+  defp make_person_email_address_primary_command(attrs) do\n+    with {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, email} <- fetch_required(attrs, :email) do\n+      {:ok, %MakePersonEmailAddressPrimary{person_id: person_id, email: email}}\n+    end\n+  end\n+\n+  defp remove_person_email_address_command(attrs) do\n+    with {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, email} <- fetch_required(attrs, :email) do\n+      {:ok, %RemovePersonEmailAddress{person_id: person_id, email: email}}\n+    end\n+  end\n+\n   defp add_member_command(attrs) do\n     with {:ok, membership_id} <- fetch_required(attrs, :membership_id),\n          {:ok, club_id} <- fetch_required(attrs, :club_id),\n@@ -1181,6 +1265,12 @@ defmodule Memba.Membership do\n     EmailAddresses.validate_set(email_addresses)\n   end\n \n+  defp normalize_command_email_addresses(%AddPersonEmailAddress{email: email}) do\n+    with {:ok, normalized_email_address} <- EmailAddresses.normalize_email(email) do\n+      {:ok, [normalized_email_address]}\n+    end\n+  end\n+\n   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do\n     with {:ok, person_id} <- cast_person_id(person_id) do\n       normalized_emails = Enum.map(email_addresses, & &1.normalized_email)\n@@ -1263,6 +1353,14 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  defp verified_at(attrs) do\n+    case fetch_optional(attrs, :verified_at) do\n+      {:ok, %DateTime{} = verified_at} -> {:ok, verified_at}\n+      {:ok, _verified_at} -> {:error, :invalid_verified_at}\n+      :error -> {:ok, DateTime.utc_now(:microsecond)}\n+    end\n+  end\n+\n   defp create_person_email_attrs(attrs) do\n     case fetch_optional(attrs, :email_addresses) do\n       {:ok, email_addresses} ->\ndiff --git a/web/lib/memba/membership/commands/add_person_email_address.ex b/web/lib/memba/membership/commands/add_person_email_address.ex\nnew file mode 100644\nindex 0000000..7b752e5\n--- /dev/null\n+++ b/web/lib/memba/membership/commands/add_person_email_address.ex\n@@ -0,0 +1,8 @@\n+defmodule Memba.Membership.Commands.AddPersonEmailAddress do\n+  @moduledoc \"\"\"\n+  Command to add a pending email address to a person.\n+  \"\"\"\n+\n+  @enforce_keys [:person_id, :email]\n+  defstruct [:person_id, :email]\n+end\ndiff --git a/web/lib/memba/membership/commands/make_person_email_address_primary.ex b/web/lib/memba/membership/commands/make_person_email_address_primary.ex\nnew file mode 100644\nindex 0000000..fd16563\n--- /dev/null\n+++ b/web/lib/memba/membership/commands/make_person_email_address_primary.ex\n@@ -0,0 +1,8 @@\n+defmodule Memba.Membership.Commands.MakePersonEmailAddressPrimary do\n+  @moduledoc \"\"\"\n+  Command to make a verified person email address primary.\n+  \"\"\"\n+\n+  @enforce_keys [:person_id, :email]\n+  defstruct [:person_id, :email]\n+end\ndiff --git a/web/lib/memba/membership/commands/remove_person_email_address.ex b/web/lib/memba/membership/commands/remove_person_email_address.ex\nnew file mode 100644\nindex 0000000..e622ecc\n--- /dev/null\n+++ b/web/lib/memba/membership/commands/remove_person_email_address.ex\n@@ -0,0 +1,8 @@\n+defmodule Memba.Membership.Commands.RemovePersonEmailAddress do\n+  @moduledoc \"\"\"\n+  Command to remove a non-primary person email address.\n+  \"\"\"\n+\n+  @enforce_keys [:person_id, :email]\n+  defstruct [:person_id, :email]\n+end\ndiff --git a/web/lib/memba/membership/commands/verify_person_email_address.ex b/web/lib/memba/membership/commands/verify_person_email_address.ex\nnew file mode 100644\nindex 0000000..f5de75d\n--- /dev/null\n+++ b/web/lib/memba/membership/commands/verify_person_email_address.ex\n@@ -0,0 +1,8 @@\n+defmodule Memba.Membership.Commands.VerifyPersonEmailAddress do\n+  @moduledoc \"\"\"\n+  Command to mark a pending person email address as verified.\n+  \"\"\"\n+\n+  @enforce_keys [:person_id, :email, :verified_at]\n+  defstruct [:person_id, :email, :verified_at]\n+end\ndiff --git a/web/lib/memba/membership/events/person_email_address_added.ex b/web/lib/memba/membership/events/person_email_address_added.ex\nnew file mode 100644\nindex 0000000..ad746ea\n--- /dev/null\n+++ b/web/lib/memba/membership/events/person_email_address_added.ex\n@@ -0,0 +1,9 @@\n+defmodule Memba.Membership.Events.PersonEmailAddressAdded do\n+  @moduledoc \"\"\"\n+  Event raised when a pending email address has been added to a person.\n+  \"\"\"\n+\n+  @derive Jason.Encoder\n+  @enforce_keys [:person_id, :email, :normalized_email]\n+  defstruct [:person_id, :email, :normalized_email]\n+end\ndiff --git a/web/lib/memba/membership/events/person_email_address_removed.ex b/web/lib/memba/membership/events/person_email_address_removed.ex\nnew file mode 100644\nindex 0000000..7115c2c\n--- /dev/null\n+++ b/web/lib/memba/membership/events/person_email_address_removed.ex\n@@ -0,0 +1,9 @@\n+defmodule Memba.Membership.Events.PersonEmailAddressRemoved do\n+  @moduledoc \"\"\"\n+  Event raised when a non-primary email address has been removed from a person.\n+  \"\"\"\n+\n+  @derive Jason.Encoder\n+  @enforce_keys [:person_id, :email, :normalized_email]\n+  defstruct [:person_id, :email, :normalized_email]\n+end\ndiff --git a/web/lib/memba/membership/events/person_email_address_verified.ex b/web/lib/memba/membership/events/person_email_address_verified.ex\nnew file mode 100644\nindex 0000000..75451c5\n--- /dev/null\n+++ b/web/lib/memba/membership/events/person_email_address_verified.ex\n@@ -0,0 +1,9 @@\n+defmodule Memba.Membership.Events.PersonEmailAddressVerified do\n+  @moduledoc \"\"\"\n+  Event raised when a person's pending email address has been verified.\n+  \"\"\"\n+\n+  @derive Jason.Encoder\n+  @enforce_keys [:person_id, :email, :normalized_email, :verified_at]\n+  defstruct [:person_id, :email, :normalized_email, :verified_at]\n+end\ndiff --git a/web/lib/memba/membership/events/person_primary_email_address_changed.ex b/web/lib/memba/membership/events/person_primary_email_address_changed.ex\nnew file mode 100644\nindex 0000000..6cf6ebe\n--- /dev/null\n+++ b/web/lib/memba/membership/events/person_primary_email_address_changed.ex\n@@ -0,0 +1,9 @@\n+defmodule Memba.Membership.Events.PersonPrimaryEmailAddressChanged do\n+  @moduledoc \"\"\"\n+  Event raised when a person's verified primary email address has changed.\n+  \"\"\"\n+\n+  @derive Jason.Encoder\n+  @enforce_keys [:person_id, :primary_email, :normalized_email]\n+  defstruct [:person_id, :primary_email, :normalized_email]\n+end\ndiff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex\nindex d4f0ea6..4e520b7 100644\n--- a/web/lib/memba/membership/person.ex\n+++ b/web/lib/memba/membership/person.ex\n@@ -5,11 +5,19 @@ defmodule Memba.Membership.Person do\n \n   alias Commanded.Aggregates.Aggregate\n   alias Memba.ID\n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n   alias Memba.Membership.EmailAddresses\n+  alias Memba.Membership.Events.PersonEmailAddressAdded\n+  alias Memba.Membership.Events.PersonEmailAddressRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressVerified\n   alias Memba.Membership.Events.PersonEmailAddressesReplaced\n   alias Memba.Membership.Events.PersonCreated\n+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged\n \n   @behaviour Aggregate\n   @legacy_verified_at ~U[1970-01-01 00:00:00Z]\n@@ -63,6 +71,84 @@ defmodule Memba.Membership.Person do\n     end\n   end\n \n+  @impl Aggregate\n+  def execute(%__MODULE__{person_id: nil}, %AddPersonEmailAddress{}) do\n+    {:error, :person_not_created}\n+  end\n+\n+  def execute(%__MODULE__{} = person, %AddPersonEmailAddress{} = command) do\n+    with :ok <- validate_person_id(command.person_id),\n+         :ok <- validate_matching_person_id(person, command),\n+         {:ok, email_addresses} <-\n+           EmailAddresses.add_pending(person.email_addresses, command.email),\n+         {:ok, email_address} <- find_address(email_addresses, command.email) do\n+      %PersonEmailAddressAdded{\n+        person_id: command.person_id,\n+        email: email_address.email,\n+        normalized_email: email_address.normalized_email\n+      }\n+    end\n+  end\n+\n+  @impl Aggregate\n+  def execute(%__MODULE__{person_id: nil}, %VerifyPersonEmailAddress{}) do\n+    {:error, :person_not_created}\n+  end\n+\n+  def execute(%__MODULE__{} = person, %VerifyPersonEmailAddress{} = command) do\n+    with :ok <- validate_person_id(command.person_id),\n+         :ok <- validate_matching_person_id(person, command),\n+         :ok <- validate_verified_at(command.verified_at),\n+         {:ok, email_addresses} <-\n+           EmailAddresses.verify(person.email_addresses, command.email, command.verified_at),\n+         {:ok, email_address} <- find_address(email_addresses, command.email) do\n+      %PersonEmailAddressVerified{\n+        person_id: command.person_id,\n+        email: email_address.email,\n+        normalized_email: email_address.normalized_email,\n+        verified_at: command.verified_at\n+      }\n+    end\n+  end\n+\n+  @impl Aggregate\n+  def execute(%__MODULE__{person_id: nil}, %MakePersonEmailAddressPrimary{}) do\n+    {:error, :person_not_created}\n+  end\n+\n+  def execute(%__MODULE__{} = person, %MakePersonEmailAddressPrimary{} = command) do\n+    with :ok <- validate_person_id(command.person_id),\n+         :ok <- validate_matching_person_id(person, command),\n+         {:ok, email_addresses} <-\n+           EmailAddresses.make_primary(person.email_addresses, command.email),\n+         {:ok, email_address} <- primary_address(email_addresses) do\n+      %PersonPrimaryEmailAddressChanged{\n+        person_id: command.person_id,\n+        primary_email: email_address.email,\n+        normalized_email: email_address.normalized_email\n+      }\n+    end\n+  end\n+\n+  @impl Aggregate\n+  def execute(%__MODULE__{person_id: nil}, %RemovePersonEmailAddress{}) do\n+    {:error, :person_not_created}\n+  end\n+\n+  def execute(%__MODULE__{} = person, %RemovePersonEmailAddress{} = command) do\n+    with :ok <- validate_person_id(command.person_id),\n+         :ok <- validate_matching_person_id(person, command),\n+         {:ok, email_address} <- find_address(person.email_addresses, command.email),\n+         {:ok, _email_addresses} <-\n+           EmailAddresses.remove_non_primary(person.email_addresses, command.email) do\n+      %PersonEmailAddressRemoved{\n+        person_id: command.person_id,\n+        email: email_address.email,\n+        normalized_email: email_address.normalized_email\n+      }\n+    end\n+  end\n+\n   @impl Aggregate\n   def apply(%__MODULE__{} = person, %PersonCreated{} = event) do\n     %__MODULE__{\n@@ -85,6 +171,40 @@ defmodule Memba.Membership.Person do\n     }\n   end\n \n+  def apply(%__MODULE__{} = person, %PersonEmailAddressAdded{} = event) do\n+    %__MODULE__{\n+      person\n+      | email_addresses:\n+          add_pending!(person.email_addresses, %{\n+            email: event.email,\n+            normalized_email: event.normalized_email\n+          })\n+    }\n+  end\n+\n+  def apply(%__MODULE__{} = person, %PersonEmailAddressVerified{} = event) do\n+    %__MODULE__{\n+      person\n+      | email_addresses:\n+          verify!(person.email_addresses, event.normalized_email, verified_at!(event.verified_at))\n+    }\n+  end\n+\n+  def apply(%__MODULE__{} = person, %PersonPrimaryEmailAddressChanged{} = event) do\n+    %__MODULE__{\n+      person\n+      | email: event.primary_email,\n+        email_addresses: make_primary!(person.email_addresses, event.normalized_email)\n+    }\n+  end\n+\n+  def apply(%__MODULE__{} = person, %PersonEmailAddressRemoved{} = event) do\n+    %__MODULE__{\n+      person\n+      | email_addresses: remove_non_primary!(person.email_addresses, event.normalized_email)\n+    }\n+  end\n+\n   defp validate_person_id(person_id) do\n     case ID.cast(:person, person_id) do\n       {:ok, ^person_id} -> :ok\n@@ -127,19 +247,17 @@ defmodule Memba.Membership.Person do\n     end\n   end\n \n-  defp validate_matching_person_id(\n-         %__MODULE__{person_id: person_id},\n-         %ReplacePersonEmailAddresses{\n-           person_id: person_id\n-         }\n-       ) do\n+  defp validate_matching_person_id(%__MODULE__{person_id: person_id}, %{person_id: person_id}) do\n     :ok\n   end\n \n-  defp validate_matching_person_id(%__MODULE__{}, %ReplacePersonEmailAddresses{}) do\n+  defp validate_matching_person_id(%__MODULE__{}, %{person_id: _person_id}) do\n     {:error, :invalid_person_id}\n   end\n \n+  defp validate_verified_at(%DateTime{}), do: :ok\n+  defp validate_verified_at(_verified_at), do: {:error, :invalid_verified_at}\n+\n   defp primary_email(email_addresses) do\n     case Enum.find(email_addresses, & &1.is_primary) do\n       %{email: email} -> {:ok, email}\n@@ -156,10 +274,66 @@ defmodule Memba.Membership.Person do\n     end\n   end\n \n+  defp primary_address(email_addresses) do\n+    case Enum.find(email_addresses, & &1.is_primary) do\n+      %{email: _email, normalized_email: _normalized_email} = email_address ->\n+        {:ok, email_address}\n+\n+      _email_address ->\n+        {:error, :exactly_one_primary_email_required}\n+    end\n+  end\n+\n+  defp find_address(email_addresses, email) do\n+    with {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email) do\n+      case Enum.find(email_addresses, &(&1.normalized_email == normalized_email)) do\n+        nil -> {:error, :email_address_not_found}\n+        email_address -> {:ok, email_address}\n+      end\n+    end\n+  end\n+\n   defp mark_all_verified!(email_addresses) do\n     case EmailAddresses.mark_all_verified(email_addresses, @legacy_verified_at) do\n       {:ok, email_addresses} -> email_addresses\n       {:error, _reason} -> email_addresses\n     end\n   end\n+\n+  defp add_pending!(email_addresses, %{email: email}) do\n+    case EmailAddresses.add_pending(email_addresses, email) do\n+      {:ok, email_addresses} -> email_addresses\n+      {:error, _reason} -> email_addresses\n+    end\n+  end\n+\n+  defp verify!(email_addresses, normalized_email, verified_at) do\n+    case EmailAddresses.verify(email_addresses, normalized_email, verified_at) do\n+      {:ok, email_addresses} -> email_addresses\n+      {:error, _reason} -> email_addresses\n+    end\n+  end\n+\n+  defp make_primary!(email_addresses, normalized_email) do\n+    case EmailAddresses.make_primary(email_addresses, normalized_email) do\n+      {:ok, email_addresses} -> email_addresses\n+      {:error, _reason} -> email_addresses\n+    end\n+  end\n+\n+  defp remove_non_primary!(email_addresses, normalized_email) do\n+    case EmailAddresses.remove_non_primary(email_addresses, normalized_email) do\n+      {:ok, email_addresses} -> email_addresses\n+      {:error, _reason} -> email_addresses\n+    end\n+  end\n+\n+  defp verified_at!(%DateTime{} = verified_at), do: verified_at\n+\n+  defp verified_at!(verified_at) when is_binary(verified_at) do\n+    case DateTime.from_iso8601(verified_at) do\n+      {:ok, verified_at, _offset} -> verified_at\n+      {:error, _reason} -> @legacy_verified_at\n+    end\n+  end\n end\ndiff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex\nindex 5338f9b..e98db2d 100644\n--- a/web/lib/memba/membership/projectors/person.ex\n+++ b/web/lib/memba/membership/projectors/person.ex\n@@ -9,8 +9,12 @@ defmodule Memba.Membership.Projectors.Person do\n     name: \"Memba.Membership.Projectors.Person\",\n     consistency: :strong\n \n+  alias Memba.Membership.Events.PersonEmailAddressAdded\n+  alias Memba.Membership.Events.PersonEmailAddressRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressVerified\n   alias Memba.Membership.Events.PersonEmailAddressesReplaced\n   alias Memba.Membership.Events.PersonCreated\n+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged\n   alias Memba.Membership.Projections.Person, as: PersonProjection\n   alias Memba.Membership.Projections.PersonEmailAddress\n \n@@ -38,6 +42,55 @@ defmodule Memba.Membership.Projectors.Person do\n     |> insert_email_addresses(event.person_id, event.email_addresses)\n   end)\n \n+  project(%PersonEmailAddressAdded{} = event, fn multi ->\n+    Ecto.Multi.insert(\n+      multi,\n+      :membership_person_email_address_added,\n+      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{\n+        person_id: event.person_id,\n+        email: event.email,\n+        is_primary: false,\n+        verified_at: nil\n+      })\n+    )\n+  end)\n+\n+  project(%PersonEmailAddressVerified{} = event, fn multi ->\n+    Ecto.Multi.update_all(\n+      multi,\n+      :membership_person_email_address_verified,\n+      email_address_query(event.person_id, event.normalized_email),\n+      set: [verified_at: verified_at!(event.verified_at), updated_at: DateTime.utc_now()]\n+    )\n+  end)\n+\n+  project(%PersonPrimaryEmailAddressChanged{} = event, fn multi ->\n+    multi\n+    |> Ecto.Multi.update_all(\n+      :membership_person_primary_email,\n+      person_query(event.person_id),\n+      set: [email: event.primary_email, updated_at: DateTime.utc_now()]\n+    )\n+    |> Ecto.Multi.update_all(\n+      :membership_person_email_addresses_non_primary,\n+      email_addresses_query(event.person_id),\n+      set: [is_primary: false, updated_at: DateTime.utc_now()]\n+    )\n+    |> Ecto.Multi.update_all(\n+      :membership_person_email_address_primary,\n+      email_address_query(event.person_id, event.normalized_email),\n+      set: [is_primary: true, updated_at: DateTime.utc_now()]\n+    )\n+  end)\n+\n+  project(%PersonEmailAddressRemoved{} = event, fn multi ->\n+    Ecto.Multi.delete_all(\n+      multi,\n+      :membership_person_email_address_removed,\n+      email_address_query(event.person_id, event.normalized_email)\n+    )\n+  end)\n+\n   defp upsert_legacy_primary_email_address(multi, %PersonCreated{} = event) do\n     changeset =\n       PersonEmailAddress.changeset(%PersonEmailAddress{}, %{\n@@ -96,6 +149,23 @@ defmodule Memba.Membership.Projectors.Person do\n     )\n   end\n \n+  defp email_address_query(person_id, normalized_email) do\n+    Ecto.Query.from(email_address in PersonEmailAddress,\n+      where:\n+        email_address.person_id == ^person_id and\n+          email_address.normalized_email == ^normalized_email\n+    )\n+  end\n+\n+  defp verified_at!(%DateTime{} = verified_at), do: verified_at\n+\n+  defp verified_at!(verified_at) when is_binary(verified_at) do\n+    case DateTime.from_iso8601(verified_at) do\n+      {:ok, verified_at, _offset} -> verified_at\n+      {:error, _reason} -> DateTime.utc_now()\n+    end\n+  end\n+\n   @impl Commanded.Projections.Ecto\n   def after_update(event, metadata, changes) do\n     Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)\ndiff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex\nindex ea93e87..4688c33 100644\n--- a/web/lib/memba/membership/router.ex\n+++ b/web/lib/memba/membership/router.ex\n@@ -11,17 +11,21 @@ defmodule Memba.Membership.Router do\n   alias Memba.Membership.Person\n   alias Memba.Membership.Commands.AcceptClubMemberInvitation\n   alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.AssignMemberRole\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Commands.DefineClubRole\n   alias Memba.Membership.Commands.GrantClubRolePermission\n   alias Memba.Membership.Commands.InviteClubMember\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n   alias Memba.Membership.Commands.RemoveMember\n   alias Memba.Membership.Commands.RemoveMemberRole\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n   alias Memba.Membership.Commands.ResendClubMemberInvitation\n   alias Memba.Membership.Commands.UpdateClub\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n \n   identify(Club, by: :club_id)\n   identify(ClubInvitation, by: :invitation_id)\n@@ -30,15 +34,19 @@ defmodule Memba.Membership.Router do\n \n   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)\n   dispatch(AddMember, to: Membership)\n+  dispatch(AddPersonEmailAddress, to: Person)\n   dispatch(AssignMemberRole, to: Club)\n   dispatch(CreateClub, to: Club)\n   dispatch(CreatePerson, to: Person)\n   dispatch(DefineClubRole, to: Club)\n   dispatch(GrantClubRolePermission, to: Club)\n   dispatch(InviteClubMember, to: ClubInvitation)\n+  dispatch(MakePersonEmailAddressPrimary, to: Person)\n   dispatch(RemoveMember, to: Membership)\n   dispatch(RemoveMemberRole, to: Club)\n+  dispatch(RemovePersonEmailAddress, to: Person)\n   dispatch(ReplacePersonEmailAddresses, to: Person)\n   dispatch(ResendClubMemberInvitation, to: ClubInvitation)\n   dispatch(UpdateClub, to: Club)\n+  dispatch(VerifyPersonEmailAddress, to: Person)\n end\ndiff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs\nindex fa148e0..d9c231c 100644\n--- a/web/test/memba/membership/app_test.exs\n+++ b/web/test/memba/membership/app_test.exs\n@@ -6,17 +6,21 @@ defmodule Memba.Membership.AppTest do\n   alias Memba.Membership.App\n   alias Memba.Membership.Commands.AcceptClubMemberInvitation\n   alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.AssignMemberRole\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Commands.DefineClubRole\n   alias Memba.Membership.Commands.GrantClubRolePermission\n   alias Memba.Membership.Commands.InviteClubMember\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n   alias Memba.Membership.Commands.RemoveMember\n   alias Memba.Membership.Commands.RemoveMemberRole\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n   alias Memba.Membership.Commands.ResendClubMemberInvitation\n   alias Memba.Membership.Commands.UpdateClub\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n   alias Memba.Membership.Projectors.Club, as: ClubProjector\n   alias Memba.Membership.Projectors.ClubInvitation, as: ClubInvitationProjector\n   alias Memba.Membership.Projectors.Membership, as: MembershipProjector\n@@ -78,17 +82,21 @@ defmodule Memba.Membership.AppTest do\n       MapSet.new([\n         AcceptClubMemberInvitation,\n         AddMember,\n+        AddPersonEmailAddress,\n         AssignMemberRole,\n         CreateClub,\n         CreatePerson,\n         DefineClubRole,\n         GrantClubRolePermission,\n         InviteClubMember,\n+        MakePersonEmailAddressPrimary,\n         RemoveMember,\n         RemoveMemberRole,\n+        RemovePersonEmailAddress,\n         ReplacePersonEmailAddresses,\n         ResendClubMemberInvitation,\n-        UpdateClub\n+        UpdateClub,\n+        VerifyPersonEmailAddress\n       ])\n \n     assert MapSet.new(App.__registered_commands__()) == expected_commands\ndiff --git a/web/test/memba/membership/create_person_dispatch_test.exs b/web/test/memba/membership/create_person_dispatch_test.exs\nindex ea2062d..1ec9b02 100644\n--- a/web/test/memba/membership/create_person_dispatch_test.exs\n+++ b/web/test/memba/membership/create_person_dispatch_test.exs\n@@ -3,10 +3,18 @@ defmodule Memba.Membership.CreatePersonDispatchTest do\n \n   alias Commanded.Commands.ExecutionResult\n   alias Memba.Membership.App\n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n+  alias Memba.Membership.Events.PersonEmailAddressAdded\n+  alias Memba.Membership.Events.PersonEmailAddressRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressVerified\n   alias Memba.Membership.Events.PersonEmailAddressesReplaced\n   alias Memba.Membership.Events.PersonCreated\n+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged\n   alias Memba.Membership.Person\n \n   test \"Membership app dispatch routes CreatePerson to the Person aggregate\" do\n@@ -143,4 +151,108 @@ defmodule Memba.Membership.CreatePersonDispatchTest do\n               }\n             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)\n   end\n+\n+  test \"Membership app dispatches individual person email-address lifecycle commands\" do\n+    person_id = Memba.ID.generate(:person)\n+    verified_at = ~U[2026-07-13 18:30:00Z]\n+\n+    assert :ok =\n+             App.dispatch(\n+               %CreatePerson{person_id: person_id, name: \"Alice\", email: \"alice@example.com\"},\n+               consistency: :strong\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              aggregate_version: 2,\n+              events: [\n+                %PersonEmailAddressAdded{\n+                  person_id: ^person_id,\n+                  email: \"Alice+New@Example.COM\",\n+                  normalized_email: \"alice+new@example.com\"\n+                }\n+              ]\n+            }} =\n+             App.dispatch(\n+               %AddPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \" Alice+New@Example.COM \"\n+               },\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              aggregate_version: 3,\n+              events: [\n+                %PersonEmailAddressVerified{\n+                  person_id: ^person_id,\n+                  normalized_email: \"alice+new@example.com\",\n+                  verified_at: ^verified_at\n+                }\n+              ]\n+            }} =\n+             App.dispatch(\n+               %VerifyPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\",\n+                 verified_at: verified_at\n+               },\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              aggregate_version: 4,\n+              events: [\n+                %PersonPrimaryEmailAddressChanged{\n+                  person_id: ^person_id,\n+                  primary_email: \"Alice+New@Example.COM\",\n+                  normalized_email: \"alice+new@example.com\"\n+                }\n+              ]\n+            }} =\n+             App.dispatch(\n+               %MakePersonEmailAddressPrimary{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               },\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              aggregate_version: 5,\n+              events: [\n+                %PersonEmailAddressRemoved{\n+                  person_id: ^person_id,\n+                  normalized_email: \"alice@example.com\"\n+                }\n+              ],\n+              aggregate_state: %Person{\n+                person_id: ^person_id,\n+                email: \"Alice+New@Example.COM\",\n+                email_addresses: [\n+                  %{\n+                    email: \"Alice+New@Example.COM\",\n+                    normalized_email: \"alice+new@example.com\",\n+                    is_primary: true,\n+                    verified_at: ^verified_at\n+                  }\n+                ]\n+              }\n+            }} =\n+             App.dispatch(\n+               %RemovePersonEmailAddress{person_id: person_id, email: \"alice@example.com\"},\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+  end\n end\ndiff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs\nindex 7f867cf..5edb826 100644\n--- a/web/test/memba/membership/person_test.exs\n+++ b/web/test/memba/membership/person_test.exs\n@@ -1,10 +1,18 @@\n defmodule Memba.Membership.PersonTest do\n   use ExUnit.Case, async: true\n \n+  alias Memba.Membership.Commands.AddPersonEmailAddress\n   alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary\n+  alias Memba.Membership.Commands.RemovePersonEmailAddress\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n+  alias Memba.Membership.Commands.VerifyPersonEmailAddress\n+  alias Memba.Membership.Events.PersonEmailAddressAdded\n+  alias Memba.Membership.Events.PersonEmailAddressRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressVerified\n   alias Memba.Membership.Events.PersonEmailAddressesReplaced\n   alias Memba.Membership.Events.PersonCreated\n+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged\n   alias Memba.Membership.Person\n \n   describe \"execute/2 CreatePerson\" do\n@@ -228,6 +236,129 @@ defmodule Memba.Membership.PersonTest do\n     end\n   end\n \n+  describe \"execute/2 individual email-address commands\" do\n+    test \"adds a pending address, verifies it, makes it primary, and removes the old non-primary address\" do\n+      person_id = Memba.ID.generate(:person)\n+      verified_at = ~U[2026-07-13 18:00:00Z]\n+      person = created_person(person_id)\n+\n+      assert %PersonEmailAddressAdded{\n+               person_id: ^person_id,\n+               email: \"Alice+New@Example.COM\",\n+               normalized_email: \"alice+new@example.com\"\n+             } =\n+               added_event =\n+               Person.execute(person, %AddPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \" Alice+New@Example.COM \"\n+               })\n+\n+      person = Person.apply(person, added_event)\n+\n+      assert [\n+               %{\n+                 normalized_email: \"alice@example.com\",\n+                 is_primary: true,\n+                 verified_at: %DateTime{}\n+               },\n+               %{\n+                 normalized_email: \"alice+new@example.com\",\n+                 is_primary: false,\n+                 verified_at: nil\n+               }\n+             ] = person.email_addresses\n+\n+      assert {:error, :email_address_not_verified} =\n+               Person.execute(person, %MakePersonEmailAddressPrimary{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               })\n+\n+      assert %PersonEmailAddressVerified{\n+               person_id: ^person_id,\n+               email: \"Alice+New@Example.COM\",\n+               normalized_email: \"alice+new@example.com\",\n+               verified_at: ^verified_at\n+             } =\n+               verified_event =\n+               Person.execute(person, %VerifyPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \" alice+new@example.com \",\n+                 verified_at: verified_at\n+               })\n+\n+      person = Person.apply(person, verified_event)\n+\n+      assert %PersonPrimaryEmailAddressChanged{\n+               person_id: ^person_id,\n+               primary_email: \"Alice+New@Example.COM\",\n+               normalized_email: \"alice+new@example.com\"\n+             } =\n+               primary_changed_event =\n+               Person.execute(person, %MakePersonEmailAddressPrimary{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               })\n+\n+      person = Person.apply(person, primary_changed_event)\n+\n+      assert %Person{\n+               email: \"Alice+New@Example.COM\",\n+               email_addresses: [\n+                 %{normalized_email: \"alice@example.com\", is_primary: false},\n+                 %{normalized_email: \"alice+new@example.com\", is_primary: true}\n+               ]\n+             } = person\n+\n+      assert %PersonEmailAddressRemoved{\n+               person_id: ^person_id,\n+               email: \"alice@example.com\",\n+               normalized_email: \"alice@example.com\"\n+             } =\n+               removed_event =\n+               Person.execute(person, %RemovePersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \" alice@example.com \"\n+               })\n+\n+      assert %Person{\n+               email: \"Alice+New@Example.COM\",\n+               email_addresses: [\n+                 %{normalized_email: \"alice+new@example.com\", is_primary: true}\n+               ]\n+             } = Person.apply(person, removed_event)\n+    end\n+\n+    test \"rejects individual email-address commands before the person is created\" do\n+      person_id = Memba.ID.generate(:person)\n+\n+      assert {:error, :person_not_created} =\n+               Person.execute(%Person{}, %AddPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               })\n+\n+      assert {:error, :person_not_created} =\n+               Person.execute(%Person{}, %VerifyPersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\",\n+                 verified_at: ~U[2026-07-13 18:00:00Z]\n+               })\n+\n+      assert {:error, :person_not_created} =\n+               Person.execute(%Person{}, %MakePersonEmailAddressPrimary{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               })\n+\n+      assert {:error, :person_not_created} =\n+               Person.execute(%Person{}, %RemovePersonEmailAddress{\n+                 person_id: person_id,\n+                 email: \"alice+new@example.com\"\n+               })\n+    end\n+  end\n+\n   test \"apply/2 records the created person identity, name, and email\" do\n     person_id = Memba.ID.generate(:person)\n     legacy_verified_at = ~U[1970-01-01 00:00:00Z]\n@@ -290,4 +421,12 @@ defmodule Memba.Membership.PersonTest do\n                primary_email: \"alice@work.example\"\n              })\n   end\n+\n+  defp created_person(person_id) do\n+    Person.apply(%Person{}, %PersonCreated{\n+      person_id: person_id,\n+      name: \"Alice\",\n+      email: \"alice@example.com\"\n+    })\n+  end\n end\ndiff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs\nindex 5213218..fa8afd2 100644\n--- a/web/test/memba/membership/public_api_test.exs\n+++ b/web/test/memba/membership/public_api_test.exs\n@@ -15,8 +15,12 @@ defmodule Memba.Membership.PublicApiTest do\n   alias Memba.Membership.Events.ClubUpdated\n   alias Memba.Membership.Events.MemberAdded\n   alias Memba.Membership.Events.MemberRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressAdded\n+  alias Memba.Membership.Events.PersonEmailAddressRemoved\n+  alias Memba.Membership.Events.PersonEmailAddressVerified\n   alias Memba.Membership.Events.PersonEmailAddressesReplaced\n   alias Memba.Membership.Events.PersonCreated\n+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged\n   alias Memba.Membership.InvitationToken\n   alias Memba.Membership.Permissions\n   alias Memba.Membership.Projections.Club, as: ClubProjection\n@@ -423,6 +427,124 @@ defmodule Memba.Membership.PublicApiTest do\n            ]\n   end\n \n+  test \"person email-address lifecycle APIs dispatch commands and update the read model\" do\n+    person_id = Memba.ID.generate(:person)\n+    verified_at = ~U[2026-07-13 19:00:00.000000Z]\n+\n+    assert :ok =\n+             Membership.create_person(\n+               %{person_id: person_id, name: \"Alice\", email: \"alice@example.com\"},\n+               consistency: :strong\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              events: [\n+                %PersonEmailAddressAdded{\n+                  person_id: ^person_id,\n+                  email: \"Alice+New@Example.COM\",\n+                  normalized_email: \"alice+new@example.com\"\n+                }\n+              ]\n+            }} =\n+             Membership.add_person_email_address(\n+               %{person_id: person_id, email: \" Alice+New@Example.COM \"},\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert %PersonEmailAddress{\n+             person_id: ^person_id,\n+             email: \"Alice+New@Example.COM\",\n+             normalized_email: \"alice+new@example.com\",\n+             is_primary: false,\n+             verified_at: nil\n+           } =\n+             Repo.get_by(PersonEmailAddress,\n+               person_id: person_id,\n+               normalized_email: \"alice+new@example.com\"\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              events: [\n+                %PersonEmailAddressVerified{\n+                  person_id: ^person_id,\n+                  normalized_email: \"alice+new@example.com\",\n+                  verified_at: ^verified_at\n+                }\n+              ]\n+            }} =\n+             Membership.verify_person_email_address(\n+               %{person_id: person_id, email: \"alice+new@example.com\", verified_at: verified_at},\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert %PersonEmailAddress{verified_at: ^verified_at} =\n+             Repo.get_by(PersonEmailAddress,\n+               person_id: person_id,\n+               normalized_email: \"alice+new@example.com\"\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              events: [\n+                %PersonPrimaryEmailAddressChanged{\n+                  person_id: ^person_id,\n+                  primary_email: \"Alice+New@Example.COM\",\n+                  normalized_email: \"alice+new@example.com\"\n+                }\n+              ]\n+            }} =\n+             Membership.make_person_email_address_primary(\n+               %{person_id: person_id, email: \"alice+new@example.com\"},\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert %PersonProjection{email: \"Alice+New@Example.COM\"} = Membership.get_person(person_id)\n+\n+    assert %PersonEmailAddress{is_primary: false} =\n+             Repo.get_by(PersonEmailAddress,\n+               person_id: person_id,\n+               normalized_email: \"alice@example.com\"\n+             )\n+\n+    assert %PersonEmailAddress{is_primary: true} =\n+             Repo.get_by(PersonEmailAddress,\n+               person_id: person_id,\n+               normalized_email: \"alice+new@example.com\"\n+             )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^person_id,\n+              events: [\n+                %PersonEmailAddressRemoved{\n+                  person_id: ^person_id,\n+                  email: \"alice@example.com\",\n+                  normalized_email: \"alice@example.com\"\n+                }\n+              ]\n+            }} =\n+             Membership.remove_person_email_address(\n+               %{person_id: person_id, email: \"alice@example.com\"},\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert is_nil(\n+             Repo.get_by(PersonEmailAddress,\n+               person_id: person_id,\n+               normalized_email: \"alice@example.com\"\n+             )\n+           )\n+  end\n+\n   test \"add_member/2 dispatches AddMember and prevents duplicate active club memberships\" do\n     club_id = Memba.ID.generate(:club)\n     person_id = Memba.ID.generate(:person)\n",
+        "summary": {
+          "files_changed": 22,
+          "additions": 1271,
+          "deletions": 28
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-07-13T17:11:04.587640923Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.thread_id": "implement_next_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "task_retry_available": false,
           "internal.retry_count.validate_task": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.sync_task_list.current_node": "todo_readable",
           "outcome": "succeeded",
@@ -6422,7 +6724,7 @@
           "internal.fidelity": "summary:high",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.sync_task_list": 0,
-          "command.output": "blob://sha256/9176ed6c22c597a5a2384299671b2900211da222cacffa657404ed3a846c0f6e",
+          "command.output": "blob://sha256/011962cf75ce3f00bd68a8d7bb0ea92f72c540193949fa7fce43cd04bfe84af2",
           "internal.retry_count.wip_gate": 0
         },
         "node_outcomes": {
@@ -6485,7 +6787,7 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/6567a26ae8c9bf9705693b5ca6256b6066e94a7f03c54b67a890e3a244fdc057"
+              "command.output": "blob://sha256/011962cf75ce3f00bd68a8d7bb0ea92f72c540193949fa7fce43cd04bfe84af2"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
@@ -6622,7 +6924,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "todo_readable": 3,
           "sync_task_list": 3,
@@ -6634,7 +6936,7 @@
           "implement_next_task": 3,
           "validate_task": 2,
           "read_plan": 1,
-          "pre_validate_snapshot": 2,
+          "pre_validate_snapshot": 3,
           "task_gate": 2
         }
       },
@@ -7742,7 +8044,12 @@
       "first_event_seq": 835,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-07-13T17:10:59.807501263Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -7756,13 +8063,20 @@
       "output": null,
       "started_at": "2026-07-13T16:56:54.888293097Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 844919,
+        "inference_time_ms": 610276,
+        "tool_time_ms": 234126,
+        "active_time_ms": 844402
+      },
       "usage": {
-        "input_tokens": 418774,
-        "output_tokens": 16395,
-        "total_tokens": 6060206,
-        "reasoning_tokens": 6349,
-        "cache_read_tokens": 5618688,
-        "cache_write_tokens": 0
+        "input_tokens": 420009,
+        "output_tokens": 17178,
+        "total_tokens": 6197388,
+        "reasoning_tokens": 7369,
+        "cache_read_tokens": 5752832,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5712871
       },
       "model": {
         "provider": "openai",
@@ -7943,42 +8257,42 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 134749,
-        "usage_percent": 49.540073529411764,
+        "input_tokens": 135379,
+        "usage_percent": 49.77169117647059,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-07-13T17:10:24.361429576Z",
-        "event_seq": 1134,
+        "generated_at": "2026-07-13T17:10:59.804372945Z",
+        "event_seq": 1138,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 958,
-            "usage_percent": 0.3522058823529412
+            "tokens": 956,
+            "usage_percent": 0.3514705882352941
           },
           {
             "category": "tools",
-            "tokens": 1366,
-            "usage_percent": 0.5022058823529412
+            "tokens": 1364,
+            "usage_percent": 0.5014705882352941
           },
           {
             "category": "memory",
-            "tokens": 367,
-            "usage_percent": 0.1349264705882353
+            "tokens": 366,
+            "usage_percent": 0.13455882352941176
           },
           {
             "category": "conversation",
-            "tokens": 132053,
-            "usage_percent": 48.54889705882353
+            "tokens": 132687,
+            "usage_percent": 48.781985294117646
           },
           {
             "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "implement_next_task@1": {
       "first_event_seq": 97,
@@ -8191,6 +8505,34 @@
         "warnings": []
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@3": {
+      "first_event_seq": 1148,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/053-my-settings-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-07-13T17:11:04.385806851Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 21,
