@@ -39,7 +39,7 @@ Rule: Staff manage a person's known email addresses
 
 Rule: Members manage their own email addresses from Account settings
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice opens Account settings from the member menu
       Given Alice is a member of Kootenay Mountaineering Club
       When Alice opens Account settings from their member menu
@@ -47,7 +47,7 @@ Rule: Members manage their own email addresses from Account settings
       And Alice should see Kootenay Mountaineering Club in their current clubs
       And Alice should see their primary email address
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice adds and verifies a new email address
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
@@ -58,14 +58,14 @@ Rule: Members manage their own email addresses from Account settings
       Then Alice should see "Email verified, you can close this browser."
       And Alice should see "alice@work.example" as verified in Account settings
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice cannot make a pending email address primary
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
       When Alice adds "alice@work.example" to their Account settings
       Then Alice should not be able to make "alice@work.example" primary
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice makes a verified alternate email address primary
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
@@ -74,7 +74,7 @@ Rule: Members manage their own email addresses from Account settings
       Then Alice's primary email address should be "alice@work.example"
       And Alice's alternate email addresses should include "alice@example.com"
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice removes a non-primary email address but keeps one primary address
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
@@ -84,14 +84,14 @@ Rule: Members manage their own email addresses from Account settings
       Then Alice's alternate email addresses should not include "alice@work.example"
       And Alice's primary email address should be "alice@example.com"
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Alice resends verification for a pending email address
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has pending email address "alice@work.example"
       When Alice resends verification for "alice@work.example"
       Then Alice should receive a verification email at "alice@work.example"
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Removed pending email addresses cannot be verified later
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has pending email address "alice@work.example"
@@ -102,7 +102,7 @@ Rule: Members manage their own email addresses from Account settings
 
 Rule: Pending email addresses do not identify a member until verified
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Signing in with a pending known address verifies it
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has pending email address "alice@work.example"
@@ -110,7 +110,7 @@ Rule: Pending email addresses do not identify a member until verified
       Then Alice should be signed in
       And Alice should see "alice@work.example" as verified in Account settings
 
-    @iteration-053 @todo-domain @todo-ui
+    @iteration-053
     Scenario: Inbound email from a pending known address is rejected
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has pending email address "alice@work.example"

@@ -21,5 +21,5 @@
 - [x] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
 - [x] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
 - [x] 021 Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
-- [ ] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
+- [x] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
 - [ ] 023 Run `dev check` and fix all issues.
