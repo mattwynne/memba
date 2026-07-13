@@ -8,7 +8,9 @@ defmodule MembaWeb.AuthControllerTest do
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
+  alias Memba.Membership, as: MembershipContext
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
 
@@ -511,6 +513,44 @@ defmodule MembaWeb.AuthControllerTest do
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
+    test "signing in with a pending known person email verifies it without making it primary",
+         %{conn: conn} do
+      Memba.EventSourcedCase.reset_event_sourced_system!()
+
+      %{person_id: person_id} =
+        create_event_sourced_active_member_with_pending_email!(
+          primary_email: "alice.primary@example.com",
+          pending_email: "Alice.Pending@Example.COM"
+        )
+
+      assert %PersonEmailAddress{verified_at: nil, is_primary: false} =
+               Repo.get_by(PersonEmailAddress,
+                 person_id: person_id,
+                 normalized_email: "alice.pending@example.com"
+               )
+
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link(" ALICE.PENDING@example.com ")
+
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
+
+      assert redirected_to(conn) == ~p"/"
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "alice.pending@example.com"
+
+      assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: false} =
+               Repo.get_by(PersonEmailAddress,
+                 person_id: person_id,
+                 normalized_email: "alice.pending@example.com"
+               )
+
+      assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: true} =
+               Repo.get_by(PersonEmailAddress,
+                 person_id: person_id,
+                 normalized_email: "alice.primary@example.com"
+               )
+
+      assert MembershipContext.get_person_primary_email(person_id) == "alice.primary@example.com"
+    end
+
     test "rejects unknown tokens without signing in", %{conn: conn} do
       conn = get(conn, ~p"/auth/sign-in/unknown-token")
 
@@ -769,6 +809,38 @@ defmodule MembaWeb.AuthControllerTest do
     })
 
     %{club_id: club_id, person_id: person.person_id}
+  end
+
+  defp create_event_sourced_active_member_with_pending_email!(attrs) do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+
+    insert_membership_club!(club_id: club_id, name: "Kootenay Mountaineering Club")
+
+    assert :ok =
+             MembershipContext.create_person(
+               %{
+                 person_id: person_id,
+                 name: "Test Member",
+                 email: Keyword.fetch!(attrs, :primary_email)
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             MembershipContext.add_person_email_address(
+               %{person_id: person_id, email: Keyword.fetch!(attrs, :pending_email)},
+               consistency: :strong
+             )
+
+    Repo.insert!(%Membership{
+      membership_id: Memba.ID.generate(:membership),
+      club_id: club_id,
+      person_id: person_id,
+      active: true
+    })
+
+    %{club_id: club_id, person_id: person_id}
   end
 
   defp club_attrs(attrs, club_id) do

@@ -189,6 +189,29 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Mark an email address as verified when a successful sign-in link proves mailbox control.
+
+  This is intentionally a safe no-op for invalid, unknown, and already-verified
+  addresses so sign-in callback handling does not reveal account state or change
+  the existing session semantics. When the normalized email belongs to a pending
+  Person email address, the ordinary Membership verification command is
+  dispatched.
+  """
+  def verify_pending_person_email_address_for_sign_in(email, dispatch_opts \\ [])
+      when is_list(dispatch_opts) do
+    case pending_person_email_address_for_sign_in(email) do
+      {:ok, %PersonEmailAddress{} = email_address} ->
+        email_address
+        |> person_email_address_verification_request()
+        |> verify_person_email_address(dispatch_opts)
+        |> normalize_sign_in_verification_result()
+
+      :not_pending ->
+        :ok
+    end
+  end
+
+  @doc """
   Make a verified person email address primary.
   """
   def make_person_email_address_primary(attrs, dispatch_opts \\ [])
@@ -1279,6 +1302,28 @@ defmodule Memba.Membership do
     |> Repo.one()
     |> ensure_pending_person_email_address()
   end
+
+  defp pending_person_email_address_for_sign_in(email) do
+    case normalize_email(email) do
+      nil ->
+        :not_pending
+
+      normalized_email ->
+        PersonEmailAddress
+        |> where([email_address], email_address.normalized_email == ^normalized_email)
+        |> where([email_address], is_nil(email_address.verified_at))
+        |> limit(1)
+        |> Repo.one()
+        |> case do
+          %PersonEmailAddress{} = email_address -> {:ok, email_address}
+          nil -> :not_pending
+        end
+    end
+  end
+
+  defp normalize_sign_in_verification_result(:ok), do: :ok
+  defp normalize_sign_in_verification_result({:ok, _result}), do: :ok
+  defp normalize_sign_in_verification_result({:error, _reason} = error), do: error
 
   defp ensure_pending_person_email_address(nil), do: {:error, :pending_email_address_not_found}
 

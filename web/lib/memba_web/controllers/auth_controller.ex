@@ -17,6 +17,7 @@ defmodule MembaWeb.AuthController do
     case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
         conn
+        |> verify_pending_person_email_address_for_sign_in(email)
         |> IdentityAuth.log_in_identity(email)
         |> maybe_store_staff_onboarding_return_to(email, return_to)
         |> put_flash(:info, "Signed in.")
@@ -50,6 +51,20 @@ defmodule MembaWeb.AuthController do
   end
 
   defp signed_in?(conn), do: not is_nil(Map.get(conn.assigns, :current_identity))
+
+  defp verify_pending_person_email_address_for_sign_in(conn, email) do
+    case Membership.verify_pending_person_email_address_for_sign_in(email, consistency: :strong) do
+      :ok ->
+        conn
+
+      {:error, reason} ->
+        Logger.warning(
+          "Could not verify pending person email address from sign-in link: #{inspect(reason)}"
+        )
+
+        conn
+    end
+  end
 
   defp safe_return_to(return_to) when is_binary(return_to) do
     cond do
