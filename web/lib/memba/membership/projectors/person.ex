@@ -9,8 +9,12 @@ defmodule Memba.Membership.Projectors.Person do
     name: "Memba.Membership.Projectors.Person",
     consistency: :strong
 
+  alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonEmailAddressRemoved
+  alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
 
@@ -36,6 +40,55 @@ defmodule Memba.Membership.Projectors.Person do
       email_addresses_query(event.person_id)
     )
     |> insert_email_addresses(event.person_id, event.email_addresses)
+  end)
+
+  project(%PersonEmailAddressAdded{} = event, fn multi ->
+    Ecto.Multi.insert(
+      multi,
+      :membership_person_email_address_added,
+      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
+        person_id: event.person_id,
+        email: event.email,
+        is_primary: false,
+        verified_at: nil
+      })
+    )
+  end)
+
+  project(%PersonEmailAddressVerified{} = event, fn multi ->
+    Ecto.Multi.update_all(
+      multi,
+      :membership_person_email_address_verified,
+      email_address_query(event.person_id, event.normalized_email),
+      set: [verified_at: verified_at!(event.verified_at), updated_at: DateTime.utc_now()]
+    )
+  end)
+
+  project(%PersonPrimaryEmailAddressChanged{} = event, fn multi ->
+    multi
+    |> Ecto.Multi.update_all(
+      :membership_person_primary_email,
+      person_query(event.person_id),
+      set: [email: event.primary_email, updated_at: DateTime.utc_now()]
+    )
+    |> Ecto.Multi.update_all(
+      :membership_person_email_addresses_non_primary,
+      email_addresses_query(event.person_id),
+      set: [is_primary: false, updated_at: DateTime.utc_now()]
+    )
+    |> Ecto.Multi.update_all(
+      :membership_person_email_address_primary,
+      email_address_query(event.person_id, event.normalized_email),
+      set: [is_primary: true, updated_at: DateTime.utc_now()]
+    )
+  end)
+
+  project(%PersonEmailAddressRemoved{} = event, fn multi ->
+    Ecto.Multi.delete_all(
+      multi,
+      :membership_person_email_address_removed,
+      email_address_query(event.person_id, event.normalized_email)
+    )
   end)
 
   defp upsert_legacy_primary_email_address(multi, %PersonCreated{} = event) do
@@ -94,6 +147,23 @@ defmodule Memba.Membership.Projectors.Person do
     Ecto.Query.from(email_address in PersonEmailAddress,
       where: email_address.person_id == ^person_id
     )
+  end
+
+  defp email_address_query(person_id, normalized_email) do
+    Ecto.Query.from(email_address in PersonEmailAddress,
+      where:
+        email_address.person_id == ^person_id and
+          email_address.normalized_email == ^normalized_email
+    )
+  end
+
+  defp verified_at!(%DateTime{} = verified_at), do: verified_at
+
+  defp verified_at!(verified_at) when is_binary(verified_at) do
+    case DateTime.from_iso8601(verified_at) do
+      {:ok, verified_at, _offset} -> verified_at
+      {:error, _reason} -> DateTime.utc_now()
+    end
   end
 
   @impl Commanded.Projections.Ecto

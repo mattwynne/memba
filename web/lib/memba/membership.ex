@@ -10,15 +10,19 @@ defmodule Memba.Membership do
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+  alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
+  alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Projections.Club
@@ -85,6 +89,56 @@ defmodule Memba.Membership do
     with {:ok, command} <- replace_person_email_addresses_command(attrs),
          {:ok, email_addresses} <- normalize_command_email_addresses(command),
          :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Add a new pending email address to a person.
+
+  The caller supplies the person aggregate identity as `:person_id` or
+  `"person_id"`. The submitted email address is rejected before dispatch when it
+  is already attached to another person.
+  """
+  def add_person_email_address(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- add_person_email_address_command(attrs),
+         {:ok, email_addresses} <- normalize_command_email_addresses(command),
+         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Mark a pending person email address as verified.
+
+  The caller supplies the person aggregate identity as `:person_id` or
+  `"person_id"` and the email address as `:email` or `"email"`. The optional
+  `:verified_at`/`"verified_at"` value defaults to the current UTC time.
+  """
+  def verify_person_email_address(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- verify_person_email_address_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Make a verified person email address primary.
+  """
+  def make_person_email_address_primary(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- make_person_email_address_primary_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove a non-primary person email address.
+  """
+  def remove_person_email_address(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_person_email_address_command(attrs) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -891,6 +945,36 @@ defmodule Memba.Membership do
     end
   end
 
+  defp add_person_email_address_command(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, email} <- fetch_required(attrs, :email) do
+      {:ok, %AddPersonEmailAddress{person_id: person_id, email: email}}
+    end
+  end
+
+  defp verify_person_email_address_command(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, email} <- fetch_required(attrs, :email),
+         {:ok, verified_at} <- verified_at(attrs) do
+      {:ok,
+       %VerifyPersonEmailAddress{person_id: person_id, email: email, verified_at: verified_at}}
+    end
+  end
+
+  defp make_person_email_address_primary_command(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, email} <- fetch_required(attrs, :email) do
+      {:ok, %MakePersonEmailAddressPrimary{person_id: person_id, email: email}}
+    end
+  end
+
+  defp remove_person_email_address_command(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, email} <- fetch_required(attrs, :email) do
+      {:ok, %RemovePersonEmailAddress{person_id: person_id, email: email}}
+    end
+  end
+
   defp add_member_command(attrs) do
     with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
          {:ok, club_id} <- fetch_required(attrs, :club_id),
@@ -1181,6 +1265,12 @@ defmodule Memba.Membership do
     EmailAddresses.validate_set(email_addresses)
   end
 
+  defp normalize_command_email_addresses(%AddPersonEmailAddress{email: email}) do
+    with {:ok, normalized_email_address} <- EmailAddresses.normalize_email(email) do
+      {:ok, [normalized_email_address]}
+    end
+  end
+
   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
     with {:ok, person_id} <- cast_person_id(person_id) do
       normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
@@ -1260,6 +1350,14 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> :error
+    end
+  end
+
+  defp verified_at(attrs) do
+    case fetch_optional(attrs, :verified_at) do
+      {:ok, %DateTime{} = verified_at} -> {:ok, verified_at}
+      {:ok, _verified_at} -> {:error, :invalid_verified_at}
+      :error -> {:ok, DateTime.utc_now(:microsecond)}
     end
   end
 

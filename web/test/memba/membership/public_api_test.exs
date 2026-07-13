@@ -15,8 +15,12 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
+  alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonEmailAddressRemoved
+  alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.InvitationToken
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -421,6 +425,124 @@ defmodule Memba.Membership.PublicApiTest do
                primary?: true
              }
            ]
+  end
+
+  test "person email-address lifecycle APIs dispatch commands and update the read model" do
+    person_id = Memba.ID.generate(:person)
+    verified_at = ~U[2026-07-13 19:00:00.000000Z]
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressAdded{
+                  person_id: ^person_id,
+                  email: "Alice+New@Example.COM",
+                  normalized_email: "alice+new@example.com"
+                }
+              ]
+            }} =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: " Alice+New@Example.COM "},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonEmailAddress{
+             person_id: ^person_id,
+             email: "Alice+New@Example.COM",
+             normalized_email: "alice+new@example.com",
+             is_primary: false,
+             verified_at: nil
+           } =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+new@example.com"
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressVerified{
+                  person_id: ^person_id,
+                  normalized_email: "alice+new@example.com",
+                  verified_at: ^verified_at
+                }
+              ]
+            }} =
+             Membership.verify_person_email_address(
+               %{person_id: person_id, email: "alice+new@example.com", verified_at: verified_at},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonEmailAddress{verified_at: ^verified_at} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+new@example.com"
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonPrimaryEmailAddressChanged{
+                  person_id: ^person_id,
+                  primary_email: "Alice+New@Example.COM",
+                  normalized_email: "alice+new@example.com"
+                }
+              ]
+            }} =
+             Membership.make_person_email_address_primary(
+               %{person_id: person_id, email: "alice+new@example.com"},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{email: "Alice+New@Example.COM"} = Membership.get_person(person_id)
+
+    assert %PersonEmailAddress{is_primary: false} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice@example.com"
+             )
+
+    assert %PersonEmailAddress{is_primary: true} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+new@example.com"
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressRemoved{
+                  person_id: ^person_id,
+                  email: "alice@example.com",
+                  normalized_email: "alice@example.com"
+                }
+              ]
+            }} =
+             Membership.remove_person_email_address(
+               %{person_id: person_id, email: "alice@example.com"},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert is_nil(
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice@example.com"
+             )
+           )
   end
 
   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do

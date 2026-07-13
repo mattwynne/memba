@@ -6,17 +6,21 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
+  alias Memba.Membership.Commands.VerifyPersonEmailAddress
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.ClubInvitation, as: ClubInvitationProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
@@ -78,17 +82,21 @@ defmodule Memba.Membership.AppTest do
       MapSet.new([
         AcceptClubMemberInvitation,
         AddMember,
+        AddPersonEmailAddress,
         AssignMemberRole,
         CreateClub,
         CreatePerson,
         DefineClubRole,
         GrantClubRolePermission,
         InviteClubMember,
+        MakePersonEmailAddressPrimary,
         RemoveMember,
         RemoveMemberRole,
+        RemovePersonEmailAddress,
         ReplacePersonEmailAddresses,
         ResendClubMemberInvitation,
-        UpdateClub
+        UpdateClub,
+        VerifyPersonEmailAddress
       ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands

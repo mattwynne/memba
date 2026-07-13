@@ -1,10 +1,18 @@
 defmodule Memba.Membership.PersonTest do
   use ExUnit.Case, async: true
 
+  alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+  alias Memba.Membership.Commands.VerifyPersonEmailAddress
+  alias Memba.Membership.Events.PersonEmailAddressAdded
+  alias Memba.Membership.Events.PersonEmailAddressRemoved
+  alias Memba.Membership.Events.PersonEmailAddressVerified
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Events.PersonPrimaryEmailAddressChanged
   alias Memba.Membership.Person
 
   describe "execute/2 CreatePerson" do
@@ -228,6 +236,129 @@ defmodule Memba.Membership.PersonTest do
     end
   end
 
+  describe "execute/2 individual email-address commands" do
+    test "adds a pending address, verifies it, makes it primary, and removes the old non-primary address" do
+      person_id = Memba.ID.generate(:person)
+      verified_at = ~U[2026-07-13 18:00:00Z]
+      person = created_person(person_id)
+
+      assert %PersonEmailAddressAdded{
+               person_id: ^person_id,
+               email: "Alice+New@Example.COM",
+               normalized_email: "alice+new@example.com"
+             } =
+               added_event =
+               Person.execute(person, %AddPersonEmailAddress{
+                 person_id: person_id,
+                 email: " Alice+New@Example.COM "
+               })
+
+      person = Person.apply(person, added_event)
+
+      assert [
+               %{
+                 normalized_email: "alice@example.com",
+                 is_primary: true,
+                 verified_at: %DateTime{}
+               },
+               %{
+                 normalized_email: "alice+new@example.com",
+                 is_primary: false,
+                 verified_at: nil
+               }
+             ] = person.email_addresses
+
+      assert {:error, :email_address_not_verified} =
+               Person.execute(person, %MakePersonEmailAddressPrimary{
+                 person_id: person_id,
+                 email: "alice+new@example.com"
+               })
+
+      assert %PersonEmailAddressVerified{
+               person_id: ^person_id,
+               email: "Alice+New@Example.COM",
+               normalized_email: "alice+new@example.com",
+               verified_at: ^verified_at
+             } =
+               verified_event =
+               Person.execute(person, %VerifyPersonEmailAddress{
+                 person_id: person_id,
+                 email: " alice+new@example.com ",
+                 verified_at: verified_at
+               })
+
+      person = Person.apply(person, verified_event)
+
+      assert %PersonPrimaryEmailAddressChanged{
+               person_id: ^person_id,
+               primary_email: "Alice+New@Example.COM",
+               normalized_email: "alice+new@example.com"
+             } =
+               primary_changed_event =
+               Person.execute(person, %MakePersonEmailAddressPrimary{
+                 person_id: person_id,
+                 email: "alice+new@example.com"
+               })
+
+      person = Person.apply(person, primary_changed_event)
+
+      assert %Person{
+               email: "Alice+New@Example.COM",
+               email_addresses: [
+                 %{normalized_email: "alice@example.com", is_primary: false},
+                 %{normalized_email: "alice+new@example.com", is_primary: true}
+               ]
+             } = person
+
+      assert %PersonEmailAddressRemoved{
+               person_id: ^person_id,
+               email: "alice@example.com",
+               normalized_email: "alice@example.com"
+             } =
+               removed_event =
+               Person.execute(person, %RemovePersonEmailAddress{
+                 person_id: person_id,
+                 email: " alice@example.com "
+               })
+
+      assert %Person{
+               email: "Alice+New@Example.COM",
+               email_addresses: [
+                 %{normalized_email: "alice+new@example.com", is_primary: true}
+               ]
+             } = Person.apply(person, removed_event)
+    end
+
+    test "rejects individual email-address commands before the person is created" do
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :person_not_created} =
+               Person.execute(%Person{}, %AddPersonEmailAddress{
+                 person_id: person_id,
+                 email: "alice+new@example.com"
+               })
+
+      assert {:error, :person_not_created} =
+               Person.execute(%Person{}, %VerifyPersonEmailAddress{
+                 person_id: person_id,
+                 email: "alice+new@example.com",
+                 verified_at: ~U[2026-07-13 18:00:00Z]
+               })
+
+      assert {:error, :person_not_created} =
+               Person.execute(%Person{}, %MakePersonEmailAddressPrimary{
+                 person_id: person_id,
+                 email: "alice+new@example.com"
+               })
+
+      assert {:error, :person_not_created} =
+               Person.execute(%Person{}, %RemovePersonEmailAddress{
+                 person_id: person_id,
+                 email: "alice+new@example.com"
+               })
+    end
+  end
+
   test "apply/2 records the created person identity, name, and email" do
     person_id = Memba.ID.generate(:person)
     legacy_verified_at = ~U[1970-01-01 00:00:00Z]
@@ -289,5 +420,13 @@ defmodule Memba.Membership.PersonTest do
                email_addresses: email_addresses,
                primary_email: "alice@work.example"
              })
+  end
+
+  defp created_person(person_id) do
+    Person.apply(%Person{}, %PersonCreated{
+      person_id: person_id,
+      name: "Alice",
+      email: "alice@example.com"
+    })
   end
 end
