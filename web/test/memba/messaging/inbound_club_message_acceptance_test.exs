@@ -821,6 +821,63 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            } = Messaging.get_inbound_email_source("resend", "task-020-alternate-sender")
   end
 
+  test "inbound email from a pending known sender address is rejected" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: alice.person_id, email: "Alice.Pending@Example.COM"},
+               consistency: :strong
+             )
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: _inbound_email_id,
+              status: :rejected,
+              rejection_reason: "unknown_sender",
+              from_address: "alice.pending@example.com",
+              to_address: "everyone@kmc.clubs.memba.io",
+              rejection_email_delivery_reference: rejection_email_delivery_reference
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-053-pending-sender",
+                 provider_event_id: "task-053-pending-sender-event",
+                 from_address: " Alice.Pending@Example.COM ",
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+                 subject: "Pending sender address",
+                 text_body: "This should not post until verified."
+               },
+               consistency: :strong
+             )
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             from_address: "alice.pending@example.com",
+             to_address: "everyone@kmc.clubs.memba.io",
+             message_id: nil,
+             rejection_reason: "unknown_sender",
+             rejection_email_delivery_reference: ^rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-053-pending-sender")
+
+    assert_rejection_email_received(
+      to: "alice.pending@example.com",
+      reason: "We couldn't find a member account for this email address"
+    )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+  end
+
   test "inbound email without usable plain text is rejected without creating a club message" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")

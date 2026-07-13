@@ -9,6 +9,11 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
                              "../../../priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs",
                              __DIR__
                            )
+  @verification_backfill_migration Memba.Repo.Migrations.AddVerifiedAtToMembershipPersonEmailAddresses
+  @verification_backfill_migration_path Path.expand(
+                                          "../../../priv/repo/migrations/20260713161015_add_verified_at_to_membership_person_email_addresses.exs",
+                                          __DIR__
+                                        )
 
   test "backfill migration creates one primary address row for each existing person email" do
     alice_id = Memba.ID.generate(:person)
@@ -38,14 +43,58 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
                person_id: ^alice_id,
                email: "Alice@Example.COM",
                normalized_email: "alice@example.com",
-               is_primary: true
+               is_primary: true,
+               verified_at: nil
              },
              %PersonEmailAddress{
                person_id: ^bob_id,
                email: "bob@example.com",
                normalized_email: "bob@example.com",
-               is_primary: true
+               is_primary: true,
+               verified_at: nil
              }
+           ] =
+             PersonEmailAddress
+             |> order_by([email_address], asc: email_address.normalized_email)
+             |> Repo.all()
+  end
+
+  test "verification-state migration backfills existing address rows as verified" do
+    person_id = Memba.ID.generate(:person)
+    other_person_id = Memba.ID.generate(:person)
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    Repo.insert!(%Person{person_id: person_id, name: "Alice", email: "alice@example.com"})
+    Repo.insert!(%Person{person_id: other_person_id, name: "Bob", email: "bob@example.com"})
+
+    Repo.insert_all(PersonEmailAddress, [
+      %{
+        id: Memba.ID.generate(:email_address),
+        person_id: person_id,
+        email: "alice@example.com",
+        normalized_email: "alice@example.com",
+        is_primary: true,
+        verified_at: nil,
+        inserted_at: now,
+        updated_at: now
+      },
+      %{
+        id: Memba.ID.generate(:email_address),
+        person_id: other_person_id,
+        email: "bob@example.com",
+        normalized_email: "bob@example.com",
+        is_primary: true,
+        verified_at: nil,
+        inserted_at: now,
+        updated_at: now
+      }
+    ])
+
+    Repo.query!(verification_backfill_sql())
+
+    assert [
+             %PersonEmailAddress{normalized_email: "alice@example.com", verified_at: ^now},
+             %PersonEmailAddress{normalized_email: "bob@example.com", verified_at: ^now}
            ] =
              PersonEmailAddress
              |> order_by([email_address], asc: email_address.normalized_email)
@@ -54,6 +103,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
 
   test "person email address projection rows can be persisted and read" do
     person_id = Memba.ID.generate(:person)
+    verified_at = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     Repo.insert!(%Person{
       person_id: person_id,
@@ -66,7 +116,8 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
         person_id: person_id,
         email: "alice@example.com",
         normalized_email: "alice@example.com",
-        is_primary: true
+        is_primary: true,
+        verified_at: verified_at
       })
 
     assert %PersonEmailAddress{
@@ -74,7 +125,8 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
              person_id: ^person_id,
              email: "alice@example.com",
              normalized_email: "alice@example.com",
-             is_primary: true
+             is_primary: true,
+             verified_at: ^verified_at
            } = Repo.get!(PersonEmailAddress, projection.id)
 
     assert Memba.ID.valid?(:email_address, id)
@@ -94,13 +146,15 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert %PersonEmailAddress{
              email: "Alice@Example.COM",
              normalized_email: "alice@example.com",
-             is_primary: true
+             is_primary: true,
+             verified_at: %DateTime{}
            } =
              %PersonEmailAddress{}
              |> PersonEmailAddress.changeset(%{
                person_id: person_id,
                email: " Alice@Example.COM ",
-               is_primary: true
+               is_primary: true,
+               verified_at: DateTime.utc_now()
              })
              |> Repo.insert!()
 
@@ -317,5 +371,13 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     end
 
     apply(@backfill_migration, :backfill_sql, [])
+  end
+
+  defp verification_backfill_sql do
+    unless Code.ensure_loaded?(@verification_backfill_migration) do
+      Code.compile_file(@verification_backfill_migration_path)
+    end
+
+    apply(@verification_backfill_migration, :backfill_sql, [])
   end
 end

@@ -22,6 +22,8 @@ defmodule MembaWeb.AppShellCssTest do
           ".app-menu",
           ".app-menu--id",
           ".app-menu__status",
+          ".app-menu__item",
+          ".app-menu__divider",
           ".app-menu__signout",
           ".app-foot",
           ".app-foot__mark"

@@ -354,6 +354,20 @@ defmodule MembaWeb.Layouts do
                   role="menu"
                   class="dropdown-content app-menu app-menu--id"
                 >
+                  <.link
+                    navigate={~p"/my/settings"}
+                    id="club-site-account-settings-link"
+                    role="menuitem"
+                    class="app-menu__item"
+                  >
+                    Account settings
+                  </.link>
+                  <div
+                    id="club-site-identity-menu-divider"
+                    class="app-menu__divider"
+                    role="separator"
+                    aria-orientation="horizontal"
+                  />
                   <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
                     <button
                       id="club-site-sign-out-button"

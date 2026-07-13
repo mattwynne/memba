@@ -94,14 +94,20 @@ defmodule MembaWeb.AdminPeopleLiveTest do
              Membership.list_people()
              |> Enum.find(&(&1.name == "Alice Example"))
 
-    assert Membership.list_person_email_addresses(person_id) == [
-             %{email: "Alice@Example.COM", normalized_email: "alice@example.com", primary?: true},
+    assert [
+             %{
+               email: "Alice@Example.COM",
+               normalized_email: "alice@example.com",
+               primary?: true,
+               verified_at: %DateTime{}
+             },
              %{
                email: "alice@work.example",
                normalized_email: "alice@work.example",
-               primary?: false
+               primary?: false,
+               verified_at: %DateTime{}
              }
-           ]
+           ] = Membership.list_person_email_addresses(person_id)
 
     refute Membership.active_member_of_club?(club.club_id, person_id)
   end
@@ -222,13 +228,19 @@ defmodule MembaWeb.AdminPeopleLiveTest do
 
     assert %{email: "alice@work.example"} = Membership.get_person(person_id)
 
-    assert Membership.list_person_email_addresses(person_id) == [
+    assert [
              %{
                email: "alice@work.example",
                normalized_email: "alice@work.example",
-               primary?: true
+               primary?: true,
+               verified_at: %DateTime{}
              },
-             %{email: "alice@example.com", normalized_email: "alice@example.com", primary?: false}
-           ]
+             %{
+               email: "alice@example.com",
+               normalized_email: "alice@example.com",
+               primary?: false,
+               verified_at: %DateTime{}
+             }
+           ] = Membership.list_person_email_addresses(person_id)
   end
 end

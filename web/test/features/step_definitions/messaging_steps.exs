@@ -263,6 +263,17 @@ defmodule Memba.Cucumber.MessagingSteps do
     )
   end
 
+  step "{word} emails Kootenay Mountaineering Club from {string}",
+       %{args: [sender_name, from_address]} = context do
+    receive_inbound_club_email(
+      context,
+      sender_name,
+      "Pending address message",
+      @kmc_everyone_address,
+      from_address: from_address
+    )
+  end
+
   step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) with an attachment$/,
        %{args: [sender_name, subject, to_address]} = context do
     receive_inbound_club_email(context, sender_name, subject, to_address,
@@ -559,6 +570,22 @@ defmodule Memba.Cucumber.MessagingSteps do
     refute Enum.any?(Fake.deliveries(), &(&1.subject == subject))
 
     context
+  end
+
+  step "Memba should reject the inbound email", context do
+    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
+    context
+  end
+
+  step "Memba should not post the email as a club message from {word}",
+       %{args: [_person_name]} = context do
+    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
+
+    assert_no_club_message(
+      context,
+      "Kootenay Mountaineering Club",
+      Map.fetch!(context, :last_message_subject)
+    )
   end
 
   step "{word} should receive a rejection email explaining the message was not posted",

@@ -235,23 +235,26 @@ defmodule Memba.Membership.QueryTest do
                "alice@example.com"
              ]
 
-      assert Membership.list_person_email_addresses(alice.person_id) == [
+      assert [
                %{
                  email: "alice@work.example",
                  normalized_email: "alice@work.example",
-                 primary?: true
+                 primary?: true,
+                 verified_at: %DateTime{}
                },
                %{
                  email: "alice+old@example.com",
                  normalized_email: "alice+old@example.com",
-                 primary?: false
+                 primary?: false,
+                 verified_at: %DateTime{}
                },
                %{
                  email: "alice@example.com",
                  normalized_email: "alice@example.com",
-                 primary?: false
+                 primary?: false,
+                 verified_at: %DateTime{}
                }
-             ]
+             ] = Membership.list_person_email_addresses(alice.person_id)
     end
 
     test "returns nil or empty lists for missing or invalid person IDs" do

@@ -172,6 +172,22 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
+        "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']"
+    )
+
+    assert_text(html, "#club-site-account-settings-link", "Account settings")
+
+    assert_selector(
+      html,
+      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
+        "a#club-site-account-settings-link + " <>
+        "div#club-site-identity-menu-divider.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "form#club-site-sign-out-form"
+    )
+
+    assert_selector(
+      html,
       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
     )
 

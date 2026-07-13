@@ -39,6 +39,199 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     add_alternate_email_address(context, person_name, alternate_email)
   end
 
+  step "{word} has verified alternate email {string}",
+       %{args: [person_name, alternate_email]} = context do
+    add_alternate_email_address(context, person_name, alternate_email)
+  end
+
+  step "{word} has pending email address {string}",
+       %{args: [person_name, email]} = context do
+    add_pending_email_address(context, person_name, email)
+  end
+
+  step "{word} opens Account settings from their member menu",
+       %{args: [person_name]} = context do
+    person = fetch_from_context!(context, :people, person_name)
+    clubs = active_club_names_for_person(person.person_id)
+
+    context
+    |> Map.put(:signed_in_identity, %{email: person.email, staff?: false, active_clubs: clubs})
+    |> Map.put(:current_page, :account_settings)
+    |> Map.put(:current_settings_tab, :profile)
+  end
+
+  step "{word} adds {string} to their Account settings",
+       %{args: [person_name, email]} = context do
+    context
+    |> add_pending_email_address(person_name, email)
+    |> Map.put(:current_page, :account_settings)
+    |> Map.put(:current_settings_tab, :emails)
+  end
+
+  step "{word} verifies {string} from that email",
+       %{args: [person_name, email]} = context do
+    verify_email_address_from_stored_link(context, person_name, email)
+  end
+
+  step "{word} makes {string} their primary email address",
+       %{args: [person_name, email]} = context do
+    person_id = context_person_id!(context, person_name)
+
+    assert :ok =
+             Membership.make_person_email_address_primary(
+               %{person_id: person_id, email: email},
+               consistency: :strong
+             )
+
+    update_context_map(context, :people, person_name, %{email: email})
+  end
+
+  step "{word} removes {string} from their Account settings",
+       %{args: [person_name, email]} = context do
+    person_id = context_person_id!(context, person_name)
+
+    assert :ok =
+             Membership.remove_person_email_address(
+               %{person_id: person_id, email: email},
+               consistency: :strong
+             )
+
+    context
+  end
+
+  step "{word} resends verification for {string}",
+       %{args: [person_name, email]} = context do
+    issue_verification_token(context, person_name, email)
+  end
+
+  step "{word} opens the old verification link for {string}",
+       %{args: [person_name, email]} = context do
+    token = verification_token_for!(context, person_name, email)
+
+    case Membership.consume_person_email_address_verification_token(token) do
+      {:ok, request} ->
+        case Membership.verify_person_email_address(request, consistency: :strong) do
+          :ok -> Map.put(context, :current_page, :email_verification_success)
+          {:error, _reason} -> Map.put(context, :current_page, :email_verification_invalid)
+        end
+
+      {:error, _reason} ->
+        Map.put(context, :current_page, :email_verification_invalid)
+    end
+  end
+
+  step "{word} should see their name in Account settings",
+       %{args: [person_name]} = context do
+    assert Map.get(context, :current_page) == :account_settings
+    assert %{person_id: person_id} = fetch_from_context!(context, :people, person_name)
+    assert %{name: ^person_name} = Membership.get_person(person_id)
+    context
+  end
+
+  step "{word} should see Kootenay Mountaineering Club in their current clubs",
+       %{args: [person_name]} = context do
+    person_id = context_person_id!(context, person_name)
+    club_names = active_club_names_for_person(person_id)
+
+    assert "Kootenay Mountaineering Club" in club_names
+    context
+  end
+
+  step "{word} should see their primary email address",
+       %{args: [person_name]} = context do
+    assert Enum.any?(persisted_person_email_addresses(context, person_name), & &1.primary?)
+    context
+  end
+
+  step "{word} should see {string} as pending verification",
+       %{args: [person_name, email]} = context do
+    assert_pending_email_address(context, person_name, email)
+  end
+
+  step "{word} should receive a verification email at {string}",
+       %{args: [person_name, email]} = context do
+    assert is_binary(verification_token_for!(context, person_name, email))
+    context
+  end
+
+  step "{word} should see {string}", %{args: [_person_name, expected_text]} = context do
+    assert Map.get(context, :current_page) == :email_verification_success
+    assert expected_text == "Email verified, you can close this browser."
+    context
+  end
+
+  step "{word} should see {string} as verified in Account settings",
+       %{args: [person_name, email]} = context do
+    email_address = persisted_person_email_address!(context, person_name, email)
+
+    assert email_address.verified_at
+    context
+  end
+
+  step "{word} should not be able to make {string} primary",
+       %{args: [person_name, email]} = context do
+    person_id = context_person_id!(context, person_name)
+
+    assert {:error, _reason} =
+             Membership.make_person_email_address_primary(
+               %{person_id: person_id, email: email},
+               consistency: :strong
+             )
+
+    assert_pending_email_address(context, person_name, email)
+  end
+
+  step "{word} should not be able to remove {string}",
+       %{args: [person_name, email]} = context do
+    person_id = context_person_id!(context, person_name)
+
+    assert {:error, _reason} =
+             Membership.remove_person_email_address(
+               %{person_id: person_id, email: email},
+               consistency: :strong
+             )
+
+    assert_primary_email_address(context, person_name, email)
+  end
+
+  step "{word}'s alternate email addresses should not include {string}",
+       %{args: [person_name, unexpected_email]} = context do
+    email_addresses = persisted_person_email_addresses(context, person_name)
+
+    refute Enum.any?(email_addresses, &(!&1.primary? and same_email?(&1.email, unexpected_email)))
+    context
+  end
+
+  step "Alice's alternate email addresses should not include {string}",
+       %{args: [unexpected_email]} = context do
+    email_addresses = persisted_person_email_addresses(context, "Alice")
+
+    refute Enum.any?(email_addresses, &(!&1.primary? and same_email?(&1.email, unexpected_email)))
+    context
+  end
+
+  step "{word} should see that the verification link is no longer valid",
+       %{args: [_person_name]} = context do
+    assert Map.get(context, :current_page) == :email_verification_invalid
+    context
+  end
+
+  step "{word}'s email addresses should not include {string}",
+       %{args: [person_name, unexpected_email]} = context do
+    email_addresses = persisted_person_email_addresses(context, person_name)
+
+    refute Enum.any?(email_addresses, &same_email?(&1.email, unexpected_email))
+    context
+  end
+
+  step "Alice's email addresses should not include {string}",
+       %{args: [unexpected_email]} = context do
+    email_addresses = persisted_person_email_addresses(context, "Alice")
+
+    refute Enum.any?(email_addresses, &same_email?(&1.email, unexpected_email))
+    context
+  end
+
   defp add_alternate_email_address(context, person_name, alternate_email) do
     current = person_email_addresses_for(context, person_name)
 
@@ -58,6 +251,52 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
       primary | alternates ++ [%{email: alternate_email, is_primary: false}]
     ])
   end
+
+  defp add_pending_email_address(context, person_name, email) do
+    person_id = context_person_id!(context, person_name)
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: email},
+               consistency: :strong
+             )
+
+    issue_verification_token(context, person_name, email)
+  end
+
+  defp issue_verification_token(context, person_name, email) do
+    person_id = context_person_id!(context, person_name)
+
+    assert {:ok, %{issuer_result: %{token: token}}} =
+             Membership.resend_person_email_address_verification(%{
+               person_id: person_id,
+               email: email
+             })
+
+    update_context_map(context, :verification_tokens, verification_key(person_name, email), %{
+      token: token
+    })
+  end
+
+  defp verify_email_address_from_stored_link(context, person_name, email) do
+    token = verification_token_for!(context, person_name, email)
+
+    with {:ok, request} <- Membership.consume_person_email_address_verification_token(token),
+         :ok <- Membership.verify_person_email_address(request, consistency: :strong) do
+      Map.put(context, :current_page, :email_verification_success)
+    else
+      _invalid -> Map.put(context, :current_page, :email_verification_invalid)
+    end
+  end
+
+  defp verification_token_for!(context, person_name, email) do
+    %{token: token} =
+      fetch_from_context!(context, :verification_tokens, verification_key(person_name, email))
+
+    token
+  end
+
+  defp verification_key(person_name, email), do: {person_name, Accounts.normalize_email(email)}
 
   step "{word} should receive a sign-in link at {string}",
        %{args: [person_name, expected_email]} = context do
@@ -193,6 +432,8 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
         })
 
       person_id ->
+        ensure_desired_addresses_are_verified(person_id, email_addresses)
+
         assert :ok =
                  Membership.replace_person_email_addresses(
                    %{person_id: person_id, email_addresses: email_addresses},
@@ -227,12 +468,53 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     end
   end
 
+  defp persisted_person_email_address!(context, person_name, email) do
+    context
+    |> persisted_person_email_addresses(person_name)
+    |> Enum.find(&same_email?(&1.email, email))
+    |> case do
+      nil -> flunk("Expected #{person_name} to have email address #{inspect(email)}")
+      email_address -> email_address
+    end
+  end
+
+  defp assert_pending_email_address(context, person_name, email) do
+    email_address = persisted_person_email_address!(context, person_name, email)
+
+    refute email_address.primary?
+    assert email_address.verified_at == nil
+    context
+  end
+
   defp context_person_id(context, person_name) do
     case Map.get(context, :people, %{}) |> Map.get(person_name) do
       %{person_id: person_id} -> person_id
+      %{email: email} -> person_id_by_email(email)
       person_id when is_binary(person_id) -> person_id
       _missing -> nil
     end
+  end
+
+  defp person_id_by_email(email) when is_binary(email) do
+    case Membership.get_person_by_email(email) do
+      nil -> nil
+      person -> person.person_id
+    end
+  end
+
+  defp person_id_by_email(_email), do: nil
+
+  defp context_person_id!(context, person_name) do
+    case context_person_id(context, person_name) do
+      nil -> flunk("Expected #{person_name} to be known in the scenario")
+      person_id -> person_id
+    end
+  end
+
+  defp active_club_names_for_person(person_id) do
+    person_id
+    |> Membership.list_active_club_memberships_for_person()
+    |> Enum.map(& &1.club_name)
   end
 
   defp primary_email!(email_addresses) do
@@ -240,6 +522,26 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
       %{email: email} -> email
       nil -> flunk("Expected exactly one primary email address")
     end
+  end
+
+  defp ensure_desired_addresses_are_verified(person_id, email_addresses) do
+    current_email_addresses = Membership.list_person_email_addresses(person_id)
+
+    Enum.each(email_addresses, fn %{email: email} ->
+      unless Enum.any?(current_email_addresses, &same_email?(&1.email, email)) do
+        assert :ok =
+                 Membership.add_person_email_address(
+                   %{person_id: person_id, email: email},
+                   consistency: :strong
+                 )
+
+        assert :ok =
+                 Membership.verify_person_email_address(
+                   %{person_id: person_id, email: email},
+                   consistency: :strong
+                 )
+      end
+    end)
   end
 
   defp same_email?(left, right),

@@ -463,6 +463,11 @@ defmodule Memba.Cucumber.AuthenticationSteps do
 
     case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
+        assert :ok =
+                 Membership.verify_pending_person_email_address_for_sign_in(email,
+                   consistency: :strong
+                 )
+
         sign_in(context, email)
 
       {:error, :consumed} ->
