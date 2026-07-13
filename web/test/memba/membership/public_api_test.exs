@@ -452,6 +452,98 @@ defmodule Memba.Membership.PublicApiTest do
            ]
   end
 
+  test "replace_person_email_addresses/2 preserves verified addresses and revokes removed pending verification tokens" do
+    person_id = Memba.ID.generate(:person)
+    verified_at = ~U[2026-07-13 20:00:00.000000Z]
+    parent = self()
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: " Alice+Verified@Example.COM "},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.verify_person_email_address(
+               %{
+                 person_id: person_id,
+                 email: "alice+verified@example.com",
+                 verified_at: verified_at
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_person_email_address(
+               %{person_id: person_id, email: " Alice+Stale@Example.COM "},
+               consistency: :strong
+             )
+
+    verification_revoker = fn request ->
+      send(parent, {:verification_revoked, request})
+      :ok
+    end
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressesReplaced{
+                  person_id: ^person_id,
+                  primary_email: "alice@example.com",
+                  email_addresses: [
+                    %{
+                      normalized_email: "alice@example.com",
+                      is_primary: true,
+                      verified_at: %DateTime{}
+                    },
+                    %{
+                      normalized_email: "alice+verified@example.com",
+                      is_primary: false,
+                      verified_at: ^verified_at
+                    }
+                  ]
+                }
+              ]
+            }} =
+             Membership.replace_person_email_addresses(
+               %{
+                 person_id: person_id,
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: true},
+                   %{email: "Alice+Verified@Example.COM", is_primary: false}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong,
+               verification_revoker: verification_revoker
+             )
+
+    assert_received {:verification_revoked,
+                     %{
+                       person_id: ^person_id,
+                       email: "Alice+Stale@Example.COM",
+                       normalized_email: "alice+stale@example.com"
+                     }}
+
+    assert %PersonEmailAddress{verified_at: ^verified_at} =
+             Repo.get_by(PersonEmailAddress,
+               person_id: person_id,
+               normalized_email: "alice+verified@example.com"
+             )
+
+    refute Repo.get_by(PersonEmailAddress,
+             person_id: person_id,
+             normalized_email: "alice+stale@example.com"
+           )
+  end
+
   test "person email-address lifecycle APIs dispatch commands and update the read model" do
     person_id = Memba.ID.generate(:person)
     verified_at = ~U[2026-07-13 19:00:00.000000Z]

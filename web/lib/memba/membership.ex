@@ -86,10 +86,23 @@ defmodule Memba.Membership do
   """
   def replace_person_email_addresses(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
+    {verification_revoker, dispatch_opts} =
+      person_email_address_verification_revoker(dispatch_opts)
+
     with {:ok, command} <- replace_person_email_addresses_command(attrs),
          {:ok, email_addresses} <- normalize_command_email_addresses(command),
-         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
-      dispatch(command, dispatch_opts)
+         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses),
+         {:ok, removed_verification_requests} <-
+           pending_removed_person_email_address_verification_requests(
+             command.person_id,
+             email_addresses
+           ) do
+      command
+      |> dispatch(dispatch_opts)
+      |> revoke_removed_person_email_address_verifications(
+        removed_verification_requests,
+        verification_revoker
+      )
     end
   end
 
@@ -161,8 +174,22 @@ defmodule Memba.Membership do
   """
   def remove_person_email_address(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
+    {verification_revoker, dispatch_opts} =
+      person_email_address_verification_revoker(dispatch_opts)
+
     with {:ok, command} <- remove_person_email_address_command(attrs) do
-      dispatch(command, dispatch_opts)
+      removed_verification_requests =
+        pending_removed_person_email_address_verification_requests(
+          command.person_id,
+          command.email
+        )
+
+      command
+      |> dispatch(dispatch_opts)
+      |> revoke_removed_person_email_address_verifications(
+        removed_verification_requests,
+        verification_revoker
+      )
     end
   end
 
@@ -1234,6 +1261,51 @@ defmodule Memba.Membership do
     {:error, :email_address_already_verified}
   end
 
+  defp pending_removed_person_email_address_verification_requests(
+         person_id,
+         replacement_email_addresses
+       )
+       when is_list(replacement_email_addresses) do
+    with {:ok, person_id} <- cast_person_id(person_id) do
+      retained_normalized_emails =
+        Enum.map(replacement_email_addresses, & &1.normalized_email)
+
+      requests =
+        PersonEmailAddress
+        |> where([email_address], email_address.person_id == ^person_id)
+        |> where([email_address], is_nil(email_address.verified_at))
+        |> where(
+          [email_address],
+          email_address.normalized_email not in ^retained_normalized_emails
+        )
+        |> order_by([email_address], asc: email_address.normalized_email)
+        |> Repo.all()
+        |> Enum.map(&person_email_address_verification_request/1)
+
+      {:ok, requests}
+    end
+  end
+
+  defp pending_removed_person_email_address_verification_requests(person_id, email) do
+    with {:ok, person_id} <- cast_person_id(person_id),
+         {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email) do
+      PersonEmailAddress
+      |> where([email_address], email_address.person_id == ^person_id)
+      |> where([email_address], email_address.normalized_email == ^normalized_email)
+      |> where([email_address], is_nil(email_address.verified_at))
+      |> Repo.one()
+      |> case do
+        nil ->
+          []
+
+        %PersonEmailAddress{} = email_address ->
+          [person_email_address_verification_request(email_address)]
+      end
+    else
+      _invalid -> []
+    end
+  end
+
   defp ensure_membership_administrator_removal_keeps_an_administrator(
          %RemoveMemberRole{} = command
        ) do
@@ -1345,6 +1417,55 @@ defmodule Memba.Membership do
   defp default_person_email_address_verification_issuer(_request) do
     {:ok, %{verification_token: InvitationToken.generate_token()}}
   end
+
+  defp person_email_address_verification_revoker(opts) do
+    Keyword.pop(
+      opts,
+      :verification_revoker,
+      &default_person_email_address_verification_revoker/1
+    )
+  end
+
+  defp revoke_removed_person_email_address_verifications(
+         {:error, _reason} = error,
+         _requests,
+         _revoker
+       ) do
+    error
+  end
+
+  defp revoke_removed_person_email_address_verifications(result, [], _revoker), do: result
+
+  defp revoke_removed_person_email_address_verifications(result, requests, revoker) do
+    with :ok <- revoke_person_email_address_verifications(requests, revoker) do
+      result
+    end
+  end
+
+  defp revoke_person_email_address_verifications(requests, revoker)
+       when is_list(requests) and is_function(revoker, 1) do
+    Enum.reduce_while(requests, :ok, fn request, :ok ->
+      case revoke_person_email_address_verification_with(revoker, request) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp revoke_person_email_address_verifications(_requests, _revoker) do
+    {:error, :invalid_email_address_verification_revoker}
+  end
+
+  defp revoke_person_email_address_verification_with(revoker, request) do
+    case revoker.(request) do
+      :ok -> :ok
+      {:ok, _revoked} -> :ok
+      {:error, _reason} = error -> error
+      other -> {:error, {:unexpected_email_address_verification_revoker_result, other}}
+    end
+  end
+
+  defp default_person_email_address_verification_revoker(_request), do: :ok
 
   defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
     with {:ok, person_id} <- cast_person_id(person_id) do
