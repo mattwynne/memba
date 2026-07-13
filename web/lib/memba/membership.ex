@@ -755,7 +755,40 @@ defmodule Memba.Membership do
       |> select([email_address], %{
         email: email_address.email,
         normalized_email: email_address.normalized_email,
-        primary?: email_address.is_primary
+        primary?: email_address.is_primary,
+        verified_at: email_address.verified_at
+      })
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  List active club memberships for a Person settings view.
+
+  Invalid, missing, or unknown person IDs return an empty list. Results include
+  the projected club display data plus the membership insertion timestamp so the
+  member-facing settings page can show global "Member since …" chips without
+  joining against Membership projections from the web layer.
+  """
+  def list_active_club_memberships_for_person(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
+      MembershipProjection
+      |> join(:inner, [membership], club in Club, on: club.club_id == membership.club_id)
+      |> where([membership, _club], membership.person_id == ^person_id)
+      |> where([membership, _club], membership.active == true)
+      |> order_by([membership, club],
+        asc: club.name,
+        asc: club.club_id,
+        asc: membership.membership_id
+      )
+      |> select([membership, club], %{
+        membership_id: membership.membership_id,
+        club_id: club.club_id,
+        club_name: club.name,
+        club_slug: club.slug,
+        member_since: membership.inserted_at
       })
       |> Repo.all()
     else
