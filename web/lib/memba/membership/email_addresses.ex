@@ -83,6 +83,31 @@ defmodule Memba.Membership.EmailAddresses do
   def mark_all_verified(_email_addresses, _verified_at), do: {:error, :invalid_verified_at}
 
   @doc """
+  Normalize a full replacement set using an existing verified/pending state set.
+
+  Addresses that already belong to the person keep their verification state. New
+  addresses are introduced as pending, so they cannot be primary until an
+  explicit verification transition proves mailbox control.
+  """
+  @spec replace_preserving_verification_state(term(), term()) ::
+          {:ok, [address_state()]} | {:error, atom()}
+  def replace_preserving_verification_state(existing_email_addresses, replacement_email_addresses) do
+    with {:ok, existing_email_addresses} <- validate_state_set(existing_email_addresses),
+         {:ok, replacement_email_addresses} <- validate_set(replacement_email_addresses),
+         email_verification_state <- verification_state_by_email(existing_email_addresses),
+         replacement_email_addresses <-
+           apply_verification_state(replacement_email_addresses, email_verification_state) do
+      validate_state_set(replacement_email_addresses)
+    end
+  end
+
+  @doc """
+  Normalize a write-side email-address state set.
+  """
+  @spec validate_state(term()) :: {:ok, [address_state()]} | {:error, atom()}
+  def validate_state(email_addresses), do: validate_state_set(email_addresses)
+
+  @doc """
   Add an email address to aggregate state as pending verification.
 
   Pending addresses are always non-primary. They can become primary only after a
@@ -262,6 +287,14 @@ defmodule Memba.Membership.EmailAddresses do
 
   defp cast_verified_at(nil), do: {:ok, nil}
   defp cast_verified_at(%DateTime{} = verified_at), do: {:ok, verified_at}
+
+  defp cast_verified_at(verified_at) when is_binary(verified_at) do
+    case DateTime.from_iso8601(verified_at) do
+      {:ok, verified_at, _offset} -> {:ok, verified_at}
+      {:error, _reason} -> {:error, :invalid_verified_at}
+    end
+  end
+
   defp cast_verified_at(_verified_at), do: {:error, :invalid_verified_at}
 
   defp require_primary_verified(email_addresses) do
@@ -294,6 +327,22 @@ defmodule Memba.Membership.EmailAddresses do
     do: {:error, :primary_email_address_cannot_be_removed}
 
   defp reject_primary_removal(%{is_primary: false}), do: :ok
+
+  defp verification_state_by_email(email_addresses) do
+    Map.new(email_addresses, fn email_address ->
+      {email_address.normalized_email, email_address.verified_at}
+    end)
+  end
+
+  defp apply_verification_state(email_addresses, verification_state_by_email) do
+    Enum.map(email_addresses, fn email_address ->
+      Map.put(
+        email_address,
+        :verified_at,
+        Map.get(verification_state_by_email, email_address.normalized_email)
+      )
+    end)
+  end
 
   defp update_address(email_addresses, normalized_email, update_fun) do
     Enum.map(email_addresses, fn email_address ->

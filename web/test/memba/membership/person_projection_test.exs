@@ -103,7 +103,10 @@ defmodule Memba.Membership.PersonProjectionTest do
                %CreatePerson{
                  person_id: person_id,
                  name: "Alice",
-                 email: "alice@example.com"
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: true},
+                   %{email: "alice@work.example", is_primary: false}
+                 ]
                },
                consistency: :strong
              )

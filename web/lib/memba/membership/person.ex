@@ -61,7 +61,11 @@ defmodule Memba.Membership.Person do
   def execute(%__MODULE__{} = person, %ReplacePersonEmailAddresses{} = command) do
     with :ok <- validate_person_id(command.person_id),
          :ok <- validate_matching_person_id(person, command),
-         {:ok, email_addresses} <- EmailAddresses.validate_set(command.email_addresses),
+         {:ok, email_addresses} <-
+           EmailAddresses.replace_preserving_verification_state(
+             person.email_addresses,
+             command.email_addresses
+           ),
          {:ok, primary_email} <- primary_email(email_addresses) do
       %PersonEmailAddressesReplaced{
         person_id: command.person_id,
@@ -167,7 +171,7 @@ defmodule Memba.Membership.Person do
     %__MODULE__{
       person
       | email: event.primary_email,
-        email_addresses: mark_all_verified!(event.email_addresses)
+        email_addresses: replacement_email_addresses!(event.email_addresses)
     }
   end
 
@@ -299,6 +303,21 @@ defmodule Memba.Membership.Person do
       {:error, _reason} -> email_addresses
     end
   end
+
+  defp replacement_email_addresses!(email_addresses) do
+    if Enum.all?(email_addresses, &has_verified_at?/1) do
+      case EmailAddresses.validate_state(email_addresses) do
+        {:ok, email_addresses} -> email_addresses
+        {:error, _reason} -> email_addresses
+      end
+    else
+      mark_all_verified!(email_addresses)
+    end
+  end
+
+  defp has_verified_at?(%{verified_at: _verified_at}), do: true
+  defp has_verified_at?(%{"verified_at" => _verified_at}), do: true
+  defp has_verified_at?(_email_address), do: false
 
   defp add_pending!(email_addresses, %{email: email}) do
     case EmailAddresses.add_pending(email_addresses, email) do

@@ -128,7 +128,7 @@ defmodule Memba.Membership.Projectors.Person do
       email: field(email_address, :email),
       normalized_email: field(email_address, :normalized_email),
       is_primary: field(email_address, :is_primary),
-      verified_at: DateTime.utc_now()
+      verified_at: replacement_verified_at(email_address)
     }
   end
 
@@ -137,6 +137,20 @@ defmodule Memba.Membership.Projectors.Person do
       {:ok, value} -> value
       :error -> Map.get(email_address, Atom.to_string(key))
     end
+  end
+
+  defp replacement_verified_at(email_address) do
+    if has_field?(email_address, :verified_at) do
+      email_address
+      |> field(:verified_at)
+      |> verified_at_or_nil!()
+    else
+      DateTime.utc_now()
+    end
+  end
+
+  defp has_field?(email_address, key) when is_map(email_address) do
+    Map.has_key?(email_address, key) or Map.has_key?(email_address, Atom.to_string(key))
   end
 
   defp person_query(person_id) do
@@ -165,6 +179,9 @@ defmodule Memba.Membership.Projectors.Person do
       {:error, _reason} -> DateTime.utc_now()
     end
   end
+
+  defp verified_at_or_nil!(nil), do: nil
+  defp verified_at_or_nil!(verified_at), do: verified_at!(verified_at)
 
   @impl Commanded.Projections.Ecto
   def after_update(event, metadata, changes) do

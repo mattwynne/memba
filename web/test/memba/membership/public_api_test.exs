@@ -331,7 +331,7 @@ defmodule Memba.Membership.PublicApiTest do
     assert is_nil(Membership.get_person(duplicate_alternate_person_id))
   end
 
-  test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
+  test "replace_person_email_addresses/2 keeps staff-added alternate addresses pending" do
     person_id = Memba.ID.generate(:person)
 
     assert :ok =
@@ -346,17 +346,19 @@ defmodule Memba.Membership.PublicApiTest do
               events: [
                 %PersonEmailAddressesReplaced{
                   person_id: ^person_id,
-                  primary_email: "alice@work.example",
+                  primary_email: "alice@example.com",
                   email_addresses: [
                     %{
                       email: "alice@example.com",
                       normalized_email: "alice@example.com",
-                      is_primary: false
+                      is_primary: true,
+                      verified_at: %DateTime{}
                     },
                     %{
                       email: "alice@work.example",
                       normalized_email: "alice@work.example",
-                      is_primary: true
+                      is_primary: false,
+                      verified_at: nil
                     }
                   ]
                 }
@@ -366,8 +368,8 @@ defmodule Memba.Membership.PublicApiTest do
                %{
                  person_id: person_id,
                  email_addresses: [
-                   %{email: "alice@example.com", is_primary: false},
-                   %{email: "alice@work.example", is_primary: true}
+                   %{email: "alice@example.com", is_primary: true},
+                   %{email: "alice@work.example", is_primary: false}
                  ]
                },
                returning: :execution_result,
@@ -378,14 +380,37 @@ defmodule Memba.Membership.PublicApiTest do
              Repo.get_by(PersonEmailAddress,
                person_id: person_id,
                normalized_email: "alice@example.com",
-               is_primary: false
+               is_primary: true
              )
 
-    assert %PersonEmailAddress{verified_at: %DateTime{}} =
+    assert %PersonEmailAddress{verified_at: nil} =
              Repo.get_by(PersonEmailAddress,
                person_id: person_id,
                normalized_email: "alice@work.example",
-               is_primary: true
+               is_primary: false
+             )
+  end
+
+  test "replace_person_email_addresses/2 rejects a newly introduced primary address" do
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert {:error, :primary_email_address_not_verified} =
+             Membership.replace_person_email_addresses(
+               %{
+                 person_id: person_id,
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: false},
+                   %{email: "alice@work.example", is_primary: true}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong
              )
   end
 

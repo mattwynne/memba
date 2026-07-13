@@ -193,6 +193,8 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
         })
 
       person_id ->
+        ensure_desired_addresses_are_verified(person_id, email_addresses)
+
         assert :ok =
                  Membership.replace_person_email_addresses(
                    %{person_id: person_id, email_addresses: email_addresses},
@@ -240,6 +242,26 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
       %{email: email} -> email
       nil -> flunk("Expected exactly one primary email address")
     end
+  end
+
+  defp ensure_desired_addresses_are_verified(person_id, email_addresses) do
+    current_email_addresses = Membership.list_person_email_addresses(person_id)
+
+    Enum.each(email_addresses, fn %{email: email} ->
+      unless Enum.any?(current_email_addresses, &same_email?(&1.email, email)) do
+        assert :ok =
+                 Membership.add_person_email_address(
+                   %{person_id: person_id, email: email},
+                   consistency: :strong
+                 )
+
+        assert :ok =
+                 Membership.verify_person_email_address(
+                   %{person_id: person_id, email: email},
+                   consistency: :strong
+                 )
+      end
+    end)
   end
 
   defp same_email?(left, right),

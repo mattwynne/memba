@@ -387,6 +387,28 @@ primary_email_address = Enum.find(email_addresses, &Map.fetch!(&1, "is_primary")
 primary_email = Map.fetch!(primary_email_address, "email")
 existing_person = if person_id, do: Memba.Membership.get_person(person_id), else: Memba.Membership.get_person_by_email(primary_email)
 
+same_email? = fn left, right ->
+  String.downcase(String.trim(left)) == String.downcase(String.trim(right))
+end
+
+ensure_desired_addresses_are_verified = fn person_id ->
+  current_email_addresses = Memba.Membership.list_person_email_addresses(person_id)
+
+  Enum.each(email_addresses, fn %{"email" => email} ->
+    unless Enum.any?(current_email_addresses, &same_email?.(&1.email, email)) do
+      :ok = Memba.Membership.add_person_email_address(
+        %{person_id: person_id, email: email},
+        consistency: :strong
+      )
+
+      :ok = Memba.Membership.verify_person_email_address(
+        %{person_id: person_id, email: email},
+        consistency: :strong
+      )
+    end
+  end)
+end
+
 person =
   case existing_person do
     nil ->
@@ -398,6 +420,8 @@ person =
       Memba.Membership.get_person(person_id)
 
     person ->
+      ensure_desired_addresses_are_verified.(person.person_id)
+
       :ok = Memba.Membership.replace_person_email_addresses(
         %{person_id: person.person_id, email_addresses: email_addresses},
         consistency: :strong

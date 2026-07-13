@@ -5,7 +5,7 @@
 - [x] 003 Model the write-side behaviour with explicit business commands/events rather than a generic replace-only edit.
 - [x] 004 Add individual Membership commands/events for adding a pending email address, verifying an email address, making a verified address primary, and removing a non-primary address.
 - [x] 005 Resend verification is an application-service action that issues a fresh verification token/email for an already-pending address and should not create a new domain event unless the pending-address state changes.
-- [ ] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
+- [x] 006 Preserve or adapt `replace_person_email_addresses/2` for staff edit compatibility while enforcing the new rule that newly introduced addresses become pending/unverified unless they already exist as verified addresses for that Person.
 - [ ] 007 Existing verified addresses for the same Person keep their verified state when staff edit the set; removed addresses lose any outstanding verification tokens.
 - [ ] 008 Add a dedicated email-address verification-token store rather than overloading `auth_sign_in_tokens`.
 - [ ] 009 Store only a token hash plus Person/address scope (`person_id`, normalized email), expiry, and consumed/revoked state.

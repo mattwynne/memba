@@ -130,8 +130,8 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
     command = %ReplacePersonEmailAddresses{
       person_id: person_id,
       email_addresses: [
-        %{email: "alice@example.com", is_primary: false},
-        %{email: "alice@work.example", is_primary: true}
+        %{email: "alice@example.com", is_primary: true},
+        %{email: "alice@work.example", is_primary: false}
       ]
     }
 
@@ -142,12 +142,36 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
               events: [
                 %PersonEmailAddressesReplaced{
                   person_id: ^person_id,
-                  primary_email: "alice@work.example"
+                  primary_email: "alice@example.com",
+                  email_addresses: [
+                    %{
+                      normalized_email: "alice@example.com",
+                      is_primary: true,
+                      verified_at: %DateTime{}
+                    },
+                    %{
+                      normalized_email: "alice@work.example",
+                      is_primary: false,
+                      verified_at: nil
+                    }
+                  ]
                 }
               ],
               aggregate_state: %Person{
                 person_id: ^person_id,
-                email: "alice@work.example"
+                email: "alice@example.com",
+                email_addresses: [
+                  %{
+                    normalized_email: "alice@example.com",
+                    is_primary: true,
+                    verified_at: %DateTime{}
+                  },
+                  %{
+                    normalized_email: "alice@work.example",
+                    is_primary: false,
+                    verified_at: nil
+                  }
+                ]
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
   end

@@ -165,7 +165,7 @@ defmodule Memba.Membership.PersonTest do
   end
 
   describe "execute/2 ReplacePersonEmailAddresses" do
-    test "emits a replace-all email-address event for an existing person" do
+    test "preserves verification state for existing addresses and makes newly introduced addresses pending" do
       person_id = Memba.ID.generate(:person)
 
       person =
@@ -178,27 +178,49 @@ defmodule Memba.Membership.PersonTest do
       command = %ReplacePersonEmailAddresses{
         person_id: person_id,
         email_addresses: [
-          %{email: "alice@example.com", is_primary: false},
-          %{email: " Alice@Work.Example ", is_primary: true}
+          %{email: "alice@example.com", is_primary: true},
+          %{email: " Alice@Work.Example ", is_primary: false}
         ]
       }
 
       assert %PersonEmailAddressesReplaced{
                person_id: ^person_id,
-               primary_email: "Alice@Work.Example",
+               primary_email: "alice@example.com",
                email_addresses: [
                  %{
                    email: "alice@example.com",
                    normalized_email: "alice@example.com",
-                   is_primary: false
+                   is_primary: true,
+                   verified_at: %DateTime{}
                  },
                  %{
                    email: "Alice@Work.Example",
                    normalized_email: "alice@work.example",
-                   is_primary: true
+                   is_primary: false,
+                   verified_at: nil
                  }
                ]
              } = Person.execute(person, command)
+    end
+
+    test "rejects making a newly introduced pending address primary during replacement" do
+      person_id = Memba.ID.generate(:person)
+
+      person =
+        Person.apply(%Person{}, %PersonCreated{
+          person_id: person_id,
+          name: "Alice",
+          email: "alice@example.com"
+        })
+
+      assert {:error, :primary_email_address_not_verified} =
+               Person.execute(person, %ReplacePersonEmailAddresses{
+                 person_id: person_id,
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: false},
+                   %{email: "alice@work.example", is_primary: true}
+                 ]
+               })
     end
 
     test "rejects replacement before the person is created" do
