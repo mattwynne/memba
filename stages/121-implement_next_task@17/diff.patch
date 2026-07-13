@@ -1,0 +1,712 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index ec81b46..83d3aaa 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -17,7 +17,7 @@
+ - [x] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
+ - [x] 016 Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page, with `/my/settings/profile`, `/my/settings/clubs`, and `/my/settings/emails` sub-routes so the selected tab is URL-addressable via `handle_params/3` per ADR 0023 (see Designs — do not implement tab switching as client-side-only JS).
+ - [x] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
+-- [ ] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
++- [x] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
+ - [ ] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
+ - [ ] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
+ - [ ] 021 Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index a407472..523c3de 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -461,6 +461,68 @@ h1, h2, h3, h4 {
+   display: none;
+ }
+ 
++/* ============================================================
++   Account settings page.
++
++   Local /my/settings presentation classes from
++   design-system/templates/account-settings.html. The LiveView keeps tab state
++   URL-addressable while these classes provide the grouped cards and email rows.
++   ============================================================ */
++.settings-panel {
++  display: grid;
++  gap: 20px;
++}
++
++.settings-panel[hidden] {
++  display: none;
++}
++
++.settings-card {
++  background: var(--color-paper);
++  border: 1px solid var(--color-line);
++  border-radius: 20px;
++  box-shadow: 0 1px 2px rgb(37 41 29 / 0.05);
++  overflow: hidden;
++}
++
++.settings-card__head {
++  border-bottom: 1px solid var(--color-line);
++  padding: 16px 18px;
++}
++
++.settings-card__title {
++  color: var(--color-ink);
++  font-size: 16px;
++  font-weight: 700;
++}
++
++.settings-card__body {
++  display: grid;
++  gap: 6px;
++  padding: 18px;
++}
++
++.email-list {
++  display: flex;
++  flex-direction: column;
++  background: var(--color-base-200);
++  border: 1px solid var(--color-base-300);
++  border-radius: 16px;
++  overflow: hidden;
++}
++
++.email-row {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  padding: 12px 14px;
++  border-top: 1px solid var(--color-base-300);
++}
++
++.email-row:first-child {
++  border-top: none;
++}
++
+ /* ============================================================
+    Club-home conversation list.
+ 
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 48eec52..f00afc6 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -755,7 +755,40 @@ defmodule Memba.Membership do
+       |> select([email_address], %{
+         email: email_address.email,
+         normalized_email: email_address.normalized_email,
+-        primary?: email_address.is_primary
++        primary?: email_address.is_primary,
++        verified_at: email_address.verified_at
++      })
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
++  @doc """
++  List active club memberships for a Person settings view.
++
++  Invalid, missing, or unknown person IDs return an empty list. Results include
++  the projected club display data plus the membership insertion timestamp so the
++  member-facing settings page can show global "Member since …" chips without
++  joining against Membership projections from the web layer.
++  """
++  def list_active_club_memberships_for_person(person_id) do
++    with {:ok, person_id} <- ID.cast(:person, person_id) do
++      MembershipProjection
++      |> join(:inner, [membership], club in Club, on: club.club_id == membership.club_id)
++      |> where([membership, _club], membership.person_id == ^person_id)
++      |> where([membership, _club], membership.active == true)
++      |> order_by([membership, club],
++        asc: club.name,
++        asc: club.club_id,
++        asc: membership.membership_id
++      )
++      |> select([membership, club], %{
++        membership_id: membership.membership_id,
++        club_id: club.club_id,
++        club_name: club.name,
++        club_slug: club.slug,
++        member_since: membership.inserted_at
+       })
+       |> Repo.all()
+     else
+diff --git a/web/lib/memba_web/live/my_settings_live.ex b/web/lib/memba_web/live/my_settings_live.ex
+index 7a455f6..c5deb3a 100644
+--- a/web/lib/memba_web/live/my_settings_live.ex
++++ b/web/lib/memba_web/live/my_settings_live.ex
+@@ -19,7 +19,11 @@ defmodule MembaWeb.MySettingsLive do
+          page_title: "Account settings",
+          selected_club: selected_club,
+          current_person: current_person,
+-         current_person_clubs: socket.assigns[:current_identity_clubs] || [],
++         current_person_clubs:
++           Membership.list_active_club_memberships_for_person(current_person.person_id),
++         current_person_email_addresses:
++           Membership.list_person_email_addresses(current_person.person_id),
++         add_email_form: to_form(%{"email" => ""}, as: :email_address),
+          active_tab: :profile
+        )}
+     else
+@@ -41,111 +45,261 @@ defmodule MembaWeb.MySettingsLive do
+       current_identity={@current_identity}
+       member_name={@current_person.name}
+     >
+-      <div
+-        id="my-settings"
+-        data-live-view="my-settings"
+-        data-active-tab={@active_tab}
+-        class="mx-auto max-w-4xl space-y-8"
+-      >
+-        <section class="space-y-4">
+-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink-2">
+-            Personal settings
+-          </p>
+-          <h1 id="my-settings-title" class="text-4xl font-semibold tracking-tight text-base-content">
+-            Account settings
+-          </h1>
+-          <p class="max-w-2xl text-base leading-7 text-ink-2">
+-            Manage the personal profile, club memberships, and email addresses connected
+-            to your Memba identity.
+-          </p>
+-        </section>
+-
+-        <div id="my-settings-tabs" class="section-tabs">
+-          <div
+-            id="my-settings-tabs-list"
+-            class="section-tabs__list"
+-            role="tablist"
+-            aria-label="Account settings sections"
+-          >
++      <main id="my-settings-main" class="px-6 py-7 sm:px-8 sm:py-10">
++        <div
++          id="my-settings"
++          data-live-view="my-settings"
++          data-active-tab={@active_tab}
++          class="mx-auto grid max-w-[860px] gap-5"
++        >
++          <section class="grid gap-1">
+             <.link
+-              id="my-settings-tab-profile"
+-              patch={settings_tab_path(:profile)}
+-              class={settings_tab_class(@active_tab, :profile)}
+-              data-tab="profile"
+-              role="tab"
+-              aria-selected={settings_tab_selected?(@active_tab, :profile)}
+-              aria-controls="my-settings-panel-profile"
++              id="my-settings-back-to-club"
++              navigate={~p"/conversations"}
++              class="inline-flex items-center gap-1 text-sm font-semibold text-ink-3 transition hover:text-sage-700"
+             >
+-              Profile
++              ‹ Back to club
+             </.link>
+-            <.link
+-              id="my-settings-tab-clubs"
+-              patch={settings_tab_path(:clubs)}
+-              class={settings_tab_class(@active_tab, :clubs)}
+-              data-tab="clubs"
+-              role="tab"
+-              aria-selected={settings_tab_selected?(@active_tab, :clubs)}
+-              aria-controls="my-settings-panel-clubs"
++            <h1
++              id="my-settings-title"
++              class="text-[30px] font-bold leading-tight tracking-[-0.03em] text-ink"
+             >
+-              Clubs
+-            </.link>
+-            <.link
+-              id="my-settings-tab-emails"
+-              patch={settings_tab_path(:emails)}
+-              class={settings_tab_class(@active_tab, :emails)}
+-              data-tab="emails"
+-              role="tab"
+-              aria-selected={settings_tab_selected?(@active_tab, :emails)}
+-              aria-controls="my-settings-panel-emails"
++              Account settings
++            </h1>
++          </section>
++
++          <div
++            id="my-settings-layout"
++            class="settings-layout flex flex-col gap-5 md:flex-row md:gap-7"
++          >
++            <nav
++              id="my-settings-tabs-list"
++              class="settings-tabs flex shrink-0 flex-row gap-1 overflow-x-auto md:w-44 md:flex-col md:overflow-visible"
++              role="tablist"
++              aria-orientation="vertical"
++              aria-label="Account settings sections"
+             >
+-              Emails
+-            </.link>
++              <.link
++                id="my-settings-tab-profile"
++                patch={settings_tab_path(:profile)}
++                class={settings_tab_class(@active_tab, :profile)}
++                data-tab="profile"
++                role="tab"
++                aria-selected={settings_tab_selected?(@active_tab, :profile)}
++                aria-controls="my-settings-panel-profile"
++              >
++                Profile
++              </.link>
++              <.link
++                id="my-settings-tab-clubs"
++                patch={settings_tab_path(:clubs)}
++                class={settings_tab_class(@active_tab, :clubs)}
++                data-tab="clubs"
++                role="tab"
++                aria-selected={settings_tab_selected?(@active_tab, :clubs)}
++                aria-controls="my-settings-panel-clubs"
++              >
++                Clubs
++              </.link>
++              <.link
++                id="my-settings-tab-emails"
++                patch={settings_tab_path(:emails)}
++                class={settings_tab_class(@active_tab, :emails)}
++                data-tab="emails"
++                role="tab"
++                aria-selected={settings_tab_selected?(@active_tab, :emails)}
++                aria-controls="my-settings-panel-emails"
++              >
++                Emails
++              </.link>
++            </nav>
++
++            <div id="my-settings-panels" class="min-w-0 flex-1">
++              <section
++                id="my-settings-panel-profile"
++                role="tabpanel"
++                aria-labelledby="my-settings-tab-profile"
++                hidden={@active_tab != :profile}
++                class="settings-panel"
++              >
++                <div id="my-settings-profile-card" class="settings-card">
++                  <div class="settings-card__head">
++                    <h2 class="settings-card__title">Profile</h2>
++                  </div>
++                  <div class="settings-card__body">
++                    <div class="flex items-center gap-3">
++                      <div
++                        id="my-settings-profile-avatar"
++                        class="grid size-10 shrink-0 place-items-center rounded-full bg-sage-400 text-sm font-bold text-white"
++                      >
++                        {person_initials(@current_person.name)}
++                      </div>
++                      <p id="my-settings-profile-name" class="text-xl font-bold text-ink">
++                        {@current_person.name}
++                      </p>
++                    </div>
++                  </div>
++                </div>
++              </section>
++
++              <section
++                id="my-settings-panel-clubs"
++                role="tabpanel"
++                aria-labelledby="my-settings-tab-clubs"
++                hidden={@active_tab != :clubs}
++                class="settings-panel"
++              >
++                <div id="my-settings-clubs-card" class="settings-card">
++                  <div class="settings-card__head">
++                    <h2 class="settings-card__title">Current clubs</h2>
++                  </div>
++                  <div class="settings-card__body">
++                    <div id="my-settings-club-chip-list" class="flex flex-wrap gap-2">
++                      <span
++                        :for={club <- @current_person_clubs}
++                        id={"my-settings-club-chip-#{club.club_id}"}
++                        class="inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-200 py-1.5 pr-3 pl-1.5"
++                      >
++                        <span class="grid size-[22px] place-items-center rounded-full bg-sage-200 text-[10px] font-bold text-sage-800">
++                          {club_initials(club.club_name)}
++                        </span>
++                        <span>
++                          <span class="text-sm font-semibold text-ink">{club.club_name}</span>
++                          <br />
++                          <span class="text-xs text-ink-3">
++                            Member since {format_month_year(club.member_since)}
++                          </span>
++                        </span>
++                      </span>
++                    </div>
++                  </div>
++                </div>
++              </section>
++
++              <section
++                id="my-settings-panel-emails"
++                role="tabpanel"
++                aria-labelledby="my-settings-tab-emails"
++                hidden={@active_tab != :emails}
++                class="settings-panel"
++              >
++                <div id="my-settings-email-addresses-card" class="settings-card">
++                  <div class="settings-card__head">
++                    <h2 class="settings-card__title">Email addresses</h2>
++                    <p class="mt-1 text-sm leading-5 text-ink-3">
++                      Your primary address is the one we'll send emails to. We'll accept incoming
++                      emails from your other verified addresses.
++                    </p>
++                  </div>
++                  <div class="settings-card__body">
++                    <div id="my-settings-email-list" class="email-list">
++                      <div
++                        :for={email_address <- @current_person_email_addresses}
++                        id={"my-settings-email-row-#{email_dom_id(email_address)}"}
++                        class="email-row"
++                        data-testid="person-email-row"
++                        data-state={email_state(email_address)}
++                      >
++                        <div class="flex flex-wrap items-center justify-between gap-3">
++                          <div class="flex min-w-0 flex-wrap items-center gap-2">
++                            <span class="break-words text-sm font-semibold text-ink">
++                              {email_address.email}
++                            </span>
++                            <span
++                              :if={email_address.primary?}
++                              class="my-settings-primary-badge badge badge-primary badge-soft"
++                            >
++                              Primary
++                            </span>
++                          </div>
++                          <.verified_badge :if={verified_email_address?(email_address)} />
++                          <.pending_badge :if={!verified_email_address?(email_address)} />
++                        </div>
++
++                        <div
++                          :if={!email_address.primary?}
++                          class="flex flex-wrap justify-end gap-2"
++                        >
++                          <button
++                            :if={verified_email_address?(email_address)}
++                            id={"my-settings-make-primary-#{email_dom_id(email_address)}"}
++                            class="btn btn-soft btn-sm"
++                            type="button"
++                          >
++                            Make primary
++                          </button>
++                          <button
++                            :if={!verified_email_address?(email_address)}
++                            id={"my-settings-resend-verification-#{email_dom_id(email_address)}"}
++                            class="btn btn-soft btn-sm"
++                            type="button"
++                          >
++                            Resend verification
++                          </button>
++                          <button
++                            id={"my-settings-remove-email-#{email_dom_id(email_address)}"}
++                            class="btn btn-ghost btn-sm"
++                            type="button"
++                          >
++                            Remove
++                          </button>
++                        </div>
++                      </div>
++                    </div>
++
++                    <.form
++                      for={@add_email_form}
++                      id="my-settings-add-email-form"
++                      class="mt-4 flex flex-wrap items-end gap-3"
++                    >
++                      <div class="min-w-60 flex-1">
++                        <.input
++                          id="settings-add-email-input"
++                          field={@add_email_form[:email]}
++                          type="email"
++                          label="Add an email address"
++                          placeholder="dana@example.com"
++                        />
++                      </div>
++                      <button
++                        id="my-settings-add-email-button"
++                        class="btn btn-primary btn-sm mb-1"
++                        type="button"
++                      >
++                        Add email address
++                      </button>
++                    </.form>
++                  </div>
++                </div>
++              </section>
++            </div>
+           </div>
+         </div>
+-
+-        <section
+-          id="my-settings-panel-profile"
+-          role="tabpanel"
+-          aria-labelledby="my-settings-tab-profile"
+-          hidden={@active_tab != :profile}
+-          class="rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm"
+-        >
+-          <h2 class="text-xl font-semibold text-base-content">Profile</h2>
+-          <p class="mt-2 text-sm leading-6 text-ink-2">
+-            Your profile settings will appear here.
+-          </p>
+-        </section>
+-
+-        <section
+-          id="my-settings-panel-clubs"
+-          role="tabpanel"
+-          aria-labelledby="my-settings-tab-clubs"
+-          hidden={@active_tab != :clubs}
+-          class="rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm"
+-        >
+-          <h2 class="text-xl font-semibold text-base-content">Clubs</h2>
+-          <p class="mt-2 text-sm leading-6 text-ink-2">
+-            Your club memberships will appear here.
+-          </p>
+-        </section>
+-
+-        <section
+-          id="my-settings-panel-emails"
+-          role="tabpanel"
+-          aria-labelledby="my-settings-tab-emails"
+-          hidden={@active_tab != :emails}
+-          class="rounded-3xl border border-base-300 bg-base-100 p-6 shadow-sm"
+-        >
+-          <h2 class="text-xl font-semibold text-base-content">Emails</h2>
+-          <p class="mt-2 text-sm leading-6 text-ink-2">
+-            Your email-address settings will appear here.
+-          </p>
+-        </section>
+-      </div>
++      </main>
+     </Layouts.club_site>
+     """
+   end
+ 
++  attr :rest, :global
++
++  defp verified_badge(assigns) do
++    ~H"""
++    <span class="my-settings-verified-badge badge badge-success badge-soft gap-1.5" {@rest}>
++      <.icon name="hero-check" class="size-3 shrink-0" />Verified
++    </span>
++    """
++  end
++
++  attr :rest, :global
++
++  defp pending_badge(assigns) do
++    ~H"""
++    <span class="my-settings-pending-badge badge badge-warning badge-soft gap-1.5" {@rest}>
++      <span class="dot size-1.5 rounded-full bg-current"></span>Pending verification
++    </span>
++    """
++  end
++
+   defp selected_club(session) when is_map(session) do
+     case Membership.get_club(Map.get(session, "club_id")) do
+       nil -> {:error, :forbidden}
+@@ -174,13 +328,53 @@ defmodule MembaWeb.MySettingsLive do
+ 
+   defp settings_tab_class(active_tab, tab) do
+     if active_tab == tab do
+-      "section-tab is-active"
++      [
++        "settings-tab is-active rounded-lg bg-sage-50 px-3 py-2.5 text-left text-sm font-semibold text-sage-700 transition"
++      ]
+     else
+-      "section-tab"
++      [
++        "settings-tab rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-2 transition hover:bg-base-200 hover:text-ink"
++      ]
+     end
+   end
+ 
+   defp settings_tab_selected?(active_tab, tab), do: to_string(active_tab == tab)
+ 
++  defp person_initials(name), do: initials(name)
++
++  defp club_initials(name), do: initials(name)
++
++  defp initials(name) when is_binary(name) do
++    name
++    |> String.split(~r/\s+/, trim: true)
++    |> Enum.take(2)
++    |> Enum.map_join("", fn word -> String.first(word) || "" end)
++    |> String.upcase()
++    |> case do
++      "" -> "?"
++      initials -> initials
++    end
++  end
++
++  defp initials(_name), do: "?"
++
++  defp format_month_year(%DateTime{} = date_time), do: Calendar.strftime(date_time, "%b %Y")
++  defp format_month_year(_date_time), do: "joining"
++
++  defp email_state(%{primary?: true}), do: "primary"
++
++  defp email_state(email_address),
++    do: if(verified_email_address?(email_address), do: "verified", else: "pending")
++
++  defp verified_email_address?(%{verified_at: nil}), do: false
++  defp verified_email_address?(%{verified_at: _verified_at}), do: true
++
++  defp email_dom_id(%{normalized_email: normalized_email}) when is_binary(normalized_email) do
++    Regex.replace(~r/[^a-zA-Z0-9_-]+/, normalized_email, "-")
++    |> String.trim("-")
++  end
++
++  defp email_dom_id(_email_address), do: "unknown"
++
+   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
+ end
+diff --git a/web/test/memba_web/live/my_settings_live_test.exs b/web/test/memba_web/live/my_settings_live_test.exs
+index 91a0433..9946ecd 100644
+--- a/web/test/memba_web/live/my_settings_live_test.exs
++++ b/web/test/memba_web/live/my_settings_live_test.exs
+@@ -1,9 +1,11 @@
+ defmodule MembaWeb.MySettingsLiveTest do
+   use MembaWeb.ConnCase, async: true
+ 
++  import Ecto.Query
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -27,6 +29,15 @@ defmodule MembaWeb.MySettingsLiveTest do
+     assert has_element?(view, "#my-settings-title", "Account settings")
+     assert has_element?(view, "#club-site-identity-menu-button .app-bar__who", "Alice Settings")
+ 
++    assert has_element?(
++             view,
++             "#my-settings-back-to-club[href='/conversations']",
++             "‹ Back to club"
++           )
++
++    assert has_element?(view, "#my-settings-profile-name", "Alice Settings")
++    assert has_element?(view, "#my-settings-profile-avatar", "AS")
++
+     assert has_element?(
+              view,
+              "#my-settings-tab-profile[role='tab'][aria-selected='true']" <>
+@@ -57,6 +68,97 @@ defmodule MembaWeb.MySettingsLiveTest do
+     assert has_element?(view, "#my-settings-panel-emails[hidden]")
+   end
+ 
++  test "renders club chips and grouped email-address rows from the selected design", %{conn: conn} do
++    club = insert_membership_club!(name: "Settings Email Club", slug: "settings-email")
++    second_club = insert_membership_club!(name: "Wilderness Book Club", slug: "wilderness-book")
++
++    member =
++      create_active_member(club, email: "alice.rows@example.com", name: "Alice Rows")
++
++    Repo.insert!(%Membership{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: second_club.club_id,
++      person_id: member.person_id,
++      active: true
++    })
++
++    primary_verified_at = ~U[2026-07-01 12:00:00Z]
++    verified_at = ~U[2026-07-02 12:00:00Z]
++
++    mark_email_verified!(member.person_id, "alice.rows@example.com", primary_verified_at)
++
++    insert_membership_person_email_address!(
++      person_id: member.person_id,
++      email: "alice.work@example.com",
++      is_primary: false
++    )
++
++    mark_email_verified!(member.person_id, "alice.work@example.com", verified_at)
++
++    insert_membership_person_email_address!(
++      person_id: member.person_id,
++      email: "alice.pending@example.com",
++      is_primary: false
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host(club, member.email)
++      |> live(~p"/my/settings/emails")
++
++    assert has_element?(view, "#my-settings-tabs-list.settings-tabs[aria-orientation='vertical']")
++    assert has_element?(view, "#my-settings-panel-clubs[hidden]")
++    assert has_element?(view, "#my-settings-panel-emails:not([hidden])")
++
++    assert has_element?(view, "#my-settings-club-chip-#{club.club_id}", "Settings Email Club")
++    assert has_element?(view, "#my-settings-club-chip-#{club.club_id}", "Member since")
++
++    assert has_element?(
++             view,
++             "#my-settings-club-chip-#{second_club.club_id}",
++             "Wilderness Book Club"
++           )
++
++    assert has_element?(view, "#my-settings-club-chip-#{second_club.club_id}", "Member since")
++
++    primary_row = "#my-settings-email-row-alice-rows-example-com"
++
++    assert has_element?(
++             view,
++             "#{primary_row}[data-state='primary'] .my-settings-primary-badge",
++             "Primary"
++           )
++
++    assert has_element?(view, "#{primary_row} .my-settings-verified-badge", "Verified")
++    assert has_element?(view, "#{primary_row} .my-settings-verified-badge .hero-check")
++
++    refute has_element?(view, "#{primary_row} button")
++
++    verified_row = "#my-settings-email-row-alice-work-example-com"
++    assert has_element?(view, "#{verified_row}[data-state='verified']", "alice.work@example.com")
++    assert has_element?(view, "#{verified_row} .my-settings-verified-badge", "Verified")
++    assert has_element?(view, "#{verified_row} .my-settings-verified-badge .hero-check")
++    assert has_element?(view, "#my-settings-make-primary-alice-work-example-com", "Make primary")
++    assert has_element?(view, "#my-settings-remove-email-alice-work-example-com", "Remove")
++
++    pending_row = "#my-settings-email-row-alice-pending-example-com"
++
++    assert has_element?(
++             view,
++             "#{pending_row}[data-state='pending'] .my-settings-pending-badge",
++             "Pending verification"
++           )
++
++    assert has_element?(view, "#{pending_row} .my-settings-pending-badge .dot")
++    assert has_element?(view, "#my-settings-resend-verification-alice-pending-example-com")
++    assert has_element?(view, "#my-settings-remove-email-alice-pending-example-com", "Remove")
++    refute has_element?(view, "#my-settings-make-primary-alice-pending-example-com")
++
++    assert has_element?(view, "#my-settings-add-email-form")
++    assert has_element?(view, "#settings-add-email-input[type='email']")
++    assert has_element?(view, "#my-settings-add-email-button", "Add email address")
++  end
++
+   test "direct tab routes restore the selected settings tab", %{conn: conn} do
+     club = insert_membership_club!(name: "Direct Settings Club", slug: "direct-settings")
+     member = create_active_member(club, email: "direct.settings@example.com", name: "Direct Tab")
+@@ -131,4 +233,20 @@ defmodule MembaWeb.MySettingsLiveTest do
+ 
+     person
+   end
++
++  defp mark_email_verified!(person_id, email, verified_at) do
++    normalized_email = String.downcase(email)
++
++    {1, _rows} =
++      Repo.update_all(
++        from(email_address in PersonEmailAddress,
++          where:
++            email_address.person_id == ^person_id and
++              email_address.normalized_email == ^normalized_email
++        ),
++        set: [verified_at: verified_at]
++      )
++
++    :ok
++  end
+ end
