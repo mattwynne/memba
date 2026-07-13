@@ -1,0 +1,272 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index 90fba23..d82f6e6 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -19,7 +19,7 @@
+ - [x] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
+ - [x] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
+ - [x] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
+-- [ ] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
++- [x] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
+ - [ ] 021 Add/update LiveView/controller tests for avatar menu navigation, settings page rendering, add/resend/remove/make-primary flows, verification confirmation, invalid verification link, and live refresh.
+ - [ ] 022 Implement or update the `@iteration-053` acceptance scenarios, removing or narrowing `@todo-domain @todo-ui` as behaviour becomes executable.
+ - [ ] 023 Run `dev check` and fix all issues.
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index a8fec8b..f7e05f5 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -20,6 +20,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def list_person_contact_summaries("
+     assert source =~ "def list_person_alternate_emails("
+     assert source =~ "def list_person_email_addresses("
++    assert source =~ "def list_active_club_memberships_for_person("
+     assert source =~ "def list_active_members_of_club("
+     assert source =~ "def list_active_clubs_for_member_email("
+     assert source =~ "def active_member_of_club_by_email?("
+@@ -37,6 +38,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+              "list_person_contact_summaries",
+              "list_person_alternate_emails",
+              "list_person_email_addresses",
++             "list_active_club_memberships_for_person",
+              "list_active_members_of_club",
+              "list_active_clubs_for_member_email"
+            ]
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index f7f4417..75bb359 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -444,13 +444,14 @@ defmodule Memba.Membership.PublicApiTest do
+                consistency: :strong
+              )
+ 
+-    assert Membership.list_person_email_addresses(bob_id) == [
++    assert [
+              %{
+                email: "bob@example.com",
+                normalized_email: "bob@example.com",
+-               primary?: true
++               primary?: true,
++               verified_at: %DateTime{}
+              }
+-           ]
++           ] = Membership.list_person_email_addresses(bob_id)
+   end
+ 
+   test "replace_person_email_addresses/2 preserves verified addresses and revokes removed pending verification tokens" do
+@@ -663,6 +664,127 @@ defmodule Memba.Membership.PublicApiTest do
+            )
+   end
+ 
++  test "person email-address lifecycle APIs enforce pending, primary, removal, and duplicate rules" do
++    alice_id = Memba.ID.generate(:person)
++    bob_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: alice_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: bob_id, name: "Bob", email: "bob@example.com"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_person_email_address(
++               %{person_id: alice_id, email: " Alice.Pending@Example.COM "},
++               consistency: :strong
++             )
++
++    assert {:error, :email_address_not_verified} =
++             Membership.make_person_email_address_primary(
++               %{person_id: alice_id, email: "alice.pending@example.com"},
++               consistency: :strong
++             )
++
++    assert {:error, :primary_email_address_cannot_be_removed} =
++             Membership.remove_person_email_address(
++               %{person_id: alice_id, email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert {:error, :email_address_taken} =
++             Membership.add_person_email_address(
++               %{person_id: bob_id, email: " ALICE.PENDING@example.com "},
++               consistency: :strong
++             )
++
++    assert [
++             %{
++               normalized_email: "alice@example.com",
++               primary?: true,
++               verified_at: %DateTime{}
++             },
++             %{
++               normalized_email: "alice.pending@example.com",
++               primary?: false,
++               verified_at: nil
++             }
++           ] = Membership.list_person_email_addresses(alice_id)
++
++    assert [
++             %{
++               normalized_email: "bob@example.com",
++               primary?: true,
++               verified_at: %DateTime{}
++             }
++           ] = Membership.list_person_email_addresses(bob_id)
++  end
++
++  test "verify_pending_person_email_address_for_sign_in/2 verifies a pending known address without making it primary" do
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice.primary@example.com"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_person_email_address(
++               %{person_id: person_id, email: "Alice.Pending@Example.COM"},
++               consistency: :strong
++             )
++
++    assert %PersonEmailAddress{verified_at: nil, is_primary: false} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice.pending@example.com"
++             )
++
++    assert :ok =
++             Membership.verify_pending_person_email_address_for_sign_in(
++               " ALICE.PENDING@example.com ",
++               consistency: :strong
++             )
++
++    assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: false} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice.pending@example.com"
++             )
++
++    assert %PersonEmailAddress{verified_at: %DateTime{}, is_primary: true} =
++             Repo.get_by(PersonEmailAddress,
++               person_id: person_id,
++               normalized_email: "alice.primary@example.com"
++             )
++
++    assert %PersonProjection{email: "alice.primary@example.com"} =
++             Membership.get_person(person_id)
++
++    events_after_verification = count_events()
++
++    assert :ok =
++             Membership.verify_pending_person_email_address_for_sign_in(
++               "alice.pending@example.com",
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.verify_pending_person_email_address_for_sign_in(
++               "unknown@example.com",
++               consistency: :strong
++             )
++
++    assert count_events() == events_after_verification
++  end
++
+   test "resend_person_email_address_verification/2 issues for pending address without appending a domain event" do
+     person_id = Memba.ID.generate(:person)
+     parent = self()
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index bddaeec..cb564fb 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -235,23 +235,26 @@ defmodule Memba.Membership.QueryTest do
+                "alice@example.com"
+              ]
+ 
+-      assert Membership.list_person_email_addresses(alice.person_id) == [
++      assert [
+                %{
+                  email: "alice@work.example",
+                  normalized_email: "alice@work.example",
+-                 primary?: true
++                 primary?: true,
++                 verified_at: %DateTime{}
+                },
+                %{
+                  email: "alice+old@example.com",
+                  normalized_email: "alice+old@example.com",
+-                 primary?: false
++                 primary?: false,
++                 verified_at: %DateTime{}
+                },
+                %{
+                  email: "alice@example.com",
+                  normalized_email: "alice@example.com",
+-                 primary?: false
++                 primary?: false,
++                 verified_at: %DateTime{}
+                }
+-             ]
++             ] = Membership.list_person_email_addresses(alice.person_id)
+     end
+ 
+     test "returns nil or empty lists for missing or invalid person IDs" do
+diff --git a/web/test/memba_web/live/admin_people_live_test.exs b/web/test/memba_web/live/admin_people_live_test.exs
+index d20cf54..ea19cd2 100644
+--- a/web/test/memba_web/live/admin_people_live_test.exs
++++ b/web/test/memba_web/live/admin_people_live_test.exs
+@@ -94,14 +94,20 @@ defmodule MembaWeb.AdminPeopleLiveTest do
+              Membership.list_people()
+              |> Enum.find(&(&1.name == "Alice Example"))
+ 
+-    assert Membership.list_person_email_addresses(person_id) == [
+-             %{email: "Alice@Example.COM", normalized_email: "alice@example.com", primary?: true},
++    assert [
++             %{
++               email: "Alice@Example.COM",
++               normalized_email: "alice@example.com",
++               primary?: true,
++               verified_at: %DateTime{}
++             },
+              %{
+                email: "alice@work.example",
+                normalized_email: "alice@work.example",
+-               primary?: false
++               primary?: false,
++               verified_at: %DateTime{}
+              }
+-           ]
++           ] = Membership.list_person_email_addresses(person_id)
+ 
+     refute Membership.active_member_of_club?(club.club_id, person_id)
+   end
+@@ -222,13 +228,19 @@ defmodule MembaWeb.AdminPeopleLiveTest do
+ 
+     assert %{email: "alice@work.example"} = Membership.get_person(person_id)
+ 
+-    assert Membership.list_person_email_addresses(person_id) == [
++    assert [
+              %{
+                email: "alice@work.example",
+                normalized_email: "alice@work.example",
+-               primary?: true
++               primary?: true,
++               verified_at: %DateTime{}
+              },
+-             %{email: "alice@example.com", normalized_email: "alice@example.com", primary?: false}
+-           ]
++             %{
++               email: "alice@example.com",
++               normalized_email: "alice@example.com",
++               primary?: false,
++               verified_at: %DateTime{}
++             }
++           ] = Membership.list_person_email_addresses(person_id)
+   end
+ end
