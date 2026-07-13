@@ -56,6 +56,7 @@ defmodule Memba.Release do
 
   @required_schema_modules [
     Memba.Accounts.SignInToken,
+    Memba.Membership.EmailAddressVerificationToken,
     Memba.Membership.Projections.Club,
     Memba.Membership.Projections.MemberPermission,
     Memba.Membership.Projections.Membership,
