@@ -1,0 +1,176 @@
+diff --git a/docs/iterations/053-my-settings-email-addresses/todo.md b/docs/iterations/053-my-settings-email-addresses/todo.md
+index c2b3681..ec81b46 100644
+--- a/docs/iterations/053-my-settings-email-addresses/todo.md
++++ b/docs/iterations/053-my-settings-email-addresses/todo.md
+@@ -16,7 +16,7 @@
+ - [x] 014 Update sign-in callback handling so a successful sign-in link for a pending known Person email address marks that address verified without making it primary or changing the Person session semantics.
+ - [x] 015 Update inbound email sender resolution so pending/unverified known addresses are rejected rather than accepted as member identity.
+ - [x] 016 Add `/my/settings` LiveView under the club-member/authenticated browser surface as a global personal settings page, with `/my/settings/profile`, `/my/settings/clubs`, and `/my/settings/emails` sub-routes so the selected tab is URL-addressable via `handle_params/3` per ADR 0023 (see Designs — do not implement tab switching as client-side-only JS).
+-- [ ] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
++- [x] 017 Add the **Account settings** avatar-menu link and separator in `Layouts.club_site/1`, promoting the template's proposed `.app-menu__item` / `.app-menu__divider` classes into the app's shared CSS (kept in sync with the design-system mirror per `app_shell_css_test.exs`).
+ - [ ] 018 Build the settings UI following `design-system/templates/account-settings.html` (side-tab Profile/Clubs/Emails, grouped email-row list, checkmark-icon Verified badges), using existing app shell/card/form/badge patterns, with stable IDs for LiveView tests.
+ - [ ] 019 Subscribe the settings LiveView to Person email-address changes and refresh rows live after verification.
+ - [ ] 020 Add/update domain tests for verification state, primary restrictions, duplicate handling, removal restrictions, sign-in-as-verification, and inbound rejection.
+diff --git a/styles.css b/styles.css
+index 2e677da..133e82b 100644
+--- a/styles.css
++++ b/styles.css
+@@ -163,6 +163,44 @@
+   gap: 6px;
+ }
+ 
++.app-menu__item {
++  width: 100%;
++  border: 0;
++  border-radius: 9px;
++  background: transparent;
++  color: var(--color-ink);
++  cursor: pointer;
++  display: flex;
++  align-items: center;
++  justify-content: flex-start;
++  font: inherit;
++  font-size: 13px;
++  font-weight: 600;
++  padding: 9px 10px;
++  text-align: left;
++  text-decoration: none;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.app-menu__item:hover,
++.app-menu__item:focus-visible {
++  background: var(--color-sage-50);
++  color: var(--color-sage-700);
++}
++
++.app-menu__item:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.app-menu__divider {
++  height: 1px;
++  margin: 4px 6px;
++  background: var(--color-line);
++}
++
+ .app-menu__signout {
+   width: 100%;
+   border: 0;
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index 68b6bf9..a407472 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -277,6 +277,44 @@ h1, h2, h3, h4 {
+   gap: 6px;
+ }
+ 
++.app-menu__item {
++  width: 100%;
++  border: 0;
++  border-radius: 9px;
++  background: transparent;
++  color: var(--color-ink);
++  cursor: pointer;
++  display: flex;
++  align-items: center;
++  justify-content: flex-start;
++  font: inherit;
++  font-size: 13px;
++  font-weight: 600;
++  padding: 9px 10px;
++  text-align: left;
++  text-decoration: none;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.app-menu__item:hover,
++.app-menu__item:focus-visible {
++  background: var(--color-sage-50);
++  color: var(--color-sage-700);
++}
++
++.app-menu__item:focus-visible {
++  outline: 2px solid var(--color-sage-300);
++  outline-offset: 2px;
++}
++
++.app-menu__divider {
++  height: 1px;
++  margin: 4px 6px;
++  background: var(--color-line);
++}
++
+ .app-menu__signout {
+   width: 100%;
+   border: 0;
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index c4bf362..a746846 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -354,6 +354,20 @@ defmodule MembaWeb.Layouts do
+                   role="menu"
+                   class="dropdown-content app-menu app-menu--id"
+                 >
++                  <.link
++                    navigate={~p"/my/settings"}
++                    id="club-site-account-settings-link"
++                    role="menuitem"
++                    class="app-menu__item"
++                  >
++                    Account settings
++                  </.link>
++                  <div
++                    id="club-site-identity-menu-divider"
++                    class="app-menu__divider"
++                    role="separator"
++                    aria-orientation="horizontal"
++                  />
+                   <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+                     <button
+                       id="club-site-sign-out-button"
+diff --git a/web/test/memba_web/app_shell_css_test.exs b/web/test/memba_web/app_shell_css_test.exs
+index 4ac1f58..e5674f2 100644
+--- a/web/test/memba_web/app_shell_css_test.exs
++++ b/web/test/memba_web/app_shell_css_test.exs
+@@ -22,6 +22,8 @@ defmodule MembaWeb.AppShellCssTest do
+           ".app-menu",
+           ".app-menu--id",
+           ".app-menu__status",
++          ".app-menu__item",
++          ".app-menu__divider",
+           ".app-menu__signout",
+           ".app-foot",
+           ".app-foot__mark"
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index a944aa9..a8fc529 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -170,6 +170,22 @@ defmodule MembaWeb.LayoutsTest do
+       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
+     )
+ 
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
++        "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']"
++    )
++
++    assert_text(html, "#club-site-account-settings-link", "Account settings")
++
++    assert_selector(
++      html,
++      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
++        "a#club-site-account-settings-link + " <>
++        "div#club-site-identity-menu-divider.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
++        "form#club-site-sign-out-form"
++    )
++
+     assert_selector(
+       html,
+       "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
