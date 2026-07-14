@@ -1,5 +1,73 @@
 # Design-sync notes — Memba
 
+## 2026-07-14 pull + drift-check fix (club-home section tabs: pill → underline)
+
+**Problem found:** the production club-home section tabs (`.section-tabs` / `.section-tab` in
+`web/assets/css/app.css`) rendered as filled sage pills, while the live cloud `memba.css`
+currently defines them as underline tabs (transparent background, `border-bottom` on the
+active tab, no `border-radius`). Matt spotted the mismatch comparing the app against
+claude.ai/design directly.
+
+Root cause: the pill CSS was ported into `app.css` in iteration 052 (2026-07-09, commit
+`1b138c4c3`) to match the design *as it stood then*. The cloud design was later restyled to
+underline tabs, but `.section-tabs*` is one of the few class families that was **never added
+to the tracked `styles.css` mirror** — it's listed below under "foundational layer... read on
+demand" — so there was no local copy to diff against, and the app-shell CSS sync test
+(`web/test/memba_web/app_shell_css_test.exs`) explicitly stripped the whole `.section-tabs*`
+block out of its comparison (`strip_club_home_section_tabs/1`) before checking `app.css`
+against `styles.css`. That carve-out is what let the drift go completely unenforced — pill
+CSS could ship and nothing would ever flag it against the (moving) design.
+
+**Fix (visual bug):**
+- Pulled the current `.section-tabs*` rules from cloud `memba.css` (`get_file`, read-only —
+  no push needed) and ported them into repo-root `styles.css` (new — this class family wasn't
+  mirrored there before). Added the `--font-sans` token to `styles.css`'s `:root`, needed by
+  the new rule.
+- Left the prod-only mobile overrides for `.section-tabs` / `.section-tabs__action` — the
+  cloud design has no mobile treatment for this component yet (iteration 052 explicitly
+  deferred mobile), so this remains a documented, intentional app-only addition, not drift.
+
+**Follow-up fix (root cause, same day):** Matt asked why `app.css` and `styles.css` were two
+separate files at all rather than one. The honest answer: they still need to serve two
+different jobs (`app.css` runs through the Tailwind/daisyUI build; `styles.css` is plain CSS
+linked directly by the zero-build static previews under `design-system/`), but the shared
+*component* CSS between them never needed to be hand-copied twice — that hand-copy is exactly
+what let the pill/underline drift happen and go undetected (the original fix above added a
+test to diff the two copies, which caught future drift but didn't stop a second copy from
+existing).
+
+Spiked and confirmed Tailwind v4's CLI (Lightning CSS-based) bundles local `@import`s at
+build time, including ones that reach outside `web/assets/` up to the repo root. So
+`web/assets/css/app.css` now has:
+
+```css
+@import "tailwindcss" source(none);
+@import "../../../styles.css";
+```
+
+and the hand-written `.app-frame` / `.app-card` / `.app-bar*` / `.app-menu*` / `.app-foot*` /
+`.section-tabs*` / `.section-panel` blocks were deleted from `app.css` entirely — `styles.css`
+is now the *only* place they're written. `app.css` keeps its own `@theme` token block (Tailwind
+needs `@theme`-specific syntax to generate utility classes like `bg-sage-500`; that can't be
+replaced by `styles.css`'s plain `:root` vars) and keeps the small app-only mobile
+`.section-tabs` override, now with a comment explaining why it's there and not in `styles.css`.
+
+This means the two "stays in sync" tests added in the fix above no longer have anything to
+diff — there's only one copy now — so they were replaced with a simpler pair: one asserting
+`app.css` contains the `@import`, one asserting `styles.css` defines the expected selectors.
+Verified end-to-end with `mix tailwind memba` — compiled `priv/static/assets/css/app.css`
+contains each shared selector exactly once (no duplication) — and visually via the gallery
+screenshot script (`node acceptance-tests/gallery/walk.js` against a locally running
+`mix phx.server`), which showed the underline tabs rendering correctly on both the
+Conversations and Members panels.
+
+**Residual risk:** this closes the "two copies drift apart" failure mode for good, but
+`styles.css` itself can still go stale relative to the *live* cloud `memba.css` — nothing
+automated re-pulls it. If the cloud design changes again, `styles.css` needs a manual refresh,
+same as always. Treat any future "app looks different from claude.ai/design" report as a cue
+to check `styles.css` against a fresh `get_file` pull first.
+
+
 Memba's design system lives at claude.ai/design (project `bc97cfc3-436c-471e-a939-7ba222859282`,
 "Memba") and is the **source of truth**. Locally, `design-system/` is a *partial* mirror of it.
 The generic `/design-sync` converter does not apply here — see `.design-sync/config.json`.

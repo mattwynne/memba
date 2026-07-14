@@ -2,9 +2,14 @@ defmodule MembaWeb.AppCssTest do
   use ExUnit.Case, async: true
 
   @app_css_path Path.expand("../../assets/css/app.css", __DIR__)
+  @design_system_css_path Path.expand("../../../styles.css", __DIR__)
 
-  test "app css includes the club-home section tab and panel rules" do
-    css = File.read!(@app_css_path)
+  test "app css imports the design-system stylesheet that defines the club-home section tab and panel rules" do
+    # .section-tabs*/.section-panel live only in styles.css now (app.css @imports it,
+    # Tailwind inlines it at build time) — see .design-sync/NOTES.md, 2026-07-14.
+    assert File.read!(@app_css_path) =~ "@import \"../../../styles.css\";"
+
+    css = File.read!(@design_system_css_path)
 
     assert css =~ ".section-tabs {"
     assert css =~ ".section-tabs__list {"
@@ -15,8 +20,8 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ ".section-panel[hidden] {"
 
     assert css =~ "justify-content: space-between;"
-    assert css =~ "border: 1px solid var(--color-line);"
-    assert css =~ "background: var(--color-sage-600);"
+    assert css =~ "border-bottom: 1px solid var(--color-line);"
+    assert css =~ "border-bottom-color: var(--color-sage-500);"
     assert css =~ "display: none;"
   end
 
