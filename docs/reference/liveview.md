@@ -1,7 +1,7 @@
 # Phoenix LiveView guidelines
 
 - **Never** use the deprecated `live_redirect` and `live_patch` functions, instead **always** use the `<.link navigate={href}>` and `<.link patch={href}>` in templates, and `push_navigate` and `push_patch` functions LiveViews.
-- **Avoid LiveComponent's** unless you have a strong, specific need for them.
+- **Avoid LiveComponent's** unless you have a strong, specific need for them. For UI factoring and component-organization guidance, read [LiveView UI structure](liveview-ui-structure.md).
 - LiveViews should be named like `AppWeb.WeatherLive`, with a `Live` suffix. When you go to add LiveView routes to the router, the default `:browser` scope is **already aliased** with the `AppWeb` module, so you can just do `live "/weather", WeatherLive`.
 
 ## LiveView streams

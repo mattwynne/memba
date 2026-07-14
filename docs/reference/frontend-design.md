@@ -3,6 +3,7 @@
 ## JS and CSS
 
 - **Use Tailwind CSS classes and custom CSS rules** to create polished, responsive, and visually stunning interfaces.
+- For LiveView UI structure, component extraction, and Tailwind factoring rules, also read [LiveView UI structure](liveview-ui-structure.md).
 - Tailwindcss v4 **no longer needs a tailwind.config.js** and uses a new import syntax in `app.css`:
 
       @import "tailwindcss" source(none);
@@ -12,7 +13,9 @@
 
 - **Always use and maintain this import syntax** in the app.css file for projects generated with `phx.new`.
 - **Never** use `@apply` when writing raw css.
-- **Always** manually write your own tailwind-based components instead of using daisyUI for a unique, world-class design.
+- Prefer project design tokens and brand utilities (`text-ink`, `bg-paper`, `border-line`, `bg-sage-600`, etc.) over raw hex colors in templates.
+- Use custom CSS classes sparingly for repeated structural patterns, global layout behaviours, vendor integration styles, or utility bundles that make HEEx hard to read.
+- This app currently uses daisyUI as a themed foundation for primitives such as `btn`, `badge`, `alert`, and `toast`. Use it intentionally and keep it aligned with Memba's theme; do not copy generic daisyUI examples blindly or add another component system without explicit agreement.
 - Out of the box **only the app.js and app.css bundles are supported**:
   - You cannot reference an external vendor'd script `src` or link `href` in the layouts.
   - You must import the vendor deps into app.js and app.css to use them.

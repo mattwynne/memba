@@ -16,9 +16,10 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 
 ### Building or changing UI
 
-- [Frontend, CSS, and design](frontend-design.md) — Tailwind v4 imports, CSS/JS bundle rules, no `@apply`, no daisyUI, visual quality expectations.
+- [Frontend, CSS, and design](frontend-design.md) — Tailwind v4 imports, CSS/JS bundle rules, CSS factoring, daisyUI policy, visual quality expectations.
 - [Phoenix HTML and HEEx](phoenix-html.md) — `~H`/HEEx syntax, forms, IDs, interpolation, class lists, comments, and loops.
 - [Phoenix LiveView](liveview.md) — LiveView naming, links/navigation, streams, hooks, pushed events, LiveView tests, and form handling.
+- [LiveView UI structure](liveview-ui-structure.md) — LiveViews as screen coordinators, Phoenix components vs LiveComponents, component organization, Tailwind factoring, IDs, accessibility, and testable UI structure.
 
 ### Working with server-side Elixir
 
@@ -31,6 +32,7 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 | --- | --- |
 | `current_scope`, `<Layouts.app>`, or `<.flash_group>` errors | [Phoenix 1.8](phoenix-1-8.md) |
 | Tailwind v4 `app.css` import syntax | [Frontend, CSS, and design](frontend-design.md) |
+| Structuring LiveView UI or factoring components | [LiveView UI structure](liveview-ui-structure.md) |
 | HEEx syntax, `{...}` interpolation, class lists, or comments | [Phoenix HTML and HEEx](phoenix-html.md) |
 | Form setup with `to_form/2` and `<.input>` | [Phoenix HTML and HEEx](phoenix-html.md), [Phoenix LiveView](liveview.md) |
 | LiveView streams, empty states, and `phx-update="stream"` | [Phoenix LiveView](liveview.md) |
