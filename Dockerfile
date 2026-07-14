@@ -31,6 +31,7 @@ COPY web/priv priv
 RUN printf '%s' "$MEMBA_GIT_SHA" > priv/git_sha
 COPY web/lib lib
 COPY web/assets assets
+COPY styles.css /styles.css
 
 RUN mix compile
 RUN mix assets.deploy
