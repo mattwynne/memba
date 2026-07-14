@@ -75,7 +75,7 @@ defmodule MembaWeb.MySettingsLive do
       :ok ->
         {:noreply,
          socket
-         |> put_flash(:info, "Verification email sent.")
+         |> put_flash(:info, verification_email_sent_message())
          |> assign(:add_email_error, nil)
          |> assign(:add_email_form, to_form(%{"email" => ""}, as: :email_address))
          |> refresh_person_email_addresses()}
@@ -92,7 +92,7 @@ defmodule MembaWeb.MySettingsLive do
   def handle_event("resend_verification", %{"email" => email}, socket) do
     case deliver_person_email_address_verification(socket, email) do
       :ok ->
-        {:noreply, put_flash(socket, :info, "Verification email sent.")}
+        {:noreply, put_flash(socket, :info, verification_email_sent_message())}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, email_action_error_message(reason))}
@@ -293,9 +293,9 @@ defmodule MembaWeb.MySettingsLive do
                         data-testid="person-email-row"
                         data-state={email_state(email_address)}
                       >
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                          <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <span class="break-words text-sm font-semibold text-ink">
+                        <div class="email-row__top">
+                          <div class="email-row__address-line">
+                            <span class="email-row__address">
                               {email_address.email}
                             </span>
                             <span
@@ -311,7 +311,7 @@ defmodule MembaWeb.MySettingsLive do
 
                         <div
                           :if={!email_address.primary?}
-                          class="flex flex-wrap justify-end gap-2"
+                          class="email-row__actions-cell"
                         >
                           <button
                             :if={verified_email_address?(email_address)}
@@ -462,6 +462,10 @@ defmodule MembaWeb.MySettingsLive do
   defp normalize_context_result(:ok), do: :ok
   defp normalize_context_result({:ok, _result}), do: :ok
   defp normalize_context_result({:error, _reason} = error), do: error
+
+  defp verification_email_sent_message,
+    do:
+      "You've been sent a verification email. Click the link in your email to verify this address"
 
   defp add_email_error_message(:email_address_taken),
     do: "That email address is already in use by another Memba user."

@@ -241,6 +241,12 @@ defmodule MembaWeb.MySettingsLiveTest do
 
     pending_row = "#my-settings-email-row-add-pending-example-com"
 
+    assert has_element?(
+             view,
+             "#flash-info",
+             "You've been sent a verification email. Click the link in your email to verify this address"
+           )
+
     assert has_element?(view, "#{pending_row}[data-state='pending']", "Add.Pending@Example.COM")
     assert has_element?(view, "#my-settings-resend-verification-add-pending-example-com")
     assert has_element?(view, "#my-settings-remove-email-add-pending-example-com")
@@ -322,6 +328,12 @@ defmodule MembaWeb.MySettingsLiveTest do
     |> render_click()
 
     assert has_element?(view, "#{pending_row}[data-state='pending']")
+
+    assert has_element?(
+             view,
+             "#flash-info",
+             "You've been sent a verification email. Click the link in your email to verify this address"
+           )
 
     assert %PersonEmailAddress{verified_at: nil, is_primary: false} =
              Repo.get_by(PersonEmailAddress,
