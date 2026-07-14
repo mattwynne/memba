@@ -1,0 +1,494 @@
+<title>Memba architecture review — July 2026</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #fdfcf9;
+    --ink: #17251e;
+    --muted: #5c6b61;
+    --line: #ddd7c9;
+    --accent: #1e5c46;
+    --accent-soft: #e4ede7;
+    --crit: #a23829;
+    --crit-soft: #f4e4e0;
+    --warn: #8f651d;
+    --warn-soft: #f2e9d7;
+    --good: #2c6e4f;
+    --good-soft: #e2ede6;
+    --mono-bg: #efece3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101813;
+      --surface: #17221b;
+      --ink: #e7e3d7;
+      --muted: #9cab9f;
+      --line: #2b382f;
+      --accent: #82c6a5;
+      --accent-soft: #1d2f26;
+      --crit: #e0876f;
+      --crit-soft: #33211c;
+      --warn: #d3a558;
+      --warn-soft: #2f2717;
+      --good: #8ccbaa;
+      --good-soft: #1c2f25;
+      --mono-bg: #1e2a22;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101813;
+    --surface: #17221b;
+    --ink: #e7e3d7;
+    --muted: #9cab9f;
+    --line: #2b382f;
+    --accent: #82c6a5;
+    --accent-soft: #1d2f26;
+    --crit: #e0876f;
+    --crit-soft: #33211c;
+    --warn: #d3a558;
+    --warn-soft: #2f2717;
+    --good: #8ccbaa;
+    --good-soft: #1c2f25;
+    --mono-bg: #1e2a22;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f4ef;
+    --surface: #fdfcf9;
+    --ink: #17251e;
+    --muted: #5c6b61;
+    --line: #ddd7c9;
+    --accent: #1e5c46;
+    --accent-soft: #e4ede7;
+    --crit: #a23829;
+    --crit-soft: #f4e4e0;
+    --warn: #8f651d;
+    --warn-soft: #f2e9d7;
+    --good: #2c6e4f;
+    --good-soft: #e2ede6;
+    --mono-bg: #efece3;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .deck { height: 100dvh; display: flex; flex-direction: column; }
+
+  .progress {
+    height: 3px; background: var(--line); flex: none;
+  }
+  .progress > div {
+    height: 100%; background: var(--accent); width: 0;
+    transition: width 200ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .progress > div { transition: none; }
+    .slide { transition: none !important; }
+  }
+
+  .stage { flex: 1; overflow: hidden; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    overflow-y: auto;
+    padding: clamp(1.2rem, 4vh, 3rem) 1.4rem 3.5rem;
+    display: none;
+    opacity: 0;
+    transition: opacity 220ms ease;
+  }
+  .slide.active { display: block; opacity: 1; }
+  .slide-inner { max-width: 860px; margin: 0 auto; }
+
+  .eyebrow {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 0.6rem;
+  }
+  h1, h2 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    text-wrap: balance; line-height: 1.15; margin: 0 0 1rem;
+  }
+  h1 { font-size: clamp(1.9rem, 5vw, 3rem); font-weight: 600; }
+  h2 { font-size: clamp(1.45rem, 3.4vw, 2.1rem); font-weight: 600; }
+  h3 { font-size: 1rem; margin: 1.4rem 0 0.4rem; }
+  p { margin: 0 0 0.9rem; max-width: 68ch; }
+  .lede { font-size: 1.08rem; color: var(--ink); }
+  .muted { color: var(--muted); }
+
+  ul { margin: 0 0 1rem; padding-left: 1.15rem; }
+  li { margin-bottom: 0.55rem; max-width: 70ch; }
+  li::marker { color: var(--accent); }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.82em;
+    background: var(--mono-bg);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    overflow-wrap: anywhere;
+  }
+
+  .chip {
+    display: inline-block; font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.18em 0.6em; border-radius: 999px; vertical-align: 0.12em;
+    margin-right: 0.4em;
+  }
+  .chip.crit { color: var(--crit); background: var(--crit-soft); }
+  .chip.warn { color: var(--warn); background: var(--warn-soft); }
+  .chip.good { color: var(--good); background: var(--good-soft); }
+  .chip.info { color: var(--accent); background: var(--accent-soft); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin: 0 0 1rem;
+  }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  .table-wrap { overflow-x: auto; margin-bottom: 1rem; }
+  th, td { text-align: left; padding: 0.45rem 0.8rem 0.45rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td:first-child { font-variant-numeric: tabular-nums; }
+
+  .nav {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.55rem 1.2rem;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .nav .counter { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .nav .hint { font-size: 0.75rem; color: var(--muted); }
+  @media (max-width: 700px) { .nav .hint { display: none; } }
+  .nav .btns { display: flex; gap: 0.5rem; }
+  .nav button {
+    font: inherit; font-size: 0.85rem; font-weight: 600;
+    color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 0.35rem 0.95rem; cursor: pointer;
+  }
+  .nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nav button:disabled { opacity: 0.35; cursor: default; }
+  .nav button:disabled:hover { border-color: var(--line); color: var(--ink); }
+
+  .title-meta { color: var(--muted); font-size: 0.95rem; margin-top: 2rem; }
+  .title-meta div { margin-bottom: 0.25rem; }
+
+  .verdict {
+    border-left: 3px solid var(--accent);
+    padding-left: 1rem;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-size: 1.25rem; line-height: 1.5;
+    max-width: 60ch;
+    margin: 1.4rem 0;
+  }
+</style>
+
+<div class="deck">
+  <div class="progress"><div id="bar"></div></div>
+  <div class="stage" id="stage">
+
+    <!-- 1 · Title -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Overnight review · 14 July 2026</p>
+        <h1>Memba: how the codebase is holding up</h1>
+        <p class="lede">A full architectural pass — domain model, web layer, tests, operations, and every open item in the code-health ledger — checked against the 23 ADRs and the goal of a codebase that lasts.</p>
+        <div class="title-meta">
+          <div>Six parallel deep-dives, findings cross-checked against the code directly.</div>
+          <div>Everything here, with full evidence and file references, is in <code>docs/notes/2026-07-14-architecture-review.md</code>.</div>
+          <div>Navigate with ← → or the buttons below.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · Verdict -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">The short version</p>
+        <h2>The inside is built better than the front door</h2>
+        <div class="verdict">This is a healthy, unusually disciplined codebase. The findings cluster into two themes, and neither is about the code you write most often.</div>
+        <ul>
+          <li><strong>The care is unevenly distributed.</strong> Aggregates, the release process, and token handling are built like they'll run for decades. The HTTP boundary and production operability are still at prototype standard: both Postmark webhooks are unauthenticated, nothing rate-limits, and production has no health check, error tracker, or metrics sink.</li>
+          <li><strong>Long-horizon event-sourcing habits aren't established yet.</strong> No event versioning strategy, no business timestamps on events, and one table that's half projection, half operational state. These cost nothing today and compound with every event written.</li>
+        </ul>
+        <p>Overall maintainability: <strong>strong</strong>. The work ahead is mostly closing the gap between the weakest parts and the very high standard the rest of the code already sets — ideally before real clubs and imported history arrive.</p>
+      </div>
+    </section>
+
+    <!-- 3 · What's good -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Calibration</p>
+        <h2>What's genuinely working</h2>
+        <ul>
+          <li><span class="chip good">solid</span><strong>The ADRs are true.</strong> Every implementation claim I spot-checked matched the code. The read-model-changes pattern (ADR 21) is in all 11 projectors without exception.</li>
+          <li><span class="chip good">solid</span><strong>Deploys verify the database.</strong> <code>Release.verify_repo_schema!</code> compares the live schema against the app's expectations and fails the deploy on drift. Very few teams do this.</li>
+          <li><span class="chip good">solid</span><strong>Token and session security.</strong> 32-byte random tokens, hashed at rest, 15-minute TTLs, single-use with row locking, session renewal on login/logout, enumeration-resistant sign-in.</li>
+          <li><span class="chip good">solid</span><strong>Boundaries hold.</strong> The web layer basically never touches <code>Repo</code> directly; Messaging reaches Membership only through its public API.</li>
+          <li><span class="chip good">solid</span><strong>The shared feature files are real.</strong> ~97 of 122 Cucumber scenarios genuinely run at both the domain and browser layers, with tag discipline that's documented <em>and</em> self-tested.</li>
+          <li><span class="chip good">solid</span><strong>Zero sleeps in the test suite</strong> — strong-consistency projectors designed the flakiness out. Zero TODO/FIXME markers in <code>lib/</code>. Compile is clean under warnings-as-errors.</li>
+          <li><span class="chip good">solid</span><strong>Email dispatch can't double-send</strong>, even multi-node: claims are atomic conditional updates at the database.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 4 · Webhooks -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Fix first</p>
+        <h2>Both Postmark webhooks accept anonymous POSTs</h2>
+        <p><span class="chip crit">major</span>The inbound endpoint is the serious one. <code>POST /webhooks/postmark/inbound</code> has no signature, secret, or IP check, and the sender is identified purely from the <code>From</code> header of the payload.</p>
+        <div class="card">
+          <p><strong>What that means in practice:</strong> anyone who finds the URL can post a message into a club as any member whose email they know — and Memba will email it to the whole club. The status webhook (<code>/webhooks/postmark</code>) is also open, so delivery records and auth-email progress can be forged too.</p>
+        </div>
+        <ul>
+          <li>This was flagged in the kaizen log on 2026-06-02 and in ADR 16's own consequences; it's still open.</li>
+          <li>The Resend endpoints <em>do</em> verify signatures — properly (HMAC, constant-time compare, replay window). But they silently skip verification when the secret isn't configured. Prod is saved by a boot-time raise; the fail-open branch is still a footgun.</li>
+          <li><strong>Fix:</strong> shared secret in the Postmark webhook URL plus Postmark's published IP ranges, and make Resend fail closed in prod. The Resend signature module is the template — this is days, not weeks.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 5 · Rate limiting -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Fix first</p>
+        <h2>Nothing in the app rate-limits anything</h2>
+        <p><span class="chip crit">major</span>No Hammer, no PlugAttack, no throttle of any kind — confirmed by exhaustive search.</p>
+        <ul>
+          <li><strong>The expensive case:</strong> <code>POST /get-started</code> and the sign-in link request both send a real provider email to any address, unauthenticated and unbounded. That's email-bombing of arbitrary inboxes on your Postmark bill, and a reputation risk with the provider.</li>
+          <li><strong>The quieter cases:</strong> token callback endpoints (sign-in, invitations, email verification) have no attempt throttling. Tokens are 256-bit so brute force isn't realistic, but there's no defense-in-depth. The webhooks have no flood cap either.</li>
+          <li>Related token hygiene while you're in there: <strong>invitation and stop-follow links never expire</strong> (invitations grant club membership — an old inbox leak is a real exposure), and spent sign-in tokens are never swept.</li>
+        </ul>
+        <p class="muted">A plug-based limiter on the four or five public endpoints that send email or consume tokens covers most of this in an afternoon.</p>
+      </div>
+    </section>
+
+    <!-- 6 · Observability -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Production operability</p>
+        <h2>Right now, you'd find out prod is broken from a user</h2>
+        <p><span class="chip crit">major</span>Or from the Fastmail smoke test, if you happen to run it. There's no other signal.</p>
+        <ul>
+          <li><strong>No health check.</strong> <code>fly.toml</code> has no checks block, so Fly routes traffic to a booted-but-broken app (projector crashed, DB unreachable) indefinitely.</li>
+          <li><strong>No error tracking.</strong> No Sentry/AppSignal/Honeybadger. A crashing projector or dispatcher shows up only as unstructured lines in <code>fly logs</code>.</li>
+          <li><strong>Telemetry defines metrics but ships them nowhere.</strong> The reporter line is commented out; LiveDashboard is dev-only.</li>
+          <li><span class="chip warn">moderate</span><code>PHX_HOST</code> silently defaults to <code>example.com</code> in prod — broken sign-in links rather than a failed boot. It should raise like <code>DATABASE_URL</code> does.</li>
+          <li><span class="chip warn">moderate</span>Production database SSL is a commented-out line for the repo and both event stores. Probably fine on Fly's private network — but make it a documented decision, not an accident.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 7 · Dispatcher -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Production operability</p>
+        <h2>The email dispatcher has three sharp edges</h2>
+        <p>The core design is good — claim-based, idempotent, provider failures rescued and recorded. The edges are around it:</p>
+        <ul>
+          <li><span class="chip warn">moderate</span><strong>No recovery sweep.</strong> Dispatch only fires when a projection-change nudge arrives. Deliveries left pending across a deploy or crash sit there until an unrelated send happens to trigger a sweep.</li>
+          <li><span class="chip warn">moderate</span><strong><code>dispatching</code> is a black hole.</strong> A crash between claiming a delivery and calling the provider strands the row where neither the nudge path nor manual retry (which only targets <code>failed</code>) can ever touch it.</li>
+          <li><span class="chip crit">major</span><strong>A projection rebuild would re-send email.</strong> Rebuilding the email-delivery projection recreates history as <code>pending</code>; the next nudge hands all of it to the provider. The code-health ledger flagged this in June (iteration 038); there's still no replay guard, and the replay-safety test stops the dispatcher first — so the dangerous configuration is exactly the one not tested.</li>
+        </ul>
+        <p class="muted">The third item is a symptom of a deeper modeling question — next slide.</p>
+      </div>
+    </section>
+
+    <!-- 8 · Event store -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Event-sourcing durability</p>
+        <h2>Three things to settle before the event store grows</h2>
+        <ul>
+          <li><span class="chip crit">major</span><strong>No event versioning strategy.</strong> Zero upcasters. Schema evolution so far lives as shims scattered through domain code: no-op applies for a dead event, dual string/atom-key matching in <code>Person</code>, a legacy 1970 timestamp constant baked into an aggregate. Each one is an upcaster written in the wrong place, and every aggregate and projector must forever know every historical shape. Adopt upcasters and write the ADR <em>before</em> the next event-shape change.</li>
+          <li><span class="chip crit">major</span><strong>Events have no business timestamps.</strong> Projectors stamp rows at projection time, so rebuilds produce different data than the original run — which defeats the point of being able to rebuild. It's already user-visible: "member since" is projection-commit time, and the planned club-history imports bring real join dates this can't represent. <code>metadata.created_at</code> is sitting right there unused.</li>
+          <li><span class="chip crit">major</span><strong>The email-delivery table is half projection, half operational state.</strong> A projector inserts rows; the dispatcher then mutates them through its lifecycle. Dispatch outcomes are unrecoverable state in a rebuildable table, and rebuilding re-sends email. Either emit dispatch-outcome events or move dispatch state to its own table — an ADR-level decision either way.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 9 · Domain smaller -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Event-sourcing durability</p>
+        <h2>Smaller domain-model debts, worth a line each</h2>
+        <ul>
+          <li><span class="chip warn">moderate</span><strong>Message and ConversationFollowers share one event stream</strong> (same aggregate ID). It works via mutual no-op applies, but <code>Message</code> has no catch-all <code>apply</code> — a future event type on that stream crashes rehydration of old messages. Undocumented; needs an ADR and a one-line guard.</li>
+          <li><span class="chip warn">moderate</span><strong>Two EventStore modules, one physical schema.</strong> The ADR 7 context split isn't reflected in storage; only typed-ID prefixes prevent stream collisions. Split it or document the sharing.</li>
+          <li><span class="chip warn">moderate</span><strong>The event-sourced-vs-plain-Ecto boundary is sensible but unwritten.</strong> Accounts, onboarding requests, and the verification-token table (which lives <em>inside</em> the event-sourced Membership context) are exactly where the next contributor guesses wrong. ADR 2 says exceptions must be explicit; they aren't yet.</li>
+          <li><span class="chip warn">moderate</span><strong>Uniqueness checks race.</strong> Club slug, duplicate membership, and email ownership are check-then-dispatch against projections — two concurrent requests can both pass, and the failure mode is permanent (two clubs, one slug).</li>
+          <li><span class="chip warn">moderate</span><strong>Multi-step flows have no compensation.</strong> Invitation acceptance and onboarding conversion dispatch 2–3 commands in sequence; a mid-sequence failure strands partial state and retries then dead-end. Same shape in the inbound-accept flow, where a failed rejection email is silently never sent.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 10 · Web tenancy -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Web layer</p>
+        <h2>Multi-tenancy: safe today, but by convention</h2>
+        <p><span class="chip good">audited</span>First the good news: I audited every member-facing surface for cross-club access by ID manipulation, and <strong>there is no hole</strong>. Every view checks both club membership and record ownership.</p>
+        <ul>
+          <li><span class="chip crit">major risk</span><strong>But the guarantee is per-view discipline, not structure.</strong> The centralized <code>on_mount</code> hook that would enforce membership at the live-session level exists in <code>IdentityAuth</code> — and has zero callers. Each LiveView independently remembers to call a loader that forbids. The next <code>live</code> route added with a naive mount ships with no membership check on WebSocket mounts, and nothing will fail.</li>
+          <li>Wire <code>:require_active_club_member</code> into the <code>:club_member</code> live_session and keep the per-record loader checks as defense-in-depth — that's what their own moduledoc says they're for.</li>
+          <li><span class="chip warn">moderate</span><code>MySettingsLive</code> checks only that a club <em>exists</em>, not that you belong to it. Nothing leaks (the data shown is self-scoped), but it breaks the pattern everyone else follows.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 11 · Web LiveView quality -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Web layer</p>
+        <h2>Member pages: live updates are wired inconsistently</h2>
+        <ul>
+          <li><span class="chip warn">moderate</span><strong>The dashboard refreshes on the wrong signal.</strong> It re-queries the entire club home when <em>any</em> delivery projection changes in <em>any</em> club — but doesn't subscribe to message changes at all, so a new conversation never appears live. The delivery-details page — whose whole point is live status — has no subscription and tells the member to "check again in a moment." The message page does it right; align the other two, and move to per-club topics before real load.</li>
+          <li><span class="chip warn">moderate</span><strong>Member surfaces hold full collections in socket memory</strong> (all members, all conversations, name maps) while the admin area consistently uses streams. With imported club history coming, port the streams pattern over.</li>
+          <li><span class="chip warn">moderate</span><strong>~200 lines of copy-paste</strong> across the four member LiveViews (session/club helpers, identity derivation, five different <code>initials/1</code> implementations). One shared scope hook + helper module deletes it.</li>
+          <li><span class="chip warn">moderate</span><strong>Leftovers:</strong> the dashboard and message LiveViews render templates stranded in <code>controllers/page_html/</code> (which the controller never uses), and the receipt-group code that iteration 047 obsoleted is still in <code>MemberMessageLive.Show</code>, dead.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 12 · Contexts -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Code organization</p>
+        <h2>The context modules are getting heavy</h2>
+        <ul>
+          <li><span class="chip warn">moderate</span><code>membership.ex</code> is 1,823 lines / 46 public functions; <code>messaging.ex</code> is 1,469, of which about a thousand are the inbound-email pipeline. Both are still internally tidy, but the extractions are obvious: an <code>InboundEmailPipeline</code> module and the email-verification token machinery.</li>
+          <li><span class="chip warn">moderate</span><strong>Domain code reaches into the web layer</strong> for URL building — <code>MembaWeb.Endpoint</code> and <code>ClubSite</code> aliased from the stop-follow token, welcome email, and dispatcher. Invert it with a URL-builder the domain owns.</li>
+          <li><span class="chip warn">moderate</span><strong>Side-effect boundaries are inconsistent:</strong> outbound mail goes through the dispatcher (good), but rejection email is sent synchronously inside a command path, and invitation emails are sent from two LiveViews. Every new surface has to remember to email.</li>
+          <li><span class="chip warn">moderate</span><strong>Still open from the ledger:</strong> the reply boundary doesn't verify the conversation ID points at a root message — one small guard away.</li>
+          <li><span class="chip info">niggle</span>A batch of small duplications: <code>normalize_email</code> ×4, the projector list in two places, <code>list_member_email_deliverys</code> (sic) in a public API.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 13 · Tests -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Test architecture</p>
+        <h2>Tests: strong shape, rising bill</h2>
+        <p>The dual-layer Cucumber setup is one of the most faithfully executed I've seen, and the coverage shape is genuinely good. The costs to watch:</p>
+        <ul>
+          <li><span class="chip crit">major cost</span><strong>The suite is mostly serial with heavy per-test churn.</strong> Every event-sourced test stops all 11 projectors, truncates the event store and projections, and restarts everything — ~150 tests' worth. It's the honest price of a shared Postgres event store, but it's the dominant and growing cost. On top of that, <em>every</em> <code>mix test</code> invocation drops and rebuilds the database, even single-file runs.</li>
+          <li><span class="chip warn">moderate</span><strong>~14,000 lines of step-definition glue</strong> for 122 scenarios, including one 3,951-line JS support file, plus a hand-rolled domain Cucumber runner on top of an unpinned GitHub fork.</li>
+          <li><span class="chip warn">moderate</span><strong>The source-scanning guardrail tests have grown to four files (~540 lines)</strong> asserting literal CSS strings — and the hardcoded member-page list has already drifted: every member surface added since iteration 047 is missing from the no-hex checks.</li>
+          <li><span class="chip warn">moderate</span><strong>Isolation by convention:</strong> the Fake provider is a global singleton reset by convention; one careless <code>async: true</code> test breaks it silently.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 14 · Code health ledger -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">The ledger, reconciled</p>
+        <h2>docs/code-health.md: what's still true</h2>
+        <p>Every numbered item verified against current code:</p>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Status</th><th>Items</th></tr>
+            <tr><td><span class="chip good">fixed</span></td><td>The big CSS class-reuse gap (conversation/message/composer classes are now ported and used — close that entry); the design-system README conventions; replies-as-top-level-rows on the dashboard.</td></tr>
+            <tr><td><span class="chip info">obsolete</span></td><td>The old message-page receipt-group finding (surface moved in 047 — but the dead code it left should go); the iteration-036 preview path mapping (superseded by the design-sync workflow).</td></tr>
+            <tr><td><span class="chip warn">open</span></td><td>Ten items. Four are accepted-open by the ledger's own judgment (brittle guardrails, separate member/staff presentation, gallery-walk reliance). Six are actionable: the dispatcher replay guard, the reply root-invariant, delivery-details URL state, the two controller flows (invitation profile, get-started) that ADR 15 says should be LiveViews or documented exceptions, and compose-success navigation.</td></tr>
+          </table>
+        </div>
+        <p class="muted">The ledger itself is a good practice — it just needs a grooming pass so fixed items stop looking open.</p>
+      </div>
+    </section>
+
+    <!-- 15 · Priorities -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Recommendations</p>
+        <h2>What I'd do, in order</h2>
+        <div class="table-wrap">
+          <table>
+            <tr><th>When</th><th>What</th></tr>
+            <tr><td><strong>P0 · days</strong></td><td>Authenticate the Postmark webhooks; make Resend fail closed. Rate-limit the public email-sending and token endpoints.</td></tr>
+            <tr><td><strong>P1 · days</strong></td><td>Health check + error tracker + telemetry reporter; make <code>PHX_HOST</code> raise. Dispatcher: startup sweep, <code>dispatching</code> recovery, replay guard.</td></tr>
+            <tr><td><strong>P2 · 1–2 iterations</strong></td><td>Event upcasting strategy (ADR); business timestamps on events — before the club-history import; resolve the email-delivery projection hybrid; the small invariant fixes (reply root guard, Message catch-all apply).</td></tr>
+            <tr><td><strong>P3 · 1 iteration</strong></td><td>Wire the tenancy on_mount hook; the live-update/PubSub pass; streams on member lists; the web-layer cleanup batch (dead code, shared helpers, stranded templates).</td></tr>
+            <tr><td><strong>P4 · ongoing</strong></td><td>Context extractions; token expiry; test-suite cost work (stop dropping the DB every run, regenerate the guardrail file list); the niggle batch.</td></tr>
+          </table>
+        </div>
+        <p>P0 and P1 are small, well-understood changes with existing in-repo templates (the Resend signature module, the release-verification pattern). Nothing on this list requires a rewrite of anything.</p>
+      </div>
+    </section>
+
+    <!-- 16 · Decisions -->
+    <section class="slide">
+      <div class="slide-inner">
+        <p class="eyebrow">Closing</p>
+        <h2>Five decisions worth making on purpose</h2>
+        <p>Cheap to decide, expensive to inherit by accident:</p>
+        <ul>
+          <li><strong>Single node or cluster?</strong> Commanded is configured node-local (two nodes would double-run every projector) while DNSCluster is wired as if clustering is coming. Write the "single-node for now" ADR or make it cluster-safe.</li>
+          <li><strong>Should every member see per-recipient delivery status and bounce reasons?</strong> They currently can. If that's the product intent, document it — it's a privacy posture, not an implementation detail.</li>
+          <li><strong>Are the invitation-profile and get-started controller flows exceptions to ADR 15, or migration debt?</strong> Either answer is fine; the ledger has carried the question for a month.</li>
+          <li><strong>PII in immutable events.</strong> Names, emails, and full message bodies live forever in the event store. A membership product will eventually need an erasure story (crypto-shredding or equivalent) — better chosen early.</li>
+          <li><strong>Delivery-details expansion state:</strong> URL-addressable per ADR 23, or documented as a transient exception. Decide once, close the thread.</li>
+        </ul>
+        <p class="muted">Full detail, evidence, and file references: <code>docs/notes/2026-07-14-architecture-review.md</code>.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <span class="counter" id="counter">1 / 16</span>
+    <span class="hint">← → arrow keys, space, or the buttons</span>
+    <span class="btns">
+      <button id="prev" aria-label="Previous slide">‹ Back</button>
+      <button id="next" aria-label="Next slide">Next ›</button>
+    </span>
+  </div>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const bar = document.getElementById('bar');
+  const counter = document.getElementById('counter');
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  let i = 0;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    slides[i].scrollTop = 0;
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    prevBtn.disabled = i === 0;
+    nextBtn.disabled = i === slides.length - 1;
+    if (location.hash !== '#' + (i + 1)) history.replaceState(null, '', '#' + (i + 1));
+  }
+
+  prevBtn.addEventListener('click', () => show(i - 1));
+  nextBtn.addEventListener('click', () => show(i + 1));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); show(i + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); show(i - 1); }
+    if (e.key === 'Home') { e.preventDefault(); show(0); }
+    if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+  });
+
+  const fromHash = parseInt(location.hash.slice(1), 10);
+  show(Number.isFinite(fromHash) ? fromHash - 1 : 0);
+</script>
