@@ -24,7 +24,7 @@ Stored in `extracted-text/` for easier grep/review:
 
 - `zeffy.md` — Zeffy was missed by the imported research briefs and is a significant free fundraising/membership/event competitor.
 - `bcmc.md` — BC Mountaineering Club's custom-built member platform; not a SaaS competitor but prior art / evidence of the problem and a source of feature requirements (trips, hut booking).
-- `kmc-thread.md` — primary-source (private) KMC email thread validating the problem and corroborating that BCMC's site is fully custom and volunteer-maintained.
+- `2026-05-31-trip-discovery-and-scheduling.md` — anonymized primary-source synthesis of a private club email thread, validating trip-discovery problems and corroborating that a comparable club's site is custom and volunteer-maintained.
 - `membee.md` — brief note on Membee, a legacy/association AMS (chambers, trade associations); adjacent to Memba, not a head-on competitor.
 - `round2-competitor-analysis/` — second-pass competitor notes from Claude/Gemini before the full gap-pass PDF.
 

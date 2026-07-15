@@ -124,10 +124,7 @@ Worth considering:
 
 ## Corroborating primary source
 
-See `kmc-thread.md` — a private KMC email thread (2026-05-29) in which a former BCMC
-exec member confirms the BCMC site is **fully custom, built ~2012, and still needs a
-volunteer team to maintain**, and in which KMC members cite the BCMC events page as
-the model they wish they had. Direct, unprompted validation of the points below.
+See [`2026-05-31-trip-discovery-and-scheduling.md`](2026-05-31-trip-discovery-and-scheduling.md) — an anonymized synthesis of a private club email thread. It reports that this comparable club's site is **fully custom, built around 2012, and still needs a volunteer team to maintain**, while members cite its events page as the model they wish they had. Direct, unprompted validation of the points below.
 
 ## Strategic implication
 
