@@ -269,7 +269,7 @@ async function assertSignedInToClub(world, personName, clubName) {
   await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
     timeout: projectionTimeoutMs(world)
   });
-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(identityLabel);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu .app-menu__who-name")).toContainText(identityLabel);
 }
 
 async function leaveWithoutEnteringName(world) {

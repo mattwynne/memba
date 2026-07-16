@@ -176,7 +176,7 @@ defmodule MembaWeb.PageControllerTest do
 
     refute html |> LazyHTML.query("#club-site-identity-menu-button") |> Enum.any?()
     refute html |> LazyHTML.query("#club-site-sign-out-form") |> Enum.any?()
-    refute html |> LazyHTML.query("#club-site-layout header .app-bar__id") |> Enum.any?()
+    refute html |> LazyHTML.query("#club-site-layout .global-bar__id") |> Enum.any?()
 
     assert html
            |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")

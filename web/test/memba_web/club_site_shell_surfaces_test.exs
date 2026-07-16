@@ -138,13 +138,13 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
 
     case Keyword.fetch(opts, :member_name) do
       {:ok, member_name} ->
-        assert_selector(document, "#club-site-identity-menu-button")
-        assert_text(document, "#club-site-identity-menu-button .app-bar__who", member_name)
+        assert_selector(document, "#club-site-global-bar #club-site-identity-menu-button")
+        assert_text(document, "#club-site-identity-menu .app-menu__who-name", member_name)
 
         if member_initials = Keyword.get(opts, :member_initials) do
           assert_text(
             document,
-            "#club-site-identity-menu-button .app-bar__avatar",
+            "#club-site-identity-menu-button .global-bar__avatar",
             member_initials
           )
         end

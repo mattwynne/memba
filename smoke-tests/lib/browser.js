@@ -77,7 +77,7 @@ async function ensureSmokeMemberSignedIn(world) {
 
   await world.page.goto(clubSiteUrl(world.config, "/"));
   await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await expect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(
+  await expect(world.page.locator("#club-site-identity-menu .app-menu__who-name")).toContainText(
     clubIdentityLabelFor(world.config.member)
   );
 }

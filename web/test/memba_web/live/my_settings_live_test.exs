@@ -54,7 +54,7 @@ defmodule MembaWeb.MySettingsLiveTest do
            )
 
     assert has_element?(view, "#my-settings-title", "Account settings")
-    assert has_element?(view, "#club-site-identity-menu-button .app-bar__who", "Alice Settings")
+    assert has_element?(view, "#club-site-identity-menu .app-menu__who-name", "Alice Settings")
 
     assert has_element?(
              view,

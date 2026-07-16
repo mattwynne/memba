@@ -322,65 +322,72 @@ defmodule MembaWeb.Layouts do
       data-surface="club-site"
       class="app-frame"
     >
+      <div id="club-site-global-bar" class="global-bar">
+        <div class="global-bar__inner">
+          <div class="global-bar__brand">
+            <.sprig variant={:solid} class="global-bar__mark" />
+            <span class="global-bar__word">Memba</span>
+          </div>
+
+          <details :if={@current_identity} class="dropdown dropdown-end global-bar__id">
+            <summary
+              id="club-site-identity-menu-button"
+              class="global-bar__me"
+              aria-controls="club-site-identity-menu"
+              aria-label="Member identity menu"
+            >
+              <span class="global-bar__avatar">
+                {club_identity_initials(@member_name, @current_identity)}
+              </span>
+            </summary>
+
+            <div
+              id="club-site-identity-menu"
+              role="menu"
+              class="dropdown-content app-menu app-menu--id"
+            >
+              <div class="app-menu__who">
+                <div class="app-menu__who-name">
+                  {club_identity_label(@member_name, @current_identity)}
+                </div>
+                <div class="app-menu__who-email">{club_identity_email(@current_identity)}</div>
+              </div>
+              <div class="app-menu__divider" role="separator" aria-orientation="horizontal" />
+              <.link
+                navigate={~p"/my/settings"}
+                id="club-site-account-settings-link"
+                role="menuitem"
+                class="app-menu__item"
+              >
+                Account settings
+              </.link>
+              <div
+                id="club-site-identity-menu-divider"
+                class="app-menu__divider"
+                role="separator"
+                aria-orientation="horizontal"
+              />
+              <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+                <button
+                  id="club-site-sign-out-button"
+                  type="submit"
+                  role="menuitem"
+                  class="app-menu__signout"
+                >
+                  Sign out
+                </button>
+              </.form>
+            </div>
+          </details>
+        </div>
+      </div>
+
       <div class="app-card">
         <header>
           <div class="app-bar">
             <div class="app-bar__brand">
               <span class="app-bar__club">{@club_name}</span>
             </div>
-
-            <nav
-              :if={@current_identity}
-              class="flex flex-wrap items-center gap-3 text-sm font-medium"
-              aria-label="Club member navigation"
-            >
-              <details class="dropdown dropdown-end app-bar__id">
-                <summary
-                  id="club-site-identity-menu-button"
-                  class="app-bar__me"
-                  aria-controls="club-site-identity-menu"
-                  aria-label="Member identity menu"
-                >
-                  <span class="app-bar__avatar">
-                    {club_identity_initials(@member_name, @current_identity)}
-                  </span>
-                  <span class="app-bar__who">
-                    {club_identity_label(@member_name, @current_identity)}
-                  </span>
-                </summary>
-
-                <div
-                  id="club-site-identity-menu"
-                  role="menu"
-                  class="dropdown-content app-menu app-menu--id"
-                >
-                  <.link
-                    navigate={~p"/my/settings"}
-                    id="club-site-account-settings-link"
-                    role="menuitem"
-                    class="app-menu__item"
-                  >
-                    Account settings
-                  </.link>
-                  <div
-                    id="club-site-identity-menu-divider"
-                    class="app-menu__divider"
-                    role="separator"
-                    aria-orientation="horizontal"
-                  />
-                  <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-                    <button
-                      id="club-site-sign-out-button"
-                      type="submit"
-                      role="menuitem"
-                      class="app-menu__signout"
-                    >
-                      Sign out
-                    </button>
-                  </.form>
-                </div>
-              </details>
-            </nav>
           </div>
         </header>
 
@@ -426,6 +433,9 @@ defmodule MembaWeb.Layouts do
     |> club_identity_label(identity)
     |> initials()
   end
+
+  defp club_identity_email(%{email: email}) when is_binary(email), do: email
+  defp club_identity_email(_identity), do: nil
 
   defp email_local_part(email) do
     email

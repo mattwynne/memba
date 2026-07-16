@@ -367,7 +367,7 @@ async function assertSignedInOnClubPage(world, personName) {
 
 async function assertClubIdentityVisible(world, label) {
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
-  await playwrightExpect(world.page.locator("#club-site-identity-menu-button .app-bar__who")).toContainText(label);
+  await playwrightExpect(world.page.locator("#club-site-identity-menu .app-menu__who-name")).toContainText(label);
 }
 
 function clubIdentityFallbackLabelFor(email) {

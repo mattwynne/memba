@@ -146,16 +146,28 @@ defmodule MembaWeb.LayoutsTest do
 
     refute_selector(html, "#club-site-layout header .app-bar__club[href]")
     refute_selector(html, "#club-site-layout header a[href='/']")
-    assert_selector(html, "#club-site-layout header .app-bar .dropdown.dropdown-end.app-bar__id")
 
     assert_selector(
       html,
-      "#club-site-layout header details.app-bar__id > summary#club-site-identity-menu-button.app-bar__me[aria-controls='club-site-identity-menu'][aria-label='Member identity menu']"
+      "#club-site-layout > #club-site-global-bar.global-bar > .global-bar__inner"
     )
 
-    assert_text(html, "#club-site-layout header .app-bar__avatar", "A")
-    assert_text(html, "#club-site-layout header .app-bar__who", "alice")
-    refute_text(html, "#club-site-layout header .app-bar__who", "alice@example.com")
+    assert_text(html, "#club-site-global-bar .global-bar__brand .global-bar__word", "Memba")
+    assert_selector(html, "#club-site-global-bar .global-bar__brand svg.global-bar__mark")
+
+    assert_selector(
+      html,
+      "#club-site-global-bar .global-bar__inner > .dropdown.dropdown-end.global-bar__id"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-global-bar details.global-bar__id > summary#club-site-identity-menu-button.global-bar__me[aria-controls='club-site-identity-menu'][aria-label='Member identity menu']"
+    )
+
+    assert_text(html, "#club-site-global-bar .global-bar__avatar", "A")
+    refute_selector(html, "#club-site-layout header .dropdown")
+    refute_selector(html, "#club-site-identity-menu-button .app-bar__who")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_selector(html, "#club-site-footer.app-foot")
     assert_text(html, "#club-site-footer", "Powered by Memba")
@@ -167,12 +179,31 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
+    )
+
+    assert_text(
+      html,
+      "#club-site-identity-menu .app-menu__who .app-menu__who-name",
+      "alice"
+    )
+
+    assert_text(
+      html,
+      "#club-site-identity-menu .app-menu__who .app-menu__who-email",
+      "alice@example.com"
     )
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
+      "#club-site-identity-menu .app-menu__who + " <>
+        "div.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "a#club-site-account-settings-link"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
         "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']"
     )
 
@@ -180,7 +211,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id " <>
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
         "a#club-site-account-settings-link + " <>
         "div#club-site-identity-menu-divider.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
         "form#club-site-sign-out-form"
@@ -188,18 +219,18 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form[action='/auth'][method='post']"
     )
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_method'][value='delete']"
     )
 
     assert [csrf_token] =
              attributes(
                html,
-               "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_csrf_token'][type='hidden']",
+               "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id form#club-site-sign-out-form input[name='_csrf_token'][type='hidden']",
                "value"
              )
 
@@ -207,7 +238,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-layout header .app-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
     )
 
     assert_text(html, "#club-site-sign-out-button", "Sign out")
@@ -253,12 +284,12 @@ defmodule MembaWeb.LayoutsTest do
       "Riverside Tennis Club"
     )
 
-    refute_selector(html, "#club-site-layout header .app-bar .app-bar__id")
-    refute_selector(html, "#club-site-layout header #club-site-identity-menu-button")
-    refute_selector(html, "#club-site-layout header .app-bar__avatar")
-    refute_selector(html, "#club-site-layout header .app-bar__who")
-    refute_selector(html, "#club-site-layout header .app-menu")
-    refute_selector(html, "#club-site-layout header #club-site-sign-out-form")
+    assert_text(html, "#club-site-global-bar .global-bar__word", "Memba")
+    refute_selector(html, "#club-site-global-bar .global-bar__id")
+    refute_selector(html, "#club-site-layout #club-site-identity-menu-button")
+    refute_selector(html, "#club-site-layout .global-bar__avatar")
+    refute_selector(html, "#club-site-layout .app-menu")
+    refute_selector(html, "#club-site-layout #club-site-sign-out-form")
     refute_text(html, "#club-site-layout header", "Signed in as")
     assert_selector(html, "#public-club-site-layout-slot")
   end
@@ -282,10 +313,17 @@ defmodule MembaWeb.LayoutsTest do
       </Layouts.club_site>
       """)
 
-    assert_selector(html, "#club-site-layout header .app-bar .app-bar__id")
-    assert_text(html, "#club-site-layout header .app-bar__avatar", "ÉD")
-    assert_text(html, "#club-site-layout header .app-bar__who", "Élodie Durand")
-    refute_text(html, "#club-site-layout header .app-bar__who", "élodie.durand")
+    assert_selector(html, "#club-site-global-bar .global-bar__id")
+    assert_text(html, "#club-site-global-bar .global-bar__avatar", "ÉD")
+    assert_text(html, "#club-site-identity-menu .app-menu__who-name", "Élodie Durand")
+    refute_text(html, "#club-site-identity-menu .app-menu__who-name", "élodie.durand")
+
+    assert_text(
+      html,
+      "#club-site-identity-menu .app-menu__who-email",
+      "élodie.durand@example.com"
+    )
+
     assert_selector(html, "#club-site-layout-slot-with-member-name")
   end
 
@@ -323,8 +361,15 @@ defmodule MembaWeb.LayoutsTest do
 
     for html <- [nil_name_html, blank_name_html] do
       assert_selector(html, "#club-site-identity-menu-button")
-      assert_text(html, "#club-site-layout header .app-bar__avatar", "AS")
-      assert_text(html, "#club-site-layout header .app-bar__who", "alice.smith")
+      assert_text(html, "#club-site-global-bar .global-bar__avatar", "AS")
+      assert_text(html, "#club-site-identity-menu .app-menu__who-name", "alice.smith")
+
+      assert_text(
+        html,
+        "#club-site-identity-menu .app-menu__who-email",
+        "alice.smith@example.com"
+      )
+
       assert_selector(html, "#club-site-sign-out-button")
     end
   end
