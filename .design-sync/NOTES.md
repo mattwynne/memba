@@ -1,5 +1,39 @@
 # Design-sync notes — Memba
 
+## 2026-07-16 pull (global app bar + identity menu with name/email)
+
+The cloud design added an app-wide **global bar** above the club card (dark ink strip:
+sprig mark + "Memba" wordmark left, avatar right) and moved the signed-in identity menu
+there. The menu now opens with an `.app-menu__who` block (member name + primary email);
+the club `.app-bar` carries only the club name. The exploration behind it is
+`explorations/global-app-bar.html` (cloud-only, read on demand) — option B, "global bar
+scrolls away with the page", is the chosen treatment.
+
+Pulled **down** (cloud → local):
+- `templates/club-home.html`, `templates/account-settings.html`, `templates/new-message.html`,
+  `templates/delivery-details.html`, `templates/member-conversation.html` — the five
+  member-app-shell templates; each gained the `.global-bar` + who-block menu markup.
+  (Staleness was detected by grepping local templates for `global-bar`: only these five
+  use the `.app-frame`/`.app-bar` shell, so only they changed in this design round.)
+- `.global-bar*` and `.app-menu__who*` rules were ported into repo-root `styles.css` in
+  the same round (commit `cebaeb9af`, which also moved the app's identity menu markup in
+  `Layouts.club_site/1`). Note two deliberate local deviations from cloud `memba.css`:
+  the app keeps an explicit `.app-menu__divider` before Sign out (cloud relies on
+  `.app-menu__signout`'s own border-top), and keeps its existing flat sage `.app-frame`
+  (no photo backdrop).
+
+Verified in sync, not rewritten: `wireframes/README.md`, `wireframes/mobile.css`
+(head/tail/length match cloud). Not re-pulled this pass (unchanged by this design round;
+diff on demand if drift is suspected): non-shell templates (marketing-homepage,
+staff-console, onboarding-request-flow, admin-request-review, profile-completion,
+invite-a-member, check-email-delivery-progress, conversation-stop-following,
+member-empty-first-run-states), `emails/**`, `components/badges/**`,
+`wireframes/mobile-*.html`.
+
+Cloud-side detail not mirrored: the templates' identity menu also shows an
+`.app-menu__status` row ("Active member · since Jan 2022") on some screens — the app
+does not implement that yet.
+
 ## 2026-07-14 pull + drift-check fix (club-home section tabs: pill → underline)
 
 **Problem found:** the production club-home section tabs (`.section-tabs` / `.section-tab` in
