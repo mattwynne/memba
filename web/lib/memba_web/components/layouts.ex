@@ -245,13 +245,9 @@ defmodule MembaWeb.Layouts do
                 </div>
               </div>
               <.form for={%{}} action={~p"/auth"} method="delete" id="admin-sign-out-form">
-                <button
-                  id="admin-sign-out-button"
-                  type="submit"
-                  class="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white"
-                >
+                <.button id="admin-sign-out-button" type="submit" variant="ghost">
                   Sign out
-                </button>
+                </.button>
               </.form>
             </div>
           </div>
@@ -368,14 +364,14 @@ defmodule MembaWeb.Layouts do
                 aria-orientation="horizontal"
               />
               <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
-                <button
+                <.button
                   id="club-site-sign-out-button"
                   type="submit"
                   role="menuitem"
-                  class="app-menu__signout"
+                  variant="ghost"
                 >
                   Sign out
-                </button>
+                </.button>
               </.form>
             </div>
           </details>

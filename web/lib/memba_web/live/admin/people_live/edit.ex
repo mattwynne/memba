@@ -256,28 +256,29 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
                       required
                     />
 
-                    <button
-                      :if={length(@email_rows) > 1}
-                      id={"remove-person-email-address-#{row.index}"}
-                      type="button"
-                      phx-click="remove_email_address"
-                      phx-value-index={row.index}
-                      aria-label={"Remove email address #{row.index}"}
-                      class="mt-7 rounded-full border border-red-200 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
+                    <div :if={length(@email_rows) > 1} class="mt-7">
+                      <.button
+                        id={"remove-person-email-address-#{row.index}"}
+                        type="button"
+                        phx-click="remove_email_address"
+                        phx-value-index={row.index}
+                        aria-label={"Remove email address #{row.index}"}
+                        variant="danger"
+                      >
+                        Remove
+                      </.button>
+                    </div>
                   </div>
 
-                  <button
+                  <.button
                     id="add-person-email-address"
                     type="button"
                     phx-click="add_email_address"
                     aria-label="Add email address"
-                    class="rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
+                    variant="secondary"
                   >
                     Add email address
-                  </button>
+                  </.button>
                 </div>
 
                 <div class="flex flex-col gap-3 border-t border-[#e6e3dc] pt-5 sm:flex-row sm:items-center">
@@ -285,17 +286,16 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
                     id="save-person-button"
                     type="submit"
                     aria-label="Save person"
-                    class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
                   >
                     Save person
                   </.button>
-                  <.link
+                  <.button
                     id="cancel-person-link"
                     navigate={~p"/admin/clubs/#{@club_id}"}
-                    class="inline-flex items-center justify-center rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
+                    variant="secondary"
                   >
                     Cancel
-                  </.link>
+                  </.button>
                 </div>
               </.form>
             </section>

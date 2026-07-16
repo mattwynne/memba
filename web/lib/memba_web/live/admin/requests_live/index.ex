@@ -264,21 +264,21 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                 Internal notes are stored for staff audit only and are not sent to the requester.
               </p>
               <div class="flex flex-wrap justify-end gap-2">
-                <button
+                <.button
                   id={"cancel-reject-request-#{@rejecting_request.request_id}"}
                   type="button"
                   phx-click="cancel_rejection"
-                  class="inline-flex items-center rounded-full border border-[#d6d2c8] px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#4b5a55] hover:bg-[#f8f5ee]"
+                  variant="secondary"
                 >
                   Cancel
-                </button>
-                <button
+                </.button>
+                <.button
                   id={"confirm-reject-request-#{@rejecting_request.request_id}"}
                   type="submit"
-                  class="inline-flex items-center rounded-full border border-[#7a5416] bg-[#7a5416] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-[#5f3f10]"
+                  variant="danger"
                 >
                   Reject request
-                </button>
+                </.button>
               </div>
             </.form>
           </div>
@@ -362,22 +362,21 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                 </p>
               </div>
               <div class="flex flex-wrap justify-end gap-2">
-                <button
+                <.button
                   id={"cancel-convert-request-#{@converting_request.request_id}"}
                   type="button"
                   phx-click="cancel_conversion"
-                  class="inline-flex items-center rounded-full border border-[#d6d2c8] px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#4b5a55] hover:bg-[#f8f5ee]"
+                  variant="secondary"
                 >
                   Cancel
-                </button>
-                <button
+                </.button>
+                <.button
                   id={"confirm-convert-request-#{@converting_request.request_id}"}
                   type="submit"
                   disabled={not @conversion_slug_feedback.valid}
-                  class="inline-flex items-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Convert request
-                </button>
+                </.button>
               </div>
             </.form>
           </div>
@@ -392,13 +391,15 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
           <p class="mt-2 text-sm leading-6">
             It may have already been converted or rejected, or the link may be wrong.
           </p>
-          <.link
-            id="inactive-request-back-link"
-            patch={~p"/admin/requests"}
-            class="mt-4 inline-flex items-center rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition duration-200 hover:-translate-y-0.5"
-          >
-            Back to active requests
-          </.link>
+          <div class="mt-4">
+            <.button
+              id="inactive-request-back-link"
+              patch={~p"/admin/requests"}
+              variant="secondary"
+            >
+              Back to active requests
+            </.button>
+          </div>
         </section>
 
         <.admin_table_card
@@ -475,7 +476,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                   </td>
                   <td class="px-4 py-3.5">
                     <div data-testid="admin-request-actions" class="flex flex-wrap gap-2">
-                      <button
+                      <.button
                         id={"reject-request-#{request.request_id}"}
                         type="button"
                         phx-click="start_rejection"
@@ -483,22 +484,20 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                         data-admin-request-action="reject"
                         data-request-id={request.request_id}
                         aria-label={"Reject request for #{request.requested_club_name}"}
-                        class="inline-flex items-center rounded-full border border-[#d6d2c8] px-3 py-1.5 text-xs font-semibold text-[#7a5416] transition duration-200 hover:-translate-y-0.5 hover:border-[#7a5416] hover:bg-[#f3ecd8]"
+                        variant="danger"
                       >
                         Reject
-                      </button>
-                      <.link
+                      </.button>
+                      <.button
                         id={"convert-request-#{request.request_id}"}
                         patch={~p"/admin/requests/#{request.request_id}"}
-                        type="button"
                         role="button"
                         data-admin-request-action="convert"
                         data-request-id={request.request_id}
                         aria-label={"Convert request for #{request.requested_club_name}"}
-                        class="inline-flex items-center rounded-full border border-[#1f4842] bg-[#1f4842] px-3 py-1.5 text-xs font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c]"
                       >
                         Convert
-                      </.link>
+                      </.button>
                     </div>
                   </td>
                 </tr>

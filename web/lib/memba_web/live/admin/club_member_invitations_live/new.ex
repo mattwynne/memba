@@ -148,7 +148,6 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
                   id="send-club-member-invitation-button"
                   type="submit"
                   aria-label="Send member invitation"
-                  class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
                 >
                   Send invitation
                 </.button>

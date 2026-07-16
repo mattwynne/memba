@@ -37,7 +37,6 @@ defmodule MembaWeb.PublicClubPageLive do
                   id="public-club-page-sign-in-link"
                   href={~p"/auth"}
                   variant="primary"
-                  size="lg"
                 >
                   Email me a sign-in link
                 </.button>
@@ -46,7 +45,6 @@ defmodule MembaWeb.PublicClubPageLive do
                   href={ClubSite.root_url()}
                   aria-label="Visit Memba home"
                   variant="secondary"
-                  size="lg"
                 >
                   Visit Memba home
                 </.button>

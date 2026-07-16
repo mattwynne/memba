@@ -124,8 +124,7 @@ defmodule MembaWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :any, default: nil
+  attr :rest, :global, include: ~w(href navigate patch method download name value type disabled)
   attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: nil, values: [nil, "sm", "lg"]
   attr :disabled, :boolean, default: false
@@ -149,28 +148,61 @@ defmodule MembaWeb.CoreComponents do
       |> assign_new(:disabled, fn -> false end)
 
     assigns =
-      assign(assigns, :class, [
+      assign(assigns, :button_class, [
         "btn",
         Map.fetch!(variants, assigns.variant),
-        Map.fetch!(sizes, assigns.size),
-        assigns.class
+        Map.fetch!(sizes, assigns.size)
       ])
 
     rest = assigns.rest
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
+      <.link class={@button_class} {@rest}>
         {render_slot(@inner_block)}
       </.link>
       """
     else
       ~H"""
-      <button class={@class} disabled={@disabled} {@rest}>
+      <button class={@button_class} disabled={@disabled} {@rest}>
         {render_slot(@inner_block)}
       </button>
       """
     end
+  end
+
+  attr :id, :string, required: true
+  attr :button_id, :string, default: nil
+  attr :content_id, :string, default: nil
+  attr :label, :string, default: "More options"
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def context_kebab_menu(assigns) do
+    assigns =
+      assigns
+      |> assign(:button_id, assigns.button_id || "#{assigns.id}-button")
+      |> assign(:content_id, assigns.content_id || "#{assigns.id}-content")
+
+    ~H"""
+    <div id={@id} class="context-menu dropdown dropdown-end" {@rest}>
+      <button
+        id={@button_id}
+        type="button"
+        tabindex="0"
+        role="button"
+        aria-haspopup="menu"
+        aria-controls={@content_id}
+        aria-label={@label}
+        class="context-menu__button"
+      >
+        <.icon name="hero-ellipsis-vertical" />
+      </button>
+      <div id={@content_id} tabindex="0" role="menu" class="dropdown-content context-menu__content">
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
   end
 
   defp size_w(:sm), do: "w-7"

@@ -37,39 +37,27 @@ defmodule MembaWeb.PageHTML do
           >
             {format_message_time(@entry.message.inserted_at)}
           </time>
-          <div
+          <.context_kebab_menu
             id={"member-conversation-entry-menu-#{@entry.message.message_id}"}
+            button_id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
             data-testid="member-conversation-entry-menu"
-            class="message__menu dropdown dropdown-end"
+            label="Message options"
           >
-            <button
-              id={"member-conversation-entry-menu-button-#{@entry.message.message_id}"}
-              type="button"
-              tabindex="0"
-              role="button"
-              aria-haspopup="menu"
-              aria-label="Message options"
-              class="message__kebab"
+            <.link
+              id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
+              data-testid="member-conversation-entry-delivery-link"
+              href={
+                member_message_delivery_path(
+                  @entry.message.message_id,
+                  @selected_club,
+                  @club_id_source
+                )
+              }
+              role="menuitem"
             >
-              <.icon name="hero-ellipsis-vertical" />
-            </button>
-            <div tabindex="0" role="menu" class="dropdown-content message-menu">
-              <.link
-                id={"member-conversation-entry-delivery-link-#{@entry.message.message_id}"}
-                data-testid="member-conversation-entry-delivery-link"
-                href={
-                  member_message_delivery_path(
-                    @entry.message.message_id,
-                    @selected_club,
-                    @club_id_source
-                  )
-                }
-                role="menuitem"
-              >
-                <.icon name="hero-envelope" /> Delivery details
-              </.link>
-            </div>
-          </div>
+              <.icon name="hero-envelope" /> Delivery details
+            </.link>
+          </.context_kebab_menu>
         </div>
         <p id={conversation_entry_body_id(@entry)} class="message__text">
           {@entry.message.body}

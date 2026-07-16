@@ -218,7 +218,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                 type="submit"
                 aria-label="Save club"
                 disabled={not @club_slug_feedback.valid}
-                class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Save club
               </.button>
@@ -477,17 +476,17 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                         </p>
                       </td>
                       <td class="px-4 py-4">
-                        <button
+                        <.button
                           id={"remove-member-button-#{member.membership_id}"}
                           type="button"
                           data-testid="remove-member-button"
                           phx-click="remove_member"
                           phx-value-membership_id={member.membership_id}
                           aria-label={"Remove #{member.name} from #{@club.name}"}
-                          class="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
+                          variant="danger"
                         >
                           Remove
-                        </button>
+                        </.button>
                       </td>
                     </tr>
                   </tbody>

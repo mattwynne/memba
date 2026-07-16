@@ -113,7 +113,6 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
               id="create-club-button"
               type="submit"
               aria-label="Create club"
-              class="inline-flex h-11 items-center justify-center rounded-lg border border-[#1f4842] bg-[#1f4842] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
             >
               Create club
             </.button>

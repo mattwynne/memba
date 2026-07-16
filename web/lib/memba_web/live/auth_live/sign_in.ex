@@ -178,7 +178,6 @@ defmodule MembaWeb.AuthLive.SignIn do
             id="request-sign-in-link-button"
             type="submit"
             variant="primary"
-            class="mt-4 btn btn-primary"
           >
             Email me a sign-in link
           </.button>

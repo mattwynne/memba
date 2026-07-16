@@ -197,7 +197,6 @@ defmodule MembaWeb.MemberInvitationLive.New do
                 type="submit"
                 aria-label="Send member invitation"
                 variant="primary"
-                size="lg"
               >
                 Send invitation
               </.button>
@@ -207,7 +206,6 @@ defmodule MembaWeb.MemberInvitationLive.New do
                 href={club_home_path(@selected_club, @route_params)}
                 aria-label="Cancel member invitation"
                 variant="secondary"
-                size="lg"
               >
                 Cancel
               </.button>

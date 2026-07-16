@@ -93,7 +93,6 @@ defmodule MembaWeb.AuthLive.Onboard do
             id="finish-staff-onboarding-button"
             type="submit"
             variant="primary"
-            class="mt-4 btn btn-primary"
           >
             Continue to Memba staff
           </.button>

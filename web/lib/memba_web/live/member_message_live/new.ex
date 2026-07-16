@@ -153,7 +153,6 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-compose-see-receipts-link"
               href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
               variant="primary"
-              size="lg"
             >
               <.icon name="hero-eye" class="size-4" /> Check delivery
             </.button>
@@ -161,7 +160,6 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-compose-send-another-link"
               href={compose_path(@selected_club, @route_params)}
               variant="secondary"
-              size="lg"
             >
               Send another message
             </.button>
@@ -169,7 +167,6 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-compose-back-home-link"
               href={club_home_path(@selected_club, @route_params)}
               variant="ghost"
-              size="lg"
             >
               Back to club home
             </.button>
@@ -206,7 +203,6 @@ defmodule MembaWeb.MemberMessageLive.New do
               type="button"
               phx-click="try_again"
               variant="primary"
-              size="lg"
             >
               <.icon name="hero-arrow-path" class="size-4" /> Try again
             </.button>
@@ -214,7 +210,6 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-compose-back-home-after-error-link"
               href={club_home_path(@selected_club, @route_params)}
               variant="secondary"
-              size="lg"
             >
               Back to club home
             </.button>
@@ -350,7 +345,6 @@ defmodule MembaWeb.MemberMessageLive.New do
                 id="member-message-send-button"
                 type="submit"
                 variant="primary"
-                size="lg"
               >
                 <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
               </.button>
@@ -358,7 +352,6 @@ defmodule MembaWeb.MemberMessageLive.New do
                 id="member-message-cancel-link"
                 href={club_home_path(@selected_club, @route_params)}
                 variant="secondary"
-                size="lg"
               >
                 Cancel
               </.button>

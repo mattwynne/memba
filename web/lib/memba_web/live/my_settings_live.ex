@@ -313,35 +313,35 @@ defmodule MembaWeb.MySettingsLive do
                           :if={!email_address.primary?}
                           class="email-row__actions-cell"
                         >
-                          <button
+                          <.button
                             :if={verified_email_address?(email_address)}
                             id={"my-settings-make-primary-#{email_dom_id(email_address)}"}
-                            class="btn btn-soft btn-sm"
                             type="button"
                             phx-click="make_primary"
                             phx-value-email={email_address.email}
+                            variant="secondary"
                           >
                             Make primary
-                          </button>
-                          <button
+                          </.button>
+                          <.button
                             :if={!verified_email_address?(email_address)}
                             id={"my-settings-resend-verification-#{email_dom_id(email_address)}"}
-                            class="btn btn-soft btn-sm"
                             type="button"
                             phx-click="resend_verification"
                             phx-value-email={email_address.email}
+                            variant="secondary"
                           >
                             Resend verification
-                          </button>
-                          <button
+                          </.button>
+                          <.button
                             id={"my-settings-remove-email-#{email_dom_id(email_address)}"}
-                            class="btn btn-ghost btn-sm"
                             type="button"
                             phx-click="remove_email"
                             phx-value-email={email_address.email}
+                            variant="ghost"
                           >
                             Remove
-                          </button>
+                          </.button>
                         </div>
                       </div>
                     </div>
@@ -361,13 +361,11 @@ defmodule MembaWeb.MySettingsLive do
                           placeholder="dana@example.com"
                         />
                       </div>
-                      <button
-                        id="my-settings-add-email-button"
-                        class="btn btn-primary btn-sm mb-1"
-                        type="submit"
-                      >
-                        Add email address
-                      </button>
+                      <div class="mb-1">
+                        <.button id="my-settings-add-email-button" type="submit">
+                          Add email address
+                        </.button>
+                      </div>
                     </.form>
 
                     <p
