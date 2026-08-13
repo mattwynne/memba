@@ -219,3 +219,46 @@ The failure also surfaced only a generic `Member message send failed` server log
 - Add richer diagnostics around member-message send failures in acceptance attachments: relevant server exception, message/event IDs, current URL, compose form state, and recent read-model/projection status.
 - Replace the compose-success browser-only wait with a read-model change, projection barrier, or explicit support signal that proves the send command and projections have reached the state the UI is expected to show.
 - Add a documented one-scenario rerun command that avoids Cucumber's configured-path merge surprise.
+
+## Additional observation: 2026-08-13
+
+### Context
+
+While restoring a green baseline before iteration 054, `PATH="$PWD/bin:$PATH" dev check` reached browser acceptance after its ExUnit stage passed.
+
+### What happened
+
+The first member-message scenario, `Alice sends a club message`, failed once while waiting for the compose success state:
+
+```text
+Projection timing timeout: timed out waiting for projected browser UI:
+member compose success for "Trip planning night".
+Locator: #member-message-compose[data-compose-state="sent"]
+```
+
+The Phoenix log tail again contained only:
+
+```text
+[error] Member message send failed
+```
+
+A later acceptance run passed the same scenario without a product-code change. That later run was externally interrupted before the entire suite completed; its Phoenix process remained alive and held connections to `memba_test`, so the next acceptance lifecycle could not drop the test database until the orphaned process was stopped.
+
+### Impact
+
+This is another recurrence of the member-message projection/error-reporting flake. It prevented `dev check` from being a reliable release signal and made a subsequent retry fail for an unrelated database-lifecycle reason.
+
+### What allowed it to happen
+
+The failure report still does not preserve the server-side reason for `Member message send failed`, nor the rendered compose state when the wait expires. Cleanup also does not reliably reap the acceptance server when the parent quality-gate command is externally terminated.
+
+### Observations
+
+- This is not evidence that the button refactor caused the flicker: its deterministic UI regressions had already been repaired and focused tests passed.
+- The failure shape is the same member-message compose-success wait recorded on 2026-06-21.
+- The scenario passed on retry without a source change, supporting the existing classification as an intermittent acceptance/harness or timing problem rather than a reproducible product regression.
+
+### Possible prevention ideas
+
+- Preserve the underlying exception/cause, the compose region HTML, and the current projection/read-model state with a projection-wait timeout.
+- Make the acceptance lifecycle own a process group and reap it on interruption, or provide a reliable trap-based cleanup path.
