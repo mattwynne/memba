@@ -491,6 +491,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                       <.button
                         id={"convert-request-#{request.request_id}"}
                         patch={~p"/admin/requests/#{request.request_id}"}
+                        type="button"
                         role="button"
                         data-admin-request-action="convert"
                         data-request-id={request.request_id}

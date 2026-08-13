@@ -320,6 +320,7 @@ defmodule MembaWeb.MySettingsLive do
                             phx-click="make_primary"
                             phx-value-email={email_address.email}
                             variant="secondary"
+                            size="sm"
                           >
                             Make primary
                           </.button>
@@ -330,6 +331,7 @@ defmodule MembaWeb.MySettingsLive do
                             phx-click="resend_verification"
                             phx-value-email={email_address.email}
                             variant="secondary"
+                            size="sm"
                           >
                             Resend verification
                           </.button>
@@ -339,6 +341,7 @@ defmodule MembaWeb.MySettingsLive do
                             phx-click="remove_email"
                             phx-value-email={email_address.email}
                             variant="ghost"
+                            size="sm"
                           >
                             Remove
                           </.button>
@@ -362,7 +365,7 @@ defmodule MembaWeb.MySettingsLive do
                         />
                       </div>
                       <div class="mb-1">
-                        <.button id="my-settings-add-email-button" type="submit">
+                        <.button id="my-settings-add-email-button" type="submit" size="sm">
                           Add email address
                         </.button>
                       </div>

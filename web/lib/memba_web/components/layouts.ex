@@ -369,6 +369,7 @@ defmodule MembaWeb.Layouts do
                   type="submit"
                   role="menuitem"
                   variant="ghost"
+                  class="app-menu__signout"
                 >
                   Sign out
                 </.button>

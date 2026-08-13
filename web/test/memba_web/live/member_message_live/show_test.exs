@@ -523,15 +523,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "#member-conversation-entry-#{reply.message_id}.message " <>
-               "#member-conversation-entry-menu-#{reply.message_id}.message__menu " <>
-               "#member-conversation-entry-menu-button-#{reply.message_id}.message__kebab"
+               "#member-conversation-entry-menu-#{reply.message_id}.context-menu " <>
+               "#member-conversation-entry-menu-button-#{reply.message_id}.context-menu__button"
            )
 
     assert has_element?(
              view,
              "#member-conversation-entry-#{reply.message_id}.message " <>
-               "#member-conversation-entry-menu-#{reply.message_id}.message__menu " <>
-               ".message-menu"
+               "#member-conversation-entry-menu-#{reply.message_id}.context-menu " <>
+               ".context-menu__content"
            )
 
     assert has_element?(
@@ -817,14 +817,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       assert has_element?(
                view,
                "#member-conversation-entry-#{entry_message.message_id} " <>
-                 "#member-conversation-entry-menu-#{entry_message.message_id}.message__menu"
+                 "#member-conversation-entry-menu-#{entry_message.message_id}.context-menu"
              )
 
       assert has_element?(
                view,
                "#member-conversation-entry-#{entry_message.message_id} " <>
                  "#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
-                 ".message__kebab[aria-label='Message options']"
+                 ".context-menu__button[aria-label='Message options']"
              )
 
       assert has_element?(
