@@ -64,7 +64,7 @@ green than before.
 | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |
 | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
 | 054 | 2026-08-13 | validated | Members change their own name | [plan](054-member-name-editing/plan.md) |
-| 055 | 2026-08-13 | draft | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |
+| 055 | 2026-08-13 | validated | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |
 
 Status notes:
 

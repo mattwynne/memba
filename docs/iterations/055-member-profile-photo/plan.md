@@ -1,7 +1,7 @@
 # Members set their own profile photo
 
 Date: 2026-08-13
-Status: draft
+Status: validated
 
 ## Goal
 
