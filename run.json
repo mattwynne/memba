@@ -567,7 +567,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-08-13T15:28:15.783045521Z",
-  "last_event_at": "2026-08-13T15:31:16.817151149Z",
+  "last_event_at": "2026-08-13T15:31:20.553456996Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1593,9 +1593,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 132,
       "checkpoint": {
-        "timestamp": "2026-08-13T15:31:16.820212804Z",
+        "timestamp": "2026-08-13T15:31:20.553252198Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -1608,61 +1608,104 @@
         ],
         "node_retries": {},
         "context_values": {
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.retry_count.publish_ready": 0,
-          "current_node": "publish_ready",
-          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-Blocking Improvements\n\n1. **Acceptance criteria could explicitly mention the 100-character limit validation in the LiveView tests section** (line 237-238). While the acceptance criteria list the requirement at line 156 and the implementation plan mentions the test at line 201, the validation plan's LiveView tests sub-list (lines 231-237) omits the over-length error case. This is inconsistency rather than omission—the test is clearly planned at line 201.\n\n2. **The \"too-long name\" acceptance scenario is not explicitly listed in the Acceptance Scenarios section** (lines 88-99). The section lists scenarios for correcting a name, cross-club visibility, multi-club following, and blank rejection, but doesn't mention the 100-character limit scenario. However, the feature file is marked `@todo-domain @todo-ui` and implementation is expected to add step definitions as needed, so this may be intentionally left to implementation discretion.\n\n---\n\n## Smallest Viable Iteration\n\n**This iteration is already minimal.** It focuses on exactly one capability—self-service name editing—with tightly defined validation rules, no new profile fields, and explicit out-of-scope boundaries. The only theoretical reduction would be deferring the \"new name shows everywhere\" validation (lines 159-161), but that would make the iteration unverifiable and break the stated goal of members seeing their corrected name across clubs.\n\nThe iteration cannot be smaller without becoming incomplete or unverifiable.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Answers to Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated:** Yes. \"A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.\" (line 8)\n- **User/business outcome, not just tasks:** Yes. Lines 10-11 state the outcome: \"a member who was added or invited under a wrong, partial, or outdated name can fix it themselves, without asking a Membership Admin or Memba staff.\"\n- **Beneficiary/actor clear:** Yes. The member is the actor; clubs seeing the correct name is the benefit.\n\n### 2. Scope Focus ✅\n\n- **Coherent outcome:** Yes. One feature: self-service name editing.\n- **Minimal:** Yes. The iteration explicitly excludes photo editing (iteration 055), per-club names, other profile fields, admin renaming, club renaming, notifications, name history, and rate limiting (lines 56-68).\n- **Boundaries clear:** Yes. Both in-scope (lines 43-54) and out-of-scope (lines 56-68) lists are concrete and unambiguous.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Concrete, clear, complete, testable:** Yes. Lines 148-166 enumerate 12 specific acceptance criteria covering happy path (save valid name), edge cases (blank, whitespace, over-length), error states (inline field errors), permissions (member edits own name), data changes (name updates, other fields untouched), and cross-club visibility.\n- **Happy paths, edge cases, permissions, errors, state changes:** Covered. Includes edit/cancel/save flows, validation errors, cross-club propagation, live refresh, and immutability of other Person state.\n- **Iteration type classified:** Yes. \"Behaviour-facing\" (line 71), with clear rationale (lines 73-76).\n- **BDD decision and feature file naming:** Yes. Lines 78-103 state \"Required,\" name the new feature file `acceptance-tests/features/member_profile.feature`, list four scenarios with tags `@iteration-054 @todo-domain @todo-ui`, and explain the tagging strategy and runner exclusion.\n- **Business decisions unresolved:** None. Line 168: \"None known.\" Lines 172-177 document three decisions made during planning (one name per person, no notification, no email rewriting).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Clear, ordered, specific:** Yes. Lines 179-204 provide 12 sequenced steps from inspection through `dev check`.\n- **Files, modules, migrations, tests, integration points named:** Yes. Mentions `RenamePerson` command, `PersonRenamed` event, `Memba.Membership`, `MembaWeb.MySettingsLive`, Person aggregate/projector, `Memba.ReadModelChanges` topic, domain tests, LiveView tests, acceptance scenarios, and specific prior work to reference (`add_person_email_address.ex`, ADRs 0015, 0021, 0023).\n- **Data model, API, UI, workflow changes clear:** Yes. Command/event pattern (lines 182-183), aggregate validation (line 186), read-model projection (lines 189-191), LiveView inline form states (lines 196-197), subscription refresh (lines 198-199), and design template reference (lines 115-146).\n- **Technical decisions unresolved:** One open decision documented explicitly (lines 206-213): whether read models denormalize the name. The plan acknowledges this as the \"main unknown,\" assigns investigation to step 1, and describes preferred resolution strategy (resolve at read time) without prematurely committing to it. This is **properly flagged uncertainty**, not a blocking gap—the plan includes the inspection step needed to resolve it and acknowledges the size impact if denormalization is found.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after:** Lines 215-219: members own their identity and can correct their name; the domain has an explicit `PersonRenamed` event for future use.\n- **How we prove success:** Lines 221-247 detail `dev check`, domain tests (6 cases), LiveView tests (6 cases), acceptance tests (4 scenarios), and 6-step manual demo with specific surfaces to verify.\n- **Stop condition:** Clear. The iteration is done when `dev check` passes, the 4 acceptance scenarios run without `@todo` tags, and the manual demo succeeds.\n\n---\n\n## Validation Plan\n\nThe plan's own validation section (lines 221-247) is comprehensive and sufficient:\n\n1. **Automated verification:**\n   - `dev check` on the exact committed state.\n   - Domain/context tests for aggregate behavior, validation rules, projector updates, event emission, and state immutability.\n   - LiveView tests for render, edit flow, cancel, save, error rendering, and live refresh.\n   - Acceptance tests: 4 scenarios in `member_profile.feature` with `@iteration-054` tags, `@todo` tags removed after implementation.\n\n2. **Manual verification:**\n   - Sign in, open Profile tab, edit and save name.\n   - Verify new name in avatar menu, member list, conversation author.\n   - Test blank-name rejection and inline error display.\n\n3. **Exit criteria:**\n   - All tests pass (unit, LiveView, acceptance).\n   - `dev check` clean.\n   - Manual demo shows name updates everywhere specified.\n   - `@todo-domain @todo-ui` tags removed from the 4 scenarios.\n\n---\n\n## Summary\n\nThis iteration plan is **production-ready**. It meets all five readiness criteria with high confidence:\n\n- **Goal** is clear, outcome-focused, and states the beneficiary.\n- **Scope** is minimal and tightly bounded with explicit in/out lists.\n- **Acceptance criteria** are concrete and testable; BDD scenarios are planned and tagged; business decisions are resolved.\n- **Implementation plan** is sequenced and specific; the one open technical decision is properly flagged with an inspection step to resolve it.\n- **Validation** is comprehensive with automated tests, manual steps, and clear exit criteria.\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "outcome": "succeeded",
-          "internal.retry_count.codex_review": 0,
+          "internal.node_visit_count": 1,
           "response.codex_review": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\",\"markdown_report\":\"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\\n\\n## Required plan edits\\n\\nNone required.\\n\\n## Validation plan\\n\\nSuccess should be proven by:\\n\\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\\n6. `dev check` passing after implementation.\"}}",
-          "thread.codex_review.current_node": "synthesize",
-          "gemini_review_confidence": "High",
-          "internal.retry_count.gemini_review": 0,
-          "last_stage": "synthesize",
-          "thread.gemini_review.current_node": "claude_review",
-          "plan_ready": true,
-          "internal.fidelity": "summary:high",
-          "gemini_review_blocking_gaps": "None",
-          "plan_needs_fix": false,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "failure_signature": "",
-          "internal.thread_id": "synthesis_gate",
-          "gemini_review_blocking_gap_count": 0,
-          "response.gemini_review": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"markdown_report\":\"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. The validation plan should mirror the implementation-plan test list by explicitly including a LiveView test for the over-100-character error message.\\n2. The open technical decision about denormalized Person names is acceptable as a bounded implementation discovery step, but the plan could be clearer that implementation must make and document the choice before coding any projection changes.\\n3. The acceptance scenarios are strong for the main behaviour; the author could optionally add a stakeholder-readable example for validation beyond blank names if product wants the 100-character rule captured in Gherkin.\\n\\n## Smallest viable iteration\\n\\nThe current slice is already the smallest useful behaviour-facing iteration: allow a signed-in member to edit their own Person name from `/my/settings` Profile, persist it through the Membership domain, validate the basic name rules, and show the updated name everywhere the existing Person name is displayed. Splitting out cross-surface visibility would risk shipping a confusing partial rename.\\n\\n## Required plan edits\\n\\nNone required before implementation.\\n\\n## Validation plan\\n\\nSuccess should be proven by:\\n\\n1. Domain/context tests for `PersonRenamed`, blank rejection, length rejection, whitespace normalization, same-name no-op, and unchanged email/membership/role state.\\n2. Projector/read-model tests proving the Person read model updates and read-model-change publication refreshes subscribers.\\n3. LiveView tests for Profile display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh in another open settings session.\\n4. Acceptance tests implementing the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature` with temporary todo tags removed.\\n5. Manual demo through `/my/settings` showing the updated display row, avatar menu/initials, member list, conversation author name, and inline blank-name error.\\n6. Final `dev check` passing after implementation.\",\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "internal.run_id": "01KZXVSVVG1BRBKSX3Q5KBC3E3",
-          "claude_review_required_edits": "None",
-          "internal.work_dir": "/workspace/memba",
-          "preferred_label": "validated",
           "graph.default_fidelity": "summary:high",
+          "codex_review_blocking_gap_count": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "preferred_label": "validated",
+          "internal.retry_count.start": 0,
+          "claude_review_blocking_gap_count": 0,
+          "failure_signature": "",
+          "plan_needs_human": false,
+          "markdown_report": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\n6. `dev check` passing after implementation.",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.gemini_review": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "thread.start.current_node": "gemini_review",
+          "thread.codex_review.current_node": "synthesize",
+          "plan_needs_fix": false,
+          "gemini_review_blocking_gaps": "None",
+          "command.output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7",
+          "internal.thread_id": "synthesis_gate",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_blocking_gaps": "None",
+          "claude_review_confidence": "High",
+          "internal.retry_count.codex_review": 0,
+          "thread.gemini_review.current_node": "claude_review",
+          "internal.run_id": "01KZXVSVVG1BRBKSX3Q5KBC3E3",
+          "claude_review_decision": "READY",
+          "claude_review_blocking_gaps": "None",
+          "gemini_review_confidence": "High",
+          "response.gemini_review": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"markdown_report\":\"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. The validation plan should mirror the implementation-plan test list by explicitly including a LiveView test for the over-100-character error message.\\n2. The open technical decision about denormalized Person names is acceptable as a bounded implementation discovery step, but the plan could be clearer that implementation must make and document the choice before coding any projection changes.\\n3. The acceptance scenarios are strong for the main behaviour; the author could optionally add a stakeholder-readable example for validation beyond blank names if product wants the 100-character rule captured in Gherkin.\\n\\n## Smallest viable iteration\\n\\nThe current slice is already the smallest useful behaviour-facing iteration: allow a signed-in member to edit their own Person name from `/my/settings` Profile, persist it through the Membership domain, validate the basic name rules, and show the updated name everywhere the existing Person name is displayed. Splitting out cross-surface visibility would risk shipping a confusing partial rename.\\n\\n## Required plan edits\\n\\nNone required before implementation.\\n\\n## Validation plan\\n\\nSuccess should be proven by:\\n\\n1. Domain/context tests for `PersonRenamed`, blank rejection, length rejection, whitespace normalization, same-name no-op, and unchanged email/membership/role state.\\n2. Projector/read-model tests proving the Person read model updates and read-model-change publication refreshes subscribers.\\n3. LiveView tests for Profile display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh in another open settings session.\\n4. Acceptance tests implementing the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature` with temporary todo tags removed.\\n5. Manual demo through `/my/settings` showing the updated display row, avatar menu/initials, member list, conversation author name, and inline blank-name error.\\n6. Final `dev check` passing after implementation.\",\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "gemini_review_blocking_gap_count": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
+          "response.claude_review": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-Blocking Improvements\n\n1. **Acceptance criteria could explicitly mention the 100-character limit validation in the LiveView tests section** (line 237-238). While the acceptance criteria list the requirement at line 156 and the implementation plan mentions the test at line 201, the validation plan's LiveView tests sub-list (lines 231-237) omits the over-length error case. This is inconsistency rather than omission—the test is clearly planned at line 201.\n\n2. **The \"too-long name\" acceptance scenario is not explicitly listed in the Acceptance Scenarios section** (lines 88-99). The section lists scenarios for correcting a name, cross-club visibility, multi-club following, and blank rejection, but doesn't mention the 100-character limit scenario. However, the feature file is marked `@todo-domain @todo-ui` and implementation is expected to add step definitions as needed, so this may be intentionally left to implementation discretion.\n\n---\n\n## Smallest Viable Iteration\n\n**This iteration is already minimal.** It focuses on exactly one capability—self-service name editing—with tightly defined validation rules, no new profile fields, and explicit out-of-scope boundaries. The only theoretical reduction would be deferring the \"new name shows everywhere\" validation (lines 159-161), but that would make the iteration unverifiable and break the stated goal of members seeing their corrected name across clubs.\n\nThe iteration cannot be smaller without becoming incomplete or unverifiable.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Answers to Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated:** Yes. \"A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.\" (line 8)\n- **User/business outcome, not just tasks:** Yes. Lines 10-11 state the outcome: \"a member who was added or invited under a wrong, partial, or outdated name can fix it themselves, without asking a Membership Admin or Memba staff.\"\n- **Beneficiary/actor clear:** Yes. The member is the actor; clubs seeing the correct name is the benefit.\n\n### 2. Scope Focus ✅\n\n- **Coherent outcome:** Yes. One feature: self-service name editing.\n- **Minimal:** Yes. The iteration explicitly excludes photo editing (iteration 055), per-club names, other profile fields, admin renaming, club renaming, notifications, name history, and rate limiting (lines 56-68).\n- **Boundaries clear:** Yes. Both in-scope (lines 43-54) and out-of-scope (lines 56-68) lists are concrete and unambiguous.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Concrete, clear, complete, testable:** Yes. Lines 148-166 enumerate 12 specific acceptance criteria covering happy path (save valid name), edge cases (blank, whitespace, over-length), error states (inline field errors), permissions (member edits own name), data changes (name updates, other fields untouched), and cross-club visibility.\n- **Happy paths, edge cases, permissions, errors, state changes:** Covered. Includes edit/cancel/save flows, validation errors, cross-club propagation, live refresh, and immutability of other Person state.\n- **Iteration type classified:** Yes. \"Behaviour-facing\" (line 71), with clear rationale (lines 73-76).\n- **BDD decision and feature file naming:** Yes. Lines 78-103 state \"Required,\" name the new feature file `acceptance-tests/features/member_profile.feature`, list four scenarios with tags `@iteration-054 @todo-domain @todo-ui`, and explain the tagging strategy and runner exclusion.\n- **Business decisions unresolved:** None. Line 168: \"None known.\" Lines 172-177 document three decisions made during planning (one name per person, no notification, no email rewriting).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Clear, ordered, specific:** Yes. Lines 179-204 provide 12 sequenced steps from inspection through `dev check`.\n- **Files, modules, migrations, tests, integration points named:** Yes. Mentions `RenamePerson` command, `PersonRenamed` event, `Memba.Membership`, `MembaWeb.MySettingsLive`, Person aggregate/projector, `Memba.ReadModelChanges` topic, domain tests, LiveView tests, acceptance scenarios, and specific prior work to reference (`add_person_email_address.ex`, ADRs 0015, 0021, 0023).\n- **Data model, API, UI, workflow changes clear:** Yes. Command/event pattern (lines 182-183), aggregate validation (line 186), read-model projection (lines 189-191), LiveView inline form states (lines 196-197), subscription refresh (lines 198-199), and design template reference (lines 115-146).\n- **Technical decisions unresolved:** One open decision documented explicitly (lines 206-213): whether read models denormalize the name. The plan acknowledges this as the \"main unknown,\" assigns investigation to step 1, and describes preferred resolution strategy (resolve at read time) without prematurely committing to it. This is **properly flagged uncertainty**, not a blocking gap—the plan includes the inspection step needed to resolve it and acknowledges the size impact if denormalization is found.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after:** Lines 215-219: members own their identity and can correct their name; the domain has an explicit `PersonRenamed` event for future use.\n- **How we prove success:** Lines 221-247 detail `dev check`, domain tests (6 cases), LiveView tests (6 cases), acceptance tests (4 scenarios), and 6-step manual demo with specific surfaces to verify.\n- **Stop condition:** Clear. The iteration is done when `dev check` passes, the 4 acceptance scenarios run without `@todo` tags, and the manual demo succeeds.\n\n---\n\n## Validation Plan\n\nThe plan's own validation section (lines 221-247) is comprehensive and sufficient:\n\n1. **Automated verification:**\n   - `dev check` on the exact committed state.\n   - Domain/context tests for aggregate behavior, validation rules, projector updates, event emission, and state immutability.\n   - LiveView tests for render, edit flow, cancel, save, error rendering, and live refresh.\n   - Acceptance tests: 4 scenarios in `member_profile.feature` with `@iteration-054` tags, `@todo` tags removed after implementation.\n\n2. **Manual verification:**\n   - Sign in, open Profile tab, edit and save name.\n   - Verify new name in avatar menu, member list, conversation author.\n   - Test blank-name rejection and inline error display.\n\n3. **Exit criteria:**\n   - All tests pass (unit, LiveView, acceptance).\n   - `dev check` clean.\n   - Manual demo shows name updates everywhere specified.\n   - `@todo-domain @todo-ui` tags removed from the 4 scenarios.\n\n---\n\n## Summary\n\nThis iteration plan is **production-ready**. It meets all five readiness criteria with high confidence:\n\n- **Goal** is clear, outcome-focused, and states the beneficiary.\n- **Scope** is minimal and tightly bounded with explicit in/out lists.\n- **Acceptance criteria** are concrete and testable; BDD scenarios are planned and tagged; business decisions are resolved.\n- **Implementation plan** is sequenced and specific; the one open technical decision is properly flagged with an inspection step to resolve it.\n- **Validation** is comprehensive with automated tests, manual steps, and clear exit criteria.\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "plan_ready": true,
           "thread.synthesis_gate.current_node": "publish_ready",
           "codex_review_required_edits": "None",
-          "codex_review_blocking_gap_count": 0,
-          "internal.retry_count.start": 0,
-          "plan_needs_human": false,
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "claude_review_blocking_gap_count": 0,
-          "codex_review_decision": "READY",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "graph.rankdir": "LR",
-          "claude_review_blocking_gaps": "None",
-          "thread.start.current_node": "gemini_review",
-          "gemini_review_required_edits": "None",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "internal.node_visit_count": 1,
-          "failure_class": "",
-          "codex_review_blocking_gaps": "None",
-          "internal.retry_count.synthesis_gate": 0,
-          "thread.claude_review.current_node": "codex_review",
-          "internal.retry_count.claude_review": 0,
-          "internal.retry_count.synthesize": 0,
-          "command.output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7",
           "codex_review_confidence": "High",
-          "claude_review_confidence": "High",
+          "current_node": "publish_ready",
+          "codex_review_decision": "READY",
           "gemini_review_decision": "READY",
-          "markdown_report": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\n6. `dev check` passing after implementation.",
-          "claude_review_decision": "READY"
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.publish_ready": 0,
+          "gemini_review_required_edits": "None",
+          "internal.retry_count.synthesize": 0,
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "last_stage": "synthesize",
+          "internal.retry_count.synthesis_gate": 0,
+          "outcome": "succeeded",
+          "claude_review_required_edits": "None"
         },
         "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "preferred_label": "validated",
+            "context_updates": {
+              "response.codex_review": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\",\"markdown_report\":\"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\\n\\n## Required plan edits\\n\\nNone required.\\n\\n## Validation plan\\n\\nSuccess should be proven by:\\n\\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\\n6. `dev check` passing after implementation.\"}}",
+              "last_response": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_",
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_required_edits": "None",
+              "codex_review_blocking_gaps": "None",
+              "codex_review_confidence": "High",
+              "codex_review_decision": "READY",
+              "markdown_report": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\n6. `dev check` passing after implementation.",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 16119,
+                    "output_tokens": 1102,
+                    "reasoning_tokens": 656,
+                    "cache_read_tokens": 3584,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 135127
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 42205,
+              "tool_time_ms": 50,
+              "active_time_ms": 42255
+            }
+          },
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1702,20 +1745,6 @@
               "active_time_ms": 11522
             }
           },
-          "publish_ready": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7"
-            },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 2577,
-              "active_time_ms": 2577
-            }
-          },
           "synthesis_gate": {
             "status": "succeeded",
             "notes": "Conditional node evaluated: synthesis_gate",
@@ -1724,6 +1753,49 @@
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_blocking_gap_count": 0,
+              "response.claude_review": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-Blocking Improvements\n\n1. **Acceptance criteria could explicitly mention the 100-character limit validation in the LiveView tests section** (line 237-238). While the acceptance criteria list the requirement at line 156 and the implementation plan mentions the test at line 201, the validation plan's LiveView tests sub-list (lines 231-237) omits the over-length error case. This is inconsistency rather than omission—the test is clearly planned at line 201.\n\n2. **The \"too-long name\" acceptance scenario is not explicitly listed in the Acceptance Scenarios section** (lines 88-99). The section lists scenarios for correcting a name, cross-club visibility, multi-club following, and blank rejection, but doesn't mention the 100-character limit scenario. However, the feature file is marked `@todo-domain @todo-ui` and implementation is expected to add step definitions as needed, so this may be intentionally left to implementation discretion.\n\n---\n\n## Smallest Viable Iteration\n\n**This iteration is already minimal.** It focuses on exactly one capability—self-service name editing—with tightly defined validation rules, no new profile fields, and explicit out-of-scope boundaries. The only theoretical reduction would be deferring the \"new name shows everywhere\" validation (lines 159-161), but that would make the iteration unverifiable and break the stated goal of members seeing their corrected name across clubs.\n\nThe iteration cannot be smaller without becoming incomplete or unverifiable.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Answers to Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated:** Yes. \"A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.\" (line 8)\n- **User/business outcome, not just tasks:** Yes. Lines 10-11 state the outcome: \"a member who was added or invited under a wrong, partial, or outdated name can fix it themselves, without asking a Membership Admin or Memba staff.\"\n- **Beneficiary/actor clear:** Yes. The member is the actor; clubs seeing the correct name is the benefit.\n\n### 2. Scope Focus ✅\n\n- **Coherent outcome:** Yes. One feature: self-service name editing.\n- **Minimal:** Yes. The iteration explicitly excludes photo editing (iteration 055), per-club names, other profile fields, admin renaming, club renaming, notifications, name history, and rate limiting (lines 56-68).\n- **Boundaries clear:** Yes. Both in-scope (lines 43-54) and out-of-scope (lines 56-68) lists are concrete and unambiguous.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Concrete, clear, complete, testable:** Yes. Lines 148-166 enumerate 12 specific acceptance criteria covering happy path (save valid name), edge cases (blank, whitespace, over-length), error states (inline field errors), permissions (member edits own name), data changes (name updates, other fields untouched), and cross-club visibility.\n- **Happy paths, edge cases, permissions, errors, state changes:** Covered. Includes edit/cancel/save flows, validation errors, cross-club propagation, live refresh, and immutability of other Person state.\n- **Iteration type classified:** Yes. \"Behaviour-facing\" (line 71), with clear rationale (lines 73-76).\n- **BDD decision and feature file naming:** Yes. Lines 78-103 state \"Required,\" name the new feature file `acceptance-tests/features/member_profile.feature`, list four scenarios with tags `@iteration-054 @todo-domain @todo-ui`, and explain the tagging strategy and runner exclusion.\n- **Business decisions unresolved:** None. Line 168: \"None known.\" Lines 172-177 document three decisions made during planning (one name per person, no notification, no email rewriting).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Clear, ordered, specific:** Yes. Lines 179-204 provide 12 sequenced steps from inspection through `dev check`.\n- **Files, modules, migrations, tests, integration points named:** Yes. Mentions `RenamePerson` command, `PersonRenamed` event, `Memba.Membership`, `MembaWeb.MySettingsLive`, Person aggregate/projector, `Memba.ReadModelChanges` topic, domain tests, LiveView tests, acceptance scenarios, and specific prior work to reference (`add_person_email_address.ex`, ADRs 0015, 0021, 0023).\n- **Data model, API, UI, workflow changes clear:** Yes. Command/event pattern (lines 182-183), aggregate validation (line 186), read-model projection (lines 189-191), LiveView inline form states (lines 196-197), subscription refresh (lines 198-199), and design template reference (lines 115-146).\n- **Technical decisions unresolved:** One open decision documented explicitly (lines 206-213): whether read models denormalize the name. The plan acknowledges this as the \"main unknown,\" assigns investigation to step 1, and describes preferred resolution strategy (resolve at read time) without prematurely committing to it. This is **properly flagged uncertainty**, not a blocking gap—the plan includes the inspection step needed to resolve it and acknowledges the size impact if denormalization is found.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after:** Lines 215-219: members own their identity and can correct their name; the domain has an explicit `PersonRenamed` event for future use.\n- **How we prove success:** Lines 221-247 detail `dev check`, domain tests (6 cases), LiveView tests (6 cases), acceptance tests (4 scenarios), and 6-step manual demo with specific surfaces to verify.\n- **Stop condition:** Clear. The iteration is done when `dev check` passes, the 4 acceptance scenarios run without `@todo` tags, and the manual demo succeeds.\n\n---\n\n## Validation Plan\n\nThe plan's own validation section (lines 221-247) is comprehensive and sufficient:\n\n1. **Automated verification:**\n   - `dev check` on the exact committed state.\n   - Domain/context tests for aggregate behavior, validation rules, projector updates, event emission, and state immutability.\n   - LiveView tests for render, edit flow, cancel, save, error rendering, and live refresh.\n   - Acceptance tests: 4 scenarios in `member_profile.feature` with `@iteration-054` tags, `@todo` tags removed after implementation.\n\n2. **Manual verification:**\n   - Sign in, open Profile tab, edit and save name.\n   - Verify new name in avatar menu, member list, conversation author.\n   - Test blank-name rejection and inline error display.\n\n3. **Exit criteria:**\n   - All tests pass (unit, LiveView, acceptance).\n   - `dev check` clean.\n   - Manual demo shows name updates everywhere specified.\n   - `@todo-domain @todo-ui` tags removed from the 4 scenarios.\n\n---\n\n## Summary\n\nThis iteration plan is **production-ready**. It meets all five readiness criteria with high confidence:\n\n- **Goal** is clear, outcome-focused, and states the beneficiary.\n- **Scope** is minimal and tightly bounded with explicit in/out lists.\n- **Acceptance criteria** are concrete and testable; BDD scenarios are planned and tagged; business decisions are resolved.\n- **Implementation plan** is sequenced and specific; the one open technical decision is properly flagged with an inspection step to resolve it.\n- **Validation** is comprehensive with automated tests, manual steps, and clear exit criteria.\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "last_response": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n",
+              "last_stage": "claude_review",
+              "claude_review_required_edits": "None",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6333,
+                    "output_tokens": 2164,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4789,
+                    "cache_write_tokens": 6139
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6139,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 75915
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 60402,
+              "tool_time_ms": 48,
+              "active_time_ms": 60450
+            }
           },
           "gemini_review": {
             "status": "succeeded",
@@ -1768,108 +1840,155 @@
               "active_time_ms": 41125
             }
           },
-          "codex_review": {
-            "status": "succeeded",
-            "preferred_label": "validated",
-            "context_updates": {
-              "response.codex_review": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\",\"markdown_report\":\"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\\n\\n## Required plan edits\\n\\nNone required.\\n\\n## Validation plan\\n\\nSuccess should be proven by:\\n\\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\\n6. `dev check` passing after implementation.\"}}",
-              "last_response": "{\"preferred_next_label\":\"validated\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_",
-              "codex_review_blocking_gap_count": 0,
-              "codex_review_required_edits": "None",
-              "codex_review_blocking_gaps": "None",
-              "codex_review_confidence": "High",
-              "codex_review_decision": "READY",
-              "markdown_report": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The open technical decision about denormalized Person names in read models is called out clearly and has an implementation step, but the plan would be even stronger if step 1 named the specific likely projections/tables to inspect.\n2. The validation plan includes blank-name LiveView coverage but does not explicitly list over-length LiveView coverage, even though the implementation plan and acceptance criteria require it.\n3. The acceptance scenarios cover the main stakeholder-readable rules, but the 100-character limit and whitespace normalization appear only in lower-level acceptance criteria/tests. That is acceptable, though adding examples would improve traceability if stakeholders care about those rules.\n\n## Smallest viable iteration\n\nThe smallest useful slice is exactly the current core slice: allow a signed-in member to edit their own Person name from `/my/settings` Profile, validate and normalize the name, persist a `PersonRenamed` fact, update the Person read model, and show the changed name across existing club-facing surfaces. Photo editing, additional profile fields, per-club names, notifications, audit/history, and staff/admin rename changes should remain out of scope.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Domain/context tests showing valid rename emits `PersonRenamed`, blank and over-length names are rejected, whitespace is normalized, same-name rename is a no-op, and unrelated Person state is unchanged.\n2. Projector/read-model tests showing the Person read model updates and read-model change publication refreshes open settings pages.\n3. LiveView tests covering display, edit, cancel, valid save, blank rejection, over-length rejection, and live refresh.\n4. Acceptance tests for the four `@iteration-054` scenarios in `acceptance-tests/features/member_profile.feature`, with temporary todo tags removed as implementation lands.\n5. Manual demo confirming Profile editing, avatar-menu initials/name refresh, club member row refresh, conversation author refresh, and inline blank-name error.\n6. `dev check` passing after implementation.",
-              "last_stage": "codex_review"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 16119,
-                    "output_tokens": 1102,
-                    "reasoning_tokens": 656,
-                    "cache_read_tokens": 3584,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 135127
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 42205,
-              "tool_time_ms": 50,
-              "active_time_ms": 42255
-            }
-          },
-          "claude_review": {
+          "publish_ready": {
             "status": "succeeded",
             "context_updates": {
-              "claude_review_confidence": "High",
-              "claude_review_blocking_gaps": "None",
-              "claude_review_blocking_gap_count": 0,
-              "response.claude_review": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n\n## Blocking Gaps\n\nNone.\n\n---\n\n## Non-Blocking Improvements\n\n1. **Acceptance criteria could explicitly mention the 100-character limit validation in the LiveView tests section** (line 237-238). While the acceptance criteria list the requirement at line 156 and the implementation plan mentions the test at line 201, the validation plan's LiveView tests sub-list (lines 231-237) omits the over-length error case. This is inconsistency rather than omission—the test is clearly planned at line 201.\n\n2. **The \"too-long name\" acceptance scenario is not explicitly listed in the Acceptance Scenarios section** (lines 88-99). The section lists scenarios for correcting a name, cross-club visibility, multi-club following, and blank rejection, but doesn't mention the 100-character limit scenario. However, the feature file is marked `@todo-domain @todo-ui` and implementation is expected to add step definitions as needed, so this may be intentionally left to implementation discretion.\n\n---\n\n## Smallest Viable Iteration\n\n**This iteration is already minimal.** It focuses on exactly one capability—self-service name editing—with tightly defined validation rules, no new profile fields, and explicit out-of-scope boundaries. The only theoretical reduction would be deferring the \"new name shows everywhere\" validation (lines 159-161), but that would make the iteration unverifiable and break the stated goal of members seeing their corrected name across clubs.\n\nThe iteration cannot be smaller without becoming incomplete or unverifiable.\n\n---\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n---\n\n## Answers to Readiness Questions\n\n### 1. Goal Clarity ✅\n\n- **Clearly articulated:** Yes. \"A signed-in member can change the name their clubs see, from the Profile tab of `/my/settings`.\" (line 8)\n- **User/business outcome, not just tasks:** Yes. Lines 10-11 state the outcome: \"a member who was added or invited under a wrong, partial, or outdated name can fix it themselves, without asking a Membership Admin or Memba staff.\"\n- **Beneficiary/actor clear:** Yes. The member is the actor; clubs seeing the correct name is the benefit.\n\n### 2. Scope Focus ✅\n\n- **Coherent outcome:** Yes. One feature: self-service name editing.\n- **Minimal:** Yes. The iteration explicitly excludes photo editing (iteration 055), per-club names, other profile fields, admin renaming, club renaming, notifications, name history, and rate limiting (lines 56-68).\n- **Boundaries clear:** Yes. Both in-scope (lines 43-54) and out-of-scope (lines 56-68) lists are concrete and unambiguous.\n\n### 3. Acceptance Criteria, BDD, and Business Decisions ✅\n\n- **Concrete, clear, complete, testable:** Yes. Lines 148-166 enumerate 12 specific acceptance criteria covering happy path (save valid name), edge cases (blank, whitespace, over-length), error states (inline field errors), permissions (member edits own name), data changes (name updates, other fields untouched), and cross-club visibility.\n- **Happy paths, edge cases, permissions, errors, state changes:** Covered. Includes edit/cancel/save flows, validation errors, cross-club propagation, live refresh, and immutability of other Person state.\n- **Iteration type classified:** Yes. \"Behaviour-facing\" (line 71), with clear rationale (lines 73-76).\n- **BDD decision and feature file naming:** Yes. Lines 78-103 state \"Required,\" name the new feature file `acceptance-tests/features/member_profile.feature`, list four scenarios with tags `@iteration-054 @todo-domain @todo-ui`, and explain the tagging strategy and runner exclusion.\n- **Business decisions unresolved:** None. Line 168: \"None known.\" Lines 172-177 document three decisions made during planning (one name per person, no notification, no email rewriting).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n- **Clear, ordered, specific:** Yes. Lines 179-204 provide 12 sequenced steps from inspection through `dev check`.\n- **Files, modules, migrations, tests, integration points named:** Yes. Mentions `RenamePerson` command, `PersonRenamed` event, `Memba.Membership`, `MembaWeb.MySettingsLive`, Person aggregate/projector, `Memba.ReadModelChanges` topic, domain tests, LiveView tests, acceptance scenarios, and specific prior work to reference (`add_person_email_address.ex`, ADRs 0015, 0021, 0023).\n- **Data model, API, UI, workflow changes clear:** Yes. Command/event pattern (lines 182-183), aggregate validation (line 186), read-model projection (lines 189-191), LiveView inline form states (lines 196-197), subscription refresh (lines 198-199), and design template reference (lines 115-146).\n- **Technical decisions unresolved:** One open decision documented explicitly (lines 206-213): whether read models denormalize the name. The plan acknowledges this as the \"main unknown,\" assigns investigation to step 1, and describes preferred resolution strategy (resolve at read time) without prematurely committing to it. This is **properly flagged uncertainty**, not a blocking gap—the plan includes the inspection step needed to resolve it and acknowledges the size impact if denormalization is found.\n\n### 5. Expected Capability and Validation ✅\n\n- **What we can do after:** Lines 215-219: members own their identity and can correct their name; the domain has an explicit `PersonRenamed` event for future use.\n- **How we prove success:** Lines 221-247 detail `dev check`, domain tests (6 cases), LiveView tests (6 cases), acceptance tests (4 scenarios), and 6-step manual demo with specific surfaces to verify.\n- **Stop condition:** Clear. The iteration is done when `dev check` passes, the 4 acceptance scenarios run without `@todo` tags, and the manual demo succeeds.\n\n---\n\n## Validation Plan\n\nThe plan's own validation section (lines 221-247) is comprehensive and sufficient:\n\n1. **Automated verification:**\n   - `dev check` on the exact committed state.\n   - Domain/context tests for aggregate behavior, validation rules, projector updates, event emission, and state immutability.\n   - LiveView tests for render, edit flow, cancel, save, error rendering, and live refresh.\n   - Acceptance tests: 4 scenarios in `member_profile.feature` with `@iteration-054` tags, `@todo` tags removed after implementation.\n\n2. **Manual verification:**\n   - Sign in, open Profile tab, edit and save name.\n   - Verify new name in avatar menu, member list, conversation author.\n   - Test blank-name rejection and inline error display.\n\n3. **Exit criteria:**\n   - All tests pass (unit, LiveView, acceptance).\n   - `dev check` clean.\n   - Manual demo shows name updates everywhere specified.\n   - `@todo-domain @todo-ui` tags removed from the 4 scenarios.\n\n---\n\n## Summary\n\nThis iteration plan is **production-ready**. It meets all five readiness criteria with high confidence:\n\n- **Goal** is clear, outcome-focused, and states the beneficiary.\n- **Scope** is minimal and tightly bounded with explicit in/out lists.\n- **Acceptance criteria** are concrete and testable; BDD scenarios are planned and tagged; business decisions are resolved.\n- **Implementation plan** is sequenced and specific; the one open technical decision is properly flagged with an inspection step to resolve it.\n- **Validation** is comprehensive with automated tests, manual steps, and clear exit criteria.\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-              "last_response": "Now I'll review the plan against the readiness criteria and provide a comprehensive validation report.\n\n---\n\n## Iteration 054 Validation Report\n\n### Decision: **READY**\n\n### Confidence: **High**\n\n---\n",
-              "last_stage": "claude_review",
-              "claude_review_required_edits": "None",
-              "claude_review_decision": "READY"
+              "command.output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7"
             },
-            "notes": "Stage completed: claude_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "anthropic",
-                    "model_id": "claude-sonnet-4-5"
-                  },
-                  "tokens": {
-                    "input_tokens": 6333,
-                    "output_tokens": 2164,
-                    "reasoning_tokens": 0,
-                    "cache_read_tokens": 4789,
-                    "cache_write_tokens": 6139
-                  }
-                },
-                "facts": {
-                  "algorithm": "anthropic",
-                  "cache_write_5m_tokens": 6139,
-                  "cache_write_1h_tokens": 0
-                }
-              },
-              "total_usd_micros": 75915
-            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 60402,
-              "tool_time_ms": 48,
-              "active_time_ms": 60450
+              "inference_time_ms": 0,
+              "tool_time_ms": 2577,
+              "active_time_ms": 2577
             }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "2be1b75e0a86829a0fbb4e4b9e1abc456659ba30",
         "node_visits": {
           "codex_review": 1,
-          "synthesis_gate": 1,
-          "start": 1,
           "publish_ready": 1,
+          "start": 1,
+          "synthesis_gate": 1,
           "synthesize": 1,
-          "claude_review": 1,
-          "gemini_review": 1
+          "gemini_review": 1,
+          "claude_review": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/054-member-name-editing/plan.md b/docs/iterations/054-member-name-editing/plan.md\nindex a32a9ac..add8db7 100644\n--- a/docs/iterations/054-member-name-editing/plan.md\n+++ b/docs/iterations/054-member-name-editing/plan.md\n@@ -1,7 +1,7 @@\n # Members change their own name\n \n Date: 2026-08-13\n-Status: draft\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex fb8c064..af42752 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -63,7 +63,7 @@ green than before.\n | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |\n | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |\n | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |\n-| 054 | 2026-08-13 | draft | Members change their own name | [plan](054-member-name-editing/plan.md) |\n+| 054 | 2026-08-13 | validated | Members change their own name | [plan](054-member-name-editing/plan.md) |\n | 055 | 2026-08-13 | draft | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |\n \n Status notes:\n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-08-13T15:31:20.588601816Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 184771,
+      "inference_time_ms": 155202,
+      "tool_time_ms": 2727,
+      "active_time_ms": 157929
+    },
+    "final_git_commit_sha": "2be1b75e0a86829a0fbb4e4b9e1abc456659ba30",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 41643,
+          "inference_time_ms": 41073,
+          "tool_time_ms": 52,
+          "active_time_ms": 41125
+        },
+        "billing_usd_micros": 139070,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 60754,
+          "inference_time_ms": 60402,
+          "tool_time_ms": 48,
+          "active_time_ms": 60450
+        },
+        "billing_usd_micros": 75915,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 42581,
+          "inference_time_ms": 42205,
+          "tool_time_ms": 50,
+          "active_time_ms": 42255
+        },
+        "billing_usd_micros": 135127,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 11559,
+          "inference_time_ms": 11522,
+          "tool_time_ms": 0,
+          "active_time_ms": 11522
+        },
+        "billing_usd_micros": 38190,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 2581,
+          "inference_time_ms": 0,
+          "tool_time_ms": 2577,
+          "active_time_ms": 2577
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 44916,
+      "output_tokens": 4365,
+      "total_tokens": 68032,
+      "reasoning_tokens": 1679,
+      "cache_read_tokens": 10933,
+      "cache_write_tokens": 6139,
+      "total_usd_micros": 388302
+    },
+    "total_retries": 0,
+    "diff": {
+      "patch": "diff --git a/docs/iterations/054-member-name-editing/plan.md b/docs/iterations/054-member-name-editing/plan.md\nindex a32a9ac..add8db7 100644\n--- a/docs/iterations/054-member-name-editing/plan.md\n+++ b/docs/iterations/054-member-name-editing/plan.md\n@@ -1,7 +1,7 @@\n # Members change their own name\n \n Date: 2026-08-13\n-Status: draft\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex fb8c064..af42752 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -63,7 +63,7 @@ green than before.\n | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |\n | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |\n | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |\n-| 054 | 2026-08-13 | draft | Members change their own name | [plan](054-member-name-editing/plan.md) |\n+| 054 | 2026-08-13 | validated | Members change their own name | [plan](054-member-name-editing/plan.md) |\n | 055 | 2026-08-13 | draft | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |\n \n Status notes:\n",
+      "summary": {
+        "files_changed": 2,
+        "additions": 2,
+        "deletions": 2
+      }
+    }
+  },
   "sandbox": {
     "kind": "ready",
     "plan": {
@@ -2096,6 +2215,329 @@
           }
         ],
         "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "synthesize@1": {
+      "first_event_seq": 107,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-08-13T15:31:06.362192276Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-08-13T15:30:54.800603156Z",
+      "handler": "prompt",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 11559,
+        "inference_time_ms": 11522,
+        "tool_time_ms": 0,
+        "active_time_ms": 11522
+      },
+      "usage": {
+        "input_tokens": 5424,
+        "output_tokens": 33,
+        "total_tokens": 5793,
+        "reasoning_tokens": 336,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 38190
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 117,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-08-13T15:31:10.136200947Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-08-13T15:31:10.135635831Z",
+      "handler": "conditional",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "codex_review@1": {
+      "first_event_seq": 77,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: codex_review",
+        "failure_reason": null,
+        "timestamp": "2026-08-13T15:30:50.663053478Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-08-13T15:30:08.080270133Z",
+      "handler": "agent",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 42581,
+        "inference_time_ms": 42205,
+        "tool_time_ms": 50,
+        "active_time_ms": 42255
+      },
+      "usage": {
+        "input_tokens": 16119,
+        "output_tokens": 1102,
+        "total_tokens": 21461,
+        "reasoning_tokens": 656,
+        "cache_read_tokens": 3584,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 135127
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by search-root-relative path using a glob pattern. Use path to choose the search root. `*` stays within one path segment and `**` searches recursively. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute Bash commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 8366,
+        "usage_percent": 3.075735294117647,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-08-13T15:30:50.660912619Z",
+        "event_seq": 97,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 873,
+            "usage_percent": 0.3209558823529412
+          },
+          {
+            "category": "tools",
+            "tokens": 1163,
+            "usage_percent": 0.4275735294117647
+          },
+          {
+            "category": "memory",
+            "tokens": 333,
+            "usage_percent": 0.12242647058823529
+          },
+          {
+            "category": "conversation",
+            "tokens": 5992,
+            "usage_percent": 2.2029411764705884
+          },
+          {
+            "category": "other",
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 135,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-08-13T15:31:20.553456996Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-08-13T15:31:20.553416550Z",
+      "handler": "exit",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "agent_control": "running",
       "state": "succeeded"
@@ -2332,6 +2774,56 @@
       "agent_control": "running",
       "state": "succeeded"
     },
+    "publish_ready@1": {
+      "first_event_seq": 125,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-08-13T15:31:16.818450188Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
+        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7",
+        "exit_code": 0,
+        "duration_ms": 2577,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-08-13T15:31:14.236029067Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 2581,
+        "inference_time_ms": 0,
+        "tool_time_ms": 2577,
+        "active_time_ms": 2577
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
     "start@1": {
       "first_event_seq": 17,
       "prompt": null,
@@ -2367,332 +2859,6 @@
       },
       "agent_control": "running",
       "state": "succeeded"
-    },
-    "codex_review@1": {
-      "first_event_seq": 77,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: codex_review",
-        "failure_reason": null,
-        "timestamp": "2026-08-13T15:30:50.663053478Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-08-13T15:30:08.080270133Z",
-      "handler": "agent",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 42581,
-        "inference_time_ms": 42205,
-        "tool_time_ms": 50,
-        "active_time_ms": 42255
-      },
-      "usage": {
-        "input_tokens": 16119,
-        "output_tokens": 1102,
-        "total_tokens": 21461,
-        "reasoning_tokens": 656,
-        "cache_read_tokens": 3584,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 135127
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running or completed subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by search-root-relative path using a glob pattern. Use path to choose the search root. `*` stays within one path segment and `**` searches recursively. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute Bash commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": false
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 8366,
-        "usage_percent": 3.075735294117647,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-08-13T15:30:50.660912619Z",
-        "event_seq": 97,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 873,
-            "usage_percent": 0.3209558823529412
-          },
-          {
-            "category": "tools",
-            "tokens": 1163,
-            "usage_percent": 0.4275735294117647
-          },
-          {
-            "category": "memory",
-            "tokens": 333,
-            "usage_percent": 0.12242647058823529
-          },
-          {
-            "category": "conversation",
-            "tokens": 5992,
-            "usage_percent": 2.2029411764705884
-          },
-          {
-            "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
-          }
-        ],
-        "warnings": []
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "synthesize@1": {
-      "first_event_seq": 107,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: synthesize",
-        "failure_reason": null,
-        "timestamp": "2026-08-13T15:31:06.362192276Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-08-13T15:30:54.800603156Z",
-      "handler": "prompt",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 11559,
-        "inference_time_ms": 11522,
-        "tool_time_ms": 0,
-        "active_time_ms": 11522
-      },
-      "usage": {
-        "input_tokens": 5424,
-        "output_tokens": 33,
-        "total_tokens": 5793,
-        "reasoning_tokens": 336,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 38190
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "synthesis_gate@1": {
-      "first_event_seq": 117,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Conditional node evaluated: synthesis_gate",
-        "failure_reason": null,
-        "timestamp": "2026-08-13T15:31:10.136200947Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-08-13T15:31:10.135635831Z",
-      "handler": "conditional",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "publish_ready@1": {
-      "first_event_seq": 125,
-      "prompt": null,
-      "response": null,
-      "completion": null,
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
-        "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/054-member-name-editing/plan.md'",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/0ca067d4d0ec01137b88ca70ce59de9bc3eb79fec46f0c70f6864f240e86d8f7",
-        "exit_code": 0,
-        "duration_ms": 2577,
-        "termination": "exited",
-        "output_bytes": 352,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 352,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-08-13T15:31:14.236029067Z",
-      "handler": "command",
-      "graph_visit": 1,
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "running"
     }
   }
 }
