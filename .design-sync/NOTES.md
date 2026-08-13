@@ -1,5 +1,40 @@
 # Design-sync notes — Memba
 
+## 2026-08-13 push #4 (local → cloud, account-settings gains the editable Profile tab)
+
+Extended `templates/account-settings.html` with the Profile tab's name and photo editing states,
+while planning iterations 054 (rename yourself) and 055 (profile photo).
+
+The extension was written on top of a fresh `get_file` of the **cloud** copy rather than the local
+mirror, because at the time this session started the local file was still the iteration-053
+club-bar version. It turned out the 2026-07-16 pull below had already reconciled that on `main` —
+the two agreed, and rebasing produced conflicts only on the two lines this session deliberately
+changed. Worth remembering as the cheap way to avoid clobbering canvas work: pull the cloud copy
+first, diff, then extend.
+
+Added: a `.profile-fields` / `.profile-field` structure for the Profile tab, the name field's
+display / editing / empty-name-error states, and the photo field's none-set / uploading / set /
+too-large / wrong-type / upload-failed states, plus two new preview rows and a `.section-heading`
+scaffold class to label them. The global-bar avatar in the menu surface now shows a photo, to make
+the point that a photo replaces initials *everywhere*, not just on the settings page.
+
+Copy corrected mid-session after Matt chose browser-side resizing: the field hint went from
+"up to 5 MB" to "JPG, PNG, GIF or WebP — we'll crop it to a square for you", and the size-limit
+error from 5 MB to 25 MB, because the hook downscales before upload so the member-facing limit is a
+guard rail on the *picked* file, not on what is stored. An HTML comment at the foot of the file
+records why there is deliberately no crop screen.
+
+Render-verified headlessly before each push (Playwright at 1320px, via
+`acceptance-tests/node_modules`): no console errors, no failed requests, no horizontal overflow,
+all 11 `data-field`/`data-state` variants present and non-zero-height. The render needed a
+throwaway shim for `.global-bar*` / `.app-menu__who*` — written before rebasing, when this branch
+predated the 2026-07-16 pull that ported those rules into `styles.css`. On current `main` the shim
+is unnecessary; the preview renders from the tracked mirror alone.
+
+Pushed (`finalize_plan` writes = 1 exact path, deletes = `[]`), twice — once for the extension, once
+for the copy correction:
+- `templates/account-settings/account-settings.html` ← local `templates/account-settings.html`
+
 ## 2026-07-16 pull (global app bar + identity menu with name/email)
 
 The cloud design added an app-wide **global bar** above the club card (dark ink strip:

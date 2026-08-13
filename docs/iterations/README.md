@@ -63,6 +63,8 @@ green than before.
 | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |
 | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |
 | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
+| 054 | 2026-08-13 | draft | Members change their own name | [plan](054-member-name-editing/plan.md) |
+| 055 | 2026-08-13 | draft | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |
 
 Status notes:
 
@@ -87,3 +89,4 @@ Shared acceptance feature files used across these iterations:
 - [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
+- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (new in iteration 054; self-service profile editing from `/my/settings`. Iteration 054 adds `@iteration-054 @todo-domain @todo-ui` scenarios for changing your own name; iteration 055 adds `@iteration-055 @todo-domain @todo-ui` scenarios for adding, replacing, and removing a profile photo, including upload rejection, upload failure, and signed-in-only photo visibility. Both sets stay excluded from the domain and browser runners until their iteration implements the steps)

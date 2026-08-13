@@ -1,5 +1,5 @@
-<!-- @dsCard group="Member App" viewport="1320x1680" name="Account settings" subtitle="/my/settings — global personal settings, the avatar-menu entry point, and email verification confirmation pages" -->
-<!-- @template name="Account settings" description="Global signed-in Person settings: profile basics, club memberships, and self-service email-address verification (iteration 053)" -->
+<!-- @dsCard group="Member App" viewport="1320x2400" name="Account settings" subtitle="/my/settings — global personal settings: editable profile (name + photo), club memberships, email verification" -->
+<!-- @template name="Account settings" description="Global signed-in Person settings: editable profile name and avatar (iteration 054), club memberships, and self-service email-address verification (iteration 053)" -->
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
@@ -66,6 +66,11 @@
       border: 1px solid var(--color-line-strong); border-radius: 999px; color: var(--color-ink-2);
       font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; padding: 7px 10px; white-space: nowrap;
     }
+    .section-heading {
+      max-width: 1264px; margin: 8px auto -6px; width: 100%;
+      color: var(--color-ink); font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .section-heading span { color: var(--color-ink-3); font-weight: 600; letter-spacing: 0; text-transform: none; }
     .surface-caption {
       background: var(--color-sage-800); color: var(--color-cream);
       display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px;
@@ -76,6 +81,7 @@
       background: var(--color-paper); border: 1px solid var(--color-line-strong); border-radius: 24px;
       box-shadow: 0 16px 40px rgb(37 41 29 / 0.08); overflow: hidden; min-width: 0;
     }
+    .surface-card__pad { padding: 18px; }
 
     .mockup-grid { display: grid; gap: 24px; max-width: 1264px; margin: 0 auto; width: 100%; }
     .mockup-grid__row { display: grid; gap: 24px; }
@@ -137,6 +143,61 @@
     }
     .profile-name { color: var(--color-ink); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
     .profile-note { color: var(--color-ink-2); font-size: 13px; line-height: 1.5; }
+
+    /* ============================================================
+       ---- Editable profile: photo + name (iteration 054). ----
+       The Profile tab was display-only in iteration 053. It now owns two
+       editable fields, both saved from this page, with the same visual
+       grammar as the Emails tab: a labelled field, an inline control row,
+       and feedback rendered as an .alert in a .state-row underneath.
+       ============================================================ */
+    .profile-fields { display: grid; gap: 4px; }
+    .profile-field { display: grid; gap: 10px; padding: 14px 0; }
+    .profile-field:first-child { padding-top: 0; }
+    .profile-field:last-child { padding-bottom: 0; }
+    .profile-field + .profile-field { border-top: 1px solid var(--color-line); }
+    .profile-field__label {
+      color: var(--color-ink-3); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+
+    /* Photo field. The initials avatar stays the fallback everywhere in the
+       app — an uploaded photo replaces it, it does not replace the pattern. */
+    .profile-photo { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .profile-avatar--lg { width: 72px; height: 72px; font-size: 24px; letter-spacing: 0.01em; }
+    .profile-avatar--photo {
+      background-color: var(--color-sage-200);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0.3' y2='1'%3E%3Cstop offset='0' stop-color='%23cfd9bd'/%3E%3Cstop offset='1' stop-color='%236f8760'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='80' height='80' fill='url(%23g)'/%3E%3Ccircle cx='40' cy='30' r='13' fill='%23f6f5ea' opacity='0.92'/%3E%3Cpath d='M11 80c0-16.5 13-25 29-25s29 8.5 29 25z' fill='%23f6f5ea' opacity='0.92'/%3E%3C/svg%3E");
+      background-size: cover; background-position: center;
+      color: transparent; /* initials stay in the DOM as the alt/fallback text */
+    }
+    .profile-photo__controls { display: grid; gap: 6px; flex: 1 1 150px; min-width: 0; }
+    .profile-photo__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .profile-hint { color: var(--color-ink-3); font-size: 12px; line-height: 1.45; max-width: 42ch; }
+
+    /* Uploading: the avatar dims under a determinate bar rather than swapping
+       to a spinner, so the target of the upload stays visible the whole time. */
+    .profile-avatar--uploading { position: relative; overflow: hidden; }
+    .profile-avatar--uploading::after {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      background: rgb(37 41 29 / 0.45);
+    }
+    .upload-progress { display: grid; gap: 6px; max-width: 260px; }
+    .upload-progress__track {
+      background: var(--color-base-300); border-radius: 999px; height: 6px; overflow: hidden; width: 100%;
+    }
+    .upload-progress__bar { background: var(--color-sage-500); border-radius: 999px; height: 100%; }
+    .upload-progress__label { color: var(--color-ink-2); font-size: 12px; font-weight: 600; }
+
+    /* Name field. Display row collapses to an inline form while editing —
+       no modal, matching the in-place editing used elsewhere on this page. */
+    .profile-name-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .profile-name-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .profile-name-form .input-wrap { flex: 1 1 200px; }
+    .profile-name-form__actions { display: flex; gap: 8px; flex: none; }
+    .profile-name-form .btn { height: 2.5rem; min-height: 2.5rem; }
+    .input-error { border-color: var(--color-error); }
+    .field-error { color: var(--color-error); font-size: 12px; font-weight: 600; line-height: 1.4; }
 
     .club-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
     .club-chip {
@@ -203,13 +264,13 @@
   <div class="preview-shell">
     <header class="preview-title">
       <div>
-        <p class="preview-title__eyebrow">Design-system catch-up · iteration 053</p>
+        <p class="preview-title__eyebrow">Member app · iterations 053 + 054</p>
         <h1>Account settings</h1>
         <p>
-          Global signed-in Person settings at <code>/my/settings</code>: profile basics, current club
-          memberships (deliberately cross-club, not scoped to one club), and self-service email-address
-          verification. Bundled with the avatar-menu entry point and the two new confirmation-page states
-          it introduces.
+          Global signed-in Person settings at <code>/my/settings</code>: an editable profile (name and
+          photo), current club memberships (deliberately cross-club, not scoped to one club), and
+          self-service email-address verification. Bundled with the avatar-menu entry point, the
+          Profile tab's editing/upload/error states, and the two email-verification confirmation pages.
         </p>
       </div>
       <span class="variant-label">repo: templates/account-settings.html</span>
@@ -221,7 +282,7 @@
         <article class="surface-card">
           <div class="surface-caption">
             <strong>Account settings — page</strong>
-            <span>/my/settings</span>
+            <span>/my/settings/profile</span>
           </div>
 
           <div id="club-site-layout" data-surface="club-site" class="app-frame" style="min-height:auto; padding:20px;">
@@ -270,11 +331,31 @@
                         <div class="settings-card">
                           <div class="settings-card__head">
                             <h3 class="settings-card__title">Profile</h3>
+                            <p class="settings-card__meta">Your name and photo are how the other members of your clubs recognise you.</p>
                           </div>
                           <div class="settings-card__body">
-                            <div class="profile-identity">
-                              <div class="profile-avatar">LT</div>
-                              <p class="profile-name">Lou Thirgood</p>
+                            <div class="profile-fields">
+                              <div class="profile-field" data-field="photo" data-state="photo-set">
+                                <span class="profile-field__label">Photo</span>
+                                <div class="profile-photo">
+                                  <div class="profile-avatar profile-avatar--lg profile-avatar--photo" id="my-settings-profile-avatar" role="img" aria-label="Your profile photo">LT</div>
+                                  <div class="profile-photo__controls">
+                                    <div class="profile-photo__actions">
+                                      <button class="btn btn-soft btn-sm" type="button">Change photo</button>
+                                      <button class="btn btn-ghost btn-sm" type="button">Remove photo</button>
+                                    </div>
+                                    <p class="profile-hint">JPG, PNG, GIF or WebP — we’ll crop it to a square for you.</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div class="profile-field" data-field="name" data-state="display">
+                                <span class="profile-field__label">Name</span>
+                                <div class="profile-name-row">
+                                  <p class="profile-name">Lou Thirgood</p>
+                                  <button class="btn btn-soft btn-sm" type="button">Edit</button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -398,7 +479,7 @@
               </div>
               <div class="global-bar__id" style="position:relative;">
                 <button tabindex="0" role="button" class="global-bar__me">
-                  <div class="global-bar__avatar">LT</div>
+                  <div class="global-bar__avatar profile-avatar--photo" style="background-size:cover;">LT</div>
                 </button>
                 <div class="app-menu app-menu--id" style="position:absolute;">
                   <div class="app-menu__who"><div class="app-menu__who-name">Lou Thirgood</div><div class="app-menu__who-email">lou@example.com</div></div>
@@ -408,16 +489,268 @@
                 </div>
               </div>
             </div>
-            <p class="menu-context-note" style="color:var(--color-cream); opacity:0.75;">
+            <!-- Pushed clear of the absolutely-positioned menu panel above it. -->
+            <p class="menu-context-note" style="color:var(--color-cream); opacity:0.75; margin-top:150px;">
               The avatar menu now lives in the app-wide <code>.global-bar</code>, not the club bar —
               <code>Account settings</code> sits above the existing <code>Sign out</code>, separated by
-              <code>.app-menu__signout</code>'s own top border.
+              <code>.app-menu__signout</code>'s own top border. Once a member sets a photo it replaces
+              the initials <em>here too</em>, and anywhere else an avatar is drawn (member rows,
+              conversation avatar-stacks) — initials remain the fallback, not a separate pattern.
             </p>
           </div>
         </article>
       </div>
 
-      <!-- Row 2: the two confirmation pages this iteration introduces. -->
+      <!-- Row 2: Profile tab — the editable name field's states. -->
+      <p class="section-heading">Profile tab · name <span>— in-place editing, no modal</span></p>
+      <div class="mockup-grid__row mockup-grid__row--thirds">
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Name — display</strong>
+            <span>default</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="name" data-state="display">
+                  <span class="profile-field__label">Name</span>
+                  <div class="profile-name-row">
+                    <p class="profile-name">Lou Thirgood</p>
+                    <button class="btn btn-soft btn-sm" type="button">Edit</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Name — editing</strong>
+            <span>Save / Cancel</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="name" data-state="editing">
+                  <span class="profile-field__label">Name</span>
+                  <div class="profile-name-form">
+                    <div class="input-wrap">
+                      <label for="settings-name-input" class="field-label">Your name</label>
+                      <input id="settings-name-input" class="input" type="text" value="Lou Thirgood">
+                    </div>
+                    <div class="profile-name-form__actions">
+                      <button class="btn btn-primary btn-sm" type="button">Save</button>
+                      <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Name — empty-name error</strong>
+            <span>blocked save</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="name" data-state="error">
+                  <span class="profile-field__label">Name</span>
+                  <div class="profile-name-form">
+                    <div class="input-wrap">
+                      <label for="settings-name-input-error" class="field-label">Your name</label>
+                      <input id="settings-name-input-error" class="input input-error" type="text" value="" aria-invalid="true" aria-describedby="settings-name-error">
+                    </div>
+                    <div class="profile-name-form__actions">
+                      <button class="btn btn-primary btn-sm" type="button">Save</button>
+                      <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
+                    </div>
+                  </div>
+                  <p class="field-error" id="settings-name-error">Enter the name your clubs should see.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Row 3: Profile tab — the photo field's states. -->
+      <p class="section-heading">Profile tab · photo <span>— set, change, remove, upload, rejected</span></p>
+      <div class="mockup-grid__row mockup-grid__row--thirds">
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — none set</strong>
+            <span>initials fallback</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="no-photo">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg" role="img" aria-label="Your initials, LT">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-soft btn-sm" type="button">Add a photo</button>
+                      </div>
+                      <p class="profile-hint">Until you add one, your clubs see your initials.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — uploading</strong>
+            <span>determinate progress</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="uploading">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg profile-avatar--photo profile-avatar--uploading" role="img" aria-label="Uploading your new photo">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="upload-progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100">
+                        <div class="upload-progress__track"><div class="upload-progress__bar" style="width:62%"></div></div>
+                        <p class="upload-progress__label">Uploading your photo…</p>
+                      </div>
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — set</strong>
+            <span>change / remove</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="photo-set">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg profile-avatar--photo" role="img" aria-label="Your profile photo">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-soft btn-sm" type="button">Change photo</button>
+                        <button class="btn btn-ghost btn-sm" type="button">Remove photo</button>
+                      </div>
+                      <p class="profile-hint">Removing it puts your initials back.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Row 4: Profile tab — rejected uploads and the saved confirmation. -->
+      <div class="mockup-grid__row mockup-grid__row--thirds">
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — file too large</strong>
+            <span>rejected before upload</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="error-too-large">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg" role="img" aria-label="Your initials, LT">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-soft btn-sm" type="button">Add a photo</button>
+                      </div>
+                      <p class="profile-hint">JPG, PNG, GIF or WebP — we’ll crop it to a square for you.</p>
+                    </div>
+                  </div>
+                  <div class="state-row">
+                    <div class="alert alert-error">That photo is bigger than 25&nbsp;MB. Choose a smaller one.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — wrong file type</strong>
+            <span>rejected before upload</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="error-wrong-type">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg" role="img" aria-label="Your initials, LT">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-soft btn-sm" type="button">Add a photo</button>
+                      </div>
+                      <p class="profile-hint">JPG, PNG, GIF or WebP — we’ll crop it to a square for you.</p>
+                    </div>
+                  </div>
+                  <div class="state-row">
+                    <div class="alert alert-error">That file isn't an image we can use. Choose a JPG, PNG, GIF or WebP.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="surface-caption">
+            <strong>Photo — upload failed</strong>
+            <span>retry, photo unchanged</span>
+          </div>
+          <div class="surface-card__pad">
+            <div class="settings-card">
+              <div class="settings-card__body">
+                <div class="profile-field" data-field="photo" data-state="error-upload-failed">
+                  <span class="profile-field__label">Photo</span>
+                  <div class="profile-photo">
+                    <div class="profile-avatar profile-avatar--lg profile-avatar--photo" role="img" aria-label="Your profile photo">LT</div>
+                    <div class="profile-photo__controls">
+                      <div class="profile-photo__actions">
+                        <button class="btn btn-soft btn-sm" type="button">Try again</button>
+                        <button class="btn btn-ghost btn-sm" type="button">Remove photo</button>
+                      </div>
+                      <p class="profile-hint">Your existing photo is still in place.</p>
+                    </div>
+                  </div>
+                  <div class="state-row">
+                    <div class="alert alert-error">We couldn't upload that photo. Please try again.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Row 5: the two email-verification confirmation pages (iteration 053). -->
+      <p class="section-heading">Email verification <span>— confirmation pages (iteration 053)</span></p>
       <div class="mockup-grid__row mockup-grid__row--thirds" style="grid-template-columns: repeat(2, minmax(0,1fr));">
         <article class="surface-card">
           <div class="surface-caption">
@@ -502,6 +835,21 @@
     /my/settings/profile, /my/settings/clubs, /my/settings/emails), the same way
     club-home's Conversations/Members tabs work, not with client-side-only
     show/hide toggling.
+
+    Likewise, the Profile tab's editing states above are drawn as separate
+    static surfaces. In the real page they are one field rendering differently:
+    the name field swaps between its display row and its inline form, and the
+    photo field is a LiveView upload (Phoenix.LiveView.allow_upload/3) whose
+    progress, client-side rejection (:too_large / :not_accepted) and server-side
+    failure map onto the uploading / rejected / failed states shown here.
+
+    There is deliberately NO crop screen. A LiveView JS hook downscales and
+    centre-crops the chosen file to a square in a canvas before it is uploaded,
+    so the member's path is pick -> progress -> done. That is why the hint says
+    "we'll crop it to a square for you" rather than naming a pixel size, and why
+    the size-limit error is a 25 MB guard rail on the file the member picked
+    (checked before the browser tries to decode it), not a limit on what gets
+    stored — what reaches the server is the small square the hook produced.
   -->
   <script>
     document.querySelectorAll('.settings-tabs').forEach(function (nav) {
