@@ -47,6 +47,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
       }
     })
 
+    await_delivery_projection!()
+
     assert [message] = Messaging.list_messages_for_club(club_id)
     assert Memba.ID.valid?(:message, message.message_id)
     assert message.sender_id == alice.person_id
@@ -128,6 +130,42 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert Fake.deliveries() == []
   end
 
+  test "submit accepts the message without waiting for every delivery diagnostics projector", %{
+    conn: conn
+  } do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    stop_projector!(Memba.Messaging.Projectors.MembaStaffEmailDelivery)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new")
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Trip planning night",
+        "body" => "Bring route ideas."
+      }
+    })
+
+    await_delivery_projection!()
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert message.sender_id == alice.person_id
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-compose-state='sent'][data-sent-message-id='#{message.message_id}']"
+           )
+
+    refute has_element?(view, "#member-compose-error-state")
+  end
+
   test "provider failure still accepts the message and renders the success state", %{
     conn: conn
   } do
@@ -159,6 +197,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert has_element?(view, "#member-compose-success-state", "Your message is being sent.")
     refute has_element?(view, "#member-compose-error-state")
     refute has_element?(view, "#member-message-compose-form")
+
+    await_delivery_projection!()
 
     assert [message] = Messaging.list_messages_for_club(club_id)
 
@@ -226,6 +266,50 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              )
 
     %{club_id: club_id, person_id: person_id}
+  end
+
+  defp await_delivery_projection! do
+    Memba.ProjectionBarrier.await!(
+      [
+        Memba.Messaging.Projectors.EmailDelivery,
+        Memba.Messaging.Projectors.MemberEmailDelivery
+      ],
+      timeout: 1_000
+    )
+  end
+
+  defp stop_projector!(projector) do
+    child_id = projector_child_id!(projector)
+
+    case Supervisor.terminate_child(Memba.Supervisor, child_id) do
+      :ok ->
+        on_exit(fn -> restart_projector!(child_id) end)
+        :ok
+
+      {:error, :not_found} ->
+        flunk("Expected #{inspect(projector)} to be supervised")
+    end
+  end
+
+  defp projector_child_id!(projector) do
+    Supervisor.which_children(Memba.Supervisor)
+    |> Enum.find_value(fn
+      {child_id, _pid, :worker, [module]} when module == projector -> child_id
+      _child -> nil
+    end)
+    |> case do
+      nil -> flunk("Expected #{inspect(projector)} to be supervised")
+      child_id -> child_id
+    end
+  end
+
+  defp restart_projector!(child_id) do
+    case Supervisor.restart_child(Memba.Supervisor, child_id) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+      {:error, :not_found} -> :ok
+    end
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

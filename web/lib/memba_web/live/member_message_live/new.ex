@@ -14,6 +14,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
   alias Memba.Messaging
+  alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
@@ -388,7 +389,7 @@ defmodule MembaWeb.MemberMessageLive.New do
         "body" => Map.get(message_params, "body", "")
       }
 
-      case Messaging.send_club_message(attrs, consistency: :strong) do
+      case Messaging.send_club_message(attrs, consistency: [MessageProjector]) do
         :ok -> {:ok, message_id}
         {:ok, _result} -> {:ok, message_id}
         {:error, reason} -> {:error, reason}
@@ -399,10 +400,12 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   defp log_send_failure(socket, reason) do
-    Logger.error("Member message send failed",
+    inspected_reason = inspect(reason)
+
+    Logger.error("Member message send failed: #{inspected_reason}",
       club_id: selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),
       sender_id: current_member_id(socket.assigns.current_member),
-      reason: inspect(reason)
+      reason: inspected_reason
     )
   end
 

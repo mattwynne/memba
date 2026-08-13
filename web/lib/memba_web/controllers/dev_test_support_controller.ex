@@ -8,6 +8,7 @@ defmodule MembaWeb.DevTestSupportController do
   alias Memba.Accounts
   alias Memba.Accounts.SignInToken
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Messaging.EmailDeliveryProviders.Local, as: LocalEmailDeliveryProvider
   alias Memba.Repo
 
   @projection_versions_table :projection_versions
@@ -60,6 +61,7 @@ defmodule MembaWeb.DevTestSupportController do
     try do
       reset_event_store!()
       reset_public_tables!()
+      reset_acceptance_application_state!()
     after
       start_event_sourced_projectors!(projector_child_ids)
     end
@@ -221,6 +223,10 @@ defmodule MembaWeb.DevTestSupportController do
       VALUES (0, '$all', 0);
       """)
     end)
+  end
+
+  defp reset_acceptance_application_state! do
+    Application.put_env(:memba, :messaging_email_delivery_provider, LocalEmailDeliveryProvider)
   end
 
   defp reset_public_tables! do

@@ -33,6 +33,15 @@ defmodule MembaWeb.DevTestSupportControllerTest do
     assert Application.get_env(:memba, :messaging_email_delivery_provider) == Local
   end
 
+  test "POST /dev/test-support/reset restores the local messaging provider", %{conn: conn} do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
+
+    conn = post(conn, ~p"/dev/test-support/reset")
+
+    assert response(conn, 204) == ""
+    assert Application.get_env(:memba, :messaging_email_delivery_provider) == Local
+  end
+
   test "POST /dev/test-support/sign-in stores the signed-in identity in the browser session",
        %{conn: conn} do
     conn = post(conn, ~p"/dev/test-support/sign-in", %{"email" => "Alice@Example.Test"})

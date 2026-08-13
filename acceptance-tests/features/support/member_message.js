@@ -1110,9 +1110,16 @@ async function sendMemberMessageToKootenayMembers(
   });
 
   const sentState = world.page.locator("#member-message-compose[data-compose-state=\"sent\"]");
-  await waitForProjectedVisible(world, sentState, `member compose success for ${JSON.stringify(subject)}`, {
-    expect
-  });
+  try {
+    await waitForProjectedVisible(world, sentState, `member compose success for ${JSON.stringify(subject)}`, {
+      expect
+    });
+  } catch (error) {
+    throw new Error(
+      `${errorMessage(error)}\nMember compose diagnostics:\n${await memberComposeDiagnostics(world)}`,
+      { cause: error }
+    );
+  }
 
   const messageId = await sentState.getAttribute("data-sent-message-id");
   assert.ok(messageId, `Expected compose success state to expose a message id for ${JSON.stringify(subject)}`);
@@ -1137,6 +1144,33 @@ async function sendMemberMessageToKootenayMembers(
   world.lastMessageSubject = subject;
 
   return world;
+}
+
+async function memberComposeDiagnostics(world) {
+  const diagnostics = [`url=${world.page && typeof world.page.url === "function" ? world.page.url() : "(unknown)"}`];
+  const compose = world.page && world.page.locator("#member-message-compose");
+
+  if (!compose) {
+    diagnostics.push("compose=(page unavailable)");
+    return diagnostics.join("\n");
+  }
+
+  try {
+    const count = await compose.count();
+    diagnostics.push(`compose_count=${count}`);
+
+    if (count > 0) {
+      const first = compose.first();
+      diagnostics.push(`compose_state=${await first.getAttribute("data-compose-state")}`);
+      diagnostics.push(`sent_message_id=${await first.getAttribute("data-sent-message-id")}`);
+      diagnostics.push(`active_member_count=${await first.getAttribute("data-active-member-count")}`);
+      diagnostics.push(`visible_text=${JSON.stringify((await first.innerText()).slice(0, 1000))}`);
+    }
+  } catch (error) {
+    diagnostics.push(`compose_diagnostics_error=${errorMessage(error)}`);
+  }
+
+  return diagnostics.join("\n");
 }
 
 async function sendInboundClubEmail(

@@ -17,6 +17,7 @@ const { closeHarnesses } = require("./member_harness");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
 let sharedBrowser = null;
+let infrastructureStopping = false;
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
 const progressLoggingEnabled = !new Set(["0", "false", "no"]).has(
   String(process.env.ACCEPTANCE_LOG_PROGRESS || "").toLowerCase()
@@ -34,6 +35,43 @@ function acceptanceLog(message) {
 function nowMs() {
   return Number(process.hrtime.bigint()) / 1_000_000;
 }
+
+async function stopAcceptanceInfrastructure(reason) {
+  if (infrastructureStopping) {
+    return;
+  }
+
+  infrastructureStopping = true;
+
+  if (sharedBrowser) {
+    acceptanceLog(`${reason}: closing shared browser`);
+    await sharedBrowser.close();
+    sharedBrowser = null;
+    acceptanceLog(`${reason}: closed shared browser`);
+  }
+
+  acceptanceLog(`${reason}: stopping Phoenix browser acceptance lifecycle`);
+  await lifecycle.stop();
+  acceptanceLog(`${reason}: stopped Phoenix browser acceptance lifecycle`);
+}
+
+function installSignalCleanup(signal, exitCode) {
+  process.once(signal, () => {
+    acceptanceLog(`received ${signal}; cleaning up browser acceptance infrastructure`);
+
+    stopAcceptanceInfrastructure(signal)
+      .catch((error) => {
+        process.stderr.write(
+          `[acceptance ${new Date().toISOString()}] cleanup after ${signal} failed: ${error.stack || error.message}\n`
+        );
+      })
+      .finally(() => process.exit(exitCode));
+  });
+}
+
+installSignalCleanup("SIGHUP", 128 + 1);
+installSignalCleanup("SIGINT", 128 + 2);
+installSignalCleanup("SIGTERM", 128 + 15);
 
 setDefaultTimeout(defaultStepTimeoutMs);
 configureBrowserEnvironment();
@@ -60,16 +98,7 @@ BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 
 });
 
 AfterAll({ name: "Stop Phoenix browser acceptance lifecycle", timeout: 120000 }, async function () {
-  if (sharedBrowser) {
-    acceptanceLog("AfterAll: closing shared browser");
-    await sharedBrowser.close();
-    sharedBrowser = null;
-    acceptanceLog("AfterAll: closed shared browser");
-  }
-
-  acceptanceLog("AfterAll: stopping Phoenix browser acceptance lifecycle");
-  await lifecycle.stop();
-  acceptanceLog("AfterAll: stopped Phoenix browser acceptance lifecycle");
+  await stopAcceptanceInfrastructure("AfterAll");
 });
 
 BeforeStep(function ({ pickleStep } = {}) {
