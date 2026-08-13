@@ -1,7 +1,7 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: validated
+Status: implementing
 
 ## Goal
 
