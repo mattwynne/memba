@@ -391,14 +391,14 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "#club-site-footer.app-foot")
     assert_text(html, "#club-site-footer", "Powered by Memba")
     assert_selector_count(html, "footer", 1)
-    refute html =~ "Red Donkey Technology Corp"
+    refute html =~ "Matt Wynne"
     refute html =~ "Footer navigation"
   end
 
   test "root layout keeps the public footer for public pages by default", %{conn: conn} do
     html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
 
-    assert_text(html, "footer", "Red Donkey Technology Corp")
+    assert_text(html, "footer", "Matt Wynne")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/privacy']")
