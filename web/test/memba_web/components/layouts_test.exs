@@ -399,6 +399,7 @@ defmodule MembaWeb.LayoutsTest do
     html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
 
     assert_text(html, "footer", "Matt Wynne")
+    assert_selector(html, "footer a[href='https://mattwynne.net']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/privacy']")
