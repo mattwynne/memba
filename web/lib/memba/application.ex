@@ -31,6 +31,7 @@ defmodule Memba.Application do
       Memba.Membership.Projectors.GroupMembership,
       Memba.Membership.Projectors.Role,
       Memba.Membership.Projectors.Person,
+      Memba.Membership.Policies.SystemGroupMembership,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       # Start a worker by calling: Memba.Worker.start_link(arg)
       # {Memba.Worker, arg},

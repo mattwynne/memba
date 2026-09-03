@@ -9,7 +9,7 @@
 - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
 - [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
 - [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
-- [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+- [x] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
 - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
 - [ ] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
 - [ ] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
