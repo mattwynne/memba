@@ -7,7 +7,7 @@
 - [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
 - [x] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
 - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
-- [ ] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+- [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
 - [ ] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
 - [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
 - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.

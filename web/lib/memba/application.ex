@@ -27,6 +27,8 @@ defmodule Memba.Application do
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.ClubInvitation,
       Memba.Membership.Projectors.Membership,
+      Memba.Membership.Projectors.Group,
+      Memba.Membership.Projectors.GroupMembership,
       Memba.Membership.Projectors.Role,
       Memba.Membership.Projectors.Person,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
