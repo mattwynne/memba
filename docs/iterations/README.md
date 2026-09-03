@@ -63,7 +63,7 @@ green than before.
 | 051 | 2026-07-09 | merged | Club home: conversation participant avatar-stack | [plan](051-conversation-participant-avatar-stack/plan.md) |
 | 052 | 2026-07-09 | merged | Desktop member app design-system alignment | [plan](052-desktop-member-app-design-alignment/plan.md) |
 | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
-| 056 | 2026-09-02 | validated | Group audience foundation: Everyone and Admin | [plan](056-group-audience-foundation/plan.md) |
+| 056 | 2026-09-02 | implementing | Group audience foundation: Everyone and Admin | [plan](056-group-audience-foundation/plan.md) |
 | 098 | 2026-08-13 | validated | Members change their own name | [plan](098-member-name-editing/plan.md) |
 | 099 | 2026-08-13 | validated | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
 
