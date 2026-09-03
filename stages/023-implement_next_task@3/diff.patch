@@ -1,0 +1,569 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 056f611..4cc82c5 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+ - [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+-- [ ] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
++- [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+ - [ ] 004 Define deterministic Everyone and Admin group IDs.
+ - [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+ - [ ] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index fb8b716..fc1b790 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -5,16 +5,22 @@ defmodule Memba.Membership.Club do
+ 
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.ID
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+@@ -27,6 +33,9 @@ defmodule Memba.Membership.Club do
+     :club_id,
+     :name,
+     :slug,
++    groups: %{},
++    group_keys: %{},
++    group_memberships: %{},
+     roles: %{},
+     role_keys: %{},
+     role_permissions: %{},
+@@ -93,6 +102,54 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  def execute(%__MODULE__{club_id: nil}, %CreateGroup{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %CreateGroup{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         {:ok, name} <- normalize_name(command.name),
++         {:ok, group_key} <- normalize_group_key(command.group_key) do
++      %GroupCreated{
++        club_id: command.club_id,
++        group_id: command.group_id,
++        group_key: group_key,
++        name: name
++      }
++    end
++  end
++
++  def execute(%__MODULE__{club_id: nil}, %AddGroupMember{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %AddGroupMember{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
++      %GroupMemberAdded{
++        club_id: command.club_id,
++        group_id: command.group_id,
++        membership_id: command.membership_id,
++        person_id: command.person_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{club_id: nil}, %RemoveGroupMember{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %RemoveGroupMember{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
++      %GroupMemberRemoved{
++        club_id: command.club_id,
++        group_id: command.group_id,
++        membership_id: command.membership_id,
++        person_id: command.person_id
++      }
++    end
++  end
++
+   def execute(%__MODULE__{club_id: nil}, %AssignMemberRole{}), do: {:error, :not_created}
+ 
+   def execute(%__MODULE__{} = club, %AssignMemberRole{} = command) do
+@@ -182,6 +239,38 @@ defmodule Memba.Membership.Club do
+     %__MODULE__{club | name: event.name, slug: event.slug}
+   end
+ 
++  def apply(%__MODULE__{} = club, %GroupCreated{} = event) do
++    group = %{group_id: event.group_id, group_key: event.group_key, name: event.name}
++
++    %__MODULE__{
++      club
++      | groups: Map.put(club.groups, event.group_id, group),
++        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id)
++    }
++  end
++
++  def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
++    group_membership = %{person_id: event.person_id, active: true}
++    group_membership_key = group_membership_key(event.group_id, event.membership_id)
++
++    %__MODULE__{
++      club
++      | group_memberships:
++          Map.put(club.group_memberships, group_membership_key, group_membership)
++    }
++  end
++
++  def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
++    group_membership = %{person_id: event.person_id, active: false}
++    group_membership_key = group_membership_key(event.group_id, event.membership_id)
++
++    %__MODULE__{
++      club
++      | group_memberships:
++          Map.put(club.group_memberships, group_membership_key, group_membership)
++    }
++  end
++
+   def apply(%__MODULE__{} = club, %MemberRoleAssigned{} = event) do
+     assignment = %{person_id: event.person_id}
+     assignment_key = role_assignment_key(event.membership_id, event.role_id)
+@@ -243,6 +332,18 @@ defmodule Memba.Membership.Club do
+ 
+   defp normalize_role_key(_role_key), do: {:error, :invalid_role_key}
+ 
++  defp normalize_group_key(nil), do: {:ok, nil}
++  defp normalize_group_key(""), do: {:ok, nil}
++
++  defp normalize_group_key(group_key) when is_binary(group_key) do
++    case String.trim(group_key) do
++      "" -> {:ok, nil}
++      trimmed_group_key -> {:ok, trimmed_group_key}
++    end
++  end
++
++  defp normalize_group_key(_group_key), do: {:error, :invalid_group_key}
++
+   defp ensure_role_id_available(%__MODULE__{} = club, role_id) do
+     if Map.has_key?(club.roles, role_id) do
+       {:error, :role_already_defined}
+@@ -309,4 +410,9 @@ defmodule Memba.Membership.Club do
+   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+ 
+   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
++
++  defp put_group_key(group_keys, nil, _group_id), do: group_keys
++  defp put_group_key(group_keys, group_key, group_id), do: Map.put(group_keys, group_key, group_id)
++
++  defp group_membership_key(group_id, membership_id), do: {group_id, membership_id}
+ end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 4688c33..c679882 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -10,15 +10,18 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Membership
+   alias Memba.Membership.Person
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.InviteClubMember
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
+@@ -33,15 +36,18 @@ defmodule Memba.Membership.Router do
+   identify(Person, by: :person_id)
+ 
+   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)
++  dispatch(AddGroupMember, to: Club)
+   dispatch(AddMember, to: Membership)
+   dispatch(AddPersonEmailAddress, to: Person)
+   dispatch(AssignMemberRole, to: Club)
+   dispatch(CreateClub, to: Club)
++  dispatch(CreateGroup, to: Club)
+   dispatch(CreatePerson, to: Person)
+   dispatch(DefineClubRole, to: Club)
+   dispatch(GrantClubRolePermission, to: Club)
+   dispatch(InviteClubMember, to: ClubInvitation)
+   dispatch(MakePersonEmailAddressPrimary, to: Person)
++  dispatch(RemoveGroupMember, to: Club)
+   dispatch(RemoveMember, to: Membership)
+   dispatch(RemoveMemberRole, to: Club)
+   dispatch(RemovePersonEmailAddress, to: Person)
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index d9c231c..ed32ec7 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -5,15 +5,18 @@ defmodule Memba.Membership.AppTest do
+ 
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.InviteClubMember
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.RemovePersonEmailAddress
+@@ -81,15 +84,18 @@ defmodule Memba.Membership.AppTest do
+     expected_commands =
+       MapSet.new([
+         AcceptClubMemberInvitation,
++        AddGroupMember,
+         AddMember,
+         AddPersonEmailAddress,
+         AssignMemberRole,
+         CreateClub,
++        CreateGroup,
+         CreatePerson,
+         DefineClubRole,
+         GrantClubRolePermission,
+         InviteClubMember,
+         MakePersonEmailAddressPrimary,
++        RemoveGroupMember,
+         RemoveMember,
+         RemoveMemberRole,
+         RemovePersonEmailAddress,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 144f0be..26999b0 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -2,16 +2,22 @@ defmodule Memba.Membership.ClubTest do
+   use ExUnit.Case, async: true
+ 
+   alias Memba.Membership.Club
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+@@ -272,6 +278,72 @@ defmodule Memba.Membership.ClubTest do
+     end
+   end
+ 
++  describe "execute/2 group commands" do
++    test "emits group definition and membership events for an existing club" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++      club = created_club(club_id)
++
++      assert %GroupCreated{
++               club_id: ^club_id,
++               group_id: ^group_id,
++               group_key: "everyone",
++               name: "Everyone"
++             } =
++               Club.execute(club, %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 group_key: "everyone",
++                 name: " Everyone "
++               })
++
++      assert %GroupMemberAdded{
++               club_id: ^club_id,
++               group_id: ^group_id,
++               membership_id: ^membership_id,
++               person_id: ^person_id
++             } =
++               Club.execute(club, %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      assert %GroupMemberRemoved{
++               club_id: ^club_id,
++               group_id: ^group_id,
++               membership_id: ^membership_id,
++               person_id: ^person_id
++             } =
++               Club.execute(club, %RemoveGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++    end
++
++    test "rejects group commands before the club exists" do
++      ids = group_membership_ids()
++
++      assert {:error, :not_created} =
++               Club.execute(%Club{}, %CreateGroup{
++                 club_id: ids.club_id,
++                 group_id: ids.group_id,
++                 name: "Everyone"
++               })
++
++      assert {:error, :not_created} =
++               Club.execute(%Club{}, struct!(AddGroupMember, ids))
++
++      assert {:error, :not_created} =
++               Club.execute(%Club{}, struct!(RemoveGroupMember, ids))
++    end
++  end
++
+   describe "execute/2 AssignMemberRole and RemoveMemberRole" do
+     test "emits role assignment and role removal events for a member" do
+       club_id = Memba.ID.generate(:club)
+@@ -437,6 +509,51 @@ defmodule Memba.Membership.ClubTest do
+              })
+   end
+ 
++  test "apply/2 records group definitions and current group membership state" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    club =
++      club_id
++      |> created_club()
++      |> create_group(group_id, "everyone", "Everyone")
++      |> add_group_member(group_id, membership_id, person_id)
++
++    assert %{
++             ^group_id => %{
++               group_id: ^group_id,
++               group_key: "everyone",
++               name: "Everyone"
++             }
++           } = club.groups
++
++    assert %{"everyone" => ^group_id} = club.group_keys
++
++    assert %{
++             {^group_id, ^membership_id} => %{
++               person_id: ^person_id,
++               active: true
++             }
++           } = club.group_memberships
++
++    assert %Club{
++             group_memberships: %{
++               {^group_id, ^membership_id} => %{
++                 person_id: ^person_id,
++                 active: false
++               }
++             }
++           } =
++             Club.apply(club, %GroupMemberRemoved{
++               club_id: club_id,
++               group_id: group_id,
++               membership_id: membership_id,
++               person_id: person_id
++             })
++  end
++
+   defp created_club(club_id) do
+     Club.apply(%Club{}, %ClubCreated{
+       club_id: club_id,
+@@ -470,4 +587,31 @@ defmodule Memba.Membership.ClubTest do
+       role_id: role_id
+     })
+   end
++
++  defp create_group(%Club{} = club, group_id, group_key, name) do
++    Club.apply(club, %GroupCreated{
++      club_id: club.club_id,
++      group_id: group_id,
++      group_key: group_key,
++      name: name
++    })
++  end
++
++  defp add_group_member(%Club{} = club, group_id, membership_id, person_id) do
++    Club.apply(club, %GroupMemberAdded{
++      club_id: club.club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id
++    })
++  end
++
++  defp group_membership_ids do
++    %{
++      club_id: Memba.ID.generate(:club),
++      group_id: Memba.ID.generate(:group),
++      membership_id: Memba.ID.generate(:membership),
++      person_id: Memba.ID.generate(:person)
++    }
++  end
+ end
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index 81fe557..ee39c2a 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -4,16 +4,22 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App
+   alias Memba.Membership.Club
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+@@ -238,4 +244,100 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                consistency: :strong
+              )
+   end
++
++  test "Membership app dispatch routes group commands to the Club aggregate" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              aggregate_version: 4,
++              events: [
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  group_key: "everyone",
++                  name: "Everyone"
++                }
++              ]
++            }} =
++             App.dispatch(
++               %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 group_key: "everyone",
++                 name: "Everyone"
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              aggregate_version: 5,
++              events: [
++                %GroupMemberAdded{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  membership_id: ^membership_id,
++                  person_id: ^person_id
++                }
++              ]
++            }} =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              aggregate_version: 6,
++              events: [
++                %GroupMemberRemoved{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  membership_id: ^membership_id,
++                  person_id: ^person_id
++                }
++              ],
++              aggregate_state: %Club{
++                club_id: ^club_id,
++                groups: %{^group_id => %{group_key: "everyone"}},
++                group_memberships: %{
++                  {^group_id, ^membership_id} => %{person_id: ^person_id, active: false}
++                }
++              }
++            }} =
++             App.dispatch(
++               %RemoveGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
+ end

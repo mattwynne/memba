@@ -1,0 +1,114 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 4cc82c5..2718c55 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+ - [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+ - [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+-- [ ] 004 Define deterministic Everyone and Admin group IDs.
++- [x] 004 Define deterministic Everyone and Admin group IDs.
+ - [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+ - [ ] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+ - [ ] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+diff --git a/web/lib/memba/membership/system_groups.ex b/web/lib/memba/membership/system_groups.ex
+new file mode 100644
+index 0000000..3ea9c19
+--- /dev/null
++++ b/web/lib/memba/membership/system_groups.ex
+@@ -0,0 +1,39 @@
++defmodule Memba.Membership.SystemGroups do
++  @moduledoc """
++  Built-in Membership conversation group definitions.
++  """
++
++  alias Memba.ID
++
++  @system_group_id_seed "system-group"
++  @everyone_key "everyone"
++  @everyone_name "Everyone"
++  @admin_key "admin"
++  @admin_name "Admin"
++
++  @doc "Stable group key for the built-in Everyone conversation group."
++  def everyone_key, do: @everyone_key
++
++  @doc "Display name for the built-in Everyone conversation group."
++  def everyone_name, do: @everyone_name
++
++  @doc "Deterministic group ID for a club's built-in Everyone conversation group."
++  def everyone_group_id(club_id) when is_binary(club_id) do
++    group_id(club_id, @everyone_key)
++  end
++
++  @doc "Stable group key for the built-in Admin conversation group."
++  def admin_key, do: @admin_key
++
++  @doc "Display name for the built-in Admin conversation group."
++  def admin_name, do: @admin_name
++
++  @doc "Deterministic group ID for a club's built-in Admin conversation group."
++  def admin_group_id(club_id) when is_binary(club_id) do
++    group_id(club_id, @admin_key)
++  end
++
++  defp group_id(club_id, group_key) do
++    ID.deterministic(:group, [@system_group_id_seed, club_id, group_key])
++  end
++end
+diff --git a/web/test/memba/membership/system_groups_test.exs b/web/test/memba/membership/system_groups_test.exs
+new file mode 100644
+index 0000000..55f8e84
+--- /dev/null
++++ b/web/test/memba/membership/system_groups_test.exs
+@@ -0,0 +1,50 @@
++defmodule Memba.Membership.SystemGroupsTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.ID
++  alias Memba.Membership.SystemGroups
++
++  test "defines stable keys and display names for built-in conversation groups" do
++    assert SystemGroups.everyone_key() == "everyone"
++    assert SystemGroups.everyone_name() == "Everyone"
++    assert SystemGroups.admin_key() == "admin"
++    assert SystemGroups.admin_name() == "Admin"
++  end
++
++  test "derives deterministic typed IDs for the Everyone and Admin groups in a club" do
++    club_id = ID.generate(:club)
++
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    assert everyone_group_id == SystemGroups.everyone_group_id(club_id)
++    assert admin_group_id == SystemGroups.admin_group_id(club_id)
++    assert everyone_group_id != admin_group_id
++
++    assert String.starts_with?(everyone_group_id, "grp_")
++    assert String.starts_with?(admin_group_id, "grp_")
++    assert ID.valid?(:group, everyone_group_id)
++    assert ID.valid?(:group, admin_group_id)
++  end
++
++  test "scopes system group IDs to the club identity" do
++    first_club_id = ID.generate(:club)
++    second_club_id = ID.generate(:club)
++
++    assert SystemGroups.everyone_group_id(first_club_id) !=
++             SystemGroups.everyone_group_id(second_club_id)
++
++    assert SystemGroups.admin_group_id(first_club_id) !=
++             SystemGroups.admin_group_id(second_club_id)
++  end
++
++  test "documents the deterministic ID source parts for backfill and policy callers" do
++    club_id = ID.generate(:club)
++
++    assert SystemGroups.everyone_group_id(club_id) ==
++             ID.deterministic(:group, ["system-group", club_id, "everyone"])
++
++    assert SystemGroups.admin_group_id(club_id) ==
++             ID.deterministic(:group, ["system-group", club_id, "admin"])
++  end
++end

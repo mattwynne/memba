@@ -1,0 +1,228 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 59c430e..ff827e8 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+ - [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+ - [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+-- [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
++- [x] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+ - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+ - [ ] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+ - [ ] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 074155c..19e2f09 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -31,6 +31,7 @@ defmodule Memba.Application do
+       Memba.Membership.Projectors.GroupMembership,
+       Memba.Membership.Projectors.Role,
+       Memba.Membership.Projectors.Person,
++      Memba.Membership.Policies.SystemGroupMembership,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       # Start a worker by calling: Memba.Worker.start_link(arg)
+       # {Memba.Worker, arg},
+diff --git a/web/lib/memba/membership/policies/system_group_membership.ex b/web/lib/memba/membership/policies/system_group_membership.ex
+new file mode 100644
+index 0000000..198102a
+--- /dev/null
++++ b/web/lib/memba/membership/policies/system_group_membership.ex
+@@ -0,0 +1,15 @@
++defmodule Memba.Membership.Policies.SystemGroupMembership do
++  @moduledoc """
++  Keeps built-in group memberships aligned with membership and role lifecycle events.
++
++  The release backfill seeds existing clubs. This strongly consistent policy starts
++  from current events only and holds no process state, so future lifecycle events can
++  be handled idempotently by the Club aggregate.
++  """
++
++  use Commanded.Event.Handler,
++    application: Memba.Membership.App,
++    name: "Memba.Membership.Policies.SystemGroupMembership",
++    consistency: :strong,
++    start_from: :current
++end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index ed32ec7..0d6068a 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -29,6 +29,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.Projectors.Person, as: PersonProjector
+   alias Memba.Membership.Projectors.Role, as: RoleProjector
++  alias Memba.Membership.Policies.SystemGroupMembership
+   alias Memba.Membership.Router
+ 
+   test "Membership Commanded app is supervised by the Phoenix application" do
+@@ -78,6 +79,15 @@ defmodule Memba.Membership.AppTest do
+              _child ->
+                false
+            end)
++
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{SystemGroupMembership, _opts}, pid, :worker, [SystemGroupMembership]}
++             when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
+   end
+ 
+   test "Membership Commanded app includes the Membership router" do
+diff --git a/web/test/memba/membership/system_group_membership_policy_test.exs b/web/test/memba/membership/system_group_membership_policy_test.exs
+new file mode 100644
+index 0000000..79ac23f
+--- /dev/null
++++ b/web/test/memba/membership/system_group_membership_policy_test.exs
+@@ -0,0 +1,20 @@
++defmodule Memba.Membership.SystemGroupMembershipPolicyTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Membership.Policies.SystemGroupMembership
++
++  test "is a stateless strongly consistent Commanded event handler starting from current events" do
++    assert %{
++             id: {SystemGroupMembership, opts},
++             restart: :permanent,
++             start: {SystemGroupMembership, :start_link, [opts]},
++             type: :worker
++           } = SystemGroupMembership.child_spec([])
++
++    assert Keyword.fetch!(opts, :application) == Memba.Membership.App
++    assert Keyword.fetch!(opts, :name) == "Memba.Membership.Policies.SystemGroupMembership"
++    assert Keyword.fetch!(opts, :consistency) == :strong
++    assert Keyword.fetch!(opts, :start_from) == :current
++    refute Keyword.has_key?(opts, :state)
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 396f17c..f797301 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -25,6 +25,9 @@ defmodule Memba.EventSourcedCase do
+     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+     Memba.Messaging.Projectors.InboundEmailSource
+   ]
++  @event_handlers [
++    Memba.Membership.Policies.SystemGroupMembership
++  ]
+   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
+ 
+   using do
+@@ -51,29 +54,29 @@ defmodule Memba.EventSourcedCase do
+       raise "Memba.EventSourcedCase resets shared EventStore state and cannot be used with async: true"
+     end
+ 
+-    projector_child_ids = stop_event_sourced_projectors!()
++    subscriber_child_ids = stop_event_sourced_subscribers!()
+     stop_commanded_aggregate_instances!()
+     reset_event_sourced_storage!()
+     reset_commanded_subscription_acks!()
+     Memba.DataCase.setup_sandbox(tags)
+-    start_event_sourced_projectors!(projector_child_ids)
++    start_event_sourced_subscribers!(subscriber_child_ids)
+     :ok
+   end
+ 
+   @doc """
+-  Reset shared event-sourced storage while keeping projector subscriptions coherent.
++  Reset shared event-sourced storage while keeping EventStore subscriber subscriptions coherent.
+ 
+   Use this from tests that are not using `Memba.EventSourcedCase` but need to
+-  truncate EventStore/projection state. Resetting the tables while projectors
++  truncate EventStore/projection state. Resetting the tables while subscribers
+   remain subscribed can leave later strong-consistency dispatches waiting for
+   acknowledgements that will never arrive.
+   """
+   def reset_event_sourced_system! do
+-    projector_child_ids = stop_event_sourced_projectors!()
++    subscriber_child_ids = stop_event_sourced_subscribers!()
+     stop_commanded_aggregate_instances!()
+     reset_event_sourced_storage!()
+     reset_commanded_subscription_acks!()
+-    start_event_sourced_projectors!(projector_child_ids)
++    start_event_sourced_subscribers!(subscriber_child_ids)
+     :ok
+   end
+ 
+@@ -91,18 +94,18 @@ defmodule Memba.EventSourcedCase do
+   Rebuild configured event-sourced projections from the retained EventStore history.
+ 
+   This clears projection read models and Commanded subscription acknowledgements
+-  without deleting EventStore events, then restarts the supervised projectors so
++  without deleting EventStore events, then restarts the supervised subscribers so
+   callers can wait for them to replay with `Memba.ProjectionBarrier`.
+   """
+   def rebuild_event_sourced_projections! do
+-    projector_child_ids = stop_event_sourced_projectors!()
++    subscriber_child_ids = stop_event_sourced_subscribers!()
+ 
+     try do
+       reset_projection_tables_in_sandbox!()
+       reset_commanded_subscription_acks!()
+       reset_event_store_subscription_checkpoints!()
+     after
+-      start_event_sourced_projectors!(projector_child_ids)
++      start_event_sourced_subscribers!(subscriber_child_ids)
+     end
+ 
+     :ok
+@@ -121,9 +124,9 @@ defmodule Memba.EventSourcedCase do
+     end)
+   end
+ 
+-  defp stop_event_sourced_projectors! do
++  defp stop_event_sourced_subscribers! do
+     for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
+-        module in @projectors do
++        module in event_sourced_subscribers() do
+       if is_pid(pid) do
+         :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+       end
+@@ -132,7 +135,7 @@ defmodule Memba.EventSourcedCase do
+     end
+   end
+ 
+-  defp start_event_sourced_projectors!(child_ids) do
++  defp start_event_sourced_subscribers!(child_ids) do
+     Enum.each(child_ids, fn child_id ->
+       case Supervisor.restart_child(Memba.Supervisor, child_id) do
+         {:ok, _pid} -> :ok
+@@ -163,25 +166,27 @@ defmodule Memba.EventSourcedCase do
+   end
+ 
+   defp reset_event_store_subscription_checkpoints! do
+-    Enum.each(@projectors, fn projector ->
++    Enum.each(event_sourced_subscribers(), fn subscriber ->
+       :ok =
+         Commanded.EventStore.delete_subscription(
+-          projector_commanded_app(projector),
++          subscriber_commanded_app(subscriber),
+           :all,
+-          inspect(projector)
++          inspect(subscriber)
+         )
+     end)
+   end
+ 
+-  defp projector_commanded_app(projector) do
+-    projector_name = inspect(projector)
++  defp subscriber_commanded_app(subscriber) do
++    subscriber_name = inspect(subscriber)
+ 
+     cond do
+-      String.starts_with?(projector_name, "Memba.Messaging.") -> Memba.Messaging.App
+-      String.starts_with?(projector_name, "Memba.Membership.") -> Memba.Membership.App
++      String.starts_with?(subscriber_name, "Memba.Messaging.") -> Memba.Messaging.App
++      String.starts_with?(subscriber_name, "Memba.Membership.") -> Memba.Membership.App
+     end
+   end
+ 
++  defp event_sourced_subscribers, do: @projectors ++ @event_handlers
++
+   defp reset_event_store!(conn) do
+     schema = event_store_schema()
+ 

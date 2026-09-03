@@ -1,0 +1,139 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 5248e1e..5e86a4b 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Define deterministic Everyone and Admin group IDs.
+ - [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+ - [x] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+-- [ ] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
++- [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+ - [ ] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+ - [ ] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+ - [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+diff --git a/web/lib/memba/membership/commands/add_group_member.ex b/web/lib/memba/membership/commands/add_group_member.ex
+index 2078261..97d2614 100644
+--- a/web/lib/memba/membership/commands/add_group_member.ex
++++ b/web/lib/memba/membership/commands/add_group_member.ex
+@@ -1,9 +1,14 @@
+ defmodule Memba.Membership.Commands.AddGroupMember do
+   @moduledoc """
+-  Command to add a club membership to a conversation group.
++  Internal command to add a club membership to a conversation group.
+ 
+   The caller supplies the club aggregate identity as `club_id` and identifies
+   both the group and member being joined.
++
++  This command is registered for system-group policy/backfill work and the
++  event-sourced group foundation. It is not a public custom-group API in this
++  slice; external callers use `Memba.Membership`, which intentionally exposes no
++  custom-group mutation functions yet.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+diff --git a/web/lib/memba/membership/commands/create_group.ex b/web/lib/memba/membership/commands/create_group.ex
+index bbc42b7..f4483f6 100644
+--- a/web/lib/memba/membership/commands/create_group.ex
++++ b/web/lib/memba/membership/commands/create_group.ex
+@@ -1,9 +1,14 @@
+ defmodule Memba.Membership.Commands.CreateGroup do
+   @moduledoc """
+-  Command to create a club-scoped conversation group.
++  Internal command to create a club-scoped conversation group.
+ 
+   The caller supplies the club aggregate identity as `club_id` and the group
+   identity as `group_id`.
++
++  This command is registered for system-group policy/backfill work and the
++  event-sourced group foundation. It is not a public custom-group API in this
++  slice; external callers use `Memba.Membership`, which intentionally exposes no
++  custom-group mutation functions yet.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :name]
+diff --git a/web/lib/memba/membership/commands/remove_group_member.ex b/web/lib/memba/membership/commands/remove_group_member.ex
+index 5715d2c..6f85353 100644
+--- a/web/lib/memba/membership/commands/remove_group_member.ex
++++ b/web/lib/memba/membership/commands/remove_group_member.ex
+@@ -1,9 +1,14 @@
+ defmodule Memba.Membership.Commands.RemoveGroupMember do
+   @moduledoc """
+-  Command to remove a club membership from a conversation group.
++  Internal command to remove a club membership from a conversation group.
+ 
+   The caller supplies the club aggregate identity as `club_id` and identifies
+   both the group and member being removed.
++
++  This command is registered for system-group policy/backfill work and the
++  event-sourced group foundation. It is not a public custom-group API in this
++  slice; external callers use `Memba.Membership`, which intentionally exposes no
++  custom-group mutation functions yet.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 8026139..cd64746 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -33,6 +33,23 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+ 
++  test "public Membership API does not expose custom group mutation functions in this slice" do
++    refute function_exported?(Membership, :create_group, 1)
++    refute function_exported?(Membership, :create_group, 2)
++    refute function_exported?(Membership, :create_custom_group, 1)
++    refute function_exported?(Membership, :create_custom_group, 2)
++
++    refute function_exported?(Membership, :add_group_member, 1)
++    refute function_exported?(Membership, :add_group_member, 2)
++    refute function_exported?(Membership, :add_custom_group_member, 1)
++    refute function_exported?(Membership, :add_custom_group_member, 2)
++
++    refute function_exported?(Membership, :remove_group_member, 1)
++    refute function_exported?(Membership, :remove_group_member, 2)
++    refute function_exported?(Membership, :remove_custom_group_member, 1)
++    refute function_exported?(Membership, :remove_custom_group_member, 2)
++  end
++
+   test "create_club/2 dispatches CreateClub through the Membership context" do
+     club_id = Memba.ID.generate(:club)
+     role_id = Roles.membership_administrator_role_id(club_id)
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index dcb09dd..6de2644 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -7,6 +7,17 @@ defmodule MembaWeb.RouterTest do
+     "/deliveries"
+   ]
+ 
++  @custom_group_paths [
++    "/groups",
++    "/groups/new",
++    "/groups/group-123",
++    "/groups/group-123/members",
++    "/admin/groups",
++    "/admin/clubs/club-123/groups",
++    "/admin/clubs/club-123/groups/new",
++    "/admin/clubs/club-123/groups/group-123"
++  ]
++
+   describe "Memba staff LiveView routes" do
+     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
+       assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
+@@ -199,6 +210,15 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
++  describe "custom group routes" do
++    test "custom group UI/API paths are not routed in this slice" do
++      for method <- ~w(GET POST PATCH DELETE),
++          path <- @custom_group_paths do
++        assert :error = Phoenix.Router.route_info(MembaWeb.Router, method, path, "localhost")
++      end
++    end
++  end
++
+   defp assert_live_route(path, route_pattern, live_view, path_params, live_action \\ nil) do
+     assert %{
+              pipe_through: [:staff_browser],

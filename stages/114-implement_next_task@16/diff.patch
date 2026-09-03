@@ -1,0 +1,442 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 82048cd..4679836 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -15,7 +15,7 @@
+ - [x] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+ - [x] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
+ - [x] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
+-- [ ] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
++- [x] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
+ - [ ] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
+ - [ ] 018 Change reply authorisation to require write access through an active group membership.
+ - [ ] 019 Keep reply-recipient/follower delivery unchanged.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 405d6ac..cdf2ab5 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -24,6 +24,7 @@ config :memba,
+     :membership_person_email_addresses,
+     :membership_people,
+     :messaging_messages,
++    :messaging_conversation_group_access,
+     :messaging_conversation_follows,
+     :messaging_email_deliveries,
+     :messaging_member_email_deliveries,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 19e2f09..daf34c7 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -19,6 +19,7 @@ defmodule Memba.Application do
+        dispatch_enabled:
+          Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
+       Memba.Messaging.Projectors.Message,
++      Memba.Messaging.Projectors.ConversationGroupAccess,
+       Memba.Messaging.Projectors.ConversationFollow,
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 14493e5..64c439c 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -18,6 +18,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Commands.UnfollowConversation
++  alias Memba.Messaging.ConversationAccess
+   alias Memba.Messaging.ConversationReference
+   alias Memba.Messaging.ConversationFollowers
+   alias Memba.Messaging.ConversationStopFollowToken
+@@ -30,6 +31,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.InboundEmailBody
+   alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.OutboundMessageID
++  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
+   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+@@ -396,6 +398,31 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Return whether a group has the requested access to a projected conversation.
++
++  The `access_level` may be `:read`, `:write`, `"read"`, or `"write"`. A stored
++  `"write"` grant satisfies both read and write checks; a stored `"read"` grant
++  satisfies only read checks. Invalid IDs or access levels return `false`.
++  """
++  def group_has_conversation_access?(conversation_id, group_id, access_level) do
++    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
++         {:ok, group_id} <- ID.cast(:group, group_id),
++         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
++      grant_levels = ConversationAccess.grant_levels_including(access_level)
++
++      ConversationGroupAccessProjection
++      |> where(
++        [access],
++        access.conversation_id == ^conversation_id and access.group_id == ^group_id and
++          access.access_level in ^grant_levels
++      )
++      |> Repo.exists?()
++    else
++      _invalid -> false
++    end
++  end
++
+   @doc """
+   List current projected followers for a conversation.
+ 
+diff --git a/web/lib/memba/messaging/conversation_access.ex b/web/lib/memba/messaging/conversation_access.ex
+new file mode 100644
+index 0000000..83142b8
+--- /dev/null
++++ b/web/lib/memba/messaging/conversation_access.ex
+@@ -0,0 +1,34 @@
++defmodule Memba.Messaging.ConversationAccess do
++  @moduledoc """
++  Access-level rules for conversation-to-group grants.
++
++  Persisted access levels are `"read"` and `"write"`. Write access includes read
++  access; read access does not include write access.
++  """
++
++  @access_levels ["read", "write"]
++
++  @doc """
++  Normalize a caller/event supplied access level.
++  """
++  def normalize_access_level(:read), do: {:ok, "read"}
++  def normalize_access_level(:write), do: {:ok, "write"}
++
++  def normalize_access_level(access_level) when is_binary(access_level) do
++    access_level = access_level |> String.trim() |> String.downcase()
++
++    if access_level in @access_levels do
++      {:ok, access_level}
++    else
++      {:error, :invalid_access_level}
++    end
++  end
++
++  def normalize_access_level(_access_level), do: {:error, :invalid_access_level}
++
++  @doc """
++  Return persisted grant levels that satisfy the requested access level.
++  """
++  def grant_levels_including("read"), do: ["read", "write"]
++  def grant_levels_including("write"), do: ["write"]
++end
+diff --git a/web/lib/memba/messaging/projections/conversation_group_access.ex b/web/lib/memba/messaging/projections/conversation_group_access.ex
+new file mode 100644
+index 0000000..6a90882
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/conversation_group_access.ex
+@@ -0,0 +1,17 @@
++defmodule Memba.Messaging.Projections.ConversationGroupAccess do
++  @moduledoc """
++  Read model projection for a group's access to a message conversation.
++  """
++
++  use Ecto.Schema
++
++  @primary_key false
++  schema "messaging_conversation_group_access" do
++    field :conversation_id, :string
++    field :club_id, :string
++    field :group_id, :string
++    field :access_level, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/conversation_group_access.ex b/web/lib/memba/messaging/projectors/conversation_group_access.ex
+new file mode 100644
+index 0000000..f51f2d2
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/conversation_group_access.ex
+@@ -0,0 +1,51 @@
++defmodule Memba.Messaging.Projectors.ConversationGroupAccess do
++  @moduledoc """
++  Projects conversation-to-group access events into the Messaging access read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.ConversationGroupAccess",
++    consistency: :strong
++
++  alias Memba.Messaging.ConversationAccess
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
++  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
++
++  project(%ConversationAccessGrantedToGroup{} = event, fn multi ->
++    with {:ok, access_level} <- ConversationAccess.normalize_access_level(event.access_level) do
++      upsert_access(multi, event, access_level)
++    end
++  end)
++
++  @impl Commanded.Projections.Ecto
++  def after_update(event, metadata, changes) do
++    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
++  end
++
++  defp upsert_access(multi, event, access_level) do
++    now = DateTime.utc_now(:microsecond)
++
++    Ecto.Multi.insert(
++      multi,
++      :messaging_conversation_group_access,
++      %ConversationGroupAccessProjection{
++        conversation_id: event.conversation_id,
++        club_id: event.club_id,
++        group_id: event.group_id,
++        access_level: access_level,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: event.club_id,
++          access_level: access_level,
++          updated_at: now
++        ]
++      ],
++      conflict_target: [:conversation_id, :group_id]
++    )
++  end
++end
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index 6c951c1..6568b32 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -19,6 +19,7 @@ defmodule MembaWeb.DevTestSupportController do
+     Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.ConversationGroupAccess,
+     Memba.Messaging.Projectors.ConversationFollow,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+diff --git a/web/priv/repo/migrations/20260903091444_create_messaging_conversation_group_access_projection.exs b/web/priv/repo/migrations/20260903091444_create_messaging_conversation_group_access_projection.exs
+new file mode 100644
+index 0000000..a16168c
+--- /dev/null
++++ b/web/priv/repo/migrations/20260903091444_create_messaging_conversation_group_access_projection.exs
+@@ -0,0 +1,32 @@
++defmodule Memba.Repo.Migrations.CreateMessagingConversationGroupAccessProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_conversation_group_access, primary_key: false) do
++      add :conversation_id, :text, null: false
++      add :club_id, :text, null: false
++      add :group_id, :text, null: false
++      add :access_level, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create constraint(
++             :messaging_conversation_group_access,
++             :messaging_conversation_group_access_level_check,
++             check: "access_level IN ('read', 'write')"
++           )
++
++    create unique_index(:messaging_conversation_group_access, [:conversation_id, :group_id],
++             name: :messaging_conversation_group_access_unique_index
++           )
++
++    create index(:messaging_conversation_group_access, [:club_id, :conversation_id],
++             name: :messaging_conversation_group_access_club_index
++           )
++
++    create index(:messaging_conversation_group_access, [:group_id],
++             name: :messaging_conversation_group_access_group_index
++           )
++  end
++end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index f494ef5..8b8920b 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -15,6 +15,7 @@ defmodule Memba.Messaging.AppTest do
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Commands.UnfollowConversation
++  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
+   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
+@@ -30,6 +31,16 @@ defmodule Memba.Messaging.AppTest do
+              _child -> false
+            end)
+ 
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{ConversationGroupAccessProjector, _opts}, pid, :worker,
++              [ConversationGroupAccessProjector]}
++             when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
++
+     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+              {{ConversationFollowProjector, _opts}, pid, :worker, [ConversationFollowProjector]}
+              when is_pid(pid) ->
+diff --git a/web/test/memba/messaging/conversation_group_access_projection_test.exs b/web/test/memba/messaging/conversation_group_access_projection_test.exs
+new file mode 100644
+index 0000000..be3628d
+--- /dev/null
++++ b/web/test/memba/messaging/conversation_group_access_projection_test.exs
+@@ -0,0 +1,115 @@
++defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
++  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
++  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
++
++  test "projects a write grant and exposes read-through-write in the Messaging query API" do
++    conversation_id = Memba.ID.generate(:message)
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++
++    assert :ok =
++             ConversationGroupAccessProjector.handle(
++               %ConversationAccessGrantedToGroup{
++                 conversation_id: conversation_id,
++                 club_id: club_id,
++                 group_id: group_id,
++                 access_level: "write"
++               },
++               projector_metadata(1)
++             )
++
++    assert [
++             %ConversationGroupAccessProjection{
++               conversation_id: ^conversation_id,
++               club_id: ^club_id,
++               group_id: ^group_id,
++               access_level: "write",
++               inserted_at: %DateTime{},
++               updated_at: %DateTime{}
++             }
++           ] = Repo.all(ConversationGroupAccessProjection)
++
++    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
++    assert Messaging.group_has_conversation_access?(conversation_id, group_id, "write")
++    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
++    assert Messaging.group_has_conversation_access?(conversation_id, group_id, "read")
++  end
++
++  test "a read grant does not imply write access" do
++    conversation_id = Memba.ID.generate(:message)
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++
++    assert :ok =
++             ConversationGroupAccessProjector.handle(
++               %ConversationAccessGrantedToGroup{
++                 conversation_id: conversation_id,
++                 club_id: club_id,
++                 group_id: group_id,
++                 access_level: "read"
++               },
++               projector_metadata(1)
++             )
++
++    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
++    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
++  end
++
++  test "repeated grants keep one current row per conversation and group" do
++    conversation_id = Memba.ID.generate(:message)
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++
++    event = %ConversationAccessGrantedToGroup{
++      conversation_id: conversation_id,
++      club_id: club_id,
++      group_id: group_id,
++      access_level: "write"
++    }
++
++    assert :ok = ConversationGroupAccessProjector.handle(event, projector_metadata(1))
++    assert :ok = ConversationGroupAccessProjector.handle(event, projector_metadata(2))
++
++    assert [
++             %ConversationGroupAccessProjection{
++               conversation_id: ^conversation_id,
++               club_id: ^club_id,
++               group_id: ^group_id,
++               access_level: "write"
++             }
++           ] = Repo.all(ConversationGroupAccessProjection)
++  end
++
++  test "invalid access levels are rejected by the projector and query API" do
++    conversation_id = Memba.ID.generate(:message)
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++
++    assert {:error, :invalid_access_level} =
++             ConversationGroupAccessProjector.handle(
++               %ConversationAccessGrantedToGroup{
++                 conversation_id: conversation_id,
++                 club_id: club_id,
++                 group_id: group_id,
++                 access_level: "admin"
++               },
++               projector_metadata(1)
++             )
++
++    assert Repo.all(ConversationGroupAccessProjection) == []
++    refute Messaging.group_has_conversation_access?(conversation_id, group_id, "admin")
++    refute Messaging.group_has_conversation_access?("not-a-message-id", group_id, :read)
++    refute Messaging.group_has_conversation_access?(conversation_id, "not-a-group-id", :read)
++  end
++
++  defp projector_metadata(event_number) do
++    %{
++      handler_name: "conversation-group-access-projection-test-#{Ecto.UUID.generate()}",
++      event_number: event_number
++    }
++  end
++end
+diff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs
+index 8bd0815..fd0069c 100644
+--- a/web/test/memba/messaging/send_message_dispatch_test.exs
++++ b/web/test/memba/messaging/send_message_dispatch_test.exs
+@@ -2,6 +2,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Commanded.Commands.ExecutionResult
++  alias Memba.Messaging
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.SendMessage
+@@ -88,6 +89,8 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+ 
+     assert MapSet.equal?(email_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
+     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
++    assert Messaging.group_has_conversation_access?(message_id, group_id, :write)
++    assert Messaging.group_has_conversation_access?(message_id, group_id, :read)
+ 
+     assert %Message{
+              message_id: ^message_id,
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index f797301..922d35e 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -19,6 +19,7 @@ defmodule Memba.EventSourcedCase do
+     Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.ConversationGroupAccess,
+     Memba.Messaging.Projectors.ConversationFollow,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,

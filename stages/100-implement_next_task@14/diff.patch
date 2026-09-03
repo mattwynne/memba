@@ -1,0 +1,290 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index ceef703..2abf38c 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+ - [x] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+ - [x] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+-- [ ] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
++- [x] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
+ - [ ] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
+ - [ ] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
+ - [ ] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 056f823..7a3b7d3 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -29,6 +29,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Policies.SystemGroupMembership
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.ClubInvitation
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.PersonEmailAddress
+@@ -845,6 +846,70 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  List active members of the given conversation group.
++
++  Returns plain maps containing the public identity needed outside the
++  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
++  Role names come from active club role assignments and are sorted
++  alphabetically for each member. Members whose group row or club membership is
++  inactive, members of other groups, members without a projected person, and
++  invalid group IDs are excluded.
++  """
++  def list_active_members_of_group(group_id) do
++    with {:ok, group_id} <- ID.cast(:group, group_id) do
++      members =
++        GroupMembershipProjection
++        |> join(:inner, [group_membership], membership in MembershipProjection,
++          on:
++            membership.membership_id == group_membership.membership_id and
++              membership.club_id == group_membership.club_id and
++              membership.person_id == group_membership.person_id
++        )
++        |> join(:inner, [_group_membership, membership], person in Person,
++          on: person.person_id == membership.person_id
++        )
++        |> join(
++          :inner,
++          [_group_membership, _membership, person],
++          primary_email_address in PersonEmailAddress,
++          on:
++            primary_email_address.person_id == person.person_id and
++              primary_email_address.is_primary == true
++        )
++        |> where(
++          [group_membership, _membership, _person, _primary_email_address],
++          group_membership.group_id == ^group_id
++        )
++        |> where(
++          [group_membership, membership, _person, _primary_email_address],
++          group_membership.active == true and membership.active == true
++        )
++        |> order_by([_group_membership, _membership, person, _primary_email_address],
++          asc: person.name,
++          asc: person.person_id
++        )
++        |> select([_group_membership, membership, person, primary_email_address], %{
++          membership_id: membership.membership_id,
++          id: person.person_id,
++          name: person.name,
++          email: primary_email_address.email
++        })
++        |> Repo.all()
++
++      role_names_by_membership =
++        members
++        |> Enum.map(& &1.membership_id)
++        |> active_role_names_by_membership()
++
++      Enum.map(members, fn member ->
++        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
++      end)
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   List active clubs for a member email address.
+ 
+@@ -895,6 +960,34 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Return whether a person is currently an active member of a conversation group.
++
++  Both the projected group-membership row and the underlying club membership
++  must be active. Invalid group or person IDs return `false`.
++  """
++  def active_member_of_group?(group_id, person_id) do
++    with {:ok, group_id} <- ID.cast(:group, group_id),
++         {:ok, person_id} <- ID.cast(:person, person_id) do
++      GroupMembershipProjection
++      |> join(:inner, [group_membership], membership in MembershipProjection,
++        on:
++          membership.membership_id == group_membership.membership_id and
++            membership.club_id == group_membership.club_id and
++            membership.person_id == group_membership.person_id
++      )
++      |> where([group_membership, _membership], group_membership.group_id == ^group_id)
++      |> where([group_membership, _membership], group_membership.person_id == ^person_id)
++      |> where(
++        [group_membership, membership],
++        group_membership.active == true and membership.active == true
++      )
++      |> Repo.exists?()
++    else
++      :error -> false
++    end
++  end
++
+   @doc """
+   Return whether an email address currently has an active membership in a club.
+ 
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index f7e05f5..cc582dd 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -22,7 +22,9 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def list_person_email_addresses("
+     assert source =~ "def list_active_club_memberships_for_person("
+     assert source =~ "def list_active_members_of_club("
++    assert source =~ "def list_active_members_of_group("
+     assert source =~ "def list_active_clubs_for_member_email("
++    assert source =~ "def active_member_of_group?("
+     assert source =~ "def active_member_of_club_by_email?("
+ 
+     list_functions =
+@@ -40,6 +42,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+              "list_person_email_addresses",
+              "list_active_club_memberships_for_person",
+              "list_active_members_of_club",
++             "list_active_members_of_group",
+              "list_active_clubs_for_member_email"
+            ]
+ 
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index cb564fb..c889965 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -12,7 +12,9 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
++  alias Memba.Membership.SystemGroups
+ 
+   describe "get_club_by_slug/1" do
+     test "returns the projected club for a valid slug" do
+@@ -215,6 +217,83 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "list_active_members_of_group/1" do
++    test "returns active members of the selected group with public member summaries" do
++      club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
++
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      bob = create_person(name: "Bob", email: "bob@example.com")
++      pat = create_person(name: "Pat", email: "pat@example.com")
++
++      alice_membership_id = add_member(club.club_id, alice.person_id)
++      bob_membership_id = add_member(club.club_id, bob.person_id)
++      _pat_membership_id = add_member(other_club.club_id, pat.person_id)
++
++      chair_role_id = define_role(club.club_id, role_key: "chair", name: "Chair")
++      assign_role(club.club_id, alice_membership_id, alice.person_id, chair_role_id)
++
++      admin_role_id = Roles.membership_administrator_role_id(club.club_id)
++      assign_role(club.club_id, alice_membership_id, alice.person_id, admin_role_id)
++
++      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
++      admin_group_id = SystemGroups.admin_group_id(club.club_id)
++
++      assert [
++               %{
++                 membership_id: ^alice_membership_id,
++                 id: alice_person_id,
++                 name: "Alice",
++                 email: "alice@example.com",
++                 roles: ["Admin", "Chair"]
++               },
++               %{
++                 membership_id: ^bob_membership_id,
++                 id: bob_person_id,
++                 name: "Bob",
++                 email: "bob@example.com",
++                 roles: []
++               }
++             ] = Membership.list_active_members_of_group(everyone_group_id)
++
++      assert alice_person_id == alice.person_id
++      assert bob_person_id == bob.person_id
++
++      assert [
++               %{
++                 membership_id: ^alice_membership_id,
++                 id: admin_person_id,
++                 name: "Alice",
++                 email: "alice@example.com",
++                 roles: ["Admin", "Chair"]
++               }
++             ] = Membership.list_active_members_of_group(admin_group_id)
++
++      assert admin_person_id == alice.person_id
++    end
++
++    test "excludes members whose group membership or club membership is inactive" do
++      club = create_club("Kootenay Mountaineering Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++
++      membership_id = add_member(club.club_id, alice.person_id)
++      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
++
++      assert [%{membership_id: ^membership_id}] =
++               Membership.list_active_members_of_group(everyone_group_id)
++
++      remove_member(membership_id)
++
++      assert [] = Membership.list_active_members_of_group(everyone_group_id)
++    end
++
++    test "returns an empty list for missing or invalid group IDs" do
++      assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
++      assert Membership.list_active_members_of_group(nil) == []
++      assert Membership.list_active_members_of_group("not-a-uuid") == []
++    end
++  end
++
+   describe "person email address query APIs" do
+     test "fetches a person's primary and alternate email addresses" do
+       alice =
+@@ -369,6 +448,38 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "active_member_of_group?/2" do
++    test "returns true only when the person has an active group membership" do
++      club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
++
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      pat = create_person(name: "Pat", email: "pat@example.com")
++
++      membership_id = add_member(club.club_id, alice.person_id)
++      _other_membership_id = add_member(other_club.club_id, pat.person_id)
++
++      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
++      admin_group_id = SystemGroups.admin_group_id(club.club_id)
++
++      assert Membership.active_member_of_group?(everyone_group_id, alice.person_id)
++      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
++      refute Membership.active_member_of_group?(everyone_group_id, pat.person_id)
++
++      admin_role_id = Roles.membership_administrator_role_id(club.club_id)
++      assign_role(club.club_id, membership_id, alice.person_id, admin_role_id)
++
++      assert Membership.active_member_of_group?(admin_group_id, alice.person_id)
++
++      remove_member(membership_id)
++
++      refute Membership.active_member_of_group?(everyone_group_id, alice.person_id)
++      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
++      refute Membership.active_member_of_group?("not-a-uuid", alice.person_id)
++      refute Membership.active_member_of_group?(everyone_group_id, "not-a-uuid")
++    end
++  end
++
+   describe "list_active_clubs_for_member_email/1" do
+     test "returns active clubs for a member email and excludes inactive or other memberships" do
+       kootenay = create_club("Kootenay Mountaineering Club")

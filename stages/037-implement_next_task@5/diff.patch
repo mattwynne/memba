@@ -1,0 +1,316 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 2718c55..346a11e 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+ - [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+ - [x] 004 Define deterministic Everyone and Admin group IDs.
+-- [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
++- [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+ - [ ] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+ - [ ] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+ - [ ] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index fc1b790..5afc485 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -26,6 +26,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
++  alias Memba.Membership.SystemGroups
+ 
+   @behaviour Aggregate
+ 
+@@ -61,6 +62,18 @@ defmodule Memba.Membership.Club do
+           club_id: command.club_id,
+           role_id: membership_administrator_role_id,
+           permission: Permissions.club_manage_members()
++        },
++        %GroupCreated{
++          club_id: command.club_id,
++          group_id: SystemGroups.everyone_group_id(command.club_id),
++          group_key: SystemGroups.everyone_key(),
++          name: SystemGroups.everyone_name()
++        },
++        %GroupCreated{
++          club_id: command.club_id,
++          group_id: SystemGroups.admin_group_id(command.club_id),
++          group_key: SystemGroups.admin_key(),
++          name: SystemGroups.admin_name()
+         }
+       ]
+     end
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index 6ae65ee..58c3b07 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -13,6 +13,7 @@ defmodule Memba.Membership.Projectors.Club do
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupCreated
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+@@ -43,6 +44,8 @@ defmodule Memba.Membership.Projectors.Club do
+ 
+   project(%ClubRolePermissionGranted{}, fn multi -> multi end)
+ 
++  project(%GroupCreated{}, fn multi -> multi end)
++
+   project(%MemberRoleAssigned{}, fn multi -> multi end)
+ 
+   project(%MemberRoleRemoved{}, fn multi -> multi end)
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 26999b0..eeb783f 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -22,11 +22,14 @@ defmodule Memba.Membership.ClubTest do
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
+ 
+   describe "execute/2 CreateClub" do
+-    test "emits ClubCreated and initializes the default Admin bundle" do
++    test "emits ClubCreated, initializes the default Admin bundle, and creates system groups" do
+       club_id = Memba.ID.generate(:club)
+       role_id = Roles.membership_administrator_role_id(club_id)
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++      admin_group_id = SystemGroups.admin_group_id(club_id)
+ 
+       command = %CreateClub{
+         club_id: club_id,
+@@ -50,6 +53,18 @@ defmodule Memba.Membership.ClubTest do
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
++               },
++               %GroupCreated{
++                 club_id: ^club_id,
++                 group_id: ^everyone_group_id,
++                 group_key: "everyone",
++                 name: "Everyone"
++               },
++               %GroupCreated{
++                 club_id: ^club_id,
++                 group_id: ^admin_group_id,
++                 group_key: "admin",
++                 name: "Admin"
+                }
+              ] = Club.execute(%Club{}, command)
+     end
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index ee39c2a..2de8beb 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -24,10 +24,13 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
+ 
+   test "Membership app dispatch routes CreateClub to the Club aggregate" do
+     club_id = Memba.ID.generate(:club)
+     role_id = Roles.membership_administrator_role_id(club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
+ 
+     command = %CreateClub{
+       club_id: club_id,
+@@ -38,7 +41,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 3,
++              aggregate_version: 5,
+               events: [
+                 %ClubCreated{
+                   club_id: ^club_id,
+@@ -55,12 +58,28 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                   club_id: ^club_id,
+                   role_id: ^role_id,
+                   permission: "club.manage_members"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  group_key: "everyone",
++                  name: "Everyone"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  group_key: "admin",
++                  name: "Admin"
+                 }
+               ],
+               aggregate_state: %Club{
+                 club_id: ^club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc",
++                groups: %{
++                  ^everyone_group_id => %{group_key: "everyone"},
++                  ^admin_group_id => %{group_key: "admin"}
++                },
+                 roles: %{^role_id => %{role_key: "admin"}},
+                 role_permissions: %{^role_id => default_role_permissions}
+               }
+@@ -72,6 +91,10 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+              club_id: ^club_id,
+              name: "Kootenay Mountaineering Club",
+              slug: "kmc",
++             groups: %{
++               ^everyone_group_id => %{group_key: "everyone"},
++               ^admin_group_id => %{group_key: "admin"}
++             },
+              roles: %{^role_id => %{role_key: "admin"}},
+              role_permissions: %{^role_id => persisted_role_permissions}
+            } =
+@@ -113,7 +136,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 4,
++              aggregate_version: 6,
+               events: [
+                 %ClubUpdated{
+                   club_id: ^club_id,
+@@ -148,7 +171,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 4,
++              aggregate_version: 6,
+               events: [
+                 %ClubRoleDefined{
+                   club_id: ^club_id,
+@@ -172,7 +195,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 5,
++              aggregate_version: 7,
+               events: [
+                 %ClubRolePermissionGranted{
+                   club_id: ^club_id,
+@@ -194,7 +217,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 6,
++              aggregate_version: 8,
+               events: [
+                 %MemberRoleAssigned{
+                   club_id: ^club_id,
+@@ -218,7 +241,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 7,
++              aggregate_version: 9,
+               events: [
+                 %MemberRoleRemoved{
+                   club_id: ^club_id,
+@@ -264,7 +287,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 4,
++              aggregate_version: 6,
+               events: [
+                 %GroupCreated{
+                   club_id: ^club_id,
+@@ -288,7 +311,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 5,
++              aggregate_version: 7,
+               events: [
+                 %GroupMemberAdded{
+                   club_id: ^club_id,
+@@ -312,7 +335,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 6,
++              aggregate_version: 8,
+               events: [
+                 %GroupMemberRemoved{
+                   club_id: ^club_id,
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 75bb359..8026139 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -13,6 +13,7 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.GroupCreated
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.MemberRemoved
+   alias Memba.Membership.Events.PersonEmailAddressAdded
+@@ -30,10 +31,13 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+   alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
+ 
+   test "create_club/2 dispatches CreateClub through the Membership context" do
+     club_id = Memba.ID.generate(:club)
+     role_id = Roles.membership_administrator_role_id(club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
+ 
+     assert {:ok,
+             %ExecutionResult{
+@@ -54,6 +58,18 @@ defmodule Memba.Membership.PublicApiTest do
+                   club_id: ^club_id,
+                   role_id: ^role_id,
+                   permission: "club.manage_members"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  group_key: "everyone",
++                  name: "Everyone"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  group_key: "admin",
++                  name: "Admin"
+                 }
+               ]
+             }} =
+@@ -70,6 +86,8 @@ defmodule Memba.Membership.PublicApiTest do
+   test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
+     club_id = Memba.ID.generate(:club)
+     role_id = Roles.membership_administrator_role_id(club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
+ 
+     assert {:ok,
+             %ExecutionResult{
+@@ -90,6 +108,18 @@ defmodule Memba.Membership.PublicApiTest do
+                   club_id: ^club_id,
+                   role_id: ^role_id,
+                   permission: "club.manage_members"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  group_key: "everyone",
++                  name: "Everyone"
++                },
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  group_key: "admin",
++                  name: "Admin"
+                 }
+               ]
+             }} =
