@@ -62,15 +62,15 @@ model. General roles within groups are intentionally deferred.
   - `GroupMemberAdded`;
   - `GroupMemberRemoved`.
 - Add `Memba.Membership.Policies.SystemGroupMembership`, a strongly consistent,
-  event-sourced process manager keyed by `membership_id`, with idempotent commands,
-  that:
-  - starts on `MemberAdded` and adds the active member to Everyone;
-  - remains active for that club-membership lifecycle;
+  stateless Commanded event handler with idempotent commands, that independently:
+  - adds an active member to Everyone after `MemberAdded`;
+  - removes the member from system groups after `MemberRemoved`;
   - adds/removes the member from Admin when their existing Admin role is assigned or
-    removed;
-  - removes the member from every system group on `MemberRemoved`, then stops.
-  The process manager starts at `:current` on deployment; it does not replay historic
-  events to create backfill facts.
+    removed.
+  The handler starts at `:current` on deployment; it does not replay historic events
+  to create backfill facts. The release backfill seeds historic state, while the
+  handler keeps both newly created and already-existing memberships aligned after
+  deployment.
 - Project `membership_groups` and `membership_group_memberships` read models with
   one current-state row per `(group_id, membership_id)`, containing `club_id`,
   `person_id`, and `active`. Add/remove events toggle `active`; a later re-add
@@ -179,9 +179,9 @@ state. Existing member messaging and Admin-role presentations remain unchanged.
 - Existing club-wide recipient sets, inbound Everyone-email acceptance/rejection,
   reply authorisation, follower delivery, and conversation/email threading remain
   unchanged.
-- Membership and Admin-role commands return only after the strong system-group
-  process manager and group projectors have made their resulting memberships
-  queryable; callers never rely on timing for group access.
+- Membership and Admin-role commands return only after the strong system-group event
+  handler and group projectors have made their resulting memberships queryable;
+  callers never rely on timing for group access.
 - The automatic release backfill is idempotent and restartable: rerunning a failed
   release does not duplicate group, group-membership, or conversation-access
   events/read-model rows.
@@ -223,15 +223,16 @@ Confirmed decisions:
    and strong-consistency projectors. `membership_group_memberships` has one
    current-state row keyed by `(group_id, membership_id)`; add/remove toggles its
    `active` flag, so re-add reactivates the row and the event stream retains history.
-5. Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` with
-   `consistency: :strong` and `start_from: :current`. Its durable process identity
-   is `membership_id`; its persisted state is the club, person, and membership
-   identities plus active-system-group flags. It starts on `MemberAdded`, continues
-   for Admin role assignment/removal events with the same membership ID, dispatches
-   idempotent Club-group membership commands, and stops only after `MemberRemoved`
-   has removed Everyone and Admin memberships. Configure the Group projectors as strong
-   and dispatch affected member/role commands with strong consistency, so those
-   commands return only after group membership is queryable.
+5. Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a
+   stateless `Commanded.Event.Handler` with a stable handler name,
+   `consistency: :strong`, and `start_from: :current`. It handles each
+   `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved`
+   independently, dispatching idempotent Club-group membership commands for Everyone
+   and the deterministic Admin role. It retains no per-membership workflow state:
+   the Club aggregate owns membership state and makes at-least-once handler
+   redelivery safe. Configure Group projectors as strong and dispatch affected
+   member/role commands with strong consistency, so those commands return only after
+   group membership is queryable.
 6. Add public Membership queries such as active group members and whether a person
    is an active member of a group. Keep all Membership schema/query details behind
    these APIs, as required by ADR 0007.
@@ -256,18 +257,21 @@ Confirmed decisions:
     and backfill facts, snapshots the group/membership/access queries, calls
     `rebuild_event_sourced_projections!/0`, awaits the new projectors through
     `Memba.ProjectionBarrier`, and asserts the same queries return the same state.
-11. Add tests for aggregate decisions; process-policy commands and idempotency;
-    system-group membership after member/role changes; sender and reply
+11. Add tests for aggregate decisions; system-group event-handler commands and
+    idempotency;
+    system-group membership after member/role changes—including future role changes
+    and member removal for memberships that were seeded by backfill; sender and reply
     authorisation; recipient/follower-delivery regression; release-backfill reruns;
     and replay parity. Run `dev check`.
 
 ## Technical Decisions
 
-- **Process policy:** `Memba.Membership.Policies.SystemGroupMembership` is a
-  Commanded process manager with one durable process per `membership_id`. It starts
-  from `:current`, uses strong consistency, remains alive for the active membership
-  lifecycle, and stops after the member has left system groups. Idempotent Club
-  commands make redelivery/retry safe.
+- **System-group policy:** `Memba.Membership.Policies.SystemGroupMembership` is a
+  stateless Commanded event handler with a stable name. It starts from `:current`,
+  uses strong consistency, and handles each membership/Admin-role lifecycle event
+  independently. The Club aggregate owns group-membership state; idempotent commands
+  make at-least-once handler redelivery safe. Because it holds no process state,
+  future role/removal events for memberships seeded by backfill work normally.
 - **Membership projection:** `membership_group_memberships` is a current-state
   projection keyed by `(group_id, membership_id)` with `active`; remove/re-add
   toggles that row. The event stream is the membership history. Index current rows
@@ -313,9 +317,10 @@ this foundation without introducing a second audience model.
 
 ## Risks / Follow-ups
 
-- The new process policy is the main operational risk. It crosses existing
-  membership/role lifecycle facts and Club-owned group state; idempotency,
-  correlation, failure visibility, and read-your-writes behaviour must be explicit.
+- The new system-group event handler is the main operational risk. It crosses
+  existing membership/role lifecycle facts and Club-owned group state; idempotency,
+  stable subscription identity, failure visibility, and read-your-writes behaviour
+  must be explicit.
 - Appending setup facts to historic streams is safer than changing old event meaning,
   but production backfill needs careful batching, observability, and restart safety.
 - The Admin group mirrors the existing Admin role; it does not replace role-based
