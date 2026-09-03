@@ -567,7 +567,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-03T06:23:24.257860645Z",
-  "last_event_at": "2026-09-03T06:26:06.673820983Z",
+  "last_event_at": "2026-09-03T06:26:31.105206643Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,14 +1069,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-09-03T06:26:29.451154025Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-09-03T06:26:33.070172561Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1087,6 +1088,7 @@
           "failure_signature": "",
           "gemini_review_blocking_gap_count": 1,
           "claude_review_confidence": "High",
+          "thread.synthesize.current_node": "synthesis_gate",
           "response.claude_review": "I'll now review the plan against the readiness criteria.\n\n---\n\n# Iteration Plan Review: Group Audience Foundation\n\n## Decision: **READY**\n\n## Confidence: **High**\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Process Manager Lifecycle Detail**: Step 5 mentions the process manager stops \"only after `MemberRemoved` has removed Everyone and Admin memberships\" but doesn't specify whether the policy explicitly issues those removal commands before stopping or relies on separate event handling. Minor—the implementation will clarify this.\n\n2. **Backfill Error Handling Strategy**: The plan states the backfill \"aborts the release on an unrecoverable error\" but doesn't define what constitutes \"unrecoverable\" vs. transient. Given the restart safety emphasis, this is acceptable for implementation-time judgment.\n\n3. **Index Detail for Query Performance**: Step 4 mentions \"index current rows for group-to-members and person-to-groups access queries\" but doesn't specify the exact indexes. Standard practice would add them during implementation; acceptable given focused scope.\n\n## Smallest Viable Iteration\n\n**This plan already represents the smallest viable iteration.**\n\nThe author explicitly deferred:\n- Custom groups\n- Group UI\n- Additional email addresses\n- Conversation read filtering\n- Public visibility\n- Shared multi-group access\n- Roles within groups\n\nThe included scope establishes the minimal event-sourced foundation (two system groups, membership policy, conversation access model) required for the next slice (Admin group email). Removing any component would leave the foundation incomplete or unusable.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation strategy:\n\n### Pre-implementation\n- Strong consistency configuration ensures read-your-writes for group membership\n- Replay parity test design using existing `EventSourcedCase` infrastructure\n\n### During implementation\n- Focused ExUnit tests for aggregate decisions, process policy idempotency, membership lifecycle\n- Acceptance regression suite preserves existing behavior\n\n### Post-implementation success criteria\n1. Club creation produces deterministic Everyone/Admin groups\n2. Member lifecycle triggers correct group membership through policy\n3. Admin role assignment/removal reflected in Admin group\n4. New root conversations emit Everyone write grant\n5. Existing behavior unchanged: recipients, authorization, follower delivery, threading\n6. Backfill idempotency proven through interrupt/retry tests\n7. Replay from event store reproduces same read models\n8. `dev check` passes\n\n### Stop condition\nAll focused tests, acceptance regressions, replay parity, backfill idempotency coverage, and `dev check` pass on committed state.\n\n---\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✓\n\n**Clear user/business outcome**: Replace hidden club-wide audience with explicit, event-sourced groups while preserving all current member capabilities.\n\n**Beneficiaries identified**: Club members (unchanged posting/receiving), future iterations (explicit foundation for Admin email and custom groups), system maintainability (rebuildable projections vs. hidden special cases).\n\n**Not just tasks**: The goal emphasizes the business invariant (\"without changing what any member can currently see, post, or receive\") alongside the technical transformation.\n\n### 2. Scope Focus ✓\n\n**One coherent outcome**: Establish event-sourced group foundation with two system groups.\n\n**Minimal useful slice**: Yes. The author explicitly listed 8 categories of deferred work and explained why Everything/Admin system groups are the minimum foundation.\n\n**Clear boundaries**: Detailed \"Out of scope\" section prevents feature creep. \"In scope\" section is precise about which events, projections, commands, and behavioral seams change.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✓\n\n**Concrete & testable**: 13 numbered acceptance criteria cover:\n- Happy path: club creation, member lifecycle, role assignment\n- Edge cases: backfill idempotency, restart safety\n- Permissions: Admin role preservation, reply authorization\n- Data/state: projection rebuild parity, process manager consistency\n- Error states: backfill failure handling\n\n**BDD classification clear**: \"Technical/engineering\" with explicit rationale—no new member-visible rule.\n\n**Gherkin decision justified**: Explains that existing `.feature` files already cover the behavior that must remain unchanged. New work (policy, event vocabulary, projection rebuild) needs focused ExUnit tests, not stakeholder-readable scenarios. This reasoning aligns with the framework: technical refactoring that preserves existing behavior doesn't need new Gherkin.\n\n**Business decisions resolved**: \"Open Business Decisions: None known\" followed by 6 confirmed decisions about group/role separation, system group scope, and implementation approach.\n\n### 4. Implementation Plan & Technical Decisions ✓\n\n**Clear, ordered, specific**: 11 numbered steps with:\n- Named files/modules: `Memba.Membership.Policies.SystemGroupMembership`, `membership_groups`, `membership_group_memberships`, `Memba.Membership.SystemGroups.Backfill`\n- Integration points: Commanded router, projection barrier, release migrate\n- Data model: typed Group ID, current-state membership projection with `active` toggle\n- Workflow: process manager lifecycle from `:current`, backfill from release migration\n\n**Technical decisions explicit**: Process policy consistency model, membership projection design, backfill execution strategy, replay proof approach all documented with rationale.\n\n### 5. Expected Capability & Validation ✓\n\n**New capability clear**: \"Memba has explicit, rebuildable Group identities and memberships for its two existing conversation cohorts, plus a conversation-to-group write-access model.\"\n\n**Proof of success**: Validation plan specifies focused tests, acceptance regression, backfill idempotency, and replay parity.\n\n**Stop condition**: \"Stop only when those focused tests, existing acceptance regressions, replay parity, idempotent automatic-backfill coverage, and `dev check` all pass on the committed implementation state.\"\n\n---\n\n## Summary\n\nThis is an exemplary iteration plan. It clearly separates the technical foundation work from future user-visible slices, provides concrete acceptance criteria that cover the critical consistency and idempotency concerns of event sourcing, explains the BDD decision with specific rationale, resolves all business decisions, and includes a detailed validation strategy with an explicit stop condition.\n\nThe plan demonstrates domain-driven design discipline: groups are conversation audiences, roles grant permissions, and the separation is preserved in both the event model and the code structure. The implementation steps are specific enough to guide work without over-specifying implementation details.\n\nNo blocking gaps. Ready for implementation.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
           "thread.gemini_review.current_node": "claude_review",
           "internal.retry_count.codex_review": 0,
@@ -1112,18 +1114,19 @@
           "internal.work_dir": "/workspace/memba",
           "preferred_label": "validated",
           "codex_review_decision": "READY",
+          "internal.retry_count.synthesis_gate": 0,
           "graph.rankdir": "LR",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "plan_needs_human": true,
           "last_stage": "synthesize",
           "internal.retry_count.synthesize": 0,
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "claude_review_blocking_gap_count": 0,
           "internal.run_id": "01M1JYZ9XTSQWYV5DD651DZES2",
           "response.gemini_review": "{\"preferred_next_label\":\"plan_revision_required\",\"outcome\":\"succeeded\",\"failure_reason\":\"Blocking technical/workflow gap: the plan says SystemGroupMembership starts from :current and starts on MemberAdded, but existing memberships will not replay MemberAdded; the plan does not specify how future Admin-role changes or MemberRemoved events for pre-existing memberships will keep system groups aligned after backfill.\",\"suggested_next_ids\":[],\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"SystemGroupMembership starts from :current and starts on MemberAdded, so existing memberships will not have process-manager lifecycle state; plan does not specify how future Admin-role changes or member removals for backfilled memberships keep system groups aligned\",\"gemini_review_required_edits\":\"Specify how the process manager handles already-existing memberships after backfill; add acceptance criteria/tests for post-backfill Admin role assign/remove and member removal; update implementation plan with the chosen durable/idempotent mechanism\"}}",
           "plan_needs_fix": false,
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "gemini_review_required_edits": "Specify how the process manager handles already-existing memberships after backfill; add acceptance criteria/tests for post-backfill Admin role assign/remove and member removal; update implementation plan with the chosen durable/idempotent mechanism",
           "claude_review_blocking_gaps": "None",
           "codex_review_required_edits": "None"
@@ -1298,14 +1301,20 @@
               "tool_time_ms": 0,
               "active_time_ms": 22748
             }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "not_ready",
         "node_visits": {
           "claude_review": 1,
           "start": 1,
           "codex_review": 1,
           "gemini_review": 1,
+          "synthesis_gate": 1,
           "synthesize": 1
         }
       },
@@ -2020,7 +2029,12 @@
       "first_event_seq": 107,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-09-03T06:26:29.451041492Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2035,16 +2049,27 @@
       "started_at": "2026-09-03T06:26:06.667029443Z",
       "handler": "prompt",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 22782,
+        "inference_time_ms": 22748,
+        "tool_time_ms": 0,
+        "active_time_ms": 22748
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
+        "input_tokens": 4649,
+        "output_tokens": 33,
+        "total_tokens": 5716,
+        "reasoning_tokens": 1034,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 55255
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     }
   }
 }
