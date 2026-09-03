@@ -122,12 +122,7 @@ defmodule Memba.Membership.Club do
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          {:ok, name} <- normalize_name(command.name),
          {:ok, group_key} <- normalize_group_key(command.group_key) do
-      %GroupCreated{
-        club_id: command.club_id,
-        group_id: command.group_id,
-        group_key: group_key,
-        name: name
-      }
+      create_group_decision(club, command, group_key, name)
     end
   end
 
@@ -137,13 +132,9 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
-      %GroupMemberAdded{
-        club_id: command.club_id,
-        group_id: command.group_id,
-        membership_id: command.membership_id,
-        person_id: command.person_id
-      }
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- ensure_group_exists(club, command.group_id) do
+      add_group_member_decision(club, command)
     end
   end
 
@@ -153,13 +144,9 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
-      %GroupMemberRemoved{
-        club_id: command.club_id,
-        group_id: command.group_id,
-        membership_id: command.membership_id,
-        person_id: command.person_id
-      }
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- ensure_group_exists(club, command.group_id) do
+      remove_group_member_decision(club, command)
     end
   end
 
@@ -417,6 +404,96 @@ defmodule Memba.Membership.Club do
       {:ok, %{}} -> {:error, :role_assignment_person_mismatch}
       :error -> {:error, :role_assignment_not_found}
     end
+  end
+
+  defp create_group_decision(%__MODULE__{} = club, %CreateGroup{} = command, group_key, name) do
+    case Map.fetch(club.groups, command.group_id) do
+      {:ok, %{group_key: ^group_key, name: ^name}} ->
+        []
+
+      {:ok, %{}} ->
+        {:error, :group_already_defined}
+
+      :error ->
+        with :ok <- ensure_group_key_available(club, group_key) do
+          %GroupCreated{
+            club_id: command.club_id,
+            group_id: command.group_id,
+            group_key: group_key,
+            name: name
+          }
+        end
+    end
+  end
+
+  defp ensure_group_key_available(_club, nil), do: :ok
+
+  defp ensure_group_key_available(%__MODULE__{} = club, group_key) do
+    if Map.has_key?(club.group_keys, group_key) do
+      {:error, :group_key_already_defined}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_group_exists(%__MODULE__{} = club, group_id) do
+    if Map.has_key?(club.groups, group_id) do
+      :ok
+    else
+      {:error, :group_not_defined}
+    end
+  end
+
+  defp add_group_member_decision(%__MODULE__{} = club, %AddGroupMember{} = command) do
+    case Map.fetch(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      {:ok, %{person_id: person_id}} when person_id != command.person_id ->
+        {:error, :group_membership_person_mismatch}
+
+      {:ok, %{active: true}} ->
+        []
+
+      {:ok, %{active: false}} ->
+        group_member_added_event(command)
+
+      :error ->
+        group_member_added_event(command)
+    end
+  end
+
+  defp remove_group_member_decision(%__MODULE__{} = club, %RemoveGroupMember{} = command) do
+    case Map.fetch(
+           club.group_memberships,
+           group_membership_key(command.group_id, command.membership_id)
+         ) do
+      {:ok, %{person_id: person_id}} when person_id != command.person_id ->
+        {:error, :group_membership_person_mismatch}
+
+      {:ok, %{active: true}} ->
+        %GroupMemberRemoved{
+          club_id: command.club_id,
+          group_id: command.group_id,
+          membership_id: command.membership_id,
+          person_id: command.person_id
+        }
+
+      {:ok, %{active: false}} ->
+        []
+
+      :error ->
+        []
+    end
+  end
+
+  defp group_member_added_event(%AddGroupMember{} = command) do
+    %GroupMemberAdded{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      membership_id: command.membership_id,
+      person_id: command.person_id
+    }
   end
 
   defp put_role_key(role_keys, nil, _role_id), do: role_keys

@@ -314,6 +314,8 @@ defmodule Memba.Membership.ClubTest do
                  name: " Everyone "
                })
 
+      club = create_group(club, group_id, "everyone", "Everyone")
+
       assert %GroupMemberAdded{
                club_id: ^club_id,
                group_id: ^group_id,
@@ -327,6 +329,8 @@ defmodule Memba.Membership.ClubTest do
                  person_id: person_id
                })
 
+      club = add_group_member(club, group_id, membership_id, person_id)
+
       assert %GroupMemberRemoved{
                club_id: ^club_id,
                group_id: ^group_id,
@@ -338,6 +342,146 @@ defmodule Memba.Membership.ClubTest do
                  group_id: group_id,
                  membership_id: membership_id,
                  person_id: person_id
+               })
+    end
+
+    test "creates each group once and rejects conflicting group IDs or keys" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, "everyone", "Everyone")
+
+      assert [] =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: " everyone ",
+                 name: " Everyone "
+               })
+
+      assert {:error, :group_already_defined} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: "admin",
+                 name: "Admin"
+               })
+
+      assert {:error, :group_key_already_defined} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 group_key: "everyone",
+                 name: "Everyone"
+               })
+    end
+
+    test "requires group memberships to belong to a group in the command club" do
+      club_id = Memba.ID.generate(:club)
+      other_club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club = created_club(club_id)
+
+      ids = %{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id
+      }
+
+      assert {:error, :group_not_defined} =
+               Club.execute(club, struct!(AddGroupMember, ids))
+
+      assert {:error, :group_not_defined} =
+               Club.execute(club, struct!(RemoveGroupMember, ids))
+
+      club = create_group(club, group_id, "everyone", "Everyone")
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(
+                 club,
+                 struct!(AddGroupMember, %{ids | club_id: other_club_id})
+               )
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(
+                 club,
+                 struct!(RemoveGroupMember, %{ids | club_id: other_club_id})
+               )
+    end
+
+    test "adds and removes group memberships idempotently" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, "everyone", "Everyone")
+
+      command = %AddGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id
+      }
+
+      assert %GroupMemberAdded{} = Club.execute(club, command)
+
+      club = add_group_member(club, group_id, membership_id, person_id)
+
+      assert [] = Club.execute(club, command)
+
+      remove_command = %RemoveGroupMember{
+        club_id: club_id,
+        group_id: group_id,
+        membership_id: membership_id,
+        person_id: person_id
+      }
+
+      assert %GroupMemberRemoved{} = Club.execute(club, remove_command)
+
+      club = remove_group_member(club, group_id, membership_id, person_id)
+
+      assert [] = Club.execute(club, remove_command)
+      assert %GroupMemberAdded{} = Club.execute(club, command)
+    end
+
+    test "rejects group membership commands with mismatched person identities" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      other_person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, "everyone", "Everyone")
+        |> add_group_member(group_id, membership_id, person_id)
+
+      assert {:error, :group_membership_person_mismatch} =
+               Club.execute(club, %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: other_person_id
+               })
+
+      assert {:error, :group_membership_person_mismatch} =
+               Club.execute(club, %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: other_person_id
                })
     end
 
@@ -614,6 +758,15 @@ defmodule Memba.Membership.ClubTest do
 
   defp add_group_member(%Club{} = club, group_id, membership_id, person_id) do
     Club.apply(club, %GroupMemberAdded{
+      club_id: club.club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id
+    })
+  end
+
+  defp remove_group_member(%Club{} = club, group_id, membership_id, person_id) do
+    Club.apply(club, %GroupMemberRemoved{
       club_id: club.club_id,
       group_id: group_id,
       membership_id: membership_id,

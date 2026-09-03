@@ -292,8 +292,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                 %GroupCreated{
                   club_id: ^club_id,
                   group_id: ^group_id,
-                  group_key: "everyone",
-                  name: "Everyone"
+                  group_key: "trail_crew",
+                  name: "Trail Crew"
                 }
               ]
             }} =
@@ -301,8 +301,20 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                %CreateGroup{
                  club_id: club_id,
                  group_id: group_id,
-                 group_key: "everyone",
-                 name: "Everyone"
+                 group_key: "trail_crew",
+                 name: "Trail Crew"
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             App.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: " trail_crew ",
+                 name: " Trail Crew "
                },
                returning: :execution_result,
                consistency: :strong
@@ -332,6 +344,18 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                consistency: :strong
              )
 
+    assert {:ok, %ExecutionResult{events: []}} =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
@@ -346,12 +370,27 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               ],
               aggregate_state: %Club{
                 club_id: ^club_id,
-                groups: %{^group_id => %{group_key: "everyone"}},
+                groups: %{^group_id => %{group_key: "trail_crew"}},
                 group_memberships: %{
-                  {^group_id, ^membership_id} => %{person_id: ^person_id, active: false}
+                  {^group_id, ^membership_id} => %{
+                    person_id: ^person_id,
+                    active: false
+                  }
                 }
               }
             }} =
+             App.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok, %ExecutionResult{events: []}} =
              App.dispatch(
                %RemoveGroupMember{
                  club_id: club_id,
