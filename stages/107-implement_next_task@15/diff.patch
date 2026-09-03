@@ -1,0 +1,293 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 2abf38c..82048cd 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -14,7 +14,7 @@
+ - [x] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+ - [x] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+ - [x] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
+-- [ ] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
++- [x] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
+ - [ ] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
+ - [ ] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
+ - [ ] 018 Change reply authorisation to require write access through an active group membership.
+diff --git a/web/lib/memba/messaging/commands/send_message.ex b/web/lib/memba/messaging/commands/send_message.ex
+index c6d7868..c67839e 100644
+--- a/web/lib/memba/messaging/commands/send_message.ex
++++ b/web/lib/memba/messaging/commands/send_message.ex
+@@ -7,7 +7,9 @@ defmodule Memba.Messaging.Commands.SendMessage do
+ 
+   A message is also the write-model unit for a conversation entry. Root club
+   messages omit `conversation_id`/`reply_to_message_id`; the aggregate records
+-  the root's `conversation_id` as its own `message_id`. Replies use their own
++  the root's `conversation_id` as its own `message_id`. Root messages may also
++  carry the resolved `audience_group_id` so the aggregate can record the
++  conversation access grant for that audience. Replies use their own
+   `message_id`, reference the root via `conversation_id`, and may reference the
+   immediate message being answered via `reply_to_message_id`.
+   """
+@@ -17,6 +19,7 @@ defmodule Memba.Messaging.Commands.SendMessage do
+     :message_id,
+     :club_id,
+     :sender_id,
++    :audience_group_id,
+     :conversation_id,
+     :reply_to_message_id,
+     :subject,
+diff --git a/web/lib/memba/messaging/events/conversation_access_granted_to_group.ex b/web/lib/memba/messaging/events/conversation_access_granted_to_group.ex
+new file mode 100644
+index 0000000..09a283d
+--- /dev/null
++++ b/web/lib/memba/messaging/events/conversation_access_granted_to_group.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.ConversationAccessGrantedToGroup do
++  @moduledoc """
++  Event raised when a conversation grants read or write access to a group.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:conversation_id, :club_id, :group_id, :access_level]
++  defstruct [:conversation_id, :club_id, :group_id, :access_level]
++end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 3e859ad..0420c32 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Message do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.ConversationReference
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+   alias Memba.Messaging.Events.ConversationFollowed
+   alias Memba.Messaging.Events.ConversationUnfollowed
+   alias Memba.Messaging.Events.MessageSent
+@@ -138,6 +139,7 @@ defmodule Memba.Messaging.Message do
+ 
+   def apply(%__MODULE__{} = message, %ConversationFollowed{}), do: message
+   def apply(%__MODULE__{} = message, %ConversationUnfollowed{}), do: message
++  def apply(%__MODULE__{} = message, %ConversationAccessGrantedToGroup{}), do: message
+ 
+   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
+   # product status. Keep this no-op so historic events can rehydrate aggregates
+@@ -184,21 +186,29 @@ defmodule Memba.Messaging.Message do
+     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
++         {:ok, audience_group_id} <-
++           normalize_command_audience_group_id(command, conversation_id, reply_to_message_id),
+          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
+          {:ok, body} <- normalize_text(command.body, :invalid_body),
+          {:ok, recipients} <- normalize_command_recipients(command) do
+-      [
+-        %MessageSent{
+-          message_id: command.message_id,
+-          club_id: command.club_id,
+-          sender_id: command.sender_id,
+-          conversation_id: conversation_id,
+-          reply_to_message_id: reply_to_message_id,
+-          subject: subject,
+-          body: body
+-        }
+-        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
+-      ]
++      message_sent = %MessageSent{
++        message_id: command.message_id,
++        club_id: command.club_id,
++        sender_id: command.sender_id,
++        conversation_id: conversation_id,
++        reply_to_message_id: reply_to_message_id,
++        subject: subject,
++        body: body
++      }
++
++      [message_sent] ++
++        conversation_access_events(
++          command,
++          conversation_id,
++          reply_to_message_id,
++          audience_group_id
++        ) ++
++        Enum.map(recipients, &email_delivery_created(command.message_id, &1))
+     end
+   end
+ 
+@@ -297,6 +307,62 @@ defmodule Memba.Messaging.Message do
+     }
+   end
+ 
++  defp conversation_access_events(
++         %SendMessage{message_id: message_id} = command,
++         conversation_id,
++         nil,
++         audience_group_id
++       )
++       when message_id == conversation_id and not is_nil(audience_group_id) do
++    [
++      %ConversationAccessGrantedToGroup{
++        conversation_id: conversation_id,
++        club_id: command.club_id,
++        group_id: audience_group_id,
++        access_level: "write"
++      }
++    ]
++  end
++
++  defp conversation_access_events(
++         _command,
++         _conversation_id,
++         _reply_to_message_id,
++         _audience_group_id
++       ),
++       do: []
++
++  defp normalize_command_audience_group_id(
++         %SendMessage{message_id: message_id, audience_group_id: audience_group_id},
++         conversation_id,
++         nil
++       )
++       when message_id == conversation_id do
++    case audience_group_id do
++      nil ->
++        {:ok, nil}
++
++      audience_group_id ->
++        with :ok <- validate_id(:group, audience_group_id, :invalid_audience_group_id) do
++          {:ok, audience_group_id}
++        end
++    end
++  end
++
++  defp normalize_command_audience_group_id(
++         %SendMessage{},
++         _conversation_id,
++         _reply_to_message_id
++       ),
++       do: {:ok, nil}
++
++  defp normalize_command_audience_group_id(
++         %PostMessageReply{},
++         _conversation_id,
++         _reply_to_message_id
++       ),
++       do: {:ok, nil}
++
+   defp validate_id(type, value, error) do
+     case ID.cast(type, value) do
+       {:ok, ^value} -> :ok
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index b2efce5..838fd95 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Messaging.MessageTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.PostMessageReply
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryBounced
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+@@ -18,10 +19,11 @@ defmodule Memba.Messaging.MessageTest do
+   alias Memba.Messaging.Recipient
+ 
+   describe "execute/2 SendMessage" do
+-    test "emits MessageSent as the root of its own conversation and one EmailDeliveryCreated per resolved recipient" do
++    test "emits MessageSent, the audience group write grant, and one EmailDeliveryCreated per resolved recipient" do
+       message_id = Memba.ID.generate(:message)
+       club_id = Memba.ID.generate(:club)
+       sender_id = Memba.ID.generate(:person)
++      group_id = Memba.ID.generate(:group)
+       alice_delivery_id = Memba.ID.generate(:delivery)
+       bob_delivery_id = Memba.ID.generate(:delivery)
+       bob_id = Memba.ID.generate(:person)
+@@ -30,6 +32,7 @@ defmodule Memba.Messaging.MessageTest do
+         message_id: message_id,
+         club_id: club_id,
+         sender_id: sender_id,
++        audience_group_id: group_id,
+         subject: " Trail day ",
+         body: " Meet at 9am. ",
+         recipients: [
+@@ -58,6 +61,12 @@ defmodule Memba.Messaging.MessageTest do
+                  subject: "Trail day",
+                  body: "Meet at 9am."
+                },
++               %ConversationAccessGrantedToGroup{
++                 conversation_id: ^message_id,
++                 club_id: ^club_id,
++                 group_id: ^group_id,
++                 access_level: "write"
++               },
+                %EmailDeliveryCreated{
+                  message_id: ^message_id,
+                  delivery_id: ^alice_delivery_id,
+@@ -86,6 +95,12 @@ defmodule Memba.Messaging.MessageTest do
+ 
+       assert {:error, :invalid_sender_id} =
+                Message.execute(%Message{}, %SendMessage{valid_command | sender_id: nil})
++
++      assert {:error, :invalid_audience_group_id} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | audience_group_id: "not-a-group-id"
++               })
+     end
+ 
+     test "rejects blank subject or body" do
+@@ -611,6 +626,7 @@ defmodule Memba.Messaging.MessageTest do
+       message_id: Memba.ID.generate(:message),
+       club_id: Memba.ID.generate(:club),
+       sender_id: sender_id,
++      audience_group_id: Memba.ID.generate(:group),
+       subject: "Trail day",
+       body: "Meet at 9am.",
+       recipients: [
+diff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs
+index 30e74a1..8bd0815 100644
+--- a/web/test/memba/messaging/send_message_dispatch_test.exs
++++ b/web/test/memba/messaging/send_message_dispatch_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Events.EmailDeliveryDelivered
+@@ -15,6 +16,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+     message_id = Memba.ID.generate(:message)
+     club_id = Memba.ID.generate(:club)
+     sender_id = Memba.ID.generate(:person)
++    group_id = Memba.ID.generate(:group)
+     bob_id = Memba.ID.generate(:person)
+     alice_delivery_id = Memba.ID.generate(:delivery)
+     bob_delivery_id = Memba.ID.generate(:delivery)
+@@ -23,6 +25,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+       message_id: message_id,
+       club_id: club_id,
+       sender_id: sender_id,
++      audience_group_id: group_id,
+       subject: "Trail day",
+       body: "Meet at 9am.",
+       recipients: [
+@@ -44,7 +47,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+-              aggregate_version: 3,
++              aggregate_version: 4,
+               events: [
+                 %MessageSent{
+                   message_id: ^message_id,
+@@ -53,6 +56,12 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+                   subject: "Trail day",
+                   body: "Meet at 9am."
+                 },
++                %ConversationAccessGrantedToGroup{
++                  conversation_id: ^message_id,
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  access_level: "write"
++                },
+                 %EmailDeliveryCreated{
+                   message_id: ^message_id,
+                   delivery_id: ^alice_delivery_id,
