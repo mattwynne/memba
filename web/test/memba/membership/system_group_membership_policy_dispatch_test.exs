@@ -1,6 +1,7 @@
 defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Commanded.EventStore
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddMember
@@ -9,6 +10,12 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
@@ -103,6 +110,63 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
   end
 
+  test "redelivered lifecycle events use Club group state rather than handler workflow memory" do
+    club_id = Memba.ID.generate(:club)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    create_club(club_id)
+
+    member_added = %MemberAdded{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id
+    }
+
+    assert :ok = SystemGroupMembership.handle(member_added, %{})
+    assert :ok = SystemGroupMembership.handle(member_added, %{})
+
+    admin_role_assigned = %MemberRoleAssigned{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      role_id: admin_role_id
+    }
+
+    assert :ok = SystemGroupMembership.handle(admin_role_assigned, %{})
+    assert :ok = SystemGroupMembership.handle(admin_role_assigned, %{})
+
+    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
+    assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
+
+    member_removed = %MemberRemoved{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id
+    }
+
+    assert :ok = SystemGroupMembership.handle(member_removed, %{})
+    assert :ok = SystemGroupMembership.handle(member_removed, %{})
+
+    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
+    assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
+
+    club_events = recorded_events(club_id)
+
+    assert count_group_events(club_events, GroupMemberAdded, everyone_group_id, membership_id) ==
+             1
+
+    assert count_group_events(club_events, GroupMemberAdded, admin_group_id, membership_id) == 1
+
+    assert count_group_events(club_events, GroupMemberRemoved, everyone_group_id, membership_id) ==
+             1
+
+    assert count_group_events(club_events, GroupMemberRemoved, admin_group_id, membership_id) == 1
+  end
+
   test "non-Admin role lifecycle events do not alter Admin group membership" do
     club_id = Memba.ID.generate(:club)
     membership_id = Memba.ID.generate(:membership)
@@ -189,6 +253,21 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   defp refute_group_membership(club_id, group_id, membership_id) do
     assert %Club{group_memberships: group_memberships} = App.aggregate_state(Club, club_id)
     refute Map.has_key?(group_memberships, {group_id, membership_id})
+  end
+
+  defp recorded_events(stream_uuid) do
+    stream_uuid
+    |> then(&EventStore.stream_forward(App, &1))
+    |> Enum.to_list()
+  end
+
+  defp count_group_events(events, event_module, group_id, membership_id) do
+    Enum.count(events, fn recorded_event ->
+      match?(
+        %{__struct__: ^event_module, group_id: ^group_id, membership_id: ^membership_id},
+        recorded_event.data
+      )
+    end)
   end
 
   defp await_group_membership_projector! do
