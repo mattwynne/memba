@@ -1,0 +1,594 @@
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index dbe4fe3..9e5ede3 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -255,8 +255,7 @@ defmodule Memba.Membership.Club do
+ 
+     %__MODULE__{
+       club
+-      | group_memberships:
+-          Map.put(club.group_memberships, group_membership_key, group_membership)
++      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
+     }
+   end
+ 
+@@ -266,8 +265,7 @@ defmodule Memba.Membership.Club do
+ 
+     %__MODULE__{
+       club
+-      | group_memberships:
+-          Map.put(club.group_memberships, group_membership_key, group_membership)
++      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
+     }
+   end
+ 
+@@ -502,7 +500,9 @@ defmodule Memba.Membership.Club do
+   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
+ 
+   defp put_group_key(group_keys, nil, _group_id), do: group_keys
+-  defp put_group_key(group_keys, group_key, group_id), do: Map.put(group_keys, group_key, group_id)
++
++  defp put_group_key(group_keys, group_key, group_id),
++    do: Map.put(group_keys, group_key, group_id)
+ 
+   defp group_membership_key(group_id, membership_id), do: {group_id, membership_id}
+ end
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 64c439c..385892f 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -6,6 +6,7 @@ defmodule Memba.Messaging do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.ID
+   alias Memba.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+   alias Memba.Messaging.Commands.FollowConversation
+@@ -44,7 +45,7 @@ defmodule Memba.Messaging do
+   import Ecto.Query
+ 
+   @doc """
+-  Send a message to the active members of a club.
++  Send a message to the active members of a club's Everyone group.
+ 
+   The service resolves recipients through Membership's public query API, builds
+   a `SendMessage` command containing those resolved recipients, and dispatches it
+@@ -1280,14 +1281,17 @@ defmodule Memba.Messaging do
+          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
+          {:ok, subject} <- fetch_required(attrs, :subject),
+          {:ok, body} <- fetch_required(attrs, :body) do
++      audience_group_id = SystemGroups.everyone_group_id(club_id)
++
+       {:ok,
+        %SendMessage{
+          message_id: message_id,
+          club_id: club_id,
+          sender_id: sender_id,
++         audience_group_id: audience_group_id,
+          subject: subject,
+          body: body,
+-         recipients: resolve_recipients(club_id)
++         recipients: resolve_group_recipients(audience_group_id)
+        }}
+     end
+   end
+@@ -1457,11 +1461,11 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
+-  defp resolve_recipients(club_id, opts \\ []) do
++  defp resolve_group_recipients(group_id, opts \\ []) do
+     except_person_id = Keyword.get(opts, :except_person_id)
+ 
+-    club_id
+-    |> Membership.list_active_members_of_club()
++    group_id
++    |> Membership.list_active_members_of_group()
+     |> Enum.reject(&(&1.id == except_person_id))
+     |> Enum.map(&resolved_recipient/1)
+   end
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index a182d09..03a6a50 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -13,6 +13,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+   alias Memba.Accounts
+   alias Memba.ClubInboundEmailAddress
+   alias Memba.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.Projectors.Message, as: MessageProjector
+   alias MembaWeb.ClubSite
+@@ -412,7 +413,8 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp compose_context(club_id, current_identity, current_identity_clubs) do
+     with selected_club when not is_nil(selected_club) <-
+            selected_club(current_identity_clubs, club_id),
+-         members <- Membership.list_active_members_of_club(club_id),
++         everyone_group_id <- SystemGroups.everyone_group_id(club_id),
++         members <- Membership.list_active_members_of_group(everyone_group_id),
+          current_member when not is_nil(current_member) <-
+            current_member_for_identity(members, current_identity) do
+       {:ok,
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 81231a4..59adbe3 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+   alias Memba.Membership
+   alias Memba.Messaging
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+@@ -54,6 +55,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     add_member!(kmc.club_id, alice.person_id)
+     add_member!(kmc.club_id, bob.person_id)
+     add_member!(npc.club_id, pat.person_id)
++    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
+ 
+     assert {:ok,
+             %{
+@@ -79,6 +81,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert kmc_id == kmc.club_id
+     assert alice_id == alice.person_id
++    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
++    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+ 
+     assert %{
+              message_id: ^message_id,
+diff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs
+index 43b79ac..4d4667d 100644
+--- a/web/test/memba/messaging/post_message_reply_test.exs
++++ b/web/test/memba/messaging/post_message_reply_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Messaging
+@@ -221,6 +222,8 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   end
+ 
+   defp add_member(club_id, person_id) do
++    ensure_club(club_id)
++
+     membership_id = Memba.ID.generate(:membership)
+ 
+     assert :ok =
+@@ -236,6 +239,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+     membership_id
+   end
+ 
++  defp ensure_club(club_id) do
++    if is_nil(Memba.Membership.get_club(club_id)) do
++      assert :ok =
++               MembershipApp.dispatch(
++                 %CreateClub{
++                   club_id: club_id,
++                   name: "Kootenay Mountaineering Club",
++                   slug: membership_club_slug("Kootenay Mountaineering Club", club_id)
++                 },
++                 consistency: :strong
++               )
++    end
++  end
++
+   defp remove_member(membership_id) do
+     assert :ok =
+              MembershipApp.dispatch(
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index e7d16e9..bae60b3 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -6,12 +6,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+   alias Memba.Messaging.EmailDeliveryRequest
+-  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+   alias Memba.Messaging.Events.EmailDeliveryCreated
++  alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+ 
+   @email_delivery_replay_projectors [
+@@ -37,18 +40,23 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     :ok
+   end
+ 
+-  test "resolves active club members via Membership and records pending delivery work without provider handoff" do
++  test "resolves active Everyone group members via Membership and records pending delivery work without provider handoff" do
+     kootenay_club_id = Memba.ID.generate(:club)
+     nelson_club_id = Memba.ID.generate(:club)
++    create_club(kootenay_club_id, "Kootenay Mountaineering Club")
++    create_club(nelson_club_id, "Nelson Cycling Club")
++    everyone_group_id = SystemGroups.everyone_group_id(kootenay_club_id)
+ 
+     alice = create_person(name: "Alice", email: "alice@example.com")
+     bob = create_person(name: "Bob", email: "bob@example.com")
+     carol = create_person(name: "Carol", email: "carol@example.com")
++    dana = create_person(name: "Dana", email: "dana@example.com")
+     pat = create_person(name: "Pat", email: "pat@example.com")
+ 
+     add_member(kootenay_club_id, alice.person_id)
+     add_member(kootenay_club_id, bob.person_id)
+     add_member(kootenay_club_id, carol.person_id)
++    insert_active_membership_projection_without_group(kootenay_club_id, dana.person_id)
+     add_member(nelson_club_id, pat.person_id)
+ 
+     message_id = Memba.ID.generate(:message)
+@@ -56,7 +64,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+-              aggregate_version: 4,
++              aggregate_version: 5,
+               events: [
+                 %MessageSent{
+                   message_id: ^message_id,
+@@ -64,6 +72,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
+                   sender_id: sender_id,
+                   subject: "Trip planning night",
+                   body: "Bring route ideas."
++                },
++                %ConversationAccessGrantedToGroup{
++                  conversation_id: ^message_id,
++                  club_id: ^kootenay_club_id,
++                  group_id: ^everyone_group_id,
++                  access_level: "write"
+                 }
+                 | delivery_events
+               ]
+@@ -104,6 +118,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+            ] = delivery_events
+ 
+     assert [alice_id, bob_id, carol_id] == [alice.person_id, bob.person_id, carol.person_id]
++    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
+     refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
+ 
+     delivery_ids = Enum.map(delivery_events, & &1.delivery_id)
+@@ -149,6 +164,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+   test "sends each active member once at the person's primary email address" do
+     club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+ 
+     alice =
+       create_person(
+@@ -180,7 +197,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^message_id,
+-              aggregate_version: 3,
++              aggregate_version: 4,
+               events: [
+                 %MessageSent{
+                   message_id: ^message_id,
+@@ -189,6 +206,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
+                   subject: "Trip planning night",
+                   body: "Bring route ideas."
+                 },
++                %ConversationAccessGrantedToGroup{
++                  conversation_id: ^message_id,
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  access_level: "write"
++                },
+                 %EmailDeliveryCreated{
+                   message_id: ^message_id,
+                   recipient_id: ^alice_id,
+@@ -270,6 +293,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+   test "does not call the provider when the send command is rejected" do
+     club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
+     alice = create_person(name: "Alice", email: "alice@example.com")
+     add_member(club_id, alice.person_id)
+ 
+@@ -447,7 +471,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+                %CreateClub{
+                  club_id: club_id,
+                  name: name,
+-                 slug: "kootenay-mountaineering-club"
++                 slug: membership_club_slug(name, club_id)
+                },
+                consistency: :strong
+              )
+@@ -484,6 +508,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   end
+ 
+   defp add_member(club_id, person_id) do
++    ensure_club(club_id)
++
+     assert :ok =
+              MembershipApp.dispatch(
+                %AddMember{
+@@ -495,6 +521,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
+              )
+   end
+ 
++  defp ensure_club(club_id) do
++    if is_nil(Memba.Membership.get_club(club_id)) do
++      create_club(club_id, "Kootenay Mountaineering Club")
++    end
++  end
++
++  defp insert_active_membership_projection_without_group(club_id, person_id) do
++    Repo.insert!(%MembershipProjection{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ 
+diff --git a/web/test/memba_web/club_site_shell_surfaces_test.exs b/web/test/memba_web/club_site_shell_surfaces_test.exs
+index 7d1f3ed..ec894ec 100644
+--- a/web/test/memba_web/club_site_shell_surfaces_test.exs
++++ b/web/test/memba_web/club_site_shell_surfaces_test.exs
+@@ -4,8 +4,11 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -208,6 +211,8 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+         active: true
+       })
+ 
++    insert_everyone_group_membership!(club.club_id, membership.membership_id, person.person_id)
++
+     club
+     |> Map.from_struct()
+     |> Map.merge(%{
+@@ -218,6 +223,28 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+     })
+   end
+ 
++  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.insert!(%GroupMembership{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp grant_manage_members!(member) do
+     Repo.insert!(%MemberPermission{
+       club_id: member.club_id,
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 7272f9f..23eb156 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -8,11 +8,14 @@ defmodule MembaWeb.PageControllerTest do
+   alias Memba.Accounts.AuthEmailRequest
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.PersonEmailAddress
+   alias Memba.Membership.Projections.RoleAssignment
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+@@ -1237,18 +1240,44 @@ defmodule MembaWeb.PageControllerTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: true
+     })
+ 
++    insert_everyone_group_membership!(club_id, membership_id, person.person_id)
++
+     club
+     |> Map.from_struct()
+     |> Map.put(:person_id, person.person_id)
+   end
+ 
++  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.insert!(%GroupMembership{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp create_message(attrs) do
+     message_id = Memba.ID.generate(:message)
+ 
+@@ -1311,7 +1340,12 @@ defmodule MembaWeb.PageControllerTest do
+     assert html
+            |> LazyHTML.query("footer")
+            |> LazyHTML.text()
+-           |> String.contains?("Red Donkey Technology Corp")
++           |> String.contains?("Matt Wynne")
++
++    assert html
++           |> LazyHTML.query("footer")
++           |> LazyHTML.text()
++           |> String.contains?("Built with")
+ 
+     assert html
+            |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/about']")
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index 6a70caf..d0abeac 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -76,7 +76,15 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+   test "club detail points message review to global Messages instead of embedding club rows", %{
+     conn: conn
+   } do
+-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    club_id = Memba.ID.generate(:club)
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    club = Membership.get_club(club_id)
+     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+ 
+     assert :ok =
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index a6f37a1..2a611bf 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -4,7 +4,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -142,6 +145,40 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute has_element?(view, "[name='message[sender_id]']")
+   end
+ 
++  test "routed mount derives recipient count from the Everyone group", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    _bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Climbing Club",
++        club_id: alice.club_id,
++        everyone_group?: false
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/new")
++
++    assert has_element?(
++             view,
++             "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='1']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-recipient-summary[data-active-member-count='1']",
++             "the current member"
++           )
++  end
++
+   test "routed compose screen renders the focused member message form affordances", %{
+     conn: conn
+   } do
+@@ -353,16 +390,44 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: true
+     })
+ 
++    if Keyword.get(attrs, :everyone_group?, true) do
++      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
++    end
++
+     %{club_id: club_id, person_id: person.person_id}
+   end
+ 
++  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.insert!(%GroupMembership{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp club_attrs(attrs, club_id) do
+     base = [
+       club_id: club_id,
