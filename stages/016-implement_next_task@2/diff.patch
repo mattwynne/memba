@@ -1,0 +1,226 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index f807dd1..056f611 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+-- [ ] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
++- [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+ - [ ] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+ - [ ] 004 Define deterministic Everyone and Admin group IDs.
+ - [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+diff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex
+index cf7cd8d..1408a10 100644
+--- a/web/lib/memba/id.ex
++++ b/web/lib/memba/id.ex
+@@ -9,6 +9,7 @@ defmodule Memba.ID do
+   @prefixes %{
+     club: "clb",
+     club_invitation: "inv",
++    group: "grp",
+     person: "per",
+     role: "rol",
+     membership: "mem",
+@@ -26,6 +27,7 @@ defmodule Memba.ID do
+   @type type ::
+           :club
+           | :club_invitation
++          | :group
+           | :person
+           | :role
+           | :membership
+diff --git a/web/lib/memba/membership/commands/add_group_member.ex b/web/lib/memba/membership/commands/add_group_member.ex
+new file mode 100644
+index 0000000..2078261
+--- /dev/null
++++ b/web/lib/memba/membership/commands/add_group_member.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Membership.Commands.AddGroupMember do
++  @moduledoc """
++  Command to add a club membership to a conversation group.
++
++  The caller supplies the club aggregate identity as `club_id` and identifies
++  both the group and member being joined.
++  """
++
++  @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id]
++end
+diff --git a/web/lib/memba/membership/commands/create_group.ex b/web/lib/memba/membership/commands/create_group.ex
+new file mode 100644
+index 0000000..bbc42b7
+--- /dev/null
++++ b/web/lib/memba/membership/commands/create_group.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Membership.Commands.CreateGroup do
++  @moduledoc """
++  Command to create a club-scoped conversation group.
++
++  The caller supplies the club aggregate identity as `club_id` and the group
++  identity as `group_id`.
++  """
++
++  @enforce_keys [:club_id, :group_id, :name]
++  defstruct [:club_id, :group_id, :group_key, :name]
++end
+diff --git a/web/lib/memba/membership/commands/remove_group_member.ex b/web/lib/memba/membership/commands/remove_group_member.ex
+new file mode 100644
+index 0000000..5715d2c
+--- /dev/null
++++ b/web/lib/memba/membership/commands/remove_group_member.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Membership.Commands.RemoveGroupMember do
++  @moduledoc """
++  Command to remove a club membership from a conversation group.
++
++  The caller supplies the club aggregate identity as `club_id` and identifies
++  both the group and member being removed.
++  """
++
++  @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id]
++end
+diff --git a/web/lib/memba/membership/events/group_created.ex b/web/lib/memba/membership/events/group_created.ex
+new file mode 100644
+index 0000000..613229c
+--- /dev/null
++++ b/web/lib/memba/membership/events/group_created.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.GroupCreated do
++  @moduledoc """
++  Event raised when a club-scoped conversation group has been created.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:club_id, :group_id, :name]
++  defstruct [:club_id, :group_id, :group_key, :name]
++end
+diff --git a/web/lib/memba/membership/events/group_member_added.ex b/web/lib/memba/membership/events/group_member_added.ex
+new file mode 100644
+index 0000000..9cf7905
+--- /dev/null
++++ b/web/lib/memba/membership/events/group_member_added.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.GroupMemberAdded do
++  @moduledoc """
++  Event raised when a club membership has been added to a conversation group.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id]
++end
+diff --git a/web/lib/memba/membership/events/group_member_removed.ex b/web/lib/memba/membership/events/group_member_removed.ex
+new file mode 100644
+index 0000000..32c9c76
+--- /dev/null
++++ b/web/lib/memba/membership/events/group_member_removed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.GroupMemberRemoved do
++  @moduledoc """
++  Event raised when a club membership has been removed from a conversation group.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
++  defstruct [:club_id, :group_id, :membership_id, :person_id]
++end
+diff --git a/web/test/memba/membership/group_command_event_modules_test.exs b/web/test/memba/membership/group_command_event_modules_test.exs
+new file mode 100644
+index 0000000..fca4ef1
+--- /dev/null
++++ b/web/test/memba/membership/group_command_event_modules_test.exs
+@@ -0,0 +1,91 @@
++defmodule Memba.Membership.GroupCommandEventModulesTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.ID
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.CreateGroup
++  alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
++
++  test "group IDs use the Membership group typed ID prefix and cast by type" do
++    group_id = ID.generate(:group)
++
++    assert String.starts_with?(group_id, "grp_")
++    assert {:ok, ^group_id} = ID.cast(:group, group_id)
++    assert ID.valid?(:group, group_id)
++    refute ID.valid?(:club, group_id)
++  end
++
++  test "group IDs can be deterministic for system group identities" do
++    club_id = ID.generate(:club)
++
++    group_id = ID.deterministic(:group, ["system-group", club_id, "everyone"])
++
++    assert String.starts_with?(group_id, "grp_")
++    assert group_id == ID.deterministic(:group, ["system-group", club_id, "everyone"])
++    assert group_id != ID.deterministic(:group, ["system-group", club_id, "admin"])
++  end
++
++  test "group commands carry club, group, membership, and person identities" do
++    ids = group_membership_ids()
++
++    assert %CreateGroup{
++             club_id: ids.club_id,
++             group_id: ids.group_id,
++             group_key: "everyone",
++             name: "Everyone"
++           } ==
++             struct!(CreateGroup, %{
++               club_id: ids.club_id,
++               group_id: ids.group_id,
++               group_key: "everyone",
++               name: "Everyone"
++             })
++
++    assert %AddGroupMember{
++             club_id: ids.club_id,
++             group_id: ids.group_id,
++             membership_id: ids.membership_id,
++             person_id: ids.person_id
++           } == struct!(AddGroupMember, ids)
++
++    assert %RemoveGroupMember{
++             club_id: ids.club_id,
++             group_id: ids.group_id,
++             membership_id: ids.membership_id,
++             person_id: ids.person_id
++           } == struct!(RemoveGroupMember, ids)
++  end
++
++  test "group events carry the same identities and are JSON encodable" do
++    ids = group_membership_ids()
++
++    assert_json_encodable(%GroupCreated{
++      club_id: ids.club_id,
++      group_id: ids.group_id,
++      group_key: "admin",
++      name: "Admin"
++    })
++
++    assert_json_encodable(struct!(GroupMemberAdded, ids))
++    assert_json_encodable(struct!(GroupMemberRemoved, ids))
++  end
++
++  defp group_membership_ids do
++    %{
++      club_id: ID.generate(:club),
++      group_id: ID.generate(:group),
++      membership_id: ID.generate(:membership),
++      person_id: ID.generate(:person)
++    }
++  end
++
++  defp assert_json_encodable(event) do
++    assert {:ok, encoded} = Jason.encode(event)
++    assert {:ok, decoded} = Jason.decode(encoded)
++    assert decoded["club_id"] == event.club_id
++    assert decoded["group_id"] == event.group_id
++  end
++end
