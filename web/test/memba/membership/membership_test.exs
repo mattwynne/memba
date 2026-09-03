@@ -103,7 +103,11 @@ defmodule Memba.Membership.MembershipTest do
 
       membership = active_membership(membership_id, club_id, person_id)
 
-      assert %MemberRemoved{membership_id: ^membership_id} =
+      assert %MemberRemoved{
+               membership_id: ^membership_id,
+               club_id: ^club_id,
+               person_id: ^person_id
+             } =
                Membership.execute(membership, %RemoveMember{membership_id: membership_id})
     end
 

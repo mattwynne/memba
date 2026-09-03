@@ -36,7 +36,11 @@ defmodule Memba.Membership.Membership do
   def execute(%__MODULE__{} = membership, %RemoveMember{} = command) do
     with :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_same_membership(membership.membership_id, command.membership_id) do
-      %MemberRemoved{membership_id: command.membership_id}
+      %MemberRemoved{
+        membership_id: command.membership_id,
+        club_id: membership.club_id,
+        person_id: membership.person_id
+      }
     end
   end
 
