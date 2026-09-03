@@ -24,10 +24,13 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroups
 
   test "Membership app dispatch routes CreateClub to the Club aggregate" do
     club_id = Memba.ID.generate(:club)
     role_id = Roles.membership_administrator_role_id(club_id)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
 
     command = %CreateClub{
       club_id: club_id,
@@ -38,7 +41,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 3,
+              aggregate_version: 5,
               events: [
                 %ClubCreated{
                   club_id: ^club_id,
@@ -55,12 +58,28 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                   club_id: ^club_id,
                   role_id: ^role_id,
                   permission: "club.manage_members"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  group_key: "everyone",
+                  name: "Everyone"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  group_key: "admin",
+                  name: "Admin"
                 }
               ],
               aggregate_state: %Club{
                 club_id: ^club_id,
                 name: "Kootenay Mountaineering Club",
                 slug: "kmc",
+                groups: %{
+                  ^everyone_group_id => %{group_key: "everyone"},
+                  ^admin_group_id => %{group_key: "admin"}
+                },
                 roles: %{^role_id => %{role_key: "admin"}},
                 role_permissions: %{^role_id => default_role_permissions}
               }
@@ -72,6 +91,10 @@ defmodule Memba.Membership.CreateClubDispatchTest do
              club_id: ^club_id,
              name: "Kootenay Mountaineering Club",
              slug: "kmc",
+             groups: %{
+               ^everyone_group_id => %{group_key: "everyone"},
+               ^admin_group_id => %{group_key: "admin"}
+             },
              roles: %{^role_id => %{role_key: "admin"}},
              role_permissions: %{^role_id => persisted_role_permissions}
            } =
@@ -113,7 +136,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 4,
+              aggregate_version: 6,
               events: [
                 %ClubUpdated{
                   club_id: ^club_id,
@@ -148,7 +171,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 4,
+              aggregate_version: 6,
               events: [
                 %ClubRoleDefined{
                   club_id: ^club_id,
@@ -172,7 +195,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 5,
+              aggregate_version: 7,
               events: [
                 %ClubRolePermissionGranted{
                   club_id: ^club_id,
@@ -194,7 +217,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 6,
+              aggregate_version: 8,
               events: [
                 %MemberRoleAssigned{
                   club_id: ^club_id,
@@ -218,7 +241,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 7,
+              aggregate_version: 9,
               events: [
                 %MemberRoleRemoved{
                   club_id: ^club_id,
@@ -264,7 +287,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 4,
+              aggregate_version: 6,
               events: [
                 %GroupCreated{
                   club_id: ^club_id,
@@ -288,7 +311,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 5,
+              aggregate_version: 7,
               events: [
                 %GroupMemberAdded{
                   club_id: ^club_id,
@@ -312,7 +335,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 6,
+              aggregate_version: 8,
               events: [
                 %GroupMemberRemoved{
                   club_id: ^club_id,

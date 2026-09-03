@@ -22,11 +22,14 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroups
 
   describe "execute/2 CreateClub" do
-    test "emits ClubCreated and initializes the default Admin bundle" do
+    test "emits ClubCreated, initializes the default Admin bundle, and creates system groups" do
       club_id = Memba.ID.generate(:club)
       role_id = Roles.membership_administrator_role_id(club_id)
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+      admin_group_id = SystemGroups.admin_group_id(club_id)
 
       command = %CreateClub{
         club_id: club_id,
@@ -50,6 +53,18 @@ defmodule Memba.Membership.ClubTest do
                  club_id: ^club_id,
                  role_id: ^role_id,
                  permission: "club.manage_members"
+               },
+               %GroupCreated{
+                 club_id: ^club_id,
+                 group_id: ^everyone_group_id,
+                 group_key: "everyone",
+                 name: "Everyone"
+               },
+               %GroupCreated{
+                 club_id: ^club_id,
+                 group_id: ^admin_group_id,
+                 group_key: "admin",
+                 name: "Admin"
                }
              ] = Club.execute(%Club{}, command)
     end

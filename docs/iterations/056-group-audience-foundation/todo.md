@@ -4,7 +4,7 @@
 - [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
 - [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
 - [x] 004 Define deterministic Everyone and Admin group IDs.
-- [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+- [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
 - [ ] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
 - [ ] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
 - [ ] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.

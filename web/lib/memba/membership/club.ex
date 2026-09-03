@@ -26,6 +26,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
+  alias Memba.Membership.SystemGroups
 
   @behaviour Aggregate
 
@@ -61,6 +62,18 @@ defmodule Memba.Membership.Club do
           club_id: command.club_id,
           role_id: membership_administrator_role_id,
           permission: Permissions.club_manage_members()
+        },
+        %GroupCreated{
+          club_id: command.club_id,
+          group_id: SystemGroups.everyone_group_id(command.club_id),
+          group_key: SystemGroups.everyone_key(),
+          name: SystemGroups.everyone_name()
+        },
+        %GroupCreated{
+          club_id: command.club_id,
+          group_id: SystemGroups.admin_group_id(command.club_id),
+          group_key: SystemGroups.admin_key(),
+          name: SystemGroups.admin_name()
         }
       ]
     end
