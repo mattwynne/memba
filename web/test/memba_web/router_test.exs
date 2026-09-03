@@ -7,6 +7,17 @@ defmodule MembaWeb.RouterTest do
     "/deliveries"
   ]
 
+  @custom_group_paths [
+    "/groups",
+    "/groups/new",
+    "/groups/group-123",
+    "/groups/group-123/members",
+    "/admin/groups",
+    "/admin/clubs/club-123/groups",
+    "/admin/clubs/club-123/groups/new",
+    "/admin/clubs/club-123/groups/group-123"
+  ]
+
   describe "Memba staff LiveView routes" do
     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
       assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
@@ -196,6 +207,15 @@ defmodule MembaWeb.RouterTest do
         assert response(conn, 404) == "Not Found"
         assert get_resp_header(conn, "location") == []
       end)
+    end
+  end
+
+  describe "custom group routes" do
+    test "custom group UI/API paths are not routed in this slice" do
+      for method <- ~w(GET POST PATCH DELETE),
+          path <- @custom_group_paths do
+        assert :error = Phoenix.Router.route_info(MembaWeb.Router, method, path, "localhost")
+      end
     end
   end
 
