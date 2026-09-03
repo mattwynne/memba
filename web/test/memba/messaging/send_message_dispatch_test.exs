@@ -2,6 +2,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.SendMessage
@@ -88,6 +89,8 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
     assert MapSet.equal?(email_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
+    assert Messaging.group_has_conversation_access?(message_id, group_id, :write)
+    assert Messaging.group_has_conversation_access?(message_id, group_id, :read)
 
     assert %Message{
              message_id: ^message_id,

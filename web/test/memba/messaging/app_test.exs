@@ -15,6 +15,7 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
+  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
@@ -28,6 +29,16 @@ defmodule Memba.Messaging.AppTest do
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {App, pid, :supervisor, [App]} when is_pid(pid) -> true
              _child -> false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{ConversationGroupAccessProjector, _opts}, pid, :worker,
+              [ConversationGroupAccessProjector]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
            end)
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn

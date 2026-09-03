@@ -18,6 +18,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
+  alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
@@ -30,6 +31,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.OutboundMessageID
+  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -393,6 +395,31 @@ defmodule Memba.Messaging do
     case get_conversation_follow(conversation_id, member_id) do
       %ConversationFollowProjection{following: true} -> true
       _not_following -> false
+    end
+  end
+
+  @doc """
+  Return whether a group has the requested access to a projected conversation.
+
+  The `access_level` may be `:read`, `:write`, `"read"`, or `"write"`. A stored
+  `"write"` grant satisfies both read and write checks; a stored `"read"` grant
+  satisfies only read checks. Invalid IDs or access levels return `false`.
+  """
+  def group_has_conversation_access?(conversation_id, group_id, access_level) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.group_id == ^group_id and
+          access.access_level in ^grant_levels
+      )
+      |> Repo.exists?()
+    else
+      _invalid -> false
     end
   end
 

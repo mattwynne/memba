@@ -19,6 +19,7 @@ defmodule MembaWeb.DevTestSupportController do
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
+    Memba.Messaging.Projectors.ConversationGroupAccess,
     Memba.Messaging.Projectors.ConversationFollow,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,

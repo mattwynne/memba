@@ -19,6 +19,7 @@ defmodule Memba.Application do
        dispatch_enabled:
          Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
       Memba.Messaging.Projectors.Message,
+      Memba.Messaging.Projectors.ConversationGroupAccess,
       Memba.Messaging.Projectors.ConversationFollow,
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,
