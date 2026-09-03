@@ -1,0 +1,353 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index ff827e8..a7dec76 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+ - [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+ - [x] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+-- [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
++- [x] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+ - [ ] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+ - [ ] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+ - [ ] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
+diff --git a/web/lib/memba/membership/events/member_removed.ex b/web/lib/memba/membership/events/member_removed.ex
+index 0982c57..38b743c 100644
+--- a/web/lib/memba/membership/events/member_removed.ex
++++ b/web/lib/memba/membership/events/member_removed.ex
+@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.MemberRemoved do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:membership_id]
+-  defstruct [:membership_id]
++  defstruct [:membership_id, :club_id, :person_id]
+ end
+diff --git a/web/lib/memba/membership/membership.ex b/web/lib/memba/membership/membership.ex
+index 2d879ca..8227c3d 100644
+--- a/web/lib/memba/membership/membership.ex
++++ b/web/lib/memba/membership/membership.ex
+@@ -36,7 +36,11 @@ defmodule Memba.Membership.Membership do
+   def execute(%__MODULE__{} = membership, %RemoveMember{} = command) do
+     with :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+          :ok <- validate_same_membership(membership.membership_id, command.membership_id) do
+-      %MemberRemoved{membership_id: command.membership_id}
++      %MemberRemoved{
++        membership_id: command.membership_id,
++        club_id: membership.club_id,
++        person_id: membership.person_id
++      }
+     end
+   end
+ 
+diff --git a/web/lib/memba/membership/policies/system_group_membership.ex b/web/lib/memba/membership/policies/system_group_membership.ex
+index 198102a..0effc4e 100644
+--- a/web/lib/memba/membership/policies/system_group_membership.ex
++++ b/web/lib/memba/membership/policies/system_group_membership.ex
+@@ -12,4 +12,87 @@ defmodule Memba.Membership.Policies.SystemGroupMembership do
+     name: "Memba.Membership.Policies.SystemGroupMembership",
+     consistency: :strong,
+     start_from: :current
++
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Events.MemberRemoved
++  alias Memba.Membership.Events.MemberRoleAssigned
++  alias Memba.Membership.Events.MemberRoleRemoved
++  alias Memba.Membership.Projectors.GroupMembership
++  alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
++
++  @impl Commanded.Event.Handler
++  def handle(%MemberAdded{} = event, _metadata) do
++    dispatch(add_group_member(event, SystemGroups.everyone_group_id(event.club_id)))
++  end
++
++  def handle(%MemberRemoved{club_id: club_id, person_id: person_id}, _metadata)
++      when not is_binary(club_id) or not is_binary(person_id) do
++    :ok
++  end
++
++  def handle(%MemberRemoved{} = event, _metadata) do
++    dispatch_all([
++      remove_group_member(event, SystemGroups.everyone_group_id(event.club_id)),
++      remove_group_member(event, SystemGroups.admin_group_id(event.club_id))
++    ])
++  end
++
++  def handle(%MemberRoleAssigned{} = event, _metadata) do
++    if admin_role?(event.club_id, event.role_id) do
++      dispatch(add_group_member(event, SystemGroups.admin_group_id(event.club_id)))
++    else
++      :ok
++    end
++  end
++
++  def handle(%MemberRoleRemoved{} = event, _metadata) do
++    if admin_role?(event.club_id, event.role_id) do
++      dispatch(remove_group_member(event, SystemGroups.admin_group_id(event.club_id)))
++    else
++      :ok
++    end
++  end
++
++  defp admin_role?(club_id, role_id) do
++    role_id == Roles.membership_administrator_role_id(club_id)
++  end
++
++  defp add_group_member(event, group_id) do
++    %AddGroupMember{
++      club_id: event.club_id,
++      group_id: group_id,
++      membership_id: event.membership_id,
++      person_id: event.person_id
++    }
++  end
++
++  defp remove_group_member(event, group_id) do
++    %RemoveGroupMember{
++      club_id: event.club_id,
++      group_id: group_id,
++      membership_id: event.membership_id,
++      person_id: event.person_id
++    }
++  end
++
++  defp dispatch_all(commands) do
++    Enum.reduce_while(commands, :ok, fn command, :ok ->
++      case dispatch(command) do
++        :ok -> {:cont, :ok}
++        {:error, _reason} = error -> {:halt, error}
++      end
++    end)
++  end
++
++  defp dispatch(command) do
++    case App.dispatch(command, consistency: [GroupMembership]) do
++      :ok -> :ok
++      {:error, reason} when reason in [:not_created, :group_not_defined] -> :ok
++      {:error, _reason} = error -> error
++    end
++  end
+ end
+diff --git a/web/test/memba/membership/membership_test.exs b/web/test/memba/membership/membership_test.exs
+index 971fb6d..15f6ddd 100644
+--- a/web/test/memba/membership/membership_test.exs
++++ b/web/test/memba/membership/membership_test.exs
+@@ -103,7 +103,11 @@ defmodule Memba.Membership.MembershipTest do
+ 
+       membership = active_membership(membership_id, club_id, person_id)
+ 
+-      assert %MemberRemoved{membership_id: ^membership_id} =
++      assert %MemberRemoved{
++               membership_id: ^membership_id,
++               club_id: ^club_id,
++               person_id: ^person_id
++             } =
+                Membership.execute(membership, %RemoveMember{membership_id: membership_id})
+     end
+ 
+diff --git a/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+new file mode 100644
+index 0000000..194c101
+--- /dev/null
++++ b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+@@ -0,0 +1,197 @@
++defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership.App
++  alias Memba.Membership.Club
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.DefineClubRole
++  alias Memba.Membership.Commands.RemoveMember
++  alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Roles
++  alias Memba.Membership.SystemGroups
++
++  test "MemberAdded and MemberRemoved dispatch idempotent Everyone membership commands" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++    create_club(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %AddMember{club_id: club_id, membership_id: membership_id, person_id: person_id},
++               consistency: :strong
++             )
++
++    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
++
++    assert :ok =
++             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++
++    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
++  end
++
++  test "Admin role assignment and removal dispatch idempotent Admin group membership commands" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++    admin_role_id = Roles.membership_administrator_role_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    create_club(club_id)
++    add_member(club_id, membership_id, person_id)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: admin_role_id
++               },
++               consistency: :strong
++             )
++
++    assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: admin_role_id
++               },
++               consistency: :strong
++             )
++
++    assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
++  end
++
++  test "MemberRemoved dispatches removals for both Everyone and Admin system groups" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++    admin_role_id = Roles.membership_administrator_role_id(club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    create_club(club_id)
++    add_member(club_id, membership_id, person_id)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: admin_role_id
++               },
++               consistency: :strong
++             )
++
++    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
++    assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
++
++    assert :ok =
++             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++
++    assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
++    assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
++  end
++
++  test "non-Admin role lifecycle events do not alter Admin group membership" do
++    club_id = Memba.ID.generate(:club)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++    custom_role_id = Memba.ID.generate(:role)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    create_club(club_id)
++    add_member(club_id, membership_id, person_id)
++
++    assert :ok =
++             App.dispatch(
++               %DefineClubRole{
++                 club_id: club_id,
++                 role_id: custom_role_id,
++                 role_key: "custom_membership_manager",
++                 name: "Custom Membership Manager"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: custom_role_id
++               },
++               consistency: :strong
++             )
++
++    refute_group_membership(club_id, admin_group_id, membership_id)
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: custom_role_id
++               },
++               consistency: :strong
++             )
++
++    refute_group_membership(club_id, admin_group_id, membership_id)
++  end
++
++  defp create_club(club_id) do
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp add_member(club_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AddMember{club_id: club_id, membership_id: membership_id, person_id: person_id},
++               consistency: :strong
++             )
++
++    await_group_membership_projector!()
++  end
++
++  defp assert_group_membership(club_id, group_id, membership_id, person_id, active?) do
++    await_group_membership_projector!()
++
++    assert %Club{
++             group_memberships: %{
++               {^group_id, ^membership_id} => %{
++                 person_id: ^person_id,
++                 active: ^active?
++               }
++             }
++           } = App.aggregate_state(Club, club_id)
++  end
++
++  defp refute_group_membership(club_id, group_id, membership_id) do
++    assert %Club{group_memberships: group_memberships} = App.aggregate_state(Club, club_id)
++    refute Map.has_key?(group_memberships, {group_id, membership_id})
++  end
++
++  defp await_group_membership_projector! do
++    Memba.ProjectionBarrier.await!([Memba.Membership.Projectors.GroupMembership], timeout: 1_000)
++  end
++end
