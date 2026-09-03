@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+- [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
 - [ ] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
 - [ ] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
 - [ ] 004 Define deterministic Everyone and Admin group IDs.
