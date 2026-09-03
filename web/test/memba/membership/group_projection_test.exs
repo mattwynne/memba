@@ -4,6 +4,9 @@ defmodule Memba.Membership.GroupProjectionTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.SystemGroups
@@ -66,6 +69,68 @@ defmodule Memba.Membership.GroupProjectionTest do
            } = group_membership(group_id, membership_id)
   end
 
+  test "group membership projection toggles one current-state row while events retain history" do
+    club_id = Memba.ID.generate(:club)
+    group_id = SystemGroups.everyone_group_id(club_id)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    create_club!(club_id)
+
+    assert :ok =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    assert %GroupMembershipProjection{active: true, inserted_at: inserted_at} =
+             group_membership(group_id, membership_id)
+
+    assert :ok =
+             App.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    assert %GroupMembershipProjection{
+             active: false,
+             inserted_at: ^inserted_at
+           } = group_membership(group_id, membership_id)
+
+    assert :ok =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    assert %GroupMembershipProjection{
+             active: true,
+             inserted_at: ^inserted_at
+           } = group_membership(group_id, membership_id)
+
+    assert 1 == group_membership_count(group_id, membership_id)
+
+    assert [GroupMemberAdded, GroupMemberRemoved, GroupMemberAdded] ==
+             club_id
+             |> group_membership_events(group_id, membership_id)
+             |> Enum.map(& &1.__struct__)
+  end
+
   defp create_club!(club_id) do
     assert :ok =
              App.dispatch(
@@ -78,6 +143,16 @@ defmodule Memba.Membership.GroupProjectionTest do
              )
   end
 
+  defp group_membership_count(group_id, membership_id) do
+    Repo.aggregate(
+      from(group_membership in GroupMembershipProjection,
+        where: group_membership.group_id == ^group_id,
+        where: group_membership.membership_id == ^membership_id
+      ),
+      :count
+    )
+  end
+
   defp group_membership(group_id, membership_id) do
     Repo.one(
       from(group_membership in GroupMembershipProjection,
@@ -85,5 +160,15 @@ defmodule Memba.Membership.GroupProjectionTest do
         where: group_membership.membership_id == ^membership_id
       )
     )
+  end
+
+  defp group_membership_events(club_id, group_id, membership_id) do
+    App
+    |> Commanded.EventStore.stream_forward(club_id)
+    |> Enum.map(& &1.data)
+    |> Enum.filter(fn
+      %{group_id: ^group_id, membership_id: ^membership_id} -> true
+      _event -> false
+    end)
   end
 end
