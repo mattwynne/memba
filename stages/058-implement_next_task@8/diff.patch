@@ -1,0 +1,346 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 5e86a4b..34e10b9 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+ - [x] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+ - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+-- [ ] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
++- [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+ - [ ] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+ - [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+ - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index d37a1d9..405d6ac 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -14,6 +14,8 @@ config :memba,
+     :projection_versions,
+     :membership_clubs,
+     :membership_club_invitations,
++    :membership_groups,
++    :membership_group_memberships,
+     :membership_memberships,
+     :membership_member_permissions,
+     :membership_role_assignments,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index abc2ec6..074155c 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -27,6 +27,8 @@ defmodule Memba.Application do
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.ClubInvitation,
+       Memba.Membership.Projectors.Membership,
++      Memba.Membership.Projectors.Group,
++      Memba.Membership.Projectors.GroupMembership,
+       Memba.Membership.Projectors.Role,
+       Memba.Membership.Projectors.Person,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+diff --git a/web/lib/memba/membership/projections/group.ex b/web/lib/memba/membership/projections/group.ex
+new file mode 100644
+index 0000000..af1e56d
+--- /dev/null
++++ b/web/lib/memba/membership/projections/group.ex
+@@ -0,0 +1,16 @@
++defmodule Memba.Membership.Projections.Group do
++  @moduledoc """
++  Read model projection for a club-scoped conversation group in the Membership context.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:group_id, :string, autogenerate: false}
++  schema "membership_groups" do
++    field :club_id, :string
++    field :group_key, :string
++    field :name, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projections/group_membership.ex b/web/lib/memba/membership/projections/group_membership.ex
+new file mode 100644
+index 0000000..9a2fb9e
+--- /dev/null
++++ b/web/lib/memba/membership/projections/group_membership.ex
+@@ -0,0 +1,18 @@
++defmodule Memba.Membership.Projections.GroupMembership do
++  @moduledoc """
++  Read model projection for a current group membership in the Membership context.
++  """
++
++  use Ecto.Schema
++
++  @primary_key false
++  schema "membership_group_memberships" do
++    field :club_id, :string
++    field :group_id, :string
++    field :membership_id, :string
++    field :person_id, :string
++    field :active, :boolean
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projectors/group.ex b/web/lib/memba/membership/projectors/group.ex
+new file mode 100644
+index 0000000..6b46d4f
+--- /dev/null
++++ b/web/lib/memba/membership/projectors/group.ex
+@@ -0,0 +1,45 @@
++defmodule Memba.Membership.Projectors.Group do
++  @moduledoc """
++  Projects group definition events into the Membership group read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Membership.App,
++    repo: Memba.Repo,
++    name: "Memba.Membership.Projectors.Group",
++    consistency: :strong
++
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Projections.Group, as: GroupProjection
++
++  project(%GroupCreated{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    Ecto.Multi.insert(
++      multi,
++      :membership_group,
++      %GroupProjection{
++        club_id: event.club_id,
++        group_id: event.group_id,
++        group_key: event.group_key,
++        name: event.name,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: event.club_id,
++          group_key: event.group_key,
++          name: event.name,
++          updated_at: now
++        ]
++      ],
++      conflict_target: :group_id
++    )
++  end)
++
++  @impl Commanded.Projections.Ecto
++  def after_update(event, metadata, changes) do
++    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
++  end
++end
+diff --git a/web/lib/memba/membership/projectors/group_membership.ex b/web/lib/memba/membership/projectors/group_membership.ex
+new file mode 100644
+index 0000000..fe24abf
+--- /dev/null
++++ b/web/lib/memba/membership/projectors/group_membership.ex
+@@ -0,0 +1,55 @@
++defmodule Memba.Membership.Projectors.GroupMembership do
++  @moduledoc """
++  Projects group membership events into the Membership group-membership read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Membership.App,
++    repo: Memba.Repo,
++    name: "Memba.Membership.Projectors.GroupMembership",
++    consistency: :strong
++
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
++
++  project(%GroupMemberAdded{} = event, fn multi ->
++    upsert_group_membership(multi, event, true)
++  end)
++
++  project(%GroupMemberRemoved{} = event, fn multi ->
++    upsert_group_membership(multi, event, false)
++  end)
++
++  defp upsert_group_membership(multi, event, active) do
++    now = DateTime.utc_now(:microsecond)
++
++    Ecto.Multi.insert(
++      multi,
++      :membership_group_membership,
++      %GroupMembershipProjection{
++        club_id: event.club_id,
++        group_id: event.group_id,
++        membership_id: event.membership_id,
++        person_id: event.person_id,
++        active: active,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: event.club_id,
++          person_id: event.person_id,
++          active: active,
++          updated_at: now
++        ]
++      ],
++      conflict_target: [:group_id, :membership_id]
++    )
++  end
++
++  @impl Commanded.Projections.Ecto
++  def after_update(event, metadata, changes) do
++    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
++  end
++end
+diff --git a/web/priv/repo/migrations/20260903074923_create_membership_group_projections.exs b/web/priv/repo/migrations/20260903074923_create_membership_group_projections.exs
+new file mode 100644
+index 0000000..f7fe3a2
+--- /dev/null
++++ b/web/priv/repo/migrations/20260903074923_create_membership_group_projections.exs
+@@ -0,0 +1,35 @@
++defmodule Memba.Repo.Migrations.CreateMembershipGroupProjections do
++  use Ecto.Migration
++
++  def change do
++    create table(:membership_groups, primary_key: false) do
++      add :group_id, :text, primary_key: true
++      add :club_id, :text, null: false
++      add :group_key, :text
++      add :name, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_groups, [:club_id])
++
++    create unique_index(:membership_groups, [:club_id, :group_key],
++             where: "group_key IS NOT NULL"
++           )
++
++    create table(:membership_group_memberships, primary_key: false) do
++      add :club_id, :text, null: false
++      add :group_id, :text, null: false
++      add :membership_id, :text, null: false
++      add :person_id, :text, null: false
++      add :active, :boolean, null: false, default: true
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_group_memberships, [:club_id, :group_id], where: "active")
++    create index(:membership_group_memberships, [:club_id, :person_id], where: "active")
++    create index(:membership_group_memberships, [:membership_id], where: "active")
++    create unique_index(:membership_group_memberships, [:group_id, :membership_id])
++  end
++end
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+new file mode 100644
+index 0000000..25ebae2
+--- /dev/null
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -0,0 +1,89 @@
++defmodule Memba.Membership.GroupProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Projections.Group, as: GroupProjection
++  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
++  alias Memba.Membership.SystemGroups
++
++  test "CreateClub projects the deterministic system groups" do
++    club_id = Memba.ID.generate(:club)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    assert %GroupProjection{
++             group_id: ^everyone_group_id,
++             club_id: ^club_id,
++             group_key: "everyone",
++             name: "Everyone"
++           } = Repo.get(GroupProjection, everyone_group_id)
++
++    assert %GroupProjection{
++             group_id: ^admin_group_id,
++             club_id: ^club_id,
++             group_key: "admin",
++             name: "Admin"
++           } = Repo.get(GroupProjection, admin_group_id)
++  end
++
++  test "AddGroupMember projects an active group membership row" do
++    club_id = Memba.ID.generate(:club)
++    group_id = SystemGroups.everyone_group_id(club_id)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert %GroupMembershipProjection{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             membership_id: ^membership_id,
++             person_id: ^person_id,
++             active: true
++           } = group_membership(group_id, membership_id)
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp group_membership(group_id, membership_id) do
++    Repo.one(
++      from(group_membership in GroupMembershipProjection,
++        where: group_membership.group_id == ^group_id,
++        where: group_membership.membership_id == ^membership_id
++      )
++    )
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index f387d61..396f17c 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -14,6 +14,8 @@ defmodule Memba.EventSourcedCase do
+     Memba.Membership.Projectors.Club,
+     Memba.Membership.Projectors.ClubInvitation,
+     Memba.Membership.Projectors.Membership,
++    Memba.Membership.Projectors.Group,
++    Memba.Membership.Projectors.GroupMembership,
+     Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
