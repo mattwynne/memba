@@ -107,7 +107,7 @@ No new design mock is needed.
 This iteration changes visible copy/address text on existing surfaces rather than adding a new page, component, or state:
 
 - Member dashboard inbound-address note: covered by `design-system/wireframes/club-home.html`, which already includes the “Prefer email?” note and mailto address.
-- Member compose and message surfaces: covered by the existing member messaging designs and sketches, including `design-system/wireframes/member-messaging.html` and the reply-threading sketch in `docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`.
+- Member compose and message surfaces: covered by the existing member messaging designs and sketches, including `design-system/wireframes/member-messaging.html` and the reply-threading sketch in `docs/specs/2026-06-17-reply-threading-design-sketch.md`.
 - Reply notification email: covered by the existing reply-notification design referenced by iterations 040/041; 042 changes the `Reply-To` destination address, not the email layout.
 
 ## Acceptance Criteria

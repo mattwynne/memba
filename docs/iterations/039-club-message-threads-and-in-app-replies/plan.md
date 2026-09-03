@@ -16,7 +16,7 @@ After this iteration:
 
 ## Background / Context
 
-Today a club message is a one-way broadcast. The message-detail screen is a delivery-receipts dashboard, and replies sent by email go to the original human sender and are not tracked (iteration 024). The design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) chose **Model C — conversation with opt-in follow** as the end state.
+Today a club message is a one-way broadcast. The message-detail screen is a delivery-receipts dashboard, and replies sent by email go to the original human sender and are not tracked (iteration 024). The design sketch [`docs/specs/2026-06-17-reply-threading-design-sketch.md`](../../specs/2026-06-17-reply-threading-design-sketch.md) chose **Model C — conversation with opt-in follow** as the end state.
 
 We are reaching Model C in steps. **039 ships the simplest honest increment:** a reply is "a club message that belongs to a conversation," emailed to all current members (reusing `send_club_message`'s delivery path and receipts). There is deliberately **no follow concept yet** — that means 039 emails replies to everyone (interim reply-all). **040 then introduces "follow this conversation to receive any new replies"** and narrows delivery to followers (sender + repliers auto-follow; others opt in), reducing noise. **041** adds replying from an email client.
 
@@ -30,7 +30,7 @@ The reply feature is split into three sequential, independently shippable iterat
 
 The implementer must build against these existing designs:
 
-- **Conversation message-detail screen** — DS wireframe `wireframes/member-conversation.html` (final version) plus design sketch [`docs/superpowers/specs/2026-06-17-reply-threading-design-sketch.md`](../../superpowers/specs/2026-06-17-reply-threading-design-sketch.md) §4.1: the message-detail screen reframed as a conversation (original message → inline reply composer → replies in order), with the delivery-receipts panel demoted to a collapsed summary. **The DS card shows the follow toggle, which is 040 — 039 builds this screen without it.** §4.2 covers the club-home row gaining a reply-count signal.
+- **Conversation message-detail screen** — DS wireframe `wireframes/member-conversation.html` (final version) plus design sketch [`docs/specs/2026-06-17-reply-threading-design-sketch.md`](../../specs/2026-06-17-reply-threading-design-sketch.md) §4.1: the message-detail screen reframed as a conversation (original message → inline reply composer → replies in order), with the delivery-receipts panel demoted to a collapsed summary. **The DS card shows the follow toggle, which is 040 — 039 builds this screen without it.** §4.2 covers the club-home row gaining a reply-count signal.
 - **Reply notification email** — DS card `emails/reply-notification.html` (final version). In 039, render it **without** the "you're following · stop following" footer line (no follow concept yet — see the design sketch §8 "one canonical email design; earlier slices omit elements"). The earlier-messages quoted-thread block and "View the conversation" CTA still apply.
 - **Mobile member surfaces** — DS wireframes `wireframes/mobile-message-detail.html` and `wireframes/mobile-compose.html` show the phone-width member layout/style (sage theme, shared components) the conversation screen must match responsively.
 

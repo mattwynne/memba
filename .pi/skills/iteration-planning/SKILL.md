@@ -116,7 +116,7 @@ Environment gate:
 Decide three things:
 
 1. **Does this iteration need a design?** Yes if it adds or changes a screen, page, component, email, or a visible state (empty / first-run / loading / error / success). No for purely internal or technical work (refactors, data/model changes, background jobs, infra, observability) with no visible surface — record `No design needed` and why.
-2. **Do we already have it?** In Claude Code, check the design system with `DesignSync` (`list_files`, then `get_file`). In any environment, check existing checked-in design sources such as `design-system/` and `docs/superpowers/specs/*` sketches for each affected surface. Reference what exists by path (e.g. a DS card `wireframes/*.html`, `ui_kits/*/index.html`, `emails/*.html`, or a sketch section). A design that is close but missing the new elements still counts as the base to extend — say so.
+2. **Do we already have it?** In Claude Code, check the design system with `DesignSync` (`list_files`, then `get_file`). In any environment, check existing checked-in design sources such as `design-system/` and `docs/specs/*` sketches for each affected surface. Reference what exists by path (e.g. a DS card `wireframes/*.html`, `ui_kits/*/index.html`, `emails/*.html`, or a sketch section). A design that is close but missing the new elements still counts as the base to extend — say so.
 3. **If it's needed and missing, remind to create it.** Do not leave a user-facing surface with no referenced design and no reminder. The reminder is: mock the surface as a self-contained design-system preview, render-verify it (headless render), and push it to the DS via `DesignSync` in Claude Code — done before implementation where possible. If the iteration is already building, record it as a **fast-follow** design to align the in-flight build/review to.
 
 Write the outcome in `## Designs`: for each affected surface, the design that covers it (with path) or the reminder to create one. When a feature spans several iterations, design the **final** version once and note which elements earlier slices omit, rather than a separate design per slice. Default to "needs a design" whenever the iteration changes anything a user sees; `No design needed` is for genuinely invisible technical work.
@@ -207,7 +207,7 @@ State the BDD decision: `Required`, `Useful but not required`, or `Not useful fo
 
 ## Designs
 
-Apply the Design Check. For each user-facing surface the iteration adds or changes, name the design that covers it (a design-system card or a `docs/superpowers/specs` sketch, by path), or note that no design exists yet and must be created in Claude Code (a reminder to mock + render-verify + push to the DS there; mark it a fast-follow if the iteration is already building). Write `No design needed` with a reason for purely internal/technical iterations.
+Apply the Design Check. For each user-facing surface the iteration adds or changes, name the design that covers it (a design-system card or a `docs/specs` sketch, by path), or note that no design exists yet and must be created in Claude Code (a reminder to mock + render-verify + push to the DS there; mark it a fast-follow if the iteration is already building). Write `No design needed` with a reason for purely internal/technical iterations.
 
 ## Acceptance Criteria
 

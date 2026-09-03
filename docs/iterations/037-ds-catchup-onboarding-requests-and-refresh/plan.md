@@ -18,7 +18,7 @@ After this iteration:
 
 The design system is meant to mirror the running app (see `CLAUDE.md`). A gap audit found several shipped surfaces with no design; iteration 036 took the first slice (member management & invitations + auth check-email). This iteration takes the **final two DS-catch-up slices**: onboarding requests (022/030) and empty-states + refresh of existing member surfaces.
 
-The phase-2 DS-previews approach is proven (`docs/superpowers/specs/2026-06-17-phase2-ds-previews-design.md`): previews render with **prebuilt daisyUI CSS via CDN + the daisyUI theme as `:root` vars** plus plain CSS for layout. Hard lesson carried forward: **Tailwind utility classes do not resolve in static prebuilt-CSS previews** — use daisyUI components + plain CSS only, and render-verify every page before pushing.
+The phase-2 DS-previews approach is proven (`docs/specs/2026-06-17-phase2-ds-previews-design.md`): previews render with **prebuilt daisyUI CSS via CDN + the daisyUI theme as `:root` vars** plus plain CSS for layout. Hard lesson carried forward: **Tailwind utility classes do not resolve in static prebuilt-CSS previews** — use daisyUI components + plain CSS only, and render-verify every page before pushing.
 
 The deliverable is design-system preview files. Delivery is "full Fabro deliver" of the **repo-side** preview files following the repo preview-location convention that iteration 036 establishes; Fabro cannot reach the cloud DS, so after the iteration merges the PM pushes the approved files to the cloud DS via DesignSync.
 

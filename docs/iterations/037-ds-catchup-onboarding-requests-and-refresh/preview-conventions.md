@@ -9,7 +9,7 @@ Task 002 confirmation for where iteration 037 repo-side DS previews live and wha
 - `design-system/wireframes/profile-completion.html`
 - `design-system/wireframes/check-email-delivery-progress.html`
 - `design-system/components/badges/badges.card.html`
-- `docs/superpowers/specs/2026-06-17-phase2-ds-previews-design.md`
+- `docs/specs/2026-06-17-phase2-ds-previews-design.md`
 - `web/assets/css/app.css`
 - `spikes/ds-convert/emails/reply-notification.html`
 
