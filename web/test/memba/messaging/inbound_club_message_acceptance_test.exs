@@ -2,6 +2,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -87,6 +88,9 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              subject: "Trip planning night",
              body: "Bring route ideas."
            } = Messaging.get_message(message_id)
+
+    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
 
     assert [
              %{

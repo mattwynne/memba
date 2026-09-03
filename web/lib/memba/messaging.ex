@@ -6,6 +6,7 @@ defmodule Memba.Messaging do
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
@@ -44,7 +45,7 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @doc """
-  Send a message to the active members of a club.
+  Send a message to a club's Everyone group.
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
@@ -1280,14 +1281,17 @@ defmodule Memba.Messaging do
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, body} <- fetch_required(attrs, :body) do
+      audience_group_id = everyone_group_id_for_club(club_id)
+
       {:ok,
        %SendMessage{
          message_id: message_id,
          club_id: club_id,
          sender_id: sender_id,
+         audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_recipients(club_id)
+         recipients: resolve_group_recipients(audience_group_id)
        }}
     end
   end
@@ -1457,11 +1461,22 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_recipients(club_id, opts \\ []) do
+  defp everyone_group_id_for_club(club_id) do
+    case ID.cast(:club, club_id) do
+      {:ok, ^club_id} -> SystemGroups.everyone_group_id(club_id)
+      _invalid -> nil
+    end
+  end
+
+  defp resolve_group_recipients(group_id, opts \\ [])
+
+  defp resolve_group_recipients(nil, _opts), do: []
+
+  defp resolve_group_recipients(group_id, opts) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
-    club_id
-    |> Membership.list_active_members_of_club()
+    group_id
+    |> Membership.list_active_members_of_group()
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
   end

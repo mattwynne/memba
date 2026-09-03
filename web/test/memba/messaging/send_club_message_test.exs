@@ -2,14 +2,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
@@ -37,7 +41,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     :ok
   end
 
-  test "resolves active club members via Membership and records pending delivery work without provider handoff" do
+  test "resolves Everyone group members via Membership and records pending delivery work without provider handoff" do
     kootenay_club_id = Memba.ID.generate(:club)
     nelson_club_id = Memba.ID.generate(:club)
 
@@ -52,11 +56,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(nelson_club_id, pat.person_id)
 
     message_id = Memba.ID.generate(:message)
+    everyone_group_id = SystemGroups.everyone_group_id(kootenay_club_id)
 
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 4,
+              aggregate_version: 5,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -64,6 +69,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                   sender_id: sender_id,
                   subject: "Trip planning night",
                   body: "Bring route ideas."
+                },
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^kootenay_club_id,
+                  group_id: ^everyone_group_id,
+                  access_level: "write"
                 }
                 | delivery_events
               ]
@@ -81,6 +92,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
 
     assert sender_id == alice.person_id
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
 
     assert [
              %EmailDeliveryCreated{
@@ -147,6 +160,58 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
   end
 
+  test "recipient resolution follows current Everyone group membership" do
+    club_id = Memba.ID.generate(:club)
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    carol = create_person(name: "Carol", email: "carol@example.com")
+
+    add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
+    carol_membership_id = add_member(club_id, carol.person_id)
+    remove_everyone_group_member(club_id, carol_membership_id, carol.person_id)
+
+    message_id = Memba.ID.generate(:message)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              events: [
+                %MessageSent{message_id: ^message_id, club_id: ^club_id},
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  access_level: "write"
+                },
+                %EmailDeliveryCreated{recipient_id: alice_id},
+                %EmailDeliveryCreated{recipient_id: bob_id}
+              ]
+            }} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
+
+    recipient_ids =
+      message_id
+      |> pending_deliveries_for_message()
+      |> Enum.map(& &1.recipient_id)
+
+    refute carol.person_id in recipient_ids
+  end
+
   test "sends each active member once at the person's primary email address" do
     club_id = Memba.ID.generate(:club)
 
@@ -176,11 +241,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
     message_id = Memba.ID.generate(:message)
     alice_id = alice.person_id
     bob_id = bob.person_id
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 3,
+              aggregate_version: 4,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -188,6 +254,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                   sender_id: ^alice_id,
                   subject: "Trip planning night",
                   body: "Bring route ideas."
+                },
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  access_level: "write"
                 },
                 %EmailDeliveryCreated{
                   message_id: ^message_id,
@@ -447,7 +519,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                %CreateClub{
                  club_id: club_id,
                  name: name,
-                 slug: "kootenay-mountaineering-club"
+                 slug: club_slug(club_id)
                },
                consistency: :strong
              )
@@ -484,15 +556,51 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp add_member(club_id, person_id) do
+    ensure_club(club_id)
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              MembershipApp.dispatch(
                %AddMember{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
                },
                consistency: :strong
              )
+
+    membership_id
+  end
+
+  defp remove_everyone_group_member(club_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: SystemGroups.everyone_group_id(club_id),
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp ensure_club(club_id) do
+    case Membership.get_club(club_id) do
+      nil -> create_club(club_id, "Test Club")
+      _club -> :ok
+    end
+  end
+
+  defp club_slug(club_id) do
+    suffix =
+      club_id
+      |> String.split("_", parts: 2)
+      |> List.last()
+      |> String.replace("-", "")
+      |> String.slice(0, 12)
+
+    "club-#{suffix}"
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

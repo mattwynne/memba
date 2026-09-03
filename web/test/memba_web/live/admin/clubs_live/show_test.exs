@@ -76,14 +76,21 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "club detail points message review to global Messages instead of embedding club rows", %{
     conn: conn
   } do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    club_id = Memba.ID.generate(:club)
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     assert :ok =
              Membership.add_member(
                %{
                  membership_id: Memba.ID.generate(:membership),
-                 club_id: club.club_id,
+                 club_id: club_id,
                  person_id: person.person_id
                },
                consistency: :strong
@@ -93,7 +100,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
       Messaging.send_club_message(
         %{
           message_id: Memba.ID.generate(:message),
-          club_id: club.club_id,
+          club_id: club_id,
           sender_id: person.person_id,
           subject: "Trip planning night",
           body: "Bring route ideas."
@@ -106,7 +113,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     {:ok, view, _initial_html} =
       conn
       |> sign_in_staff()
-      |> live(~p"/admin/clubs/#{club.club_id}")
+      |> live(~p"/admin/clubs/#{club_id}")
 
     assert has_element?(view, "#club-messaging-card", "Messages live globally")
 

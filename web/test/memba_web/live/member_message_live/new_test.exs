@@ -4,7 +4,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -353,14 +356,37 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    insert_everyone_group!(club_id)
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: true
     })
 
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: SystemGroups.everyone_group_id(club_id),
+      membership_id: membership_id,
+      person_id: person.person_id,
+      active: true
+    })
+
     %{club_id: club_id, person_id: person.person_id}
+  end
+
+  defp insert_everyone_group!(club_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.get(Group, group_id) ||
+      Repo.insert!(%Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      })
   end
 
   defp club_attrs(attrs, club_id) do

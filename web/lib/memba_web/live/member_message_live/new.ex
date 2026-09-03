@@ -13,6 +13,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.Accounts
   alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.Projectors.Message, as: MessageProjector
   alias MembaWeb.ClubSite
@@ -412,7 +413,10 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp compose_context(club_id, current_identity, current_identity_clubs) do
     with selected_club when not is_nil(selected_club) <-
            selected_club(current_identity_clubs, club_id),
-         members <- Membership.list_active_members_of_club(club_id),
+         members <-
+           club_id
+           |> SystemGroups.everyone_group_id()
+           |> Membership.list_active_members_of_group(),
          current_member when not is_nil(current_member) <-
            current_member_for_identity(members, current_identity) do
       {:ok,
