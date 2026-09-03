@@ -7,9 +7,21 @@ defmodule Memba.Membership.GroupProjectionTest do
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Projectors.Group
+  alias Memba.Membership.Projectors.GroupMembership
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.SystemGroups
+
+  test "group projectors are configured for strong consistency" do
+    assert %{start: {Group, :start_link, [group_opts]}} = Group.child_spec([])
+    assert Keyword.fetch!(group_opts, :consistency) == :strong
+
+    assert %{start: {GroupMembership, :start_link, [group_membership_opts]}} =
+             GroupMembership.child_spec([])
+
+    assert Keyword.fetch!(group_membership_opts, :consistency) == :strong
+  end
 
   test "CreateClub projects the deterministic system groups" do
     club_id = Memba.ID.generate(:club)

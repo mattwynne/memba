@@ -26,6 +26,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -255,7 +256,7 @@ defmodule Memba.Membership do
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs),
          :ok <- prevent_duplicate_active_membership(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -343,7 +344,7 @@ defmodule Memba.Membership do
            invitation_add_member_command(invitation, person_id, membership_id),
          :ok <- prevent_duplicate_active_membership(add_member_command),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -380,7 +381,7 @@ defmodule Memba.Membership do
          {:ok, create_person_result} <-
            dispatch_acceptance_command(create_person_command, dispatch_opts),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -399,7 +400,7 @@ defmodule Memba.Membership do
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -459,7 +460,7 @@ defmodule Memba.Membership do
              command.person_id,
              command.membership_id
            ) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -487,7 +488,7 @@ defmodule Memba.Membership do
              command.membership_id
            ),
          :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -1669,6 +1670,50 @@ defmodule Memba.Membership do
       {:error, _reason} = error -> error
     end
   end
+
+  defp dispatch_system_group_membership_acceptance_command(command, dispatch_opts) do
+    command
+    |> dispatch_system_group_membership_command(dispatch_opts)
+    |> case do
+      :ok -> {:ok, :ok}
+      {:ok, _result} = ok -> ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_system_group_membership_command(command, dispatch_opts) do
+    dispatch(command, system_group_membership_consistency(dispatch_opts))
+  end
+
+  defp system_group_membership_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [SystemGroupMembership],
+      &include_system_group_membership_consistency/1
+    )
+  end
+
+  defp include_system_group_membership_consistency(:strong), do: :strong
+  defp include_system_group_membership_consistency(:eventual), do: [SystemGroupMembership]
+
+  defp include_system_group_membership_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &system_group_membership_handler?/1) do
+      handlers
+    else
+      [SystemGroupMembership | handlers]
+    end
+  end
+
+  defp include_system_group_membership_consistency(consistency), do: consistency
+
+  defp system_group_membership_handler?(SystemGroupMembership), do: true
+
+  defp system_group_membership_handler?(handler) when is_binary(handler) do
+    handler == inspect(SystemGroupMembership)
+  end
+
+  defp system_group_membership_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
