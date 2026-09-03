@@ -61,17 +61,22 @@ model. General roles within groups are intentionally deferred.
   - `GroupCreated`;
   - `GroupMemberAdded`;
   - `GroupMemberRemoved`.
-- Add an event-sourced Membership process policy, with idempotent commands, that:
-  - adds an active club member to Everyone after `MemberAdded`;
-  - removes a removed club member from Everyone after `MemberRemoved`;
-  - adds/removes a member from Admin when their existing Admin role is assigned or
+- Add `Memba.Membership.Policies.SystemGroupMembership`, a strongly consistent,
+  event-sourced process manager keyed by `membership_id`, with idempotent commands,
+  that:
+  - starts on `MemberAdded` and adds the active member to Everyone;
+  - remains active for that club-membership lifecycle;
+  - adds/removes the member from Admin when their existing Admin role is assigned or
     removed;
-  - removes a departed member from any system-group membership derived from active
-    club membership.
+  - removes the member from every system group on `MemberRemoved`, then stops.
+  The process manager starts at `:current` on deployment; it does not replay historic
+  events to create backfill facts.
 - Project `membership_groups` and `membership_group_memberships` read models with
-  uniqueness and active-state constraints suitable for later named groups. The
-  projectors must simply project Group events; they must not infer special group
-  names or policies.
+  one current-state row per `(group_id, membership_id)`, containing `club_id`,
+  `person_id`, and `active`. Add/remove events toggle `active`; a later re-add
+  reactivates the same row. The event stream, not duplicated projection rows,
+  preserves membership history. Projectors simply project Group events; they must
+  not infer special group names or policies.
 - Add a public Membership query API for group membership and active group members.
   Messaging must use this API rather than access Membership projection schemas
   directly.
@@ -98,7 +103,11 @@ model. General roles within groups are intentionally deferred.
   - `GroupMemberAdded` for every active holder of the existing Admin role in Admin;
   - `ConversationAccessGrantedToGroup` granting Everyone write access to every
     existing root conversation.
-- Provide an operationally safe, restartable backfill path and verify a clean
+- Run an operationally safe, restartable backfill automatically from
+  `Memba.Release.migrate/0`, after Ecto migrations and application/event-store
+  startup. A reusable backfill service paginates authoritative current projections
+  and appends only missing facts; it is never an Ecto migration, never runs at
+  ordinary application boot, and needs no operator command. Verify that a clean
   projection rebuild produces the same group, membership, and access read models.
 
 ### Out of scope
@@ -170,10 +179,16 @@ state. Existing member messaging and Admin-role presentations remain unchanged.
 - Existing club-wide recipient sets, inbound Everyone-email acceptance/rejection,
   reply authorisation, follower delivery, and conversation/email threading remain
   unchanged.
-- The backfill is idempotent and restartable: rerunning it does not duplicate group,
-  group-membership, or conversation-access events/read-model rows.
-- A clean projection rebuild reproduces the post-backfill group, membership, and
-  conversation-access read models from the event store.
+- Membership and Admin-role commands return only after the strong system-group
+  process manager and group projectors have made their resulting memberships
+  queryable; callers never rely on timing for group access.
+- The automatic release backfill is idempotent and restartable: rerunning a failed
+  release does not duplicate group, group-membership, or conversation-access
+  events/read-model rows.
+- A `Memba.EventSourcedCase` replay test clears the relevant projection tables and
+  Commanded subscription checkpoints, restarts the group/access projectors, awaits
+  them with `Memba.ProjectionBarrier`, and reproduces the post-backfill group,
+  membership, and conversation-access read models from the retained event store.
 - `dev check` passes.
 
 ## Open Business Decisions
@@ -205,14 +220,18 @@ Confirmed decisions:
    not added twice; commands carry club, group, membership, and person identities.
    Keep custom-group behaviour unavailable through the public UI/API in this slice.
 4. Add `membership_groups` and `membership_group_memberships` migrations, schemas,
-   and strong-consistency projectors. Use unique keys that prevent duplicate active
-   facts while retaining enough state for a future remove/re-add lifecycle.
-5. Implement and supervise an event-sourced Membership process policy keyed by club
-   membership. It reacts to `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`,
-   and `MemberRoleRemoved`, then dispatches idempotent Club-group membership
-   commands for Everyone and the existing deterministic Admin role. Use projection
-   barriers or a domain completion signal where a caller must observe the resulting
-   membership immediately; do not rely on timing or projector-name special cases.
+   and strong-consistency projectors. `membership_group_memberships` has one
+   current-state row keyed by `(group_id, membership_id)`; add/remove toggles its
+   `active` flag, so re-add reactivates the row and the event stream retains history.
+5. Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` with
+   `consistency: :strong` and `start_from: :current`. Its durable process identity
+   is `membership_id`; its persisted state is the club, person, and membership
+   identities plus active-system-group flags. It starts on `MemberAdded`, continues
+   for Admin role assignment/removal events with the same membership ID, dispatches
+   idempotent Club-group membership commands, and stops only after `MemberRemoved`
+   has removed Everyone and Admin memberships. Configure the Group projectors as strong
+   and dispatch affected member/role commands with strong consistency, so those
+   commands return only after group membership is queryable.
 6. Add public Membership queries such as active group members and whether a person
    is an active member of a group. Keep all Membership schema/query details behind
    these APIs, as required by ADR 0007.
@@ -224,31 +243,44 @@ Confirmed decisions:
    resolve the deterministic Everyone group and resolve recipients through the
    Membership group API. Change reply authorisation to require write access through
    an active group membership. Keep reply-recipient/follower delivery unchanged.
-9. Build a one-off, restartable backfill command/task that appends missing system
-   group, group-membership, and root-conversation access events from current
-   authoritative projections. It must first inspect each stream/current state,
-   append only missing facts, and be safe after interruption. Do not modify or
-   delete historic events.
-10. Add tests for aggregate decisions; process-policy commands and idempotency;
+9. Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated,
+   idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto
+   migrations and application/event-store startup. It scans authoritative current
+   projections in dependency order (groups, memberships/Admin assignments, root
+   conversations), dispatches only missing commands, logs counts, and aborts the
+   release on an unrecoverable error. A subsequent release safely resumes; it is not
+   an Ecto migration or an application-boot task. Do not modify or delete historic
+   events.
+10. Extend `Memba.EventSourcedCase` with the new Group and conversation-access
+    projectors/tables. Add a replay-parity test that dispatches representative setup
+    and backfill facts, snapshots the group/membership/access queries, calls
+    `rebuild_event_sourced_projections!/0`, awaits the new projectors through
+    `Memba.ProjectionBarrier`, and asserts the same queries return the same state.
+11. Add tests for aggregate decisions; process-policy commands and idempotency;
     system-group membership after member/role changes; sender and reply
-    authorisation; recipient/follower-delivery regression; backfill reruns; and a
-    clean event-store/projection rebuild. Run `dev check`.
+    authorisation; recipient/follower-delivery regression; release-backfill reruns;
+    and replay parity. Run `dev check`.
 
-## Open Technical Decisions
+## Technical Decisions
 
-- The exact Commanded process-manager identity, state, and completion strategy for
-  the Membership policy. It must correlate MemberAdded/Removed and Admin-role
-  events safely, avoid duplicate commands under replay/retry, and provide a defined
-  read-your-writes boundary where required.
-- The precise uniqueness/index strategy for event-backed active/inactive group
-  membership projection rows. It must preserve re-add history without allowing
-  duplicate current membership.
-- Whether the backfill is implemented as a release task, Mix task, or an explicitly
-  invoked application command. It must be production-safe, observable, restartable,
-  and not run accidentally on every boot.
-- How the existing Commanded projector-rebuild tooling is invoked in automated
-  validation. The test must prove a fresh rebuild from appended facts rather than
-  merely asserting the database rows created by the backfill task.
+- **Process policy:** `Memba.Membership.Policies.SystemGroupMembership` is a
+  Commanded process manager with one durable process per `membership_id`. It starts
+  from `:current`, uses strong consistency, remains alive for the active membership
+  lifecycle, and stops after the member has left system groups. Idempotent Club
+  commands make redelivery/retry safe.
+- **Membership projection:** `membership_group_memberships` is a current-state
+  projection keyed by `(group_id, membership_id)` with `active`; remove/re-add
+  toggles that row. The event stream is the membership history. Index current rows
+  for group-to-members and person-to-groups access queries.
+- **Backfill:** `Memba.Membership.SystemGroups.Backfill` runs automatically from the
+  existing release migration flow, after schema migration and app startup. It is a
+  paginated, idempotent command dispatcher that logs counts, aborts safely on
+  unrecoverable failure, and resumes on the next release. It never runs at normal
+  boot and requires no manual operator command.
+- **Replay proof:** reuse `Memba.EventSourcedCase.rebuild_event_sourced_projections!/0`
+  and `Memba.ProjectionBarrier` in an asynchronous-false ExUnit test after adding
+  the new projectors/tables to its reset/restart lists. The test compares query
+  results before and after rebuild from retained events.
 
 ## New Capability
 
@@ -267,13 +299,17 @@ this foundation without introducing a second audience model.
 - Test that the existing acceptance examples still have the same recipients,
   authorisation results, reply followers, and email threading after the new policy
   is in place.
-- Run the backfill against representative existing clubs, memberships, Admin-role
-  assignments, root messages, and replies; interrupt/retry it in tests and assert
-  no duplicate facts or current rows.
-- Rebuild the relevant Membership and Messaging projections from the event store and
-  compare their group/membership/access read models to the backfilled state.
-- Run `dev check` on the committed planning/implementation state before delivery is
-  complete.
+- Exercise the automatic `Memba.Release.migrate/0` backfill path against
+  representative existing clubs, memberships, Admin-role assignments, root messages,
+  and replies; interrupt/retry it in tests and assert no duplicate facts or current
+  rows.
+- Use `Memba.EventSourcedCase.rebuild_event_sourced_projections!/0` and a projection
+  barrier to rebuild the relevant Membership and Messaging projections from retained
+  events, then compare their group/membership/access query results to the
+  post-backfill state.
+- Stop only when those focused tests, existing acceptance regressions, replay parity,
+  idempotent automatic-backfill coverage, and `dev check` all pass on the committed
+  implementation state.
 
 ## Risks / Follow-ups
 
