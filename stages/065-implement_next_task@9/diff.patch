@@ -1,0 +1,128 @@
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 34e10b9..59c430e 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+ - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+ - [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+-- [ ] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
++- [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+ - [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.
+ - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+ - [ ] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index 25ebae2..d7491c6 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -4,6 +4,9 @@ defmodule Memba.Membership.GroupProjectionTest do
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Events.GroupMemberAdded
++  alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.SystemGroups
+@@ -66,6 +69,68 @@ defmodule Memba.Membership.GroupProjectionTest do
+            } = group_membership(group_id, membership_id)
+   end
+ 
++  test "group membership projection toggles one current-state row while events retain history" do
++    club_id = Memba.ID.generate(:club)
++    group_id = SystemGroups.everyone_group_id(club_id)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert %GroupMembershipProjection{active: true, inserted_at: inserted_at} =
++             group_membership(group_id, membership_id)
++
++    assert :ok =
++             App.dispatch(
++               %RemoveGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert %GroupMembershipProjection{
++             active: false,
++             inserted_at: ^inserted_at
++           } = group_membership(group_id, membership_id)
++
++    assert :ok =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert %GroupMembershipProjection{
++             active: true,
++             inserted_at: ^inserted_at
++           } = group_membership(group_id, membership_id)
++
++    assert 1 == group_membership_count(group_id, membership_id)
++
++    assert [GroupMemberAdded, GroupMemberRemoved, GroupMemberAdded] ==
++             club_id
++             |> group_membership_events(group_id, membership_id)
++             |> Enum.map(& &1.__struct__)
++  end
++
+   defp create_club!(club_id) do
+     assert :ok =
+              App.dispatch(
+@@ -78,6 +143,16 @@ defmodule Memba.Membership.GroupProjectionTest do
+              )
+   end
+ 
++  defp group_membership_count(group_id, membership_id) do
++    Repo.aggregate(
++      from(group_membership in GroupMembershipProjection,
++        where: group_membership.group_id == ^group_id,
++        where: group_membership.membership_id == ^membership_id
++      ),
++      :count
++    )
++  end
++
+   defp group_membership(group_id, membership_id) do
+     Repo.one(
+       from(group_membership in GroupMembershipProjection,
+@@ -86,4 +161,14 @@ defmodule Memba.Membership.GroupProjectionTest do
+       )
+     )
+   end
++
++  defp group_membership_events(club_id, group_id, membership_id) do
++    App
++    |> Commanded.EventStore.stream_forward(club_id)
++    |> Enum.map(& &1.data)
++    |> Enum.filter(fn
++      %{group_id: ^group_id, membership_id: ^membership_id} -> true
++      _event -> false
++    end)
++  end
+ end
