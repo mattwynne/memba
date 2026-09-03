@@ -567,7 +567,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-03T06:03:46.263016172Z",
-  "last_event_at": "2026-09-03T06:07:08.033458282Z",
+  "last_event_at": "2026-09-03T06:07:13.770267938Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,72 +1069,155 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 114,
       "checkpoint": {
-        "timestamp": "2026-09-03T06:07:10.033658689Z",
-        "current_node": "synthesis_gate",
+        "timestamp": "2026-09-03T06:07:10.031093531Z",
+        "current_node": "synthesize",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize",
-          "synthesis_gate"
+          "synthesize"
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.claude_review": 0,
-          "thread.codex_review.current_node": "synthesize",
-          "current_node": "synthesis_gate",
-          "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
-          "preferred_label": "plan_not_ready",
-          "codex_review_blocking_gap_count": 1,
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
-          "claude_review_confidence": "High",
-          "plan_needs_human": true,
-          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
-          "claude_review_blocking_gaps": "None",
-          "graph.default_fidelity": "summary:high",
-          "internal.node_visit_count": 1,
-          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
-          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "internal.retry_count.codex_review": 0,
-          "plan_ready": false,
-          "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
-          "last_stage": "synthesize",
-          "internal.retry_count.start": 0,
-          "internal.fidelity": "summary:high",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.synthesis_gate": 0,
-          "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check",
-          "gemini_review_decision": "NOT READY",
-          "failure_class": "",
-          "gemini_review_confidence": "High",
-          "codex_review_decision": "NOT READY",
-          "internal.retry_count.synthesize": 0,
-          "failure_signature": "",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "thread.start.current_node": "gemini_review",
-          "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.run_id": "01M1JXTXT1H416ZACSEFWBHRX3",
-          "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
-          "gemini_review_blocking_gap_count": 1,
+          "plan_ready": false,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
           "claude_review_blocking_gap_count": 0,
-          "thread.gemini_review.current_node": "claude_review",
-          "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+          "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check",
+          "codex_review_blocking_gap_count": 1,
+          "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}",
+          "internal.retry_count.synthesize": 0,
+          "claude_review_confidence": "High",
+          "gemini_review_decision": "NOT READY",
+          "internal.retry_count.start": 0,
           "claude_review_required_edits": "None",
-          "thread.claude_review.current_node": "codex_review",
-          "codex_review_confidence": "High",
-          "plan_needs_fix": false,
-          "thread.synthesize.current_node": "synthesis_gate",
-          "outcome": "succeeded",
-          "internal.retry_count.gemini_review": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "plan_needs_human": true,
+          "claude_review_blocking_gaps": "None",
+          "current_node": "synthesize",
+          "internal.retry_count.codex_review": 0,
+          "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01M1JXTXT1H416ZACSEFWBHRX3",
+          "last_stage": "synthesize",
+          "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_confidence": "High",
           "claude_review_decision": "READY",
-          "internal.thread_id": "synthesize",
-          "graph.rankdir": "LR"
+          "failure_class": "",
+          "thread.codex_review.current_node": "synthesize",
+          "internal.thread_id": "codex_review",
+          "thread.start.current_node": "gemini_review",
+          "internal.fidelity": "summary:high",
+          "codex_review_confidence": "High",
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
+          "graph.default_fidelity": "summary:high",
+          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
+          "internal.retry_count.claude_review": 0,
+          "outcome": "succeeded",
+          "plan_needs_fix": false,
+          "codex_review_decision": "NOT READY",
+          "failure_signature": "",
+          "gemini_review_blocking_gap_count": 1,
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "preferred_label": "plan_not_ready",
+          "internal.retry_count.gemini_review": 0
         },
         "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_decision": "READY",
+              "claude_review_required_edits": "None",
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. ",
+              "last_stage": "claude_review",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_blocking_gaps": "None",
+              "claude_review_confidence": "High"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6580,
+                    "output_tokens": 1618,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4764,
+                    "cache_write_tokens": 6110
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6110,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 68351
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45917,
+              "tool_time_ms": 43,
+              "active_time_ms": 45960
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_fix": false,
+              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_ready": false,
+              "last_stage": "synthesize",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_needs_human": true
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5916,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 434,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 43590
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11512,
+              "tool_time_ms": 0,
+              "active_time_ms": 11512
+            }
+          },
           "gemini_review": {
             "status": "succeeded",
             "preferred_label": "revise_plan",
@@ -1177,11 +1260,135 @@
               "active_time_ms": 82682
             }
           },
-          "synthesis_gate": {
+          "codex_review": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
+            "preferred_label": "plan_not_ready",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "last_response": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"sugges",
+              "codex_review_decision": "NOT READY",
+              "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
+              "codex_review_confidence": "High",
+              "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+              "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
+              "codex_review_blocking_gap_count": 1,
+              "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17841,
+                    "output_tokens": 1532,
+                    "reasoning_tokens": 718,
+                    "cache_read_tokens": 2560,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 157985
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45292,
+              "tool_time_ms": 44,
+              "active_time_ms": 45336
+            }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "fa94d0c457b82743def7b308ac1f4dd9208d17ee",
+        "node_visits": {
+          "synthesize": 1,
+          "gemini_review": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 122,
+      "checkpoint": {
+        "timestamp": "2026-09-03T06:07:13.608599251Z",
+        "current_node": "synthesis_gate",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "claude_review_decision": "READY",
+          "gemini_review_confidence": "High",
+          "graph.rankdir": "LR",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.synthesize": 0,
+          "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check",
+          "internal.fidelity": "summary:high",
+          "internal.run_id": "01M1JXTXT1H416ZACSEFWBHRX3",
+          "plan_needs_human": true,
+          "claude_review_blocking_gaps": "None",
+          "gemini_review_blocking_gap_count": 1,
+          "internal.thread_id": "synthesize",
+          "internal.retry_count.gemini_review": 0,
+          "codex_review_blocking_gap_count": 1,
+          "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
+          "preferred_label": "plan_not_ready",
+          "internal.node_visit_count": 1,
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+          "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}",
+          "internal.work_dir": "/workspace/memba",
+          "failure_signature": "",
+          "last_stage": "synthesize",
+          "plan_ready": false,
+          "claude_review_blocking_gap_count": 0,
+          "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "thread.gemini_review.current_node": "claude_review",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "codex_review_confidence": "High",
+          "thread.start.current_node": "gemini_review",
+          "current_node": "synthesis_gate",
+          "claude_review_required_edits": "None",
+          "thread.codex_review.current_node": "synthesize",
+          "claude_review_confidence": "High",
+          "graph.default_fidelity": "summary:high",
+          "plan_needs_fix": false,
+          "failure_class": "",
+          "internal.retry_count.claude_review": 0,
+          "codex_review_decision": "NOT READY",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "internal.retry_count.codex_review": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "gemini_review_decision": "NOT READY",
+          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
+          "thread.synthesize.current_node": "synthesis_gate"
+        },
+        "node_outcomes": {
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1220,6 +1427,10 @@
               "tool_time_ms": 0,
               "active_time_ms": 11512
             }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
           },
           "codex_review": {
             "status": "succeeded",
@@ -1307,18 +1518,346 @@
               "active_time_ms": 45960
             }
           },
-          "start": {
+          "gemini_review": {
             "status": "succeeded",
+            "preferred_label": "revise_plan",
+            "context_updates": {
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
+              "last_stage": "gemini_review",
+              "last_response": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critica",
+              "gemini_review_confidence": "High",
+              "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
+              "gemini_review_blocking_gap_count": 1,
+              "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 20476,
+                    "output_tokens": 2035,
+                    "reasoning_tokens": 1694,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 214250
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82630,
+              "tool_time_ms": 52,
+              "active_time_ms": 82682
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
             "usage": null
           }
         },
         "next_node_id": "not_ready",
+        "git_commit_sha": "345efa35cf2fb44f7873d061008f004de7724715",
+        "node_visits": {
+          "claude_review": 1,
+          "synthesis_gate": 1,
+          "gemini_review": 1,
+          "synthesize": 1,
+          "codex_review": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-03T06:07:13.773022219Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "not_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.rankdir": "LR",
+          "thread.codex_review.current_node": "synthesize",
+          "claude_review_confidence": "High",
+          "internal.retry_count.not_ready": 0,
+          "internal.retry_count.codex_review": 0,
+          "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
+          "internal.retry_count.synthesis_gate": 0,
+          "last_stage": "synthesize",
+          "internal.retry_count.start": 0,
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.synthesize": 0,
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_blocking_gap_count": 1,
+          "thread.gemini_review.current_node": "claude_review",
+          "claude_review_required_edits": "None",
+          "thread.claude_review.current_node": "codex_review",
+          "plan_needs_fix": false,
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.gemini_review": 0,
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+          "plan_needs_human": true,
+          "current_node": "not_ready",
+          "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
+          "preferred_label": "plan_not_ready",
+          "codex_review_blocking_gap_count": 1,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "claude_review_blocking_gaps": "None",
+          "graph.default_fidelity": "summary:high",
+          "internal.node_visit_count": 1,
+          "plan_ready": false,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
+          "thread.synthesis_gate.current_node": "not_ready",
+          "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check",
+          "gemini_review_decision": "NOT READY",
+          "failure_class": "deterministic",
+          "gemini_review_confidence": "High",
+          "codex_review_decision": "NOT READY",
+          "thread.start.current_node": "gemini_review",
+          "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}",
+          "internal.run_id": "01M1JXTXT1H416ZACSEFWBHRX3",
+          "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
+          "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+          "claude_review_blocking_gap_count": 0,
+          "codex_review_confidence": "High",
+          "outcome": "failed",
+          "claude_review_decision": "READY",
+          "internal.thread_id": "synthesis_gate",
+          "internal.retry_count.claude_review": 0
+        },
+        "node_outcomes": {
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_fix": false,
+              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_ready": false,
+              "last_stage": "synthesize",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_needs_human": true
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5916,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 434,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 43590
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11512,
+              "tool_time_ms": 0,
+              "active_time_ms": 11512
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_decision": "READY",
+              "claude_review_required_edits": "None",
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Implementation Plan step 5**: The phrase \"Use projection barriers or a domain completion signal where a caller must observe the resulting membership immediately\" defers a consistency decision to implementation time. While this is acknowledged in Open Technical Decisions, consider specifying whether web compose/message-send paths need synchronous barriers or can rely on eventual consistency.\n\n2. **Open Technical Decisions**: All four items are genuinely open and appropriate for implementation-time resolution, but consider whether the \"exact Commanded process-manager identity\" decision could be narrowed to one or two candidate approaches before starting.\n\n## Smallest Viable Iteration\n\nThe plan already represents an excellent vertical slice. It could theoretically be split into:\n\n- **Slice A**: Groups/memberships in Membership context + policy (no Messaging)\n- **Slice B**: Conversation access + backfill for existing data\n\nHowever, splitting would sacrifice the verification value of unchanged acceptance tests and create an awkward intermediate state where groups exist but aren't used. The current scope is appropriately minimal for a coherent, testable outcome.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation.\n\n## Validation Plan Assessment\n\nThe validation plan is thorough and concrete:\n\n- ✅ New aggregate/policy/projection unit tests during development\n- ✅ Lifecycle correctness (club creation → groups; member add/remove → Everyone; role assign/remove → Admin)\n- ✅ Unchanged acceptance behavior (existing `.feature` files remain green)\n- ✅ Backfill idempotency and restart safety\n- ✅ Projection rebuild verification from event store\n- ✅ `dev check` before delivery\n\nThis covers happy paths, edge cases (backfill retry), data integrity (uniqueness, rebuild), and regression (acceptance tests).\n\n---\n\n## Detailed Assessment by Question\n\n### 1. Goal Clarity ✅\n\n**Goal:** Replace hidden club-wide conversation audience with explicit, event-sourced conversation groups without changing observable behavior.\n\n- Clear outcome: two built-in groups (Everyone, Admin) with deterministic membership\n- Beneficiary: the product (foundation for future group features) and engineers (explicit vs. implicit model)\n- Business outcome: enables future Admin-group conversations and custom groups on a rebuildable foundation\n\nThe goal avoids task-language and states the intended transformation clearly.\n\n### 2. Scope Focus ✅\n\n**Scope:** Tightly bounded technical refactoring with explicit non-goals.\n\n- Coherent: groups + memberships + conversation access for two system groups only\n- Could it be smaller? Not meaningfully. Splitting out Messaging would leave groups unused; splitting out backfill would leave production data inconsistent.\n- Non-goals: 10 items explicitly deferred (custom groups, new UI, group email, read filtering, etc.)\n\nThe iteration is focused on making implicit behavior explicit while changing nothing observable.\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**Acceptance criteria:** 12 concrete, testable statements covering:\n\n- Happy paths: club creation → groups; member add → Everyone; role assign → Admin\n- Edge cases: backfill idempotency, restart safety, projection rebuild\n- Permissions: Admin role keeps existing authority\n- Error/boundary: reply auth, inbound email acceptance unchanged\n- State changes: group/membership events, conversation access grants\n- Regression: existing acceptance tests pass\n\n**BDD decision:** Explicit \"Not useful for this slice\" with clear rationale—no new stakeholder-visible workflow; existing `.feature` files already cover required behavior.\n\n**Business decisions:** \"None known\" with six confirmed decisions listed. All domain/policy questions are resolved (groups = audiences; roles = permissions; membership logic; event-append strategy).\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation plan:** 10 ordered, specific steps naming:\n\n- Files/concepts: Club aggregate, Commanded router, process policy\n- Migrations/schemas: `membership_groups`, `membership_group_memberships`, `messaging_conversation_group_access`\n- Tests: aggregate, policy, sender auth, reply auth, backfill, rebuild\n- Integration points: Membership query API, web compose, inbound mail, reply auth\n- Validation: `dev check` at step 10\n\n**Technical decisions:** Four items appropriately deferred:\n\n1. Process-manager identity/state/completion (requires Commanded patterns research)\n2. Uniqueness/index strategy for active/inactive rows (design constraint discovered during schema work)\n3. Backfill invocation mechanism (operational/deployment concern)\n4. Projector-rebuild test tooling (framework-specific)\n\nThese are genuine implementation-time concerns, not planning gaps.\n\n### 5. Expected Capability and Validation ✅\n\n**Capability:** Explicit, rebuildable Group identities and memberships for Everyone/Admin; conversation-to-group write-access model. Current messages become \"Everyone conversations\" rather than a special case.\n\n**Proof of success:**\n\n- Groups projected after club creation\n- Membership follows lifecycle events\n- Access grants recorded\n- Acceptance tests unchanged\n- Backfill idempotent\n- Projection rebuild matches backfill state\n- `dev check` passes\n\n**Stop condition:** Clear—when all acceptance criteria are met and `dev check` passes.\n\n---\n\n## Conclusion\n\nThis plan demonstrates exceptional readiness:\n\n- The goal is clear and focused on enabling future work without risking current behavior\n- The scope is minimal but useful, with thorough non-goals\n- Acceptance criteria are concrete, testable, and cover the full lifecycle\n- The BDD decision is appropriate and well-justified\n- Business decisions are resolved; technical decisions are appropriately deferred\n- Implementation steps are specific and ordered\n- Validation is comprehensive\n\nThe plan is ready for implementation.\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria.\n\n---\n\n# Iteration 056 Readiness Review\n\n**Decision:** READY\n\n**Confidence:** High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. ",
+              "last_stage": "claude_review",
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_blocking_gaps": "None",
+              "claude_review_confidence": "High"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6580,
+                    "output_tokens": 1618,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4764,
+                    "cache_write_tokens": 6110
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6110,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 68351
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45917,
+              "tool_time_ms": 43,
+              "active_time_ms": 45960
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "preferred_label": "revise_plan",
+            "context_updates": {
+              "gemini_review_decision": "NOT READY",
+              "gemini_review_blocking_gaps": "Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach",
+              "last_stage": "gemini_review",
+              "last_response": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critica",
+              "gemini_review_confidence": "High",
+              "response.gemini_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"failure_reason\":\"The review completed successfully and found the plan NOT READY because it explicitly leaves several implementation-critical technical decisions unresolved.\",\"suggested_next_ids\":[],\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\nI read the complete plan directly from `docs/iterations/056-group-audience-foundation/plan.md`. The product goal, boundaries, acceptance criteria, and validation intent are generally strong. However, the plan explicitly lists unresolved technical decisions that are central to the implementation, migration/backfill safety, and validation strategy. That prevents it from being ready to validate for implementation.\\n\\n## Blocking gaps\\n\\n1. **Core technical decisions remain open.** The plan’s `## Open Technical Decisions` section leaves unresolved: the Commanded process-manager identity/state/completion strategy, group-membership uniqueness/index strategy, backfill delivery mechanism, and automated projection-rebuild validation approach. These are not minor implementation details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. **Name likely modules/files where possible.** The implementation plan is ordered and specific conceptually, but it would be easier to implement safely if it named the existing Membership, Messaging, router, projector, migration, and test modules expected to change.\\n2. **Make the stop condition more explicit.** The acceptance criteria and validation plan imply completion, but the plan could add a single stop condition such as: implementation stops when existing behaviour is unchanged, new events/projections rebuild correctly, backfill is idempotent, and `dev check` passes.\\n3. **Consider splitting the iteration.** The scope is coherent but large: Membership groups, process policy, Messaging access grants, routing/authorisation changes, backfill, and rebuild validation. A smaller slice may reduce delivery risk.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice I recommend is: introduce deterministic Everyone/Admin system groups in Membership, including group events, projections, membership policy, public query APIs, and an idempotent backfill for existing clubs/members/Admin-role holders. Defer `ConversationAccessGrantedToGroup`, Messaging authorisation changes, and root-conversation access backfill to a follow-up slice.\\n\\nIf the author wants to keep the current broader scope, the plan can still be acceptable after resolving the listed technical decisions directly in the plan.\\n\\n## Required plan edits\\n\\n1. Replace `## Open Technical Decisions` with decided approaches for:\\n   - process-manager identity, state, correlation, idempotency, and read-your-writes/completion strategy;\\n   - projection uniqueness/index model for current and historical group memberships;\\n   - whether the backfill is a release task, Mix task, or application command, including how it is invoked safely;\\n   - the exact validation approach for proving clean projection rebuilds from appended facts.\\n2. Add enough implementation specificity to identify the main existing modules/interfaces/migrations/tests expected to change, or explain why discovery during implementation is intentionally acceptable.\\n3. Add an explicit stop condition tying together acceptance criteria, backfill/rebuild proof, unchanged behaviour, and `dev check`.\\n\\n## Validation plan\\n\\nTo prove the iteration succeeded after revision and implementation:\\n\\n1. Run focused Membership aggregate/policy/projection tests proving club creation creates Everyone/Admin groups and member/Admin-role lifecycle events produce idempotent group-membership facts.\\n2. Run Messaging tests proving new root conversations receive Everyone write access, replies do not create new access grants, and reply authorisation remains unchanged for active members/non-members.\\n3. Run regression acceptance tests for current member messaging, Everyone inbound email, replies, follower delivery, threading, and Admin-role membership administration.\\n4. Run backfill tests against representative existing data, including interruption/retry, and assert no duplicate events or active read-model rows.\\n5. Rebuild relevant Membership and Messaging projections from the event store and compare the resulting group, membership, and access read models to the post-backfill state.\\n6. Run `dev check` before delivery.\",\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":1,\"gemini_review_blocking_gaps\":\"Core technical decisions remain unresolved: process-manager identity/state/completion; group-membership uniqueness/index strategy; backfill invocation mechanism; projection-rebuild validation approach\",\"gemini_review_required_edits\":\"Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check\"}}",
+              "gemini_review_blocking_gap_count": 1,
+              "gemini_review_required_edits": "Resolve Open Technical Decisions in the plan; Name main modules/interfaces/migrations/tests or state why discovery is acceptable; Add explicit stop condition tying acceptance criteria, backfill/rebuild proof, unchanged behaviour, and dev check"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 20476,
+                    "output_tokens": 2035,
+                    "reasoning_tokens": 1694,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 214250
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 82630,
+              "tool_time_ms": 52,
+              "active_time_ms": 82682
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "preferred_label": "plan_not_ready",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "last_response": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"sugges",
+              "codex_review_decision": "NOT READY",
+              "codex_review_blocking_gaps": "Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved",
+              "codex_review_confidence": "High",
+              "markdown_report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\n\n## Non-blocking improvements\n\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\n\n## Required plan edits\n\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\n\n## Validation plan\n\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.",
+              "codex_review_required_edits": "Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready",
+              "codex_review_blocking_gap_count": 1,
+              "response.codex_review": "{\"preferred_next_label\":\"plan_not_ready\",\"outcome\":\"succeeded\",\"failure_reason\":\"The plan review completed and found the iteration NOT READY because key technical decisions remain unresolved.\",\"suggested_next_ids\":[],\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Open Technical Decisions section leaves process-manager identity/completion strategy, uniqueness/index strategy, backfill mechanism, and rebuild-validation approach unresolved\",\"codex_review_required_edits\":\"Resolve or convert the Open Technical Decisions into concrete implementation choices before marking ready\",\"markdown_report\":\"## Decision: NOT READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\n\\n1. **Key technical decisions remain unresolved.** The plan explicitly lists open technical decisions for the Membership process-manager identity/state/completion strategy, group-membership uniqueness/indexing, the production backfill mechanism, and automated projector-rebuild validation. These are not minor details; they affect correctness, idempotency, operational safety, and proof of success.\\n\\n## Non-blocking improvements\\n\\n1. The plan could define the exact stop condition more crisply, e.g. “complete when all listed tests pass, backfill is idempotent in test/representative data, projection rebuild parity is proven, and `dev check` passes.”\\n2. The acceptance criteria are good, but they could be grouped by Membership, Messaging, Backfill, Regression, and Validation to make implementation tracking easier.\\n3. The plan could name likely modules/tasks more specifically where known, though the current implementation plan is already detailed enough aside from the unresolved technical decisions.\\n4. Consider explicitly stating whether existing clubs created before this iteration should receive both group definitions through backfill only, and whether new clubs created after deployment get them synchronously through `CreateClub`.\\n\\n## Smallest viable iteration\\n\\nThe smallest useful slice would be: introduce deterministic Everyone/Admin group identities, event-sourced group membership, projections, public Membership group queries, and a safe backfill for existing club/group membership state. Conversation access grants and Messaging authorization changes could be a follow-up slice if necessary. However, if the intended foundation specifically requires replacing the hidden Everyone messaging audience seam, then the current scope is coherent once the technical decisions are resolved.\\n\\n## Required plan edits\\n\\n1. Replace the `## Open Technical Decisions` section with decided implementation choices.\\n2. Specify the Commanded process-manager/process-policy identity, state, correlation strategy, idempotency behavior, and read-your-writes/completion boundary.\\n3. Specify the exact uniqueness/indexing strategy for `membership_group_memberships`, including how active/inactive rows and remove/re-add history are represented.\\n4. Decide whether the backfill is a release task, Mix task, or application command, and document how it is invoked safely, observed, retried, and prevented from running accidentally.\\n5. Define how automated validation proves a clean projection rebuild from appended facts rather than only asserting rows produced by the backfill.\\n\\n## Validation plan\\n\\nSuccess should be proven by focused ExUnit/domain tests for group events, aggregate decisions, policy idempotency, group projections, Messaging access grants, recipient resolution, reply authorization, backfill restart/idempotency, and projection rebuild parity. Existing acceptance features for member message deliverability, club message replies, and membership administration should continue passing unchanged. Final validation should include `dev check` after implementation.\"}}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 17841,
+                    "output_tokens": 1532,
+                    "reasoning_tokens": 718,
+                    "cache_read_tokens": 2560,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 157985
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45292,
+              "tool_time_ms": 44,
+              "active_time_ms": 45336
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "exit",
         "node_visits": {
           "synthesis_gate": 1,
           "synthesize": 1,
           "gemini_review": 1,
           "claude_review": 1,
           "codex_review": 1,
+          "not_ready": 1,
           "start": 1
         }
       },
@@ -2039,6 +2578,42 @@
       "agent_control": "running",
       "state": "succeeded"
     },
+    "synthesis_gate@1": {
+      "first_event_seq": 117,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-09-03T06:07:10.033474636Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-03T06:07:10.032850656Z",
+      "handler": "conditional",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
     "start@1": {
       "first_event_seq": 17,
       "prompt": null,
@@ -2074,6 +2649,45 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 125,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+        "exit_code": 1,
+        "duration_ms": 153,
+        "termination": "exited",
+        "output_bytes": 141,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 141,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-03T06:07:13.611500299Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     }
   }
 }
