@@ -1,0 +1,68 @@
+diff --git a/docs/iterations/056-group-audience-foundation/implementation-notes.md b/docs/iterations/056-group-audience-foundation/implementation-notes.md
+new file mode 100644
+index 0000000..e6a3092
+--- /dev/null
++++ b/docs/iterations/056-group-audience-foundation/implementation-notes.md
+@@ -0,0 +1,50 @@
++# Implementation notes
++
++## 001 Existing membership and projection-barrier inspection
++
++- Membership has two Commanded applications per ADR 0007:
++  - `Memba.Membership.App` / `Memba.Membership.Router` own Membership commands,
++    aggregates, events, and projections.
++  - `Memba.Messaging.App` / `Memba.Messaging.Router` own Messaging commands,
++    aggregates, events, and projections.
++- `Memba.Membership.Club` currently owns club identity and club-scoped roles:
++  - state fields: `club_id`, `name`, `slug`, `roles`, `role_keys`,
++    `role_permissions`, and `role_assignments`;
++  - `CreateClub` emits `ClubCreated`, the deterministic Admin `ClubRoleDefined`,
++    and `ClubRolePermissionGranted` for `club.manage_members`;
++  - `AssignMemberRole` / `RemoveMemberRole` dispatch to the Club aggregate and
++    validate role existence, duplicate assignment/removal, and person/membership
++    identity consistency inside Club state.
++- Membership lifecycle currently lives in `Memba.Membership.Membership`:
++  - `AddMember` emits `MemberAdded` with `membership_id`, `club_id`, and
++    `person_id`;
++  - `RemoveMember` emits `MemberRemoved` with only `membership_id`;
++  - the aggregate tracks current `active` state but does not own role or group
++    state.
++- Public Membership application services enforce cross-aggregate/query rules:
++  - `add_member/2` prevents duplicate active `{club_id, person_id}` memberships
++    before dispatch;
++  - Admin-specific entry points derive `Roles.membership_administrator_role_id/1`;
++  - role assignment/removal entry points authorize via projected
++    `club.manage_members`, ensure the target membership is active, and preserve the
++    last-Admin invariant before dispatching Club role commands.
++- ID conventions are centralized in `Memba.ID`:
++  - caller-generated typed IDs use `ID.generate/1`;
++  - deterministic typed IDs use `ID.deterministic/2`;
++  - adding groups will require a new typed ID prefix/type before deterministic
++    Everyone/Admin group IDs can be defined.
++- Existing strong projectors use `Commanded.Projections.Ecto` with stable string
++  names and `consistency: :strong`.
++  - Membership role projection toggles current-state rows for role assignments and
++    responds to `MemberRemoved` by deactivating assignments and deleting flattened
++    permissions.
++  - Projection table reset coverage is configured in
++    `config :memba, :event_sourced_projection_tables`.
++- `Memba.EventSourcedCase.rebuild_event_sourced_projections!/0` stops configured
++  projectors, truncates configured projection tables, resets Commanded
++  subscriptions and EventStore subscription checkpoints, then restarts the same
++  projectors.
++- `Memba.ProjectionBarrier` waits for selected projector names in
++  `projection_versions` to reach the current or supplied EventStore checkpoint;
++  replay-parity work will need to add future group/access projectors to the
++  EventSourcedCase projector list and projection table config before awaiting them.
+diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md
+index 2988579..f807dd1 100644
+--- a/docs/iterations/056-group-audience-foundation/todo.md
++++ b/docs/iterations/056-group-audience-foundation/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
++- [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+ - [ ] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+ - [ ] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+ - [ ] 004 Define deterministic Everyone and Admin group IDs.
