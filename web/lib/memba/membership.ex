@@ -29,6 +29,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -846,6 +847,70 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List active members of the given conversation group.
+
+  Returns plain maps containing the public identity needed outside the
+  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
+  Role names come from active club role assignments and are sorted
+  alphabetically for each member. Members whose group row or club membership is
+  inactive, members of other groups, members without a projected person, and
+  invalid group IDs are excluded.
+  """
+  def list_active_members_of_group(group_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id) do
+      members =
+        GroupMembershipProjection
+        |> join(:inner, [group_membership], membership in MembershipProjection,
+          on:
+            membership.membership_id == group_membership.membership_id and
+              membership.club_id == group_membership.club_id and
+              membership.person_id == group_membership.person_id
+        )
+        |> join(:inner, [_group_membership, membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(
+          :inner,
+          [_group_membership, _membership, person],
+          primary_email_address in PersonEmailAddress,
+          on:
+            primary_email_address.person_id == person.person_id and
+              primary_email_address.is_primary == true
+        )
+        |> where(
+          [group_membership, _membership, _person, _primary_email_address],
+          group_membership.group_id == ^group_id
+        )
+        |> where(
+          [group_membership, membership, _person, _primary_email_address],
+          group_membership.active == true and membership.active == true
+        )
+        |> order_by([_group_membership, _membership, person, _primary_email_address],
+          asc: person.name,
+          asc: person.person_id
+        )
+        |> select([_group_membership, membership, person, primary_email_address], %{
+          membership_id: membership.membership_id,
+          id: person.person_id,
+          name: person.name,
+          email: primary_email_address.email
+        })
+        |> Repo.all()
+
+      role_names_by_membership =
+        members
+        |> Enum.map(& &1.membership_id)
+        |> active_role_names_by_membership()
+
+      Enum.map(members, fn member ->
+        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
+      end)
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List active clubs for a member email address.
 
   Email lookup is normalized by trimming whitespace and comparing
@@ -889,6 +954,34 @@ defmodule Memba.Membership do
       |> where([membership], membership.club_id == ^club_id)
       |> where([membership], membership.person_id == ^person_id)
       |> where([membership], membership.active == true)
+      |> Repo.exists?()
+    else
+      :error -> false
+    end
+  end
+
+  @doc """
+  Return whether a person is currently an active member of a conversation group.
+
+  Both the projected group-membership row and the underlying club membership
+  must be active. Invalid group or person IDs return `false`.
+  """
+  def active_member_of_group?(group_id, person_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      GroupMembershipProjection
+      |> join(:inner, [group_membership], membership in MembershipProjection,
+        on:
+          membership.membership_id == group_membership.membership_id and
+            membership.club_id == group_membership.club_id and
+            membership.person_id == group_membership.person_id
+      )
+      |> where([group_membership, _membership], group_membership.group_id == ^group_id)
+      |> where([group_membership, _membership], group_membership.person_id == ^person_id)
+      |> where(
+        [group_membership, membership],
+        group_membership.active == true and membership.active == true
+      )
       |> Repo.exists?()
     else
       :error -> false
