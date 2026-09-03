@@ -4,16 +4,22 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App
   alias Memba.Membership.Club
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
+  alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
@@ -233,6 +239,102 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                  membership_id: membership_id,
                  person_id: person_id,
                  role_id: role_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
+
+  test "Membership app dispatch routes group commands to the Club aggregate" do
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              aggregate_version: 4,
+              events: [
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  group_key: "everyone",
+                  name: "Everyone"
+                }
+              ]
+            }} =
+             App.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: "everyone",
+                 name: "Everyone"
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              aggregate_version: 5,
+              events: [
+                %GroupMemberAdded{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  membership_id: ^membership_id,
+                  person_id: ^person_id
+                }
+              ]
+            }} =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              aggregate_version: 6,
+              events: [
+                %GroupMemberRemoved{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  membership_id: ^membership_id,
+                  person_id: ^person_id
+                }
+              ],
+              aggregate_state: %Club{
+                club_id: ^club_id,
+                groups: %{^group_id => %{group_key: "everyone"}},
+                group_memberships: %{
+                  {^group_id, ^membership_id} => %{person_id: ^person_id, active: false}
+                }
+              }
+            }} =
+             App.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
                },
                returning: :execution_result,
                consistency: :strong

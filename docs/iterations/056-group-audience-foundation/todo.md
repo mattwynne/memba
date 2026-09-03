@@ -2,7 +2,7 @@
 
 - [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
 - [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
-- [ ] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+- [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
 - [ ] 004 Define deterministic Everyone and Admin group IDs.
 - [ ] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
 - [ ] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.

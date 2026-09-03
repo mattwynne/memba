@@ -5,16 +5,22 @@ defmodule Memba.Membership.Club do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
+  alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupMemberAdded
+  alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
@@ -27,6 +33,9 @@ defmodule Memba.Membership.Club do
     :club_id,
     :name,
     :slug,
+    groups: %{},
+    group_keys: %{},
+    group_memberships: %{},
     roles: %{},
     role_keys: %{},
     role_permissions: %{},
@@ -89,6 +98,54 @@ defmodule Memba.Membership.Club do
         club_id: command.club_id,
         role_id: command.role_id,
         permission: command.permission
+      }
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %CreateGroup{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %CreateGroup{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         {:ok, name} <- normalize_name(command.name),
+         {:ok, group_key} <- normalize_group_key(command.group_key) do
+      %GroupCreated{
+        club_id: command.club_id,
+        group_id: command.group_id,
+        group_key: group_key,
+        name: name
+      }
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %AddGroupMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %AddGroupMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
+      %GroupMemberAdded{
+        club_id: command.club_id,
+        group_id: command.group_id,
+        membership_id: command.membership_id,
+        person_id: command.person_id
+      }
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %RemoveGroupMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %RemoveGroupMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
+      %GroupMemberRemoved{
+        club_id: command.club_id,
+        group_id: command.group_id,
+        membership_id: command.membership_id,
+        person_id: command.person_id
       }
     end
   end
@@ -182,6 +239,38 @@ defmodule Memba.Membership.Club do
     %__MODULE__{club | name: event.name, slug: event.slug}
   end
 
+  def apply(%__MODULE__{} = club, %GroupCreated{} = event) do
+    group = %{group_id: event.group_id, group_key: event.group_key, name: event.name}
+
+    %__MODULE__{
+      club
+      | groups: Map.put(club.groups, event.group_id, group),
+        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id)
+    }
+  end
+
+  def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
+    group_membership = %{person_id: event.person_id, active: true}
+    group_membership_key = group_membership_key(event.group_id, event.membership_id)
+
+    %__MODULE__{
+      club
+      | group_memberships:
+          Map.put(club.group_memberships, group_membership_key, group_membership)
+    }
+  end
+
+  def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
+    group_membership = %{person_id: event.person_id, active: false}
+    group_membership_key = group_membership_key(event.group_id, event.membership_id)
+
+    %__MODULE__{
+      club
+      | group_memberships:
+          Map.put(club.group_memberships, group_membership_key, group_membership)
+    }
+  end
+
   def apply(%__MODULE__{} = club, %MemberRoleAssigned{} = event) do
     assignment = %{person_id: event.person_id}
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
@@ -242,6 +331,18 @@ defmodule Memba.Membership.Club do
   end
 
   defp normalize_role_key(_role_key), do: {:error, :invalid_role_key}
+
+  defp normalize_group_key(nil), do: {:ok, nil}
+  defp normalize_group_key(""), do: {:ok, nil}
+
+  defp normalize_group_key(group_key) when is_binary(group_key) do
+    case String.trim(group_key) do
+      "" -> {:ok, nil}
+      trimmed_group_key -> {:ok, trimmed_group_key}
+    end
+  end
+
+  defp normalize_group_key(_group_key), do: {:error, :invalid_group_key}
 
   defp ensure_role_id_available(%__MODULE__{} = club, role_id) do
     if Map.has_key?(club.roles, role_id) do
@@ -309,4 +410,9 @@ defmodule Memba.Membership.Club do
   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
 
   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
+
+  defp put_group_key(group_keys, nil, _group_id), do: group_keys
+  defp put_group_key(group_keys, group_key, group_id), do: Map.put(group_keys, group_key, group_id)
+
+  defp group_membership_key(group_id, membership_id), do: {group_id, membership_id}
 end
