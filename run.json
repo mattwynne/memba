@@ -1510,7 +1510,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-03T06:40:29.158444608Z",
-  "last_event_at": "2026-09-03T08:13:14.759705393Z",
+  "last_event_at": "2026-09-03T08:13:19.038732969Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -22356,9 +22356,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 4586,
       "checkpoint": {
-        "timestamp": "2026-09-03T08:13:14.767298009Z",
+        "timestamp": "2026-09-03T08:13:19.024037512Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -22436,6 +22436,359 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #resolve_publish_conflict { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.start": 0,
+          "last_stage": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 010 Implement and supervise Memba.Membership.Policies.SystemGroupMembership as a stateless Commanded.Event.Handler with a stable handler name, consistency: :strong, and start_from: :current.`\n\n2. **Changes made**\n   - Added `Memba.Membership.Policies.SystemGroupMembership`\n     - Uses `Commanded.Event.Handler`\n     - `application: Memba.Membership.App`\n     - stable name: `\"Memba.Membership.Policies.SystemGroupMembership\"`\n     - `consistency: :strong`\n     - `start_from: :current`\n     - no handler state configured\n   - Added it to `Memba.Application` supervision.\n   - Updated `Memba.EventSourcedCase` to stop/restart this new EventStore subscriber alongside projectors during event-sourced test resets, avoiding stale strong-consistency subscriptions.\n   - Added focused tests:\n     - policy child spec/options/statelessness\n     - Phoenix app supervision includes the policy handler\n\n3. **Focused validation**\n   - `cd web && mix format --check-formatted lib/memba/membership/policies/system_group_membership.ex lib/memba/application.ex test/memba/membership/app_test.exs test/memba/membership/system_group_membership_policy_test.exs test/support/event_sourced_case.ex`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/app_test.exs test/memba/membership/system_group_membership_policy_test.exs test/memba/membership/group_projection_test.exs`\n     - Passed: `7 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Command exited `0`.\n     - Output still prints the known unrelated `MembaWeb.PageControllerTest` public-footer failures; I did not touch them because they are unrelated to task 010.\n\n4. **Todo check-off made**\n   - Changed exactly task 010 from:\n     - `- [ ] 010 ...`\n   - to:\n     - `- [x] 010 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: implemented the policy using Commanded event-handler infrastructure.\n   - ADR 0007: stayed within the Membership bounded context; no Messaging dependency or cross-context storage access added.\n   - ADR 0009: kept projector behavior separate; this policy is a non-projection event handler.\n   - ADR 0022: adjusted test reset handling so the new strong EventStore subscriber does not break read-your-writes/strong-consistency test flows.",
+          "internal.retry_count.validate_task": 0,
+          "response.validate_task": "{\n  \"preferred_next_label\": \"valid\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"context_updates\": {\n    \"task_valid\": true,\n    \"task_retry_available\": false\n  },\n  \"decision\": \"VALID\",\n  \"evidence\": {\n    \"completed_todo_checkoff\": \"Working tree is clean. Recent checkpoint b790ddd changes exactly one ordinary todo line in docs/iterations/056-group-audience-foundation/todo.md: task 009 from '- [ ]' to '- [x]'. The parent todo state had tasks 001-008 checked and task 009 was the first unchecked task.\",\n    \"implementation_artifacts\": \"Checkpoint b790ddd modifies web/test/memba/membership/group_projection_test.exs, adding coverage that AddGroupMember creates an active projection row, RemoveGroupMember toggles the same row inactive, a later AddGroupMember reactivates the same row, only one row exists for (group_id, membership_id), and the Club event stream retains GroupMemberAdded/GroupMemberRemoved/GroupMemberAdded history. Existing production artifacts corroborate the behavior: membership_group_memberships has a unique index on (group_id, membership_id), and Memba.Membership.Projectors.GroupMembership uses an upsert with conflict_target [:group_id, :membership_id] that updates active without resetting inserted_at.\",\n    \"tests_run_results\": \"Reran focused validation live: PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/membership/group_projection_test.exs. Result: 3 tests, 0 failures. Working tree remained clean afterward.\",\n    \"adr_plan_conformance\": \"Work matches plan item 4/task 009 and stays inside Membership projection/test scope. No custom-group UI/API was introduced. No Messaging code accesses Membership projection storage. No acceptance .feature files were changed. Todo ordering/scope were preserved with no plan-required work deleted or weakened.\"\n  }\n}",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "command.output": "blob://sha256/969aaf62de6474d07b8213511e52b379b0009ea61537d770717446ee5f98d6dc",
+          "internal.run_id": "01M1JZX34A6PX42CN82N900CBZ",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "failure_signature": "",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.thread_id": "all_tasks_done",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "outcome": "succeeded",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.rankdir": "LR",
+          "task_retry_available": false,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "graph.max_node_visits": "80",
+          "internal.node_visit_count": 10,
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 010 Implement and supervise Memba.Membership.Policies.SystemGroupMembership as a stateless Commanded.Event.Handler",
+          "internal.work_dir": "/workspace/memba",
+          "task_valid": true,
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.start.current_node": "read_plan",
+          "failure_class": "",
+          "current_node": "implement_next_task",
+          "preferred_label": "valid",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.task_gate": 0
+        },
+        "node_outcomes": {
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/02057ca3cca3e33135bbe01fe085b42088da295a984060956204697ac86717e7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "valid",
+            "context_updates": {
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "{\n  \"preferred_next_label\": \"valid\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"context_updates\": {\n    \"task_valid\": true,\n    \"task_retry_available\": false\n  },\n  \"decision\": \"VALID\",\n  \"evidence\": {\n    \"completed_todo_checkoff\": \"Working tree is clean. Recent checkpoint b790ddd changes exactly one ordinary todo line in docs/iterations/056-group-audience-foundation/todo.md: task 009 from '- [ ]' to '- [x]'. The parent todo state had tasks 001-008 checked and task 009 was the first unchecked task.\",\n    \"implementation_artifacts\": \"Checkpoint b790ddd modifies web/test/memba/membership/group_projection_test.exs, adding coverage that AddGroupMember creates an active projection row, RemoveGroupMember toggles the same row inactive, a later AddGroupMember reactivates the same row, only one row exists for (group_id, membership_id), and the Club event stream retains GroupMemberAdded/GroupMemberRemoved/GroupMemberAdded history. Existing production artifacts corroborate the behavior: membership_group_memberships has a unique index on (group_id, membership_id), and Memba.Membership.Projectors.GroupMembership uses an upsert with conflict_target [:group_id, :membership_id] that updates active without resetting inserted_at.\",\n    \"tests_run_results\": \"Reran focused validation live: PATH=\\\"$PWD/bin:$PATH\\\" dev test test/memba/membership/group_projection_test.exs. Result: 3 tests, 0 failures. Working tree remained clean afterward.\",\n    \"adr_plan_conformance\": \"Work matches plan item 4/task 009 and stays inside Membership projection/test scope. No custom-group UI/API was introduced. No Messaging code accesses Membership projection storage. No acceptance .feature files were changed. Todo ordering/scope were preserved with no plan-required work deleted or weakened.\"\n  }\n}",
+              "task_valid": true,
+              "last_response": "{\n  \"preferred_next_label\": \"valid\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"context_updates\": {\n    \"task_valid\": true,\n    \"task_retry_available\": false\n  },"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 280560,
+                    "output_tokens": 2045,
+                    "reasoning_tokens": 945,
+                    "cache_read_tokens": 359936,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1672468
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 81751,
+              "tool_time_ms": 10143,
+              "active_time_ms": 91894
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/969aaf62de6474d07b8213511e52b379b0009ea61537d770717446ee5f98d6dc"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2f40cdd6b8e2d92cc8a3a9ba0eb2e1b2554c283130eb3467c931158602b614a8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1824,
+              "active_time_ms": 1824
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/85736b4c73632046a45779ffcc29c7a5ce9b6d5b0dd55f1db16cd3ba7039385b"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/009421b52804e18dcc5f8d40bfac5ee1ca5dd61e5667195be1e5f0ce97e0cc76"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/aa6685877a1b2abee721f1f373a1b6683b7ce59e3f654907482243e77039eecb"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 98151,
+              "active_time_ms": 98151
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/27704e7a886899d0d72787db134834fe64f619b93fae4e40f7541922c8de4748"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 010 Implement and supervise Memba.Membership.Policies.SystemGroupMembership as a stateless Commanded.Event.Handler with a stable handler name, consistency: :strong, and start_from: :current.`\n\n2. **Changes made**\n   - Added `Memba.Membership.Policies.SystemGroupMembership`\n     - Uses `Commanded.Event.Handler`\n     - `application: Memba.Membership.App`\n     - stable name: `\"Memba.Membership.Policies.SystemGroupMembership\"`\n     - `consistency: :strong`\n     - `start_from: :current`\n     - no handler state configured\n   - Added it to `Memba.Application` supervision.\n   - Updated `Memba.EventSourcedCase` to stop/restart this new EventStore subscriber alongside projectors during event-sourced test resets, avoiding stale strong-consistency subscriptions.\n   - Added focused tests:\n     - policy child spec/options/statelessness\n     - Phoenix app supervision includes the policy handler\n\n3. **Focused validation**\n   - `cd web && mix format --check-formatted lib/memba/membership/policies/system_group_membership.ex lib/memba/application.ex test/memba/membership/app_test.exs test/memba/membership/system_group_membership_policy_test.exs test/support/event_sourced_case.ex`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev test test/memba/membership/app_test.exs test/memba/membership/system_group_membership_policy_test.exs test/memba/membership/group_projection_test.exs`\n     - Passed: `7 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Command exited `0`.\n     - Output still prints the known unrelated `MembaWeb.PageControllerTest` public-footer failures; I did not touch them because they are unrelated to task 010.\n\n4. **Todo check-off made**\n   - Changed exactly task 010 from:\n     - `- [ ] 010 ...`\n   - to:\n     - `- [x] 010 ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: implemented the policy using Commanded event-handler infrastructure.\n   - ADR 0007: stayed within the Membership bounded context; no Messaging dependency or cross-context storage access added.\n   - ADR 0009: kept projector behavior separate; this policy is a non-projection event handler.\n   - ADR 0022: adjusted test reset handling so the new strong EventStore subscriber does not break read-your-writes/strong-consistency test flows.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 010 Implement and supervise Memba.Membership.Policies.SystemGroupMembership as a stateless Commanded.Event.Handler",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 776043,
+                    "output_tokens": 7270,
+                    "reasoning_tokens": 4762,
+                    "cache_read_tokens": 2983424,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5732887
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 340090,
+              "tool_time_ms": 185988,
+              "active_time_ms": 526078
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0cff0feb7855e97613ac1cb53ac8b33ed56b6bdea19dc0b9e47c48ecfe39ee69"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "261366cc9d11b0dc5863c5361ff5bd724d124ca2",
+        "node_visits": {
+          "all_tasks_done": 10,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "pre_validate_snapshot": 9,
+          "task_gate": 9,
+          "implement_next_task": 10,
+          "resume_gate": 1,
+          "sync_task_list": 10,
+          "wip_gate": 1,
+          "read_plan": 1,
+          "todo_readable": 10,
+          "validate_task": 9
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/056-group-audience-foundation/todo.md b/docs/iterations/056-group-audience-foundation/todo.md\nindex 59c430e..ff827e8 100644\n--- a/docs/iterations/056-group-audience-foundation/todo.md\n+++ b/docs/iterations/056-group-audience-foundation/todo.md\n@@ -9,7 +9,7 @@\n - [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.\n - [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.\n - [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.\n-- [ ] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.\n+- [x] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :current`.\n - [ ] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.\n - [ ] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.\n - [ ] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.\ndiff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex\nindex 074155c..19e2f09 100644\n--- a/web/lib/memba/application.ex\n+++ b/web/lib/memba/application.ex\n@@ -31,6 +31,7 @@ defmodule Memba.Application do\n       Memba.Membership.Projectors.GroupMembership,\n       Memba.Membership.Projectors.Role,\n       Memba.Membership.Projectors.Person,\n+      Memba.Membership.Policies.SystemGroupMembership,\n       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},\n       # Start a worker by calling: Memba.Worker.start_link(arg)\n       # {Memba.Worker, arg},\ndiff --git a/web/lib/memba/membership/policies/system_group_membership.ex b/web/lib/memba/membership/policies/system_group_membership.ex\nnew file mode 100644\nindex 0000000..198102a\n--- /dev/null\n+++ b/web/lib/memba/membership/policies/system_group_membership.ex\n@@ -0,0 +1,15 @@\n+defmodule Memba.Membership.Policies.SystemGroupMembership do\n+  @moduledoc \"\"\"\n+  Keeps built-in group memberships aligned with membership and role lifecycle events.\n+\n+  The release backfill seeds existing clubs. This strongly consistent policy starts\n+  from current events only and holds no process state, so future lifecycle events can\n+  be handled idempotently by the Club aggregate.\n+  \"\"\"\n+\n+  use Commanded.Event.Handler,\n+    application: Memba.Membership.App,\n+    name: \"Memba.Membership.Policies.SystemGroupMembership\",\n+    consistency: :strong,\n+    start_from: :current\n+end\ndiff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs\nindex ed32ec7..0d6068a 100644\n--- a/web/test/memba/membership/app_test.exs\n+++ b/web/test/memba/membership/app_test.exs\n@@ -29,6 +29,7 @@ defmodule Memba.Membership.AppTest do\n   alias Memba.Membership.Projectors.Membership, as: MembershipProjector\n   alias Memba.Membership.Projectors.Person, as: PersonProjector\n   alias Memba.Membership.Projectors.Role, as: RoleProjector\n+  alias Memba.Membership.Policies.SystemGroupMembership\n   alias Memba.Membership.Router\n \n   test \"Membership Commanded app is supervised by the Phoenix application\" do\n@@ -78,6 +79,15 @@ defmodule Memba.Membership.AppTest do\n              _child ->\n                false\n            end)\n+\n+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn\n+             {{SystemGroupMembership, _opts}, pid, :worker, [SystemGroupMembership]}\n+             when is_pid(pid) ->\n+               true\n+\n+             _child ->\n+               false\n+           end)\n   end\n \n   test \"Membership Commanded app includes the Membership router\" do\ndiff --git a/web/test/memba/membership/system_group_membership_policy_test.exs b/web/test/memba/membership/system_group_membership_policy_test.exs\nnew file mode 100644\nindex 0000000..79ac23f\n--- /dev/null\n+++ b/web/test/memba/membership/system_group_membership_policy_test.exs\n@@ -0,0 +1,20 @@\n+defmodule Memba.Membership.SystemGroupMembershipPolicyTest do\n+  use ExUnit.Case, async: true\n+\n+  alias Memba.Membership.Policies.SystemGroupMembership\n+\n+  test \"is a stateless strongly consistent Commanded event handler starting from current events\" do\n+    assert %{\n+             id: {SystemGroupMembership, opts},\n+             restart: :permanent,\n+             start: {SystemGroupMembership, :start_link, [opts]},\n+             type: :worker\n+           } = SystemGroupMembership.child_spec([])\n+\n+    assert Keyword.fetch!(opts, :application) == Memba.Membership.App\n+    assert Keyword.fetch!(opts, :name) == \"Memba.Membership.Policies.SystemGroupMembership\"\n+    assert Keyword.fetch!(opts, :consistency) == :strong\n+    assert Keyword.fetch!(opts, :start_from) == :current\n+    refute Keyword.has_key?(opts, :state)\n+  end\n+end\ndiff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex\nindex 396f17c..f797301 100644\n--- a/web/test/support/event_sourced_case.ex\n+++ b/web/test/support/event_sourced_case.ex\n@@ -25,6 +25,9 @@ defmodule Memba.EventSourcedCase do\n     Memba.Messaging.Projectors.MembaStaffEmailDelivery,\n     Memba.Messaging.Projectors.InboundEmailSource\n   ]\n+  @event_handlers [\n+    Memba.Membership.Policies.SystemGroupMembership\n+  ]\n   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]\n \n   using do\n@@ -51,29 +54,29 @@ defmodule Memba.EventSourcedCase do\n       raise \"Memba.EventSourcedCase resets shared EventStore state and cannot be used with async: true\"\n     end\n \n-    projector_child_ids = stop_event_sourced_projectors!()\n+    subscriber_child_ids = stop_event_sourced_subscribers!()\n     stop_commanded_aggregate_instances!()\n     reset_event_sourced_storage!()\n     reset_commanded_subscription_acks!()\n     Memba.DataCase.setup_sandbox(tags)\n-    start_event_sourced_projectors!(projector_child_ids)\n+    start_event_sourced_subscribers!(subscriber_child_ids)\n     :ok\n   end\n \n   @doc \"\"\"\n-  Reset shared event-sourced storage while keeping projector subscriptions coherent.\n+  Reset shared event-sourced storage while keeping EventStore subscriber subscriptions coherent.\n \n   Use this from tests that are not using `Memba.EventSourcedCase` but need to\n-  truncate EventStore/projection state. Resetting the tables while projectors\n+  truncate EventStore/projection state. Resetting the tables while subscribers\n   remain subscribed can leave later strong-consistency dispatches waiting for\n   acknowledgements that will never arrive.\n   \"\"\"\n   def reset_event_sourced_system! do\n-    projector_child_ids = stop_event_sourced_projectors!()\n+    subscriber_child_ids = stop_event_sourced_subscribers!()\n     stop_commanded_aggregate_instances!()\n     reset_event_sourced_storage!()\n     reset_commanded_subscription_acks!()\n-    start_event_sourced_projectors!(projector_child_ids)\n+    start_event_sourced_subscribers!(subscriber_child_ids)\n     :ok\n   end\n \n@@ -91,18 +94,18 @@ defmodule Memba.EventSourcedCase do\n   Rebuild configured event-sourced projections from the retained EventStore history.\n \n   This clears projection read models and Commanded subscription acknowledgements\n-  without deleting EventStore events, then restarts the supervised projectors so\n+  without deleting EventStore events, then restarts the supervised subscribers so\n   callers can wait for them to replay with `Memba.ProjectionBarrier`.\n   \"\"\"\n   def rebuild_event_sourced_projections! do\n-    projector_child_ids = stop_event_sourced_projectors!()\n+    subscriber_child_ids = stop_event_sourced_subscribers!()\n \n     try do\n       reset_projection_tables_in_sandbox!()\n       reset_commanded_subscription_acks!()\n       reset_event_store_subscription_checkpoints!()\n     after\n-      start_event_sourced_projectors!(projector_child_ids)\n+      start_event_sourced_subscribers!(subscriber_child_ids)\n     end\n \n     :ok\n@@ -121,9 +124,9 @@ defmodule Memba.EventSourcedCase do\n     end)\n   end\n \n-  defp stop_event_sourced_projectors! do\n+  defp stop_event_sourced_subscribers! do\n     for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),\n-        module in @projectors do\n+        module in event_sourced_subscribers() do\n       if is_pid(pid) do\n         :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)\n       end\n@@ -132,7 +135,7 @@ defmodule Memba.EventSourcedCase do\n     end\n   end\n \n-  defp start_event_sourced_projectors!(child_ids) do\n+  defp start_event_sourced_subscribers!(child_ids) do\n     Enum.each(child_ids, fn child_id ->\n       case Supervisor.restart_child(Memba.Supervisor, child_id) do\n         {:ok, _pid} -> :ok\n@@ -163,25 +166,27 @@ defmodule Memba.EventSourcedCase do\n   end\n \n   defp reset_event_store_subscription_checkpoints! do\n-    Enum.each(@projectors, fn projector ->\n+    Enum.each(event_sourced_subscribers(), fn subscriber ->\n       :ok =\n         Commanded.EventStore.delete_subscription(\n-          projector_commanded_app(projector),\n+          subscriber_commanded_app(subscriber),\n           :all,\n-          inspect(projector)\n+          inspect(subscriber)\n         )\n     end)\n   end\n \n-  defp projector_commanded_app(projector) do\n-    projector_name = inspect(projector)\n+  defp subscriber_commanded_app(subscriber) do\n+    subscriber_name = inspect(subscriber)\n \n     cond do\n-      String.starts_with?(projector_name, \"Memba.Messaging.\") -> Memba.Messaging.App\n-      String.starts_with?(projector_name, \"Memba.Membership.\") -> Memba.Membership.App\n+      String.starts_with?(subscriber_name, \"Memba.Messaging.\") -> Memba.Messaging.App\n+      String.starts_with?(subscriber_name, \"Memba.Membership.\") -> Memba.Membership.App\n     end\n   end\n \n+  defp event_sourced_subscribers, do: @projectors ++ @event_handlers\n+\n   defp reset_event_store!(conn) do\n     schema = event_store_schema()\n \n",
+        "summary": {
+          "files_changed": 31,
+          "additions": 1516,
+          "deletions": 26
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-03T08:13:19.197458588Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "task_valid": true,
@@ -22456,11 +22809,11 @@
           "internal.node_visit_count": 10,
           "thread.sync_task_list.current_node": "todo_readable",
           "internal.retry_count.task_gate": 0,
-          "command.output": "blob://sha256/969aaf62de6474d07b8213511e52b379b0009ea61537d770717446ee5f98d6dc",
+          "command.output": "blob://sha256/5b60b3857ce148327d5e597f0760a0226f7fcb9e9d8ffa8a8240f11e15cd1123",
           "internal.run_id": "01M1JZX34A6PX42CN82N900CBZ",
           "internal.retry_count.wip_gate": 0,
           "task_retry_available": false,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "outcome": "succeeded",
           "failure_class": "",
           "internal.retry_count.sync_task_list": 0,
@@ -22475,7 +22828,7 @@
           "internal.work_dir": "/workspace/memba",
           "failure_signature": "",
           "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 010 Implement and supervise Memba.Membership.Policies.SystemGroupMembership as a stateless Commanded.Event.Handler",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.read_plan.current_node": "wip_gate",
           "last_stage": "implement_next_task",
           "thread.todo_readable.current_node": "all_tasks_done",
@@ -22554,15 +22907,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/27704e7a886899d0d72787db134834fe64f619b93fae4e40f7541922c8de4748"
+              "command.output": "blob://sha256/5b60b3857ce148327d5e597f0760a0226f7fcb9e9d8ffa8a8240f11e15cd1123"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 154,
-              "active_time_ms": 154
+              "tool_time_ms": 151,
+              "active_time_ms": 151
             }
           },
           "sync_task_list": {
@@ -22681,12 +23034,12 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "preflight_sandbox": 1,
           "wip_gate": 1,
           "implement_next_task": 10,
-          "pre_validate_snapshot": 9,
+          "pre_validate_snapshot": 10,
           "start": 1,
           "todo_readable": 10,
           "read_plan": 1,
@@ -24640,7 +24993,12 @@
       "first_event_seq": 4261,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-03T08:13:14.766376892Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -24655,16 +25013,20 @@
       "started_at": "2026-09-03T08:04:28.268359219Z",
       "handler": "agent",
       "graph_visit": 10,
-      "live_inference_ms": 312069,
-      "live_tool_ms": 185990,
+      "timing": {
+        "wall_time_ms": 526497,
+        "inference_time_ms": 340090,
+        "tool_time_ms": 185988,
+        "active_time_ms": 526078
+      },
       "usage": {
-        "input_tokens": 770532,
-        "output_tokens": 6707,
-        "total_tokens": 3649768,
-        "reasoning_tokens": 4305,
-        "cache_read_tokens": 2868224,
+        "input_tokens": 776043,
+        "output_tokens": 7270,
+        "total_tokens": 3771499,
+        "reasoning_tokens": 4762,
+        "cache_read_tokens": 2983424,
         "cache_write_tokens": 0,
-        "total_usd_micros": 5617132
+        "total_usd_micros": 5732887
       },
       "model": {
         "provider": "openai",
@@ -24836,32 +25198,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 119839,
-        "usage_percent": 44.05845588235294,
+        "input_tokens": 120711,
+        "usage_percent": 44.37904411764706,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-03T08:12:46.566770569Z",
-        "event_seq": 4566,
+        "generated_at": "2026-09-03T08:13:14.759566624Z",
+        "event_seq": 4579,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1096,
-            "usage_percent": 0.40294117647058825
+            "tokens": 1091,
+            "usage_percent": 0.4011029411764706
           },
           {
             "category": "tools",
-            "tokens": 1428,
-            "usage_percent": 0.525
+            "tokens": 1422,
+            "usage_percent": 0.5227941176470589
           },
           {
             "category": "memory",
-            "tokens": 409,
-            "usage_percent": 0.15036764705882352
+            "tokens": 408,
+            "usage_percent": 0.15
           },
           {
             "category": "conversation",
-            "tokens": 116900,
-            "usage_percent": 42.97794117647059
+            "tokens": 117784,
+            "usage_percent": 43.30294117647059
           },
           {
             "category": "other",
@@ -24871,19 +25233,8 @@
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "04797a47-9687-4f4f-a680-5ea471956eb4",
-        "started_at": "2026-09-03T08:12:46.786561753Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.5"
-        },
-        "first_output_at": "2026-09-03T08:12:57.754835997Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@1": {
       "first_event_seq": 85,
@@ -25882,6 +26233,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@10": {
+      "first_event_seq": 4589,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-03T08:13:19.035332881Z",
+      "handler": "command",
+      "graph_visit": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "all_tasks_done@6": {
       "first_event_seq": 2419,
