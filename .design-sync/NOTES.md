@@ -3,7 +3,7 @@
 ## 2026-08-13 push #4 (local → cloud, account-settings gains the editable Profile tab)
 
 Extended `templates/account-settings.html` with the Profile tab's name and photo editing states,
-while planning iterations 054 (rename yourself) and 055 (profile photo).
+while planning iterations 098 (rename yourself) and 099 (profile photo).
 
 The extension was written on top of a fresh `get_file` of the **cloud** copy rather than the local
 mirror, because at the time this session started the local file was still the iteration-053

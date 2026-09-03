@@ -224,7 +224,7 @@ The failure also surfaced only a generic `Member message send failed` server log
 
 ### Context
 
-While restoring a green baseline before iteration 054, `PATH="$PWD/bin:$PATH" dev check` reached browser acceptance after its ExUnit stage passed.
+While restoring a green baseline before iteration 098, `PATH="$PWD/bin:$PATH" dev check` reached browser acceptance after its ExUnit stage passed.
 
 ### What happened
 
