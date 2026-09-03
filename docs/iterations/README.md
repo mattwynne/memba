@@ -65,7 +65,7 @@ green than before.
 | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
 | 054 | 2026-08-13 | validated | Members change their own name | [plan](054-member-name-editing/plan.md) |
 | 055 | 2026-08-13 | validated | Members set their own profile photo | [plan](055-member-profile-photo/plan.md) |
-| 056 | 2026-09-02 | draft | Group audience foundation: Everyone and Admin | [plan](056-group-audience-foundation/plan.md) |
+| 056 | 2026-09-02 | validated | Group audience foundation: Everyone and Admin | [plan](056-group-audience-foundation/plan.md) |
 
 Status notes:
 

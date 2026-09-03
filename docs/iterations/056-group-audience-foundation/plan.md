@@ -1,7 +1,7 @@
 # Group audience foundation: Everyone and Admin
 
 Date: 2026-09-02
-Status: draft
+Status: validated
 
 ## Goal
 
