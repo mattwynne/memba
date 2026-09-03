@@ -4,7 +4,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -140,6 +143,40 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(view, "input#member-message-subject-input[name='message[subject]']")
     assert has_element?(view, "textarea#member-message-body-input[name='message[body]']")
     refute has_element?(view, "[name='message[sender_id]']")
+  end
+
+  test "routed mount derives recipient count from the Everyone group", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    _bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Climbing Club",
+        club_id: alice.club_id,
+        everyone_group?: false
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='1']",
+             "the current member"
+           )
   end
 
   test "routed compose screen renders the focused member message form affordances", %{
@@ -353,14 +390,42 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: true
     })
 
+    if Keyword.get(attrs, :everyone_group?, true) do
+      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+    end
+
     %{club_id: club_id, person_id: person.person_id}
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp club_attrs(attrs, club_id) do

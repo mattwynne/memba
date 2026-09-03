@@ -255,8 +255,7 @@ defmodule Memba.Membership.Club do
 
     %__MODULE__{
       club
-      | group_memberships:
-          Map.put(club.group_memberships, group_membership_key, group_membership)
+      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
     }
   end
 
@@ -266,8 +265,7 @@ defmodule Memba.Membership.Club do
 
     %__MODULE__{
       club
-      | group_memberships:
-          Map.put(club.group_memberships, group_membership_key, group_membership)
+      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
     }
   end
 
@@ -502,7 +500,9 @@ defmodule Memba.Membership.Club do
   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
 
   defp put_group_key(group_keys, nil, _group_id), do: group_keys
-  defp put_group_key(group_keys, group_key, group_id), do: Map.put(group_keys, group_key, group_id)
+
+  defp put_group_key(group_keys, group_key, group_id),
+    do: Map.put(group_keys, group_key, group_id)
 
   defp group_membership_key(group_id, membership_id), do: {group_id, membership_id}
 end
