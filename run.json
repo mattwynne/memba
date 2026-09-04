@@ -567,7 +567,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T13:36:54.956990655Z",
-  "last_event_at": "2026-09-04T13:43:33.211284999Z",
+  "last_event_at": "2026-09-04T13:43:39.133347444Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1563,9 +1563,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 338,
       "checkpoint": {
-        "timestamp": "2026-09-04T13:43:33.368608971Z",
+        "timestamp": "2026-09-04T13:43:39.133212629Z",
         "current_node": "not_ready",
         "completed_nodes": [
           "start",
@@ -1578,61 +1578,93 @@
         ],
         "node_retries": {},
         "context_values": {
-          "gemini_review_decision": "READY",
-          "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional ",
-          "outcome": "failed",
-          "gemini_review_blocking_gap_count": 0,
-          "claude_review_blocking_gaps": "None",
-          "thread.codex_review.current_node": "synthesize",
-          "last_stage": "synthesize",
-          "internal.retry_count.claude_review": 0,
           "gemini_review_required_edits": "None",
           "internal.retry_count.start": 0,
-          "internal.fidelity": "summary:high",
-          "codex_review_confidence": "High",
+          "claude_review_blocking_gaps": "None",
+          "gemini_review_blocking_gap_count": 0,
+          "internal.thread_id": "synthesis_gate",
+          "response.claude_review": "# Iteration 057 Plan Review — Admin Group Email Conversations\n\nI read the complete plan file (`docs/iterations/057-admin-group-email-conversations/plan.md`, 243 lines) directly, cross-checked it against the acceptance feature files it names, its stated dependency (iteration 056), the referenced problem notes, the groups vision doc, and the current codebase state.\n\n## Decision: READY\n## Confidence: High\n\n## Blocking gaps\n\nNone found. The plan is internally consistent, its scope is bounded, its acceptance criteria are concrete and testable, its BDD classification and feature-file plan are already reflected verbatim in `acceptance-tests/features/member_message_deliverability.feature` (lines 84–101) and `acceptance-tests/features/club_message_replies.feature` (lines 120–133) with matching `@iteration-057 @todo-domain @todo-ui` tags, and its hard dependency on iteration 056 is explicitly named, verified as not-yet-merged (056's status is `implementing`, and no `GroupCreated`/`GroupMemberAdded`/`SystemGroupMembership`/`ConversationAccessGrantedToGroup` code exists yet), and handled by an explicit \"verify 056 first\" step (Implementation Plan step 1) plus a named risk (\"Iteration 056 is a hard dependency and must be merged before this plan can start\"). This matches the project's own status semantics (`docs/iterations/README.md`: a `validated` plan may wait behind the single WIP slot), so the dependency is a sequencing fact the plan already accounts for, not a plan-quality defect.\n\n## Non-blocking improvements\n\n1. The Implementation Plan (steps 1–10) never includes updating `docs/specs/2026-09-02-groups-and-conversation-access-vision.md` to reflect the confirmed `club_members_only` posting rule — it's only mentioned as a Risk/Follow-up. Consider promoting it to an explicit implementation step so it isn't dropped during delivery.\n2. Technical steps are slightly less concrete than iteration 056's plan about which existing files change (e.g., step 4's \"inbound destination resolution\" almost certainly means `web/lib/memba/messaging/inbound_club_destination.ex`, and related `inbound_club_authorization.ex`/`inbound_club_sender.ex`/`inbound_club_rejection_email.ex`). Naming these explicitly would speed delivery and reduce discovery time.\n3. \"Add public Messaging queries\" (step 8) doesn't name a target module/namespace; a suggested location (mirroring the Membership group-lookup API pattern from 056) would tighten the interface contract.\n4. The new email-slug column/migration for groups isn't named (e.g., column name, migration filename), unlike 056's explicit `membership_groups`/`membership_group_memberships` naming.\n\n## Smallest viable iteration\n\nThe plan is already close to the minimum useful vertical slice: it deliberately excludes web UI, custom groups, configurable policies, and the redundant-copy fix, while still shipping the one end-to-end capability that matters (email-only, private Admin conversations). I would not shrink it further — splitting the email-slug model from the Admin route, or splitting inbound-post from reply-by-email, would leave an unusable half-slice. This is an appropriately minimal, coherent unit.\n\n## Required plan edits\n\nNone required for readiness. Optional (see non-blocking improvements above): add an explicit implementation step for the vision-doc update, and name the specific existing Messaging modules/files expected to change.\n\n## Validation plan (how to prove the iteration succeeded)\n\n- Confirm iteration 056 is merged and its Membership group/membership queries, conversation access grant, and group-aware reply authorisation are present and passing before starting 057's own work (already specified as step 1).\n- Run the plan's own Validation Plan: focused Membership tests (slug persistence/uniqueness/backfill/replay), focused Messaging tests (destination resolution, recipient delivery, sender policy, access grants, reply authorisation), and existing inbound-email/reply regressions.\n- Execute the three new `member_message_deliverability.feature` scenarios (non-Admin sender excluded, Admin sender included, other-club sender rejected) and the one new `club_message_replies.feature` scenario (Admin reply-by-email), removing/narrowing `@todo-domain`/`@todo-ui` only once each runner can execute them — confirmed these scenarios already exist in the repo exactly as the plan describes.\n- Confirm group-ID-based Messaging queries return only the requested group's conversations, and that existing web surfaces still request Everyone only (no Admin leakage into UI).\n- Run `dev check` on the committed implementation state as the final stop condition.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+          "response.codex_review": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was reviewed directly. It defines a clear user outcome: active club members can email a private Admin audience, while only active Admin members receive, access, and reply to those conversations. The actor, privacy boundary, fixed posting policy, deferred capabilities, and unchanged Everyone behaviour are explicit.\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Treat iteration 056 as a strict execution gate. Its plan currently says `Status: implementing`; delivery of 057 must not begin until 056 is completed, merged, and its expected group/access APIs and backfill are verified. The plan already states this requirement, so it is not a plan-readiness blocker.\\n2. The public group-ID list/read API is preparation for a later UI rather than essential to the Admin-email outcome. It is coherent with the access-model transition, but it could be deferred if implementation pressure calls for a smaller slice.\\n3. Focused tests could state the exact accepted slug syntax and database-level uniqueness enforcement more explicitly, although the fixed `everyone` and `admin` slugs make this non-blocking for the planned system groups.\\n4. Add explicit validation cases for an unknown group slug and a forged/direct non-Admin reply. Both are already implied by the rejection criteria and implementation plan, but naming them in the final test matrix would improve traceability.\\n\\n## Smallest viable iteration\\n\\nAdd immutable `everyone` and `admin` email slugs and their safe backfill; resolve `admin@<club>.clubs.memba.io`; permit active destination-club members to start Admin conversations; grant access and send root delivery only to active Admin members; preserve Admin reply-by-email and existing rejection/idempotency behaviour; and prove Admin conversations remain absent from Everyone-only web views. The generic public group-ID list/read API could move to the later group UI iteration without reducing this email-only capability.\\n\\n## Required plan edits\\n\\nNone required for implementation readiness. Do not start implementation until the iteration 056 dependency gate passes.\\n\\n## Validation plan\\n\\n1. Verify iteration 056 is completed and merged and that its system-group identities, memberships, access grants, public Membership queries, reply authorization, and release backfill pass their tests.\\n2. Confirm the new acceptance scenarios are initially excluded only by their declared runner-debt tags; then implement the necessary support and remove or narrow those tags so all applicable scenarios execute.\\n3. Test slug persistence, immutability, club-scoped uniqueness, replay, and idempotent backfill reruns.\\n4. Exercise realistic inbound Admin messages from an active non-Admin, active Admin, inactive sender, unknown sender, other-club sender, and a duplicate provider message, plus unknown group routing, attachments, and unusable bodies.\\n5. Assert the complete privacy state for a non-Admin sender: no delivery, acknowledgement, access grant, follower relationship, reply delivery, or web visibility.\\n6. Assert an active Admin sender receives the ordinary root copy and that only active Admin members receive the conversation.\\n7. Verify Admin email replies thread correctly and retain follower-only delivery; reject direct or forged non-Admin reply attempts.\\n8. Verify accepted Admin conversations have exactly the Admin write-access grant and that Everyone behaviour and existing inbound/reply regressions remain unchanged.\\n9. Verify existing web list/detail paths request Everyone and cannot expose Admin conversations. If retained in this iteration, prove group-ID queries return only conversations granted to the supplied group.\\n10. Run `dev check` on the exact implementation state. Stop when the shared acceptance scenarios and focused regressions pass, the dependency gate is satisfied, privacy assertions hold, and `dev check` passes.\\n\\nNo implementation or file edits were performed.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}",
+          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+          "last_stage": "synthesize",
+          "graph.rankdir": "LR",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "graph.default_fidelity": "summary:high",
           "internal.retry_count.codex_review": 0,
-          "thread.start.current_node": "gemini_review",
-          "internal.node_visit_count": 1,
-          "internal.run_id": "01M1PA5SS2HE6918YMQXDD6M18",
-          "internal.work_dir": "/workspace/memba",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.codex_review.current_node": "synthesize",
           "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional decision: READY\\n\\nAll required review evidence is present. Gemini, Claude, and Codex independently returned **READY** with **High** confidence and identified no blocking gaps. The plan can be marked `validated` without beginning implementation.\\n\\nIteration 056 remains a hard execution dependency, but that does not prevent validating iteration 057's plan. Implementation of 057 must wait until 056 is completed, merged, and verified as specified in the plan.\\n\\n## 2. Reviewer decision table\\n\\n| Reviewer | Decision | Confidence | Blocking gaps count | Notes |\\n|---|---|---:|---:|---|\\n| Gemini | READY | High | 0 | No blocking gaps or required edits. |\\n| Claude | READY | High | 0 | Scope, acceptance scenarios, dependency handling, and validation criteria are sufficient. Suggested optional implementation-detail improvements only. |\\n| Codex/GPT | READY | High | 0 | Plan is implementable and testable. Confirmed that iteration 056 is an execution gate rather than a plan-readiness blocker. Suggested optional validation refinements. |\\n\\n## 3. Consensus findings\\n\\n- The intended outcome and privacy boundary are clear: Admin conversations are email-only and accessible and deliverable only to active Admin members, subject to the stated sender policy.\\n- The iteration is a coherent smallest useful vertical slice; deferred UI, custom-group, configurable-policy, and unrelated delivery work are appropriately excluded.\\n- Acceptance criteria are concrete and testable, with the relevant shared Cucumber feature files and scenarios explicitly identified.\\n- The plan makes the iteration 056 dependency explicit and includes verification of that dependency before implementation starts.\\n- The implementation and validation plans cover persistence, routing, authorization, delivery, reply handling, privacy, idempotency, regression protection, and final `dev check` execution.\\n- No material product, business, data-model, or technical-design decision must be resolved before an engineer can begin once the dependency gate is satisfied.\\n\\n## 4. Reviewer objections addressed\\n\\nNo reviewer returned NOT READY.\\n\\n## 5. Corrected findings\\n\\n- **Iteration 056 dependency:** Retained as an implementation sequencing gate, not elevated to a readiness blocker. A plan may be validated while waiting for its prerequisite to merge when that prerequisite and the required verification are explicit.\\n- **Vision-document update:** Claude's suggestion to promote this to an implementation step is useful but optional. Its omission does not make the planned capability or validation ambiguous.\\n- **Specific module and migration names:** Naming anticipated files, modules, columns, or migration filenames could reduce discovery time, but these are implementation details rather than unresolved material design choices.\\n- **Generic group-ID query API:** Codex noted that this could potentially be deferred. The current inclusion is coherent with the plan and does not make the scope too broad, so no scope repair is required.\\n- **Additional explicit test cases:** Unknown group slugs and forged/direct non-Admin replies would strengthen traceability, but existing rejection, privacy, and authorization requirements already imply these cases sufficiently for readiness.\\n\\n## 6. Blocking gaps\\n\\nNone.\\n\\n## 7. Codex repair brief\\n\\nNone. No plan edits are required before validation.\\n\\n## 8. Questions for Matt\\n\\nNone.\\n\\n## 9. Validation checklist\\n\\n- Mark iteration 057's plan status as `validated` without changing application code or starting implementation.\\n- Preserve iteration 056 as a strict implementation gate: 057 must not begin until 056 is completed, merged, and its expected group, membership, access-grant, query, reply-authorization, and backfill capabilities are verified.\\n- Before implementation, confirm the named acceptance scenarios and allowed feature-file changes still match the plan.\\n- During delivery, verify Admin recipient privacy, sender policy, reply authorization, group access grants, idempotency, and unchanged Everyone behavior.\\n- Confirm existing web surfaces remain Everyone-scoped and do not expose Admin conversations.\\n- Run focused tests, applicable acceptance scenarios, regressions, and `dev check` on the exact final implementation state.\\n- Do not perform implementation work as part of this validation transition.\"\n}",
+          "thread.start.current_node": "gemini_review",
+          "internal.retry_count.claude_review": 0,
+          "claude_review_blocking_gap_count": 0,
+          "claude_review_confidence": "High",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "outcome": "failed",
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.not_ready": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.run_id": "01M1PA5SS2HE6918YMQXDD6M18",
+          "claude_review_decision": "READY",
+          "claude_review_required_edits": "None",
+          "codex_review_required_edits": "None",
+          "codex_review_blocking_gap_count": 0,
+          "codex_review_confidence": "High",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional ",
+          "thread.synthesis_gate.current_node": "not_ready",
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.synthesize": 0,
           "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
-          "claude_review_confidence": "High",
-          "thread.claude_review.current_node": "codex_review",
-          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
-          "internal.retry_count.synthesis_gate": 0,
-          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
-          "failure_class": "deterministic",
-          "claude_review_blocking_gap_count": 0,
-          "internal.thread_id": "synthesis_gate",
-          "graph.rankdir": "LR",
-          "codex_review_required_edits": "None",
-          "current_node": "not_ready",
-          "internal.retry_count.not_ready": 0,
-          "response.codex_review": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was reviewed directly. It defines a clear user outcome: active club members can email a private Admin audience, while only active Admin members receive, access, and reply to those conversations. The actor, privacy boundary, fixed posting policy, deferred capabilities, and unchanged Everyone behaviour are explicit.\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Treat iteration 056 as a strict execution gate. Its plan currently says `Status: implementing`; delivery of 057 must not begin until 056 is completed, merged, and its expected group/access APIs and backfill are verified. The plan already states this requirement, so it is not a plan-readiness blocker.\\n2. The public group-ID list/read API is preparation for a later UI rather than essential to the Admin-email outcome. It is coherent with the access-model transition, but it could be deferred if implementation pressure calls for a smaller slice.\\n3. Focused tests could state the exact accepted slug syntax and database-level uniqueness enforcement more explicitly, although the fixed `everyone` and `admin` slugs make this non-blocking for the planned system groups.\\n4. Add explicit validation cases for an unknown group slug and a forged/direct non-Admin reply. Both are already implied by the rejection criteria and implementation plan, but naming them in the final test matrix would improve traceability.\\n\\n## Smallest viable iteration\\n\\nAdd immutable `everyone` and `admin` email slugs and their safe backfill; resolve `admin@<club>.clubs.memba.io`; permit active destination-club members to start Admin conversations; grant access and send root delivery only to active Admin members; preserve Admin reply-by-email and existing rejection/idempotency behaviour; and prove Admin conversations remain absent from Everyone-only web views. The generic public group-ID list/read API could move to the later group UI iteration without reducing this email-only capability.\\n\\n## Required plan edits\\n\\nNone required for implementation readiness. Do not start implementation until the iteration 056 dependency gate passes.\\n\\n## Validation plan\\n\\n1. Verify iteration 056 is completed and merged and that its system-group identities, memberships, access grants, public Membership queries, reply authorization, and release backfill pass their tests.\\n2. Confirm the new acceptance scenarios are initially excluded only by their declared runner-debt tags; then implement the necessary support and remove or narrow those tags so all applicable scenarios execute.\\n3. Test slug persistence, immutability, club-scoped uniqueness, replay, and idempotent backfill reruns.\\n4. Exercise realistic inbound Admin messages from an active non-Admin, active Admin, inactive sender, unknown sender, other-club sender, and a duplicate provider message, plus unknown group routing, attachments, and unusable bodies.\\n5. Assert the complete privacy state for a non-Admin sender: no delivery, acknowledgement, access grant, follower relationship, reply delivery, or web visibility.\\n6. Assert an active Admin sender receives the ordinary root copy and that only active Admin members receive the conversation.\\n7. Verify Admin email replies thread correctly and retain follower-only delivery; reject direct or forged non-Admin reply attempts.\\n8. Verify accepted Admin conversations have exactly the Admin write-access grant and that Everyone behaviour and existing inbound/reply regressions remain unchanged.\\n9. Verify existing web list/detail paths request Everyone and cannot expose Admin conversations. If retained in this iteration, prove group-ID queries return only conversations granted to the supplied group.\\n10. Run `dev check` on the exact implementation state. Stop when the shared acceptance scenarios and focused regressions pass, the dependency gate is satisfied, privacy assertions hold, and `dev check` passes.\\n\\nNo implementation or file edits were performed.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}",
-          "claude_review_required_edits": "None",
-          "codex_review_decision": "READY",
           "codex_review_blocking_gaps": "None",
-          "claude_review_decision": "READY",
-          "response.claude_review": "# Iteration 057 Plan Review — Admin Group Email Conversations\n\nI read the complete plan file (`docs/iterations/057-admin-group-email-conversations/plan.md`, 243 lines) directly, cross-checked it against the acceptance feature files it names, its stated dependency (iteration 056), the referenced problem notes, the groups vision doc, and the current codebase state.\n\n## Decision: READY\n## Confidence: High\n\n## Blocking gaps\n\nNone found. The plan is internally consistent, its scope is bounded, its acceptance criteria are concrete and testable, its BDD classification and feature-file plan are already reflected verbatim in `acceptance-tests/features/member_message_deliverability.feature` (lines 84–101) and `acceptance-tests/features/club_message_replies.feature` (lines 120–133) with matching `@iteration-057 @todo-domain @todo-ui` tags, and its hard dependency on iteration 056 is explicitly named, verified as not-yet-merged (056's status is `implementing`, and no `GroupCreated`/`GroupMemberAdded`/`SystemGroupMembership`/`ConversationAccessGrantedToGroup` code exists yet), and handled by an explicit \"verify 056 first\" step (Implementation Plan step 1) plus a named risk (\"Iteration 056 is a hard dependency and must be merged before this plan can start\"). This matches the project's own status semantics (`docs/iterations/README.md`: a `validated` plan may wait behind the single WIP slot), so the dependency is a sequencing fact the plan already accounts for, not a plan-quality defect.\n\n## Non-blocking improvements\n\n1. The Implementation Plan (steps 1–10) never includes updating `docs/specs/2026-09-02-groups-and-conversation-access-vision.md` to reflect the confirmed `club_members_only` posting rule — it's only mentioned as a Risk/Follow-up. Consider promoting it to an explicit implementation step so it isn't dropped during delivery.\n2. Technical steps are slightly less concrete than iteration 056's plan about which existing files change (e.g., step 4's \"inbound destination resolution\" almost certainly means `web/lib/memba/messaging/inbound_club_destination.ex`, and related `inbound_club_authorization.ex`/`inbound_club_sender.ex`/`inbound_club_rejection_email.ex`). Naming these explicitly would speed delivery and reduce discovery time.\n3. \"Add public Messaging queries\" (step 8) doesn't name a target module/namespace; a suggested location (mirroring the Membership group-lookup API pattern from 056) would tighten the interface contract.\n4. The new email-slug column/migration for groups isn't named (e.g., column name, migration filename), unlike 056's explicit `membership_groups`/`membership_group_memberships` naming.\n\n## Smallest viable iteration\n\nThe plan is already close to the minimum useful vertical slice: it deliberately excludes web UI, custom groups, configurable policies, and the redundant-copy fix, while still shipping the one end-to-end capability that matters (email-only, private Admin conversations). I would not shrink it further — splitting the email-slug model from the Admin route, or splitting inbound-post from reply-by-email, would leave an unusable half-slice. This is an appropriately minimal, coherent unit.\n\n## Required plan edits\n\nNone required for readiness. Optional (see non-blocking improvements above): add an explicit implementation step for the vision-doc update, and name the specific existing Messaging modules/files expected to change.\n\n## Validation plan (how to prove the iteration succeeded)\n\n- Confirm iteration 056 is merged and its Membership group/membership queries, conversation access grant, and group-aware reply authorisation are present and passing before starting 057's own work (already specified as step 1).\n- Run the plan's own Validation Plan: focused Membership tests (slug persistence/uniqueness/backfill/replay), focused Messaging tests (destination resolution, recipient delivery, sender policy, access grants, reply authorisation), and existing inbound-email/reply regressions.\n- Execute the three new `member_message_deliverability.feature` scenarios (non-Admin sender excluded, Admin sender included, other-club sender rejected) and the one new `club_message_replies.feature` scenario (Admin reply-by-email), removing/narrowing `@todo-domain`/`@todo-ui` only once each runner can execute them — confirmed these scenarios already exist in the repo exactly as the plan describes.\n- Confirm group-ID-based Messaging queries return only the requested group's conversations, and that existing web surfaces still request Everyone only (no Admin leakage into UI).\n- Run `dev check` on the committed implementation state as the final stop condition.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "preferred_label": "validated",
-          "thread.synthesis_gate.current_node": "not_ready",
+          "gemini_review_confidence": "High",
+          "internal.fidelity": "summary:high",
+          "failure_class": "deterministic",
+          "gemini_review_decision": "READY",
+          "codex_review_decision": "READY",
           "internal.retry_count.gemini_review": 0,
-          "gemini_review_blocking_gaps": "None",
-          "thread.gemini_review.current_node": "claude_review",
-          "graph.default_fidelity": "summary:high",
-          "codex_review_blocking_gap_count": 0,
-          "gemini_review_confidence": "High"
+          "current_node": "not_ready",
+          "internal.node_visit_count": 1,
+          "preferred_label": "validated"
         },
         "node_outcomes": {
-          "synthesis_gate": {
+          "synthesize": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
+            "preferred_label": "validated",
+            "context_updates": {
+              "last_stage": "synthesize",
+              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional ",
+              "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional decision: READY\\n\\nAll required review evidence is present. Gemini, Claude, and Codex independently returned **READY** with **High** confidence and identified no blocking gaps. The plan can be marked `validated` without beginning implementation.\\n\\nIteration 056 remains a hard execution dependency, but that does not prevent validating iteration 057's plan. Implementation of 057 must wait until 056 is completed, merged, and verified as specified in the plan.\\n\\n## 2. Reviewer decision table\\n\\n| Reviewer | Decision | Confidence | Blocking gaps count | Notes |\\n|---|---|---:|---:|---|\\n| Gemini | READY | High | 0 | No blocking gaps or required edits. |\\n| Claude | READY | High | 0 | Scope, acceptance scenarios, dependency handling, and validation criteria are sufficient. Suggested optional implementation-detail improvements only. |\\n| Codex/GPT | READY | High | 0 | Plan is implementable and testable. Confirmed that iteration 056 is an execution gate rather than a plan-readiness blocker. Suggested optional validation refinements. |\\n\\n## 3. Consensus findings\\n\\n- The intended outcome and privacy boundary are clear: Admin conversations are email-only and accessible and deliverable only to active Admin members, subject to the stated sender policy.\\n- The iteration is a coherent smallest useful vertical slice; deferred UI, custom-group, configurable-policy, and unrelated delivery work are appropriately excluded.\\n- Acceptance criteria are concrete and testable, with the relevant shared Cucumber feature files and scenarios explicitly identified.\\n- The plan makes the iteration 056 dependency explicit and includes verification of that dependency before implementation starts.\\n- The implementation and validation plans cover persistence, routing, authorization, delivery, reply handling, privacy, idempotency, regression protection, and final `dev check` execution.\\n- No material product, business, data-model, or technical-design decision must be resolved before an engineer can begin once the dependency gate is satisfied.\\n\\n## 4. Reviewer objections addressed\\n\\nNo reviewer returned NOT READY.\\n\\n## 5. Corrected findings\\n\\n- **Iteration 056 dependency:** Retained as an implementation sequencing gate, not elevated to a readiness blocker. A plan may be validated while waiting for its prerequisite to merge when that prerequisite and the required verification are explicit.\\n- **Vision-document update:** Claude's suggestion to promote this to an implementation step is useful but optional. Its omission does not make the planned capability or validation ambiguous.\\n- **Specific module and migration names:** Naming anticipated files, modules, columns, or migration filenames could reduce discovery time, but these are implementation details rather than unresolved material design choices.\\n- **Generic group-ID query API:** Codex noted that this could potentially be deferred. The current inclusion is coherent with the plan and does not make the scope too broad, so no scope repair is required.\\n- **Additional explicit test cases:** Unknown group slugs and forged/direct non-Admin replies would strengthen traceability, but existing rejection, privacy, and authorization requirements already imply these cases sufficiently for readiness.\\n\\n## 6. Blocking gaps\\n\\nNone.\\n\\n## 7. Codex repair brief\\n\\nNone. No plan edits are required before validation.\\n\\n## 8. Questions for Matt\\n\\nNone.\\n\\n## 9. Validation checklist\\n\\n- Mark iteration 057's plan status as `validated` without changing application code or starting implementation.\\n- Preserve iteration 056 as a strict implementation gate: 057 must not begin until 056 is completed, merged, and its expected group, membership, access-grant, query, reply-authorization, and backfill capabilities are verified.\\n- Before implementation, confirm the named acceptance scenarios and allowed feature-file changes still match the plan.\\n- During delivery, verify Admin recipient privacy, sender policy, reply authorization, group access grants, idempotency, and unchanged Everyone behavior.\\n- Confirm existing web surfaces remain Everyone-scoped and do not expose Admin conversations.\\n- Run focused tests, applicable acceptance scenarios, regressions, and `dev check` on the exact final implementation state.\\n- Do not perform implementation work as part of this validation transition.\"\n}"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 4109,
+                    "output_tokens": 933,
+                    "reasoning_tokens": 129,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 52405
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20513,
+              "tool_time_ms": 0,
+              "active_time_ms": 20513
+            }
           },
           "not_ready": {
             "status": "failed",
@@ -1651,88 +1683,10 @@
               "active_time_ms": 149
             }
           },
-          "gemini_review": {
+          "synthesis_gate": {
             "status": "succeeded",
-            "context_updates": {
-              "gemini_review_decision": "READY",
-              "gemini_review_confidence": "High",
-              "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
-              "gemini_review_blocking_gap_count": 0,
-              "last_response": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemin",
-              "gemini_review_required_edits": "None",
-              "last_stage": "gemini_review",
-              "gemini_review_blocking_gaps": "None"
-            },
-            "notes": "Stage completed: gemini_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openrouter",
-                    "model_id": "gemini-3.1-pro-preview"
-                  },
-                  "tokens": {
-                    "input_tokens": 8009,
-                    "output_tokens": 126,
-                    "reasoning_tokens": 649,
-                    "cache_read_tokens": 3781,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 26074
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 11593,
-              "tool_time_ms": 42,
-              "active_time_ms": 11635
-            }
-          },
-          "codex_review": {
-            "status": "succeeded",
-            "preferred_label": "validated",
-            "context_updates": {
-              "codex_review_decision": "READY",
-              "codex_review_blocking_gaps": "None",
-              "last_stage": "codex_review",
-              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was revi",
-              "codex_review_blocking_gap_count": 0,
-              "codex_review_confidence": "High",
-              "response.codex_review": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was reviewed directly. It defines a clear user outcome: active club members can email a private Admin audience, while only active Admin members receive, access, and reply to those conversations. The actor, privacy boundary, fixed posting policy, deferred capabilities, and unchanged Everyone behaviour are explicit.\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Treat iteration 056 as a strict execution gate. Its plan currently says `Status: implementing`; delivery of 057 must not begin until 056 is completed, merged, and its expected group/access APIs and backfill are verified. The plan already states this requirement, so it is not a plan-readiness blocker.\\n2. The public group-ID list/read API is preparation for a later UI rather than essential to the Admin-email outcome. It is coherent with the access-model transition, but it could be deferred if implementation pressure calls for a smaller slice.\\n3. Focused tests could state the exact accepted slug syntax and database-level uniqueness enforcement more explicitly, although the fixed `everyone` and `admin` slugs make this non-blocking for the planned system groups.\\n4. Add explicit validation cases for an unknown group slug and a forged/direct non-Admin reply. Both are already implied by the rejection criteria and implementation plan, but naming them in the final test matrix would improve traceability.\\n\\n## Smallest viable iteration\\n\\nAdd immutable `everyone` and `admin` email slugs and their safe backfill; resolve `admin@<club>.clubs.memba.io`; permit active destination-club members to start Admin conversations; grant access and send root delivery only to active Admin members; preserve Admin reply-by-email and existing rejection/idempotency behaviour; and prove Admin conversations remain absent from Everyone-only web views. The generic public group-ID list/read API could move to the later group UI iteration without reducing this email-only capability.\\n\\n## Required plan edits\\n\\nNone required for implementation readiness. Do not start implementation until the iteration 056 dependency gate passes.\\n\\n## Validation plan\\n\\n1. Verify iteration 056 is completed and merged and that its system-group identities, memberships, access grants, public Membership queries, reply authorization, and release backfill pass their tests.\\n2. Confirm the new acceptance scenarios are initially excluded only by their declared runner-debt tags; then implement the necessary support and remove or narrow those tags so all applicable scenarios execute.\\n3. Test slug persistence, immutability, club-scoped uniqueness, replay, and idempotent backfill reruns.\\n4. Exercise realistic inbound Admin messages from an active non-Admin, active Admin, inactive sender, unknown sender, other-club sender, and a duplicate provider message, plus unknown group routing, attachments, and unusable bodies.\\n5. Assert the complete privacy state for a non-Admin sender: no delivery, acknowledgement, access grant, follower relationship, reply delivery, or web visibility.\\n6. Assert an active Admin sender receives the ordinary root copy and that only active Admin members receive the conversation.\\n7. Verify Admin email replies thread correctly and retain follower-only delivery; reject direct or forged non-Admin reply attempts.\\n8. Verify accepted Admin conversations have exactly the Admin write-access grant and that Everyone behaviour and existing inbound/reply regressions remain unchanged.\\n9. Verify existing web list/detail paths request Everyone and cannot expose Admin conversations. If retained in this iteration, prove group-ID queries return only conversations granted to the supplied group.\\n10. Run `dev check` on the exact implementation state. Stop when the shared acceptance scenarios and focused regressions pass, the dependency gate is satisfied, privacy assertions hold, and `dev check` passes.\\n\\nNo implementation or file edits were performed.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}",
-              "codex_review_required_edits": "None"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.6-sol"
-                  },
-                  "tokens": {
-                    "input_tokens": 86003,
-                    "output_tokens": 2865,
-                    "reasoning_tokens": 2589,
-                    "cache_read_tokens": 4864,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 596067
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 114371,
-              "tool_time_ms": 1126,
-              "active_time_ms": 115497
-            }
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "claude_review": {
             "status": "succeeded",
@@ -1777,15 +1731,20 @@
               "active_time_ms": 226692
             }
           },
-          "synthesize": {
+          "codex_review": {
             "status": "succeeded",
             "preferred_label": "validated",
             "context_updates": {
-              "last_stage": "synthesize",
-              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional ",
-              "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"# Iteration Plan Validation Synthesis\\n\\n## 1. Provisional decision: READY\\n\\nAll required review evidence is present. Gemini, Claude, and Codex independently returned **READY** with **High** confidence and identified no blocking gaps. The plan can be marked `validated` without beginning implementation.\\n\\nIteration 056 remains a hard execution dependency, but that does not prevent validating iteration 057's plan. Implementation of 057 must wait until 056 is completed, merged, and verified as specified in the plan.\\n\\n## 2. Reviewer decision table\\n\\n| Reviewer | Decision | Confidence | Blocking gaps count | Notes |\\n|---|---|---:|---:|---|\\n| Gemini | READY | High | 0 | No blocking gaps or required edits. |\\n| Claude | READY | High | 0 | Scope, acceptance scenarios, dependency handling, and validation criteria are sufficient. Suggested optional implementation-detail improvements only. |\\n| Codex/GPT | READY | High | 0 | Plan is implementable and testable. Confirmed that iteration 056 is an execution gate rather than a plan-readiness blocker. Suggested optional validation refinements. |\\n\\n## 3. Consensus findings\\n\\n- The intended outcome and privacy boundary are clear: Admin conversations are email-only and accessible and deliverable only to active Admin members, subject to the stated sender policy.\\n- The iteration is a coherent smallest useful vertical slice; deferred UI, custom-group, configurable-policy, and unrelated delivery work are appropriately excluded.\\n- Acceptance criteria are concrete and testable, with the relevant shared Cucumber feature files and scenarios explicitly identified.\\n- The plan makes the iteration 056 dependency explicit and includes verification of that dependency before implementation starts.\\n- The implementation and validation plans cover persistence, routing, authorization, delivery, reply handling, privacy, idempotency, regression protection, and final `dev check` execution.\\n- No material product, business, data-model, or technical-design decision must be resolved before an engineer can begin once the dependency gate is satisfied.\\n\\n## 4. Reviewer objections addressed\\n\\nNo reviewer returned NOT READY.\\n\\n## 5. Corrected findings\\n\\n- **Iteration 056 dependency:** Retained as an implementation sequencing gate, not elevated to a readiness blocker. A plan may be validated while waiting for its prerequisite to merge when that prerequisite and the required verification are explicit.\\n- **Vision-document update:** Claude's suggestion to promote this to an implementation step is useful but optional. Its omission does not make the planned capability or validation ambiguous.\\n- **Specific module and migration names:** Naming anticipated files, modules, columns, or migration filenames could reduce discovery time, but these are implementation details rather than unresolved material design choices.\\n- **Generic group-ID query API:** Codex noted that this could potentially be deferred. The current inclusion is coherent with the plan and does not make the scope too broad, so no scope repair is required.\\n- **Additional explicit test cases:** Unknown group slugs and forged/direct non-Admin replies would strengthen traceability, but existing rejection, privacy, and authorization requirements already imply these cases sufficiently for readiness.\\n\\n## 6. Blocking gaps\\n\\nNone.\\n\\n## 7. Codex repair brief\\n\\nNone. No plan edits are required before validation.\\n\\n## 8. Questions for Matt\\n\\nNone.\\n\\n## 9. Validation checklist\\n\\n- Mark iteration 057's plan status as `validated` without changing application code or starting implementation.\\n- Preserve iteration 056 as a strict implementation gate: 057 must not begin until 056 is completed, merged, and its expected group, membership, access-grant, query, reply-authorization, and backfill capabilities are verified.\\n- Before implementation, confirm the named acceptance scenarios and allowed feature-file changes still match the plan.\\n- During delivery, verify Admin recipient privacy, sender policy, reply authorization, group access grants, idempotency, and unchanged Everyone behavior.\\n- Confirm existing web surfaces remain Everyone-scoped and do not expose Admin conversations.\\n- Run focused tests, applicable acceptance scenarios, regressions, and `dev check` on the exact final implementation state.\\n- Do not perform implementation work as part of this validation transition.\"\n}"
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None",
+              "last_stage": "codex_review",
+              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was revi",
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_confidence": "High",
+              "response.codex_review": "{\n  \"preferred_next_label\": \"validated\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"report_markdown\": \"## Decision\\n\\nREADY\\n\\nThe complete 243-line plan was reviewed directly. It defines a clear user outcome: active club members can email a private Admin audience, while only active Admin members receive, access, and reply to those conversations. The actor, privacy boundary, fixed posting policy, deferred capabilities, and unchanged Everyone behaviour are explicit.\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. Treat iteration 056 as a strict execution gate. Its plan currently says `Status: implementing`; delivery of 057 must not begin until 056 is completed, merged, and its expected group/access APIs and backfill are verified. The plan already states this requirement, so it is not a plan-readiness blocker.\\n2. The public group-ID list/read API is preparation for a later UI rather than essential to the Admin-email outcome. It is coherent with the access-model transition, but it could be deferred if implementation pressure calls for a smaller slice.\\n3. Focused tests could state the exact accepted slug syntax and database-level uniqueness enforcement more explicitly, although the fixed `everyone` and `admin` slugs make this non-blocking for the planned system groups.\\n4. Add explicit validation cases for an unknown group slug and a forged/direct non-Admin reply. Both are already implied by the rejection criteria and implementation plan, but naming them in the final test matrix would improve traceability.\\n\\n## Smallest viable iteration\\n\\nAdd immutable `everyone` and `admin` email slugs and their safe backfill; resolve `admin@<club>.clubs.memba.io`; permit active destination-club members to start Admin conversations; grant access and send root delivery only to active Admin members; preserve Admin reply-by-email and existing rejection/idempotency behaviour; and prove Admin conversations remain absent from Everyone-only web views. The generic public group-ID list/read API could move to the later group UI iteration without reducing this email-only capability.\\n\\n## Required plan edits\\n\\nNone required for implementation readiness. Do not start implementation until the iteration 056 dependency gate passes.\\n\\n## Validation plan\\n\\n1. Verify iteration 056 is completed and merged and that its system-group identities, memberships, access grants, public Membership queries, reply authorization, and release backfill pass their tests.\\n2. Confirm the new acceptance scenarios are initially excluded only by their declared runner-debt tags; then implement the necessary support and remove or narrow those tags so all applicable scenarios execute.\\n3. Test slug persistence, immutability, club-scoped uniqueness, replay, and idempotent backfill reruns.\\n4. Exercise realistic inbound Admin messages from an active non-Admin, active Admin, inactive sender, unknown sender, other-club sender, and a duplicate provider message, plus unknown group routing, attachments, and unusable bodies.\\n5. Assert the complete privacy state for a non-Admin sender: no delivery, acknowledgement, access grant, follower relationship, reply delivery, or web visibility.\\n6. Assert an active Admin sender receives the ordinary root copy and that only active Admin members receive the conversation.\\n7. Verify Admin email replies thread correctly and retain follower-only delivery; reject direct or forged non-Admin reply attempts.\\n8. Verify accepted Admin conversations have exactly the Admin write-access grant and that Everyone behaviour and existing inbound/reply regressions remain unchanged.\\n9. Verify existing web list/detail paths request Everyone and cannot expose Admin conversations. If retained in this iteration, prove group-ID queries return only conversations granted to the supplied group.\\n10. Run `dev check` on the exact implementation state. Stop when the shared acceptance scenarios and focused regressions pass, the dependency gate is satisfied, privacy assertions hold, and `dev check` passes.\\n\\nNo implementation or file edits were performed.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}",
+              "codex_review_required_edits": "None"
             },
-            "notes": "Stage completed: synthesize",
+            "notes": "Stage completed: codex_review",
             "usage": {
               "input": {
                 "usage": {
@@ -1794,10 +1753,10 @@
                     "model_id": "gpt-5.6-sol"
                   },
                   "tokens": {
-                    "input_tokens": 4109,
-                    "output_tokens": 933,
-                    "reasoning_tokens": 129,
-                    "cache_read_tokens": 0,
+                    "input_tokens": 86003,
+                    "output_tokens": 2865,
+                    "reasoning_tokens": 2589,
+                    "cache_read_tokens": 4864,
                     "cache_write_tokens": 0
                   }
                 },
@@ -1805,13 +1764,54 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 52405
+              "total_usd_micros": 596067
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 20513,
-              "tool_time_ms": 0,
-              "active_time_ms": 20513
+              "inference_time_ms": 114371,
+              "tool_time_ms": 1126,
+              "active_time_ms": 115497
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_decision": "READY",
+              "gemini_review_confidence": "High",
+              "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+              "gemini_review_blocking_gap_count": 0,
+              "last_response": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemin",
+              "gemini_review_required_edits": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_blocking_gaps": "None"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openrouter",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 8009,
+                    "output_tokens": 126,
+                    "reasoning_tokens": 649,
+                    "cache_read_tokens": 3781,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 26074
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11593,
+              "tool_time_ms": 42,
+              "active_time_ms": 11635
             }
           },
           "start": {
@@ -1820,20 +1820,140 @@
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "a6d0087263b51d6560dc04fa0c7000429c49a843",
+        "loop_failure_signatures": {
+          "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.": 1
+        },
         "node_visits": {
-          "claude_review": 1,
-          "not_ready": 1,
-          "codex_review": 1,
-          "gemini_review": 1,
           "start": 1,
+          "synthesis_gate": 1,
+          "not_ready": 1,
           "synthesize": 1,
-          "synthesis_gate": 1
+          "gemini_review": 1,
+          "codex_review": 1,
+          "claude_review": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-09-04T13:43:39.175397438Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 404178,
+      "inference_time_ms": 369435,
+      "tool_time_ms": 5051,
+      "active_time_ms": 374486
+    },
+    "final_git_commit_sha": "a6d0087263b51d6560dc04fa0c7000429c49a843",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 12268,
+          "inference_time_ms": 11593,
+          "tool_time_ms": 42,
+          "active_time_ms": 11635
+        },
+        "billing_usd_micros": 26074,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 227021,
+          "inference_time_ms": 222958,
+          "tool_time_ms": 3734,
+          "active_time_ms": 226692
+        },
+        "billing_usd_micros": 510807,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 115800,
+          "inference_time_ms": 114371,
+          "tool_time_ms": 1126,
+          "active_time_ms": 115497
+        },
+        "billing_usd_micros": 596067,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 20554,
+          "inference_time_ms": 20513,
+          "tool_time_ms": 0,
+          "active_time_ms": 20513
+        },
+        "billing_usd_micros": 52405,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "not_ready",
+        "stage_label": "not_ready",
+        "timing": {
+          "wall_time_ms": 152,
+          "inference_time_ms": 0,
+          "tool_time_ms": 149,
+          "active_time_ms": 149
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 135906,
+      "output_tokens": 9663,
+      "total_tokens": 934892,
+      "reasoning_tokens": 13384,
+      "cache_read_tokens": 721932,
+      "cache_write_tokens": 54007,
+      "total_usd_micros": 1185353
+    },
+    "total_retries": 0,
+    "diff": {
+      "summary": {
+        "files_changed": 0,
+        "additions": 0,
+        "deletions": 0
+      }
+    }
+  },
   "sandbox": {
     "kind": "ready",
     "plan": {
@@ -1859,6 +1979,247 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "gemini_review@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: gemini_review",
+        "failure_reason": null,
+        "timestamp": "2026-09-04T13:37:09.484479080Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openrouter",
+        "model": "gemini-3.1-pro-preview",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-04T13:36:57.214851469Z",
+      "handler": "agent",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 12268,
+        "inference_time_ms": 11593,
+        "tool_time_ms": 42,
+        "active_time_ms": 11635
+      },
+      "usage": {
+        "input_tokens": 8009,
+        "output_tokens": 126,
+        "total_tokens": 12565,
+        "reasoning_tokens": 649,
+        "cache_read_tokens": 3781,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 26074
+      },
+      "model": {
+        "provider": "openrouter",
+        "model_id": "gemini-3.1-pro-preview"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "close_agent",
+          "description": "Close a running or completed subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "edit_file",
+          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by search-root-relative path using a glob pattern. Use path to choose the search root. `*` stays within one path segment and `**` searches recursively. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "list_dir",
+          "description": "List directory contents with depth control",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_many_files",
+          "description": "Read multiple files at once",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute Bash commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openrouter",
+        "model": "gemini-3.1-pro-preview",
+        "context_window_tokens": 1048576,
+        "input_tokens": 8010,
+        "usage_percent": 0.7638931274414062,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-04T13:37:09.481075105Z",
+        "event_seq": 40,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1379,
+            "usage_percent": 0.13151168823242188
+          },
+          {
+            "category": "tools",
+            "tokens": 1346,
+            "usage_percent": 0.12836456298828125
+          },
+          {
+            "category": "memory",
+            "tokens": 443,
+            "usage_percent": 0.042247772216796875
+          },
+          {
+            "category": "conversation",
+            "tokens": 4836,
+            "usage_percent": 0.4611968994140625
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.00057220458984375
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 323,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-09-04T13:43:28.094441248Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-04T13:43:28.093806574Z",
+      "handler": "conditional",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
     "claude_review@1": {
       "first_event_seq": 50,
       "prompt": null,
@@ -2155,220 +2516,15 @@
       "agent_control": "running",
       "state": "succeeded"
     },
-    "gemini_review@1": {
-      "first_event_seq": 21,
+    "exit@1": {
+      "first_event_seq": 341,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Stage completed: gemini_review",
+        "notes": null,
         "failure_reason": null,
-        "timestamp": "2026-09-04T13:37:09.484479080Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openrouter",
-        "model": "gemini-3.1-pro-preview",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-09-04T13:36:57.214851469Z",
-      "handler": "agent",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 12268,
-        "inference_time_ms": 11593,
-        "tool_time_ms": 42,
-        "active_time_ms": 11635
-      },
-      "usage": {
-        "input_tokens": 8009,
-        "output_tokens": 126,
-        "total_tokens": 12565,
-        "reasoning_tokens": 649,
-        "cache_read_tokens": 3781,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 26074
-      },
-      "model": {
-        "provider": "openrouter",
-        "model_id": "gemini-3.1-pro-preview"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "close_agent",
-          "description": "Close a running or completed subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "edit_file",
-          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by search-root-relative path using a glob pattern. Use path to choose the search root. `*` stays within one path segment and `**` searches recursively. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "list_dir",
-          "description": "List directory contents with depth control",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_many_files",
-          "description": "Read multiple files at once",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a subagent. A running agent receives it at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute Bash commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": false
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openrouter",
-        "model": "gemini-3.1-pro-preview",
-        "context_window_tokens": 1048576,
-        "input_tokens": 8010,
-        "usage_percent": 0.7638931274414062,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-09-04T13:37:09.481075105Z",
-        "event_seq": 40,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1379,
-            "usage_percent": 0.13151168823242188
-          },
-          {
-            "category": "tools",
-            "tokens": 1346,
-            "usage_percent": 0.12836456298828125
-          },
-          {
-            "category": "memory",
-            "tokens": 443,
-            "usage_percent": 0.042247772216796875
-          },
-          {
-            "category": "conversation",
-            "tokens": 4836,
-            "usage_percent": 0.4611968994140625
-          },
-          {
-            "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.00057220458984375
-          }
-        ],
-        "warnings": []
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "synthesis_gate@1": {
-      "first_event_seq": 323,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Conditional node evaluated: synthesis_gate",
-        "failure_reason": null,
-        "timestamp": "2026-09-04T13:43:28.094441248Z"
+        "timestamp": "2026-09-04T13:43:39.133347444Z"
       },
       "provider_used": null,
       "diff": null,
@@ -2376,8 +2532,8 @@
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-09-04T13:43:28.093806574Z",
-      "handler": "conditional",
+      "started_at": "2026-09-04T13:43:39.133333852Z",
+      "handler": "exit",
       "graph_visit": 1,
       "timing": {
         "wall_time_ms": 0,
@@ -2560,7 +2716,12 @@
       "first_event_seq": 331,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+        "timestamp": "2026-09-04T13:43:33.366663743Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -2568,12 +2729,28 @@
         "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+        "exit_code": 1,
+        "duration_ms": 149,
+        "termination": "exited",
+        "output_bytes": 141,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 141,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-09-04T13:43:33.211136682Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 152,
+        "inference_time_ms": 0,
+        "tool_time_ms": 149,
+        "active_time_ms": 149
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -2583,7 +2760,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "failed"
     }
   }
 }
