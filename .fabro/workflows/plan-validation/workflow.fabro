@@ -49,8 +49,6 @@ digraph PlanValidation {
         prompt="@prompts/synthesize.md"
     ]
 
-    synthesis_gate [shape=diamond, label="Obvious fixes?"]
-
     codex_update [
         label="Sol Updates Plan",
         prompt="@prompts/apply_fixes.md"
@@ -61,8 +59,6 @@ digraph PlanValidation {
         shape=box,
         prompt="@prompts/recheck.md"
     ]
-
-    recheck_gate [shape=diamond, label="Plan ready?"]
 
     publish_ready [
         label="Publish Validated Plan",
@@ -80,15 +76,13 @@ digraph PlanValidation {
     gemini_review -> claude_review
     claude_review -> codex_review
     codex_review -> synthesize
-    synthesize -> synthesis_gate
-    synthesis_gate -> publish_ready [label="Validated", condition="preferred_label=validated"]
-    synthesis_gate -> codex_update [label="Apply obvious fixes", condition="preferred_label=fix"]
-    synthesis_gate -> not_ready [label="Needs human input"]
+    synthesize -> publish_ready [label="validated", condition="preferred_label=validated"]
+    synthesize -> codex_update [label="fix", condition="preferred_label=fix"]
+    synthesize -> not_ready [label="needs_human"]
     codex_update -> opus_recheck
-    opus_recheck -> recheck_gate
-    recheck_gate -> publish_ready [label="Validated", condition="preferred_label=validated"]
-    recheck_gate -> codex_update [label="Fix again", condition="preferred_label=fix && context.internal.node_visit_count < 3"]
-    recheck_gate -> not_ready [label="Needs human input"]
+    opus_recheck -> publish_ready [label="validated", condition="preferred_label=validated"]
+    opus_recheck -> codex_update [label="fix", condition="preferred_label=fix && context.internal.node_visit_count < 3"]
+    opus_recheck -> not_ready [label="needs_human"]
     publish_ready -> exit
     not_ready -> exit
 }
