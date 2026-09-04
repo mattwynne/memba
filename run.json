@@ -590,7 +590,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T15:56:05.800317252Z",
-  "last_event_at": "2026-09-04T16:01:54.716327165Z",
+  "last_event_at": "2026-09-04T16:01:56.587390790Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -634,20 +634,23 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-09-04T16:01:54.719134588Z",
-        "current_node": "review_fork",
+        "timestamp": "2026-09-04T16:01:58.742242539Z",
+        "current_node": "review_merge",
         "completed_nodes": [
           "start",
-          "review_fork"
+          "review_fork",
+          "review_merge"
         ],
         "node_retries": {},
         "context_values": {
           "internal.retry_count.start": 0,
+          "internal.retry_count.review_merge": 0,
           "internal.work_dir": "/workspace/memba",
           "failure_signature": "",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "parallel.branch_count": 3,
-          "current_node": "review_fork",
+          "thread.review_fork.current_node": "review_merge",
+          "current_node": "review_merge",
           "internal.run_id": "01M1PJ4063FZVCHDJYAG9SRHSD",
           "internal.fidelity": "summary:high",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
@@ -705,7 +708,7 @@
             }
           ],
           "outcome": "succeeded",
-          "internal.thread_id": "start"
+          "internal.thread_id": "review_fork"
         },
         "node_outcomes": {
           "start": {
@@ -767,11 +770,17 @@
             "jump_to_node": "review_merge",
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
           }
         },
-        "next_node_id": "review_merge",
+        "next_node_id": "synthesize",
         "node_visits": {
           "start": 1,
+          "review_merge": 1,
           "review_fork": 1
         }
       },
@@ -808,16 +817,73 @@
       "first_event_seq": 21,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+        "failure_reason": null,
+        "timestamp": "2026-09-04T16:01:54.718935717Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
-      "parallel_results": null,
+      "parallel_results": [
+        {
+          "id": "gemini_review",
+          "index": 0,
+          "status": "succeeded",
+          "context_updates": {
+            "gemini_review_blocking_gap_count": 0,
+            "gemini_review_blocking_gaps": "None",
+            "gemini_review_confidence": "High",
+            "gemini_review_decision": "READY",
+            "gemini_review_required_edits": "None",
+            "last_response": "- Decision: READY\n- Confidence: High\n- Blocking gaps: None\n- Non-blocking improvements: None\n- Smallest viable iteration: The proposed plan is already a minimal, focused iteration targeting a single w",
+            "last_stage": "gemini_review",
+            "response.gemini_review": "- Decision: READY\n- Confidence: High\n- Blocking gaps: None\n- Non-blocking improvements: None\n- Smallest viable iteration: The proposed plan is already a minimal, focused iteration targeting a single well-defined outcome without over-engineering (e.g., sticking to one message, no background jobs, local RFC 4180 parsing).\n- Required plan edits: None\n- Validation plan: Run the focused controller and export tests, perform a manual test by generating a message with a mix of delivered, problem, opened, and sent recipients and verifying the downloaded CSV's columns, row count, ordering, and statuses, and finally confirm that `dev check` passes.\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+          }
+        },
+        {
+          "id": "claude_review",
+          "index": 1,
+          "status": "succeeded",
+          "context_updates": {
+            "claude_review_blocking_gap_count": 2,
+            "claude_review_blocking_gaps": "Acceptance criteria require an 'opened' receipt_status/delivery_status that the product explicitly retired (iterations 017/035, ADR 0006) and that cannot occur in the read models this export queries; Implementation plan omits a cross-club message-ownership authorization check for the new controller route, risking a tenant-isolation leak (the existing MemberMessageDetail.require_message_in_club check is not replicated)",
+            "claude_review_confidence": "High",
+            "claude_review_decision": "NOT READY",
+            "claude_review_required_edits": "Remove the 'opened' scenario/criterion or add an explicit Open Business Decision to reverse iterations 017/035 with sign-off; add an acceptance criterion and implementation step requiring 404/403 when the requested message does not belong to the requester's active club; name the router scope/pipeline for the new route; specify the join needed to obtain recipient_email",
+            "last_response": "# Plan Validation Report — Export validated member message delivery receipts as CSV\n\nI read the complete plan file at `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` (95 line",
+            "last_stage": "claude_review",
+            "response.claude_review": "# Plan Validation Report — Export validated member message delivery receipts as CSV\n\nI read the complete plan file at `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` (95 lines, all sections present: Goal, Background, Scope, Iteration Type, Acceptance Scenarios/Feature Files, Allowed acceptance feature changes, Acceptance Criteria, Open Business Decisions, Implementation Plan, Open Technical Decisions, New Capability, Validation Plan). I then cross-checked its claims against the actual codebase (router, messaging context, projections, projectors, webhook controller, `MemberEmailDeliveryPresentation`, and prior iteration/ADR/problem docs on delivery status).\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **The plan requires an \"opened\" delivery status that the product explicitly does not support, and cannot currently occur in the data it reads.** Acceptance Criteria line: *\"An opened recipient has `receipt_status` of `opened`, `delivery_status` of `opened`, and an empty `delivery_reason`.\"* The Acceptance Scenarios section also requires Gherkin coverage for an \"opened\" case. But:\n   - `Memba.Messaging.EmailDeliveryStatus.provider_webhook_statuses/0` only contains `delivered, delayed, bounced, spam_complaint` — no `opened` (`web/lib/memba/messaging/email_delivery_status.ex`).\n   - `MemberEmailDeliveryPresentation` only maps to `sent`, `delivered`, `delivery problem` — the member-facing vocabulary has no `opened` value (`web/lib/memba_web/member_email_delivery_presentation.ex`).\n   - The Postmark webhook controller explicitly **rejects** the `\"open\"` record type as unsupported (`postmark_webhook_controller.ex:41`).\n   - `EmailDeliveryOpened` is a documented no-op replay shim only — its projector clauses in both `member_email_delivery.ex` and `memba_staff_email_delivery.ex` do nothing, so no row in either read model this export queries can ever hold status `opened` today.\n   - Iteration 017 (\"Remove open tracking\") and iteration 035 (\"Obliterate the deprecated 'opened' email delivery status\") deliberately removed this concept, and the follow-up note explicitly says: *\"Do not reintroduce open tracking or an 'opened' status without a new product decision reversing iteration 017\"* (`docs/iterations/021-staff-area-redesign/follow-ups.md:128`).\n   The plan's \"Open Business Decisions: None\" is therefore incorrect — this acceptance criterion silently reopens a closed product decision and is not implementable against current data without a new product decision.\n\n2. **No cross-club authorization check is specified for the new controller route, creating a plausible tenant-isolation gap.** The existing member message detail page authorizes access in two layers: the router pipeline (`club_member_required` → `require_active_club_member`, checking the *signed-in identity is an active member of the club resolved from the host subdomain*) and a **separate** check inside `MemberMessageDetail.load/3` (`require_message_in_club/2`) that verifies the specific `message.club_id` matches the resolved club. The plan's scope note says the CSV route will rely on \"the existing browser pipeline access model,\" but a plain controller action wired only to `[:browser, :club_member_required]` gets the first check, not the second. Without an explicit message-ownership check in the new controller, an active member of Club A could download delivery receipts for a message belonging to Club B by requesting `/messages/:club-B-message-id/delivery_receipts.csv` from Club A's subdomain (since `Messaging.get_message/1` and `Messaging.list_member_email_deliverys/1` take no club scoping). Acceptance Criteria explicitly call out permissions/error states as an area to cover, and this gap is unaddressed.\n\n## Non-blocking improvements\n\n1. The plan doesn't name which router `scope`/pipeline the new `GET /messages/:message_id/delivery_receipts.csv` route should sit under (e.g., alongside the existing `club_member_required` live_session scope at `router.ex:69-79`); spelling this out would remove ambiguity for the implementer.\n2. `Messaging.list_member_email_deliverys/1` (`web/lib/memba/messaging.ex:816`) does not currently select `recipient_email`; it only joins `MembaStaffEmailDeliveryProjection` for `reason`. The export will need an additional join to `recipient_address` (present on `EmailDeliveryProjection` or `MembaStaffEmailDeliveryProjection`) or a new query function. Naming this explicitly in the implementation plan would sharpen step 2.\n3. Sorting is specified as `recipient_name` then `recipient_email`, but the existing analogous query sorts by `recipient_name` then `recipient_id` — worth a one-line note that this is a deliberate change, not an oversight.\n4. Consider explicitly stating the CSV `Content-Type`/`Content-Disposition` (attachment filename) expectations, since \"download\" behaviour is part of the acceptance criteria's implied UX but isn't listed as a testable criterion.\n\n## Smallest viable iteration\n\nDrop the \"opened\" row/scenario entirely (four statuses: delivered, delivery problem via delayed/bounced/spam-complaint, sent, plus non-addressed exclusion and unknown-message 404) and add one explicit acceptance criterion plus an implementation step for the cross-club ownership check (reusing or extracting `MemberMessageDetail.require_message_in_club/2`-equivalent logic in the new controller). Everything else in the plan is already a minimal, coherent, single-outcome slice and should not be shrunk further.\n\n## Required plan edits\n\n1. Remove the \"opened\" acceptance criterion, its data mapping, and its mention in the Acceptance Scenarios/Feature Files section — or add an explicit, separately-flagged \"Open Business Decision\" proposing to reverse iteration 017/035 and get sign-off before implementation. Recommend the former.\n2. Add an explicit acceptance criterion and implementation step for club-ownership authorization: requesting `/messages/:message_id/delivery_receipts.csv` for a message that exists but belongs to a different club than the requester's active club must return 404 (or 403), matching `MemberMessageDetail.require_message_in_club/2` semantics.\n3. Name the router scope/pipeline the new route joins (e.g., the existing `pipe_through [:browser, :club_member_required]` scope) so the pipeline-derived `club_id` is available to the new controller for the ownership check in edit 2.\n4. Note the additional join/field needed to obtain `recipient_email`, since the current `list_member_email_deliverys/1` doesn't select it.\n\n## Validation plan (for the corrected plan)\n\n- Controller tests: 200 with correct headers/columns/ordering for a message with delivered/delivery-problem/sent recipients; empty `delivery_reason` handling; RFC 4180 escaping for a name/subject containing a comma or quote; 404 for unknown `message_id`; 404 (or 403) for a message belonging to a different club than the requester's active club.\n- Manual check: create a message with delivered, delayed/bounced, and sent recipients across two clubs, download CSV from the owning club's subdomain, verify columns/order/values, then attempt the cross-club download and confirm it is rejected.\n- `dev check` green on the committed diff, including the updated `member_message_deliverability.feature` scenarios (with \"opened\" removed).\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":2,\"claude_review_blocking_gaps\":\"Acceptance criteria require an 'opened' receipt_status/delivery_status that the product explicitly retired (iterations 017/035, ADR 0006) and that cannot occur in the read models this export queries; Implementation plan omits a cross-club message-ownership authorization check for the new controller route, risking a tenant-isolation leak (the existing MemberMessageDetail.require_message_in_club check is not replicated)\",\"claude_review_required_edits\":\"Remove the 'opened' scenario/criterion or add an explicit Open Business Decision to reverse iterations 017/035 with sign-off; add an acceptance criterion and implementation step requiring 404/403 when the requested message does not belong to the requester's active club; name the router scope/pipeline for the new route; specify the join needed to obtain recipient_email\"}}"
+          }
+        },
+        {
+          "id": "codex_review",
+          "index": 2,
+          "status": "succeeded",
+          "context_updates": {
+            "codex_review_blocking_gap_count": 0,
+            "codex_review_blocking_gaps": "None",
+            "codex_review_confidence": "High",
+            "codex_review_decision": "READY",
+            "codex_review_required_edits": "None",
+            "last_response": "{\n  \"preferred_next_label\": \"synthesize\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blo",
+            "last_stage": "codex_review",
+            "response.codex_review": "{\n  \"preferred_next_label\": \"synthesize\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Explicitly assert the CSV response Content-Type and Content-Disposition, including the intended download filename.\",\n    \"Add focused test cases for commas, double quotes, and newlines so every specified RFC 4180-style escaping rule is directly verified.\"\n  ],\n  \"smallest_viable_iteration\": \"The planned slice is already the smallest useful coherent outcome: export delivery receipts for one already-sent message through one CSV endpoint and one message-detail download link, using existing data and access rules.\",\n  \"required_plan_edits\": [],\n  \"validation_plan\": [\n    \"Run focused controller and export tests covering the exact header, one row per addressed recipient, status mappings, blank and recorded reasons, exclusion of non-addressed members, deterministic ordering, CSV escaping, and unknown-message 404.\",\n    \"Run the named Cucumber feature scenarios for delivered, problem, opened, sent, exclusion, ordering, and unknown-message behaviour.\",\n    \"Manually download a mixed-status message report from the message detail page and inspect its columns, rows, ordering, status values, reasons, and browser download behaviour.\",\n    \"Run dev check successfully as the stop condition.\"\n  ],\n  \"markdown_report\": \"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\nNone.\\n\\n## Non-blocking improvements\\n\\n1. Explicitly assert the CSV response `Content-Type` and `Content-Disposition`, including the intended download filename.\\n2. Add focused test cases for commas, double quotes, and newlines so every specified RFC 4180-style escaping rule is directly verified.\\n\\n## Smallest viable iteration\\n\\nThe planned slice is already the smallest useful coherent outcome: export delivery receipts for one already-sent message through one CSV endpoint and one message-detail download link, using existing data and access rules.\\n\\n## Required plan edits\\n\\nNone. The goal, beneficiary, boundaries, access policy, status mappings, ordering, error behaviour, feature-file coverage, implementation sequence, and stop condition are sufficiently decided for implementation.\\n\\n## Validation plan\\n\\n1. Run focused controller and export tests covering the exact header, one row per addressed recipient, status mappings, blank and recorded reasons, exclusion of non-addressed members, deterministic ordering, CSV escaping, and unknown-message 404.\\n2. Run the named Cucumber feature scenarios for delivered, problem, opened, sent, exclusion, ordering, and unknown-message behaviour.\\n3. Manually download a mixed-status message report from the message detail page and inspect its columns, rows, ordering, status values, reasons, and browser download behaviour.\\n4. Run `dev check` successfully as the stop condition.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+          }
+        }
+      ],
       "output": null,
       "started_at": "2026-09-04T15:56:08.014532245Z",
       "handler": "parallel",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 346703,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -827,7 +893,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "codex_review@1": {
       "first_event_seq": 23,
@@ -1032,7 +1098,12 @@
       "first_event_seq": 28,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-04T16:01:54.717359603Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openrouter",
@@ -1048,23 +1119,22 @@
       "started_at": "2026-09-04T15:56:08.050340046Z",
       "handler": "agent",
       "graph_visit": 1,
-      "live_inference_ms": 256144,
-      "live_tool_ms": 2736,
-      "tool_batch": {
-        "session_id": "96657026-5c04-49f9-9af0-0e7c60b4d2df",
-        "started_at": "2026-09-04T15:59:35.415816348Z",
-        "open_call_ids": [
-          "toolu_018Ln6M8a58jpB7wVdk7CNoW"
-        ]
+      "timing": {
+        "wall_time_ms": 346667,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
+      "live_inference_ms": 340867,
+      "live_tool_ms": 142036,
       "usage": {
-        "input_tokens": 14356,
-        "output_tokens": 4394,
-        "total_tokens": 694567,
-        "reasoning_tokens": 14829,
-        "cache_read_tokens": 605061,
-        "cache_write_tokens": 55927,
-        "total_usd_micros": 481775
+        "input_tokens": 14358,
+        "output_tokens": 7336,
+        "total_tokens": 760626,
+        "reasoning_tokens": 19727,
+        "cache_read_tokens": 660988,
+        "cache_write_tokens": 58217,
+        "total_usd_micros": 577089
       },
       "model": {
         "provider": "openrouter",
@@ -1203,32 +1273,32 @@
         "provider": "openrouter",
         "model": "claude-sonnet-5",
         "context_window_tokens": 1000000,
-        "input_tokens": 55929,
-        "usage_percent": 5.5929,
+        "input_tokens": 58219,
+        "usage_percent": 5.8219,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-04T16:00:29.844046758Z",
-        "event_seq": 258,
+        "generated_at": "2026-09-04T16:01:54.716256547Z",
+        "event_seq": 268,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1578,
-            "usage_percent": 0.1578
+            "tokens": 1522,
+            "usage_percent": 0.1522
           },
           {
             "category": "tools",
-            "tokens": 1804,
-            "usage_percent": 0.1804
+            "tokens": 1741,
+            "usage_percent": 0.1741
           },
           {
             "category": "memory",
-            "tokens": 707,
-            "usage_percent": 0.0707
+            "tokens": 682,
+            "usage_percent": 0.0682
           },
           {
             "category": "conversation",
-            "tokens": 51833,
-            "usage_percent": 5.1833
+            "tokens": 54267,
+            "usage_percent": 5.4267
           },
           {
             "category": "other",
@@ -1238,19 +1308,8 @@
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "96657026-5c04-49f9-9af0-0e7c60b4d2df",
-        "started_at": "2026-09-04T16:00:29.993235791Z",
-        "requested_model": {
-          "provider": "openrouter",
-          "model_id": "claude-sonnet-5"
-        },
-        "first_output_at": "2026-09-04T16:01:27.814713343Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "gemini_review@1": {
       "first_event_seq": 24,
