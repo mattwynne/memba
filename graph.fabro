@@ -1,0 +1,94 @@
+digraph PlanValidation {
+    graph [
+        goal="Rigorously validate the iteration plan at {{ inputs.plan_path }} and mark it validated when it is ready for future implementation",
+        default_fidelity="summary:high",
+        model_stylesheet="
+            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }
+            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }
+            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #publish_ready { reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    gemini_review [
+        label="Gemini Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/gemini_review.md"
+    ]
+
+    claude_review [
+        label="Claude Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/claude_review.md"
+    ]
+
+    codex_review [
+        label="Sol Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/codex_review.md"
+    ]
+
+    synthesize [
+        label="Sol Synthesis & Repair Brief",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/synthesize.md"
+    ]
+
+    synthesis_gate [shape=diamond, label="Obvious fixes?"]
+
+    codex_update [
+        label="Sol Updates Plan",
+        prompt="@prompts/apply_fixes.md"
+    ]
+
+    opus_recheck [
+        label="Sol Recheck",
+        shape=box,
+        prompt="@prompts/recheck.md"
+    ]
+
+    recheck_gate [shape=diamond, label="Plan ready?"]
+
+    publish_ready [
+        label="Publish Validated Plan",
+        shape=parallelogram,
+        script="if [ '{{ inputs.publish }}' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'"
+    ]
+
+    not_ready [
+        label="Fail: Plan Not Ready",
+        shape=parallelogram,
+        script="echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
+    ]
+
+    start -> gemini_review
+    gemini_review -> claude_review
+    claude_review -> codex_review
+    codex_review -> synthesize
+    synthesize -> synthesis_gate
+    synthesis_gate -> publish_ready [label="Already ready", condition="plan_ready=true"]
+    synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
+    synthesis_gate -> not_ready [label="Needs human input"]
+    codex_update -> opus_recheck
+    opus_recheck -> recheck_gate
+    recheck_gate -> publish_ready [label="Ready", condition="plan_ready=true"]
+    recheck_gate -> codex_update [label="Fix again", condition="plan_needs_fix=true && context.internal.node_visit_count < 3"]
+    recheck_gate -> not_ready [label="Not ready"]
+    publish_ready -> exit
+    not_ready -> exit
+}
