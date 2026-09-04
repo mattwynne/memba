@@ -1,16 +1,19 @@
 defmodule Memba.Messaging.InboundClubAuthorizationTest do
   use Memba.DataCase, async: true
 
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
 
   describe "authorize_inbound_club_email_sender/2" do
-    test "authorizes a resolved sender who is an active member of the destination club" do
+    test "authorizes a resolved sender who is an active member of the destination club's Everyone group" do
       club = insert_membership_club!(slug: "kmc")
       alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-      insert_membership!(club, alice, active: true)
+      membership = insert_membership!(club, alice, active: true)
+      insert_everyone_group_membership!(club, membership, alice, active: true)
 
       assert :ok ==
                Messaging.authorize_inbound_club_email_sender(
@@ -23,7 +26,8 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
       kmc = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
       npc = insert_membership_club!(name: "Nelson Paddling Club", slug: "npc")
       pat = insert_membership_person!(name: "Pat Example", email: "pat@example.com")
-      insert_membership!(npc, pat, active: true)
+      membership = insert_membership!(npc, pat, active: true)
+      insert_everyone_group_membership!(npc, membership, pat, active: true)
 
       assert {:error, :sender_not_active_member,
               %{
@@ -38,10 +42,29 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
                )
     end
 
+    test "rejects a resolved sender with an active destination-club membership but no Everyone membership" do
+      club = insert_membership_club!(slug: "kmc")
+      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+      insert_membership!(club, alice, active: true)
+
+      assert {:error, :sender_not_active_member,
+              %{
+                sender_id: alice.person_id,
+                club_id: club.club_id,
+                from_address: "alice@example.com",
+                to_address: "kmc@clubs.memba.io"
+              }} ==
+               Messaging.authorize_inbound_club_email_sender(
+                 sender(alice, "alice@example.com"),
+                 destination(club, "kmc@clubs.memba.io")
+               )
+    end
+
     test "rejects a resolved sender with an inactive destination-club membership" do
       club = insert_membership_club!(slug: "kmc")
       alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-      insert_membership!(club, alice, active: false)
+      membership = insert_membership!(club, alice, active: false)
+      insert_everyone_group_membership!(club, membership, alice, active: true)
 
       assert {:error, :sender_not_active_member,
               %{
@@ -78,6 +101,16 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
     Repo.insert!(%MembershipProjection{
       membership_id: Memba.ID.generate(:membership),
       club_id: club.club_id,
+      person_id: person.person_id,
+      active: Keyword.fetch!(attrs, :active)
+    })
+  end
+
+  defp insert_everyone_group_membership!(club, membership, person, attrs) do
+    Repo.insert!(%GroupMembershipProjection{
+      club_id: club.club_id,
+      group_id: SystemGroups.everyone_group_id(club.club_id),
+      membership_id: membership.membership_id,
       person_id: person.person_id,
       active: Keyword.fetch!(attrs, :active)
     })

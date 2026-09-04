@@ -240,9 +240,11 @@ defmodule Memba.Messaging do
   @doc """
   Authorize a resolved inbound sender to post to a resolved club destination.
 
-  Only active members of the destination club may post by email. Known people who
-  belong only to another club, or whose destination-club membership is inactive,
-  receive a typed rejection reason for later rejection-email handling.
+  Only active members of the destination club's deterministic Everyone group may
+  post by email. Known people who belong only to another club, whose
+  destination-club membership is absent from Everyone, or whose destination-club
+  membership is inactive receive a typed rejection reason for later
+  rejection-email handling.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
     InboundClubAuthorization.authorize(sender, destination)

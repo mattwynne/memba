@@ -16,7 +16,7 @@
 - [x] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
 - [x] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
 - [x] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
-- [ ] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
+- [x] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
 - [ ] 018 Change reply authorisation to require write access through an active group membership.
 - [ ] 019 Keep reply-recipient/follower delivery unchanged.
 - [ ] 020 Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated, idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto migrations and application/event-store startup.
