@@ -1,6 +1,7 @@
 defmodule Memba.Messaging.MessageTest do
   use ExUnit.Case, async: true
 
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -346,6 +347,163 @@ defmodule Memba.Messaging.MessageTest do
     end
   end
 
+  describe "execute/2 GrantConversationAccessToGroup" do
+    test "emits a conversation group access grant for an existing root conversation" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      message = root_message(conversation_id, club_id)
+
+      assert %ConversationAccessGrantedToGroup{
+               conversation_id: ^conversation_id,
+               club_id: ^club_id,
+               group_id: ^group_id,
+               access_level: "read"
+             } =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: :read
+               })
+    end
+
+    test "treats repeated grants and read requests satisfied by write access as no-ops" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+
+      read_message =
+        conversation_id
+        |> root_message(club_id)
+        |> Message.apply(%ConversationAccessGrantedToGroup{
+          conversation_id: conversation_id,
+          club_id: club_id,
+          group_id: group_id,
+          access_level: "read"
+        })
+
+      assert [] =
+               Message.execute(read_message, %GrantConversationAccessToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: "read"
+               })
+
+      write_message =
+        conversation_id
+        |> root_message(club_id)
+        |> Message.apply(%ConversationAccessGrantedToGroup{
+          conversation_id: conversation_id,
+          club_id: club_id,
+          group_id: group_id,
+          access_level: "write"
+        })
+
+      assert [] =
+               Message.execute(write_message, %GrantConversationAccessToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: "read"
+               })
+    end
+
+    test "upgrades an existing read grant to write access" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+
+      message =
+        conversation_id
+        |> root_message(club_id)
+        |> Message.apply(%ConversationAccessGrantedToGroup{
+          conversation_id: conversation_id,
+          club_id: club_id,
+          group_id: group_id,
+          access_level: "read"
+        })
+
+      assert %ConversationAccessGrantedToGroup{
+               conversation_id: ^conversation_id,
+               club_id: ^club_id,
+               group_id: ^group_id,
+               access_level: "write"
+             } =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: "write"
+               })
+    end
+
+    test "rejects invalid IDs and access levels" do
+      message = root_message(Memba.ID.generate(:message), Memba.ID.generate(:club))
+      command = valid_conversation_access_grant(message)
+
+      assert {:error, :invalid_conversation_id} =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 command
+                 | conversation_id: "not-a-uuid"
+               })
+
+      assert {:error, :invalid_club_id} =
+               Message.execute(message, %GrantConversationAccessToGroup{command | club_id: nil})
+
+      assert {:error, :invalid_group_id} =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 command
+                 | group_id: "not-a-group-id"
+               })
+
+      assert {:error, :invalid_access_level} =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 command
+                 | access_level: "admin"
+               })
+    end
+
+    test "targets existing root conversations only and rejects identity mismatches" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      message = root_message(conversation_id, club_id)
+
+      assert {:error, :conversation_not_found} =
+               Message.execute(%Message{}, valid_conversation_access_grant(message))
+
+      assert {:error, :club_id_mismatch} =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 valid_conversation_access_grant(message)
+                 | club_id: Memba.ID.generate(:club)
+               })
+
+      assert {:error, :conversation_id_mismatch} =
+               Message.execute(message, %GrantConversationAccessToGroup{
+                 valid_conversation_access_grant(message)
+                 | conversation_id: Memba.ID.generate(:message)
+               })
+
+      reply =
+        Message.apply(%Message{}, %MessageSent{
+          message_id: Memba.ID.generate(:message),
+          club_id: club_id,
+          sender_id: Memba.ID.generate(:person),
+          conversation_id: conversation_id,
+          reply_to_message_id: conversation_id,
+          subject: "Re: Trail day",
+          body: "I'll bring maps."
+        })
+
+      assert {:error, :conversation_id_mismatch} =
+               Message.execute(reply, %GrantConversationAccessToGroup{
+                 valid_conversation_access_grant(message)
+                 | conversation_id: reply.message_id
+               })
+    end
+  end
+
   describe "execute/2 delivery status reports" do
     test "emits delivered, delayed, bounced, and spam complaint events" do
       {message, ids} = sent_message()
@@ -564,7 +722,8 @@ defmodule Memba.Messaging.MessageTest do
              reply_to_message_id: nil,
              delivery_statuses: delivery_statuses,
              email_delivery_ids: email_delivery_ids,
-             recipient_ids: recipient_ids
+             recipient_ids: recipient_ids,
+             group_access: %{}
            } = message
 
     assert MapSet.equal?(email_delivery_ids, MapSet.new([delivery_id]))
@@ -589,6 +748,22 @@ defmodule Memba.Messaging.MessageTest do
              conversation_id: ^message_id,
              reply_to_message_id: nil
            } = message
+  end
+
+  test "apply/2 records conversation group access grants" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+
+    assert %Message{group_access: %{^group_id => "write"}} =
+             conversation_id
+             |> root_message(club_id)
+             |> Message.apply(%ConversationAccessGrantedToGroup{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: group_id,
+               access_level: :write
+             })
   end
 
   test "apply/2 records delivery status changes and ignores historic opened events" do
@@ -617,6 +792,27 @@ defmodule Memba.Messaging.MessageTest do
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              })
+  end
+
+  defp root_message(conversation_id, club_id) do
+    Message.apply(%Message{}, %MessageSent{
+      message_id: conversation_id,
+      club_id: club_id,
+      sender_id: Memba.ID.generate(:person),
+      conversation_id: conversation_id,
+      reply_to_message_id: nil,
+      subject: "Trail day",
+      body: "Meet at 9am."
+    })
+  end
+
+  defp valid_conversation_access_grant(%Message{} = message) do
+    %GrantConversationAccessToGroup{
+      conversation_id: message.conversation_id,
+      club_id: message.club_id,
+      group_id: Memba.ID.generate(:group),
+      access_level: "read"
+    }
   end
 
   defp valid_send_message do

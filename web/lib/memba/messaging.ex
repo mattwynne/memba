@@ -10,6 +10,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
@@ -72,6 +73,23 @@ defmodule Memba.Messaging do
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- post_message_reply_command(attrs),
          :ok <- authorize_reply_sender(command),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Grant a club-scoped group read or write access to an existing root conversation.
+
+  This API is intended for system/backfill use. It dispatches with strong
+  consistency for conversation-access projections so callers can query the grant
+  immediately after the function returns.
+  """
+  def grant_conversation_access_to_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    dispatch_opts = Keyword.put(dispatch_opts, :consistency, :strong)
+
+    with {:ok, command} <- grant_conversation_access_to_group_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1278,6 +1296,22 @@ defmodule Memba.Messaging do
   defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp rejection_reason(reason) when is_binary(reason), do: reason
 
+  defp grant_conversation_access_to_group_command(attrs) do
+    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+         {:ok, access_level} <- fetch_required(attrs, :access_level),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      {:ok,
+       %GrantConversationAccessToGroup{
+         conversation_id: conversation_id,
+         club_id: club_id,
+         group_id: group_id,
+         access_level: access_level
+       }}
+    end
+  end
+
   defp send_club_message_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, club_id} <- fetch_required(attrs, :club_id),
@@ -1403,6 +1437,19 @@ defmodule Memba.Messaging do
       _attrs -> {:error, {:missing_required_attribute, key}}
     end
   end
+
+  defp fetch_required_id(attrs, key, type) do
+    with {:ok, value} <- fetch_required(attrs, key) do
+      case ID.cast(type, value) do
+        {:ok, ^value} -> {:ok, value}
+        :error -> {:error, invalid_id_reason(key)}
+      end
+    end
+  end
+
+  defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
+  defp invalid_id_reason(:club_id), do: :invalid_club_id
+  defp invalid_id_reason(:group_id), do: :invalid_group_id
 
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do

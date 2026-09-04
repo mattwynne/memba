@@ -6,6 +6,7 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
@@ -80,6 +81,7 @@ defmodule Memba.Messaging.AppTest do
         PostMessageReply,
         FollowConversation,
         UnfollowConversation,
+        GrantConversationAccessToGroup,
         ReceiveInboundEmail,
         AcceptInboundClubEmail,
         RejectInboundClubEmail,

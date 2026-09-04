@@ -59,6 +59,46 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
     refute Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
   end
 
+  test "read grants can be upgraded to write grants" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             ConversationGroupAccessProjector.handle(
+               %ConversationAccessGrantedToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: "read"
+               },
+               projector_metadata(1)
+             )
+
+    assert :ok =
+             ConversationGroupAccessProjector.handle(
+               %ConversationAccessGrantedToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id,
+                 access_level: "write"
+               },
+               projector_metadata(2)
+             )
+
+    assert [
+             %ConversationGroupAccessProjection{
+               conversation_id: ^conversation_id,
+               club_id: ^club_id,
+               group_id: ^group_id,
+               access_level: "write"
+             }
+           ] = Repo.all(ConversationGroupAccessProjection)
+
+    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
+    assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+  end
+
   test "repeated grants keep one current row per conversation and group" do
     conversation_id = Memba.ID.generate(:message)
     club_id = Memba.ID.generate(:club)
