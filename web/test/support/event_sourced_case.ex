@@ -113,6 +113,53 @@ defmodule Memba.EventSourcedCase do
   end
 
   @doc """
+  Return each Ecto projector's current processed event number.
+
+  Mixed Membership and Messaging replay tests cannot use the global EventStore
+  checkpoint for every projector because a projector's `projection_versions` row
+  advances only when it processes events relevant to its Commanded application.
+  Snapshot positions before a rebuild, then await the same positions after the
+  rebuild to prove those projectors have replayed the events that built the
+  public query state under test.
+  """
+  def event_sourced_projection_positions(projectors) when is_list(projectors) do
+    projection_names = Enum.map(projectors, &projection_name/1)
+
+    positions =
+      case projection_names do
+        [] ->
+          %{}
+
+        projection_names ->
+          rows =
+            Memba.Repo.query!(
+              """
+              SELECT projection_name, last_seen_event_number
+              FROM projection_versions
+              WHERE projection_name = ANY($1)
+              """,
+              [projection_names]
+            ).rows
+
+          Map.new(rows, fn [projection_name, last_seen_event_number] ->
+            {projection_name, last_seen_event_number}
+          end)
+      end
+
+    Map.new(projection_names, &{&1, Map.get(positions, &1, 0)})
+  end
+
+  @doc """
+  Await projector positions captured by `event_sourced_projection_positions/1`.
+  """
+  def await_event_sourced_projection_positions!(positions, opts \\ []) when is_map(positions) do
+    Enum.each(positions, fn {projection_name, event_number} ->
+      opts = Keyword.put(opts, :checkpoint, event_number)
+      Memba.ProjectionBarrier.await!([projection_name], opts)
+    end)
+  end
+
+  @doc """
   Reset persistent event-sourced storage used by tests.
 
   The reset runs outside the SQL sandbox so EventStore rows and projector writes
@@ -187,6 +234,12 @@ defmodule Memba.EventSourcedCase do
   end
 
   defp event_sourced_subscribers, do: @projectors ++ @event_handlers
+
+  defp projection_name(projector) when is_atom(projector), do: inspect(projector)
+
+  defp projection_name(projector) when is_binary(projector) do
+    String.trim_leading(projector, "Elixir.")
+  end
 
   defp reset_event_store!(conn) do
     schema = event_store_schema()
