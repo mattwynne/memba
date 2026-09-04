@@ -21,7 +21,7 @@ fabro_git_committer_email() {
   printf '%s' "${FABRO_GIT_COMMITTER_EMAIL:-${FABRO_GIT_AUTHOR_EMAIL:-noreply@fabro.sh}}"
 }
 
-fabro_git_commit() {
+fabro_git_with_identity() {
   local author_name author_email committer_name committer_email
   author_name=$(fabro_git_author_name)
   author_email=$(fabro_git_author_email)
@@ -35,5 +35,13 @@ fabro_git_commit() {
     git \
       -c "user.name=$committer_name" \
       -c "user.email=$committer_email" \
-      commit "$@"
+      "$@"
+}
+
+fabro_git_commit() {
+  fabro_git_with_identity commit "$@"
+}
+
+fabro_git_commit_tree() {
+  fabro_git_with_identity commit-tree "$@"
 }

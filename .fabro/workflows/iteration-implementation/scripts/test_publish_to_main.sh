@@ -51,10 +51,14 @@ end
 CODE
 git add web/lib/example.ex
 git commit -q -m 'fabro checkpoint implementation'
+run_branch=fabro/run/TEST-RUN
+git switch -q -c "$run_branch"
+remote_run_checkpoint=$(git rev-parse HEAD)
+git push -q origin HEAD:"$run_branch"
 
 FABRO_RUN_ID=TEST-RUN "$script_path" docs/iterations/001-example/plan.md >/tmp/publish-to-main.out 2>/tmp/publish-to-main.err
 
-git fetch -q origin main
+git fetch -q origin main "$run_branch"
 published=$(git rev-parse origin/main)
 message=$(git log -1 --format=%B origin/main)
 
@@ -90,6 +94,16 @@ if ! git show "$published:docs/iterations/README.md" | grep -q '| 001 | 2026-01-
 fi
 if ! git show "$published:web/lib/example.ex" | grep -q ':after'; then
   echo "Expected product implementation to be published" >&2
+  exit 1
+fi
+if ! git merge-base --is-ancestor "$remote_run_checkpoint" HEAD; then
+  echo "Expected publish not to rewrite the active Fabro run branch away from its pushed checkpoint" >&2
+  git log --oneline --decorate --graph --all >&2
+  exit 1
+fi
+git commit --allow-empty -q -m 'fabro automatic checkpoint after publish'
+if ! git push -q origin HEAD:"$run_branch"; then
+  echo "Expected ordinary post-publish checkpoint push to active Fabro run branch to succeed" >&2
   exit 1
 fi
 
@@ -138,6 +152,11 @@ fi
 if ! grep -q 'web/lib/example.ex' /tmp/publish-conflict.err; then
   echo "Expected conflicted file in publish failure output" >&2
   cat /tmp/publish-conflict.err >&2
+  exit 1
+fi
+if ! git diff --name-only --diff-filter=U | grep -q 'web/lib/example.ex'; then
+  echo "Expected publish conflict to leave active conflict markers for recovery routing" >&2
+  git status --short --branch >&2
   exit 1
 fi
 if ! git ls-remote --exit-code --heads origin fabro/rescue/CONFLICT-RUN-001-publish-conflict >/dev/null 2>&1; then
