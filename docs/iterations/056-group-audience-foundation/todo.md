@@ -25,5 +25,5 @@
 - [x] 023 Do not modify or delete historic events.
 - [x] 024 Extend `Memba.EventSourcedCase` with the new Group and conversation-access projectors/tables.
 - [x] 025 Add a replay-parity test that dispatches representative setup and backfill facts, snapshots the group/membership/access queries, calls `rebuild_event_sourced_projections!/0`, awaits the new projectors through `Memba.ProjectionBarrier`, and asserts the same queries return the same state.
-- [ ] 026 Add tests for aggregate decisions; system-group event-handler commands and idempotency; system-group membership after member/role changes—including future role changes and member removal for memberships that were seeded by backfill; sender and reply authorisation; recipient/follower-delivery regression; release-backfill reruns; and replay parity.
+- [x] 026 Add tests for aggregate decisions; system-group event-handler commands and idempotency; system-group membership after member/role changes—including future role changes and member removal for memberships that were seeded by backfill; sender and reply authorisation; recipient/follower-delivery regression; release-backfill reruns; and replay parity.
 - [ ] 027 Run `dev check`.
