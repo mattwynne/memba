@@ -1,0 +1,1 @@
+{"preferred_next_label":"validated","outcome":"succeeded","failure_reason":"","suggested_next_ids":["synthesize"],"context_updates":{"codex_review_decision":"READY","codex_review_confidence":"High","codex_review_blocking_gap_count":0,"codex_review_blocking_gaps":"None","codex_review_required_edits":"None"}}
