@@ -12,7 +12,9 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Roles
   alias Memba.Membership.Slug
+  alias Memba.Membership.SystemGroups
 
   describe "get_club_by_slug/1" do
     test "returns the projected club for a valid slug" do
@@ -215,6 +217,83 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "list_active_members_of_group/1" do
+    test "returns active members of the selected group with public member summaries" do
+      club = create_club("Kootenay Mountaineering Club")
+      other_club = create_club("Nelson Cycling Club")
+
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      bob = create_person(name: "Bob", email: "bob@example.com")
+      pat = create_person(name: "Pat", email: "pat@example.com")
+
+      alice_membership_id = add_member(club.club_id, alice.person_id)
+      bob_membership_id = add_member(club.club_id, bob.person_id)
+      _pat_membership_id = add_member(other_club.club_id, pat.person_id)
+
+      chair_role_id = define_role(club.club_id, role_key: "chair", name: "Chair")
+      assign_role(club.club_id, alice_membership_id, alice.person_id, chair_role_id)
+
+      admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+      assign_role(club.club_id, alice_membership_id, alice.person_id, admin_role_id)
+
+      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+      admin_group_id = SystemGroups.admin_group_id(club.club_id)
+
+      assert [
+               %{
+                 membership_id: ^alice_membership_id,
+                 id: alice_person_id,
+                 name: "Alice",
+                 email: "alice@example.com",
+                 roles: ["Admin", "Chair"]
+               },
+               %{
+                 membership_id: ^bob_membership_id,
+                 id: bob_person_id,
+                 name: "Bob",
+                 email: "bob@example.com",
+                 roles: []
+               }
+             ] = Membership.list_active_members_of_group(everyone_group_id)
+
+      assert alice_person_id == alice.person_id
+      assert bob_person_id == bob.person_id
+
+      assert [
+               %{
+                 membership_id: ^alice_membership_id,
+                 id: admin_person_id,
+                 name: "Alice",
+                 email: "alice@example.com",
+                 roles: ["Admin", "Chair"]
+               }
+             ] = Membership.list_active_members_of_group(admin_group_id)
+
+      assert admin_person_id == alice.person_id
+    end
+
+    test "excludes members whose group membership or club membership is inactive" do
+      club = create_club("Kootenay Mountaineering Club")
+      alice = create_person(name: "Alice", email: "alice@example.com")
+
+      membership_id = add_member(club.club_id, alice.person_id)
+      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+
+      assert [%{membership_id: ^membership_id}] =
+               Membership.list_active_members_of_group(everyone_group_id)
+
+      remove_member(membership_id)
+
+      assert [] = Membership.list_active_members_of_group(everyone_group_id)
+    end
+
+    test "returns an empty list for missing or invalid group IDs" do
+      assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
+      assert Membership.list_active_members_of_group(nil) == []
+      assert Membership.list_active_members_of_group("not-a-uuid") == []
+    end
+  end
+
   describe "person email address query APIs" do
     test "fetches a person's primary and alternate email addresses" do
       alice =
@@ -366,6 +445,38 @@ defmodule Memba.Membership.QueryTest do
       refute Membership.active_member_of_club?(nelson_club_id, alice.person_id)
       refute Membership.active_member_of_club?("not-a-uuid", alice.person_id)
       refute Membership.active_member_of_club?(kootenay_club_id, "not-a-uuid")
+    end
+  end
+
+  describe "active_member_of_group?/2" do
+    test "returns true only when the person has an active group membership" do
+      club = create_club("Kootenay Mountaineering Club")
+      other_club = create_club("Nelson Cycling Club")
+
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      pat = create_person(name: "Pat", email: "pat@example.com")
+
+      membership_id = add_member(club.club_id, alice.person_id)
+      _other_membership_id = add_member(other_club.club_id, pat.person_id)
+
+      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+      admin_group_id = SystemGroups.admin_group_id(club.club_id)
+
+      assert Membership.active_member_of_group?(everyone_group_id, alice.person_id)
+      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
+      refute Membership.active_member_of_group?(everyone_group_id, pat.person_id)
+
+      admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+      assign_role(club.club_id, membership_id, alice.person_id, admin_role_id)
+
+      assert Membership.active_member_of_group?(admin_group_id, alice.person_id)
+
+      remove_member(membership_id)
+
+      refute Membership.active_member_of_group?(everyone_group_id, alice.person_id)
+      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
+      refute Membership.active_member_of_group?("not-a-uuid", alice.person_id)
+      refute Membership.active_member_of_group?(everyone_group_id, "not-a-uuid")
     end
   end
 

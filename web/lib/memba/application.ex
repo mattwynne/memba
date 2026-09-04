@@ -19,6 +19,7 @@ defmodule Memba.Application do
        dispatch_enabled:
          Application.get_env(:memba, :email_delivery_dispatcher_dispatch_enabled, true)},
       Memba.Messaging.Projectors.Message,
+      Memba.Messaging.Projectors.ConversationGroupAccess,
       Memba.Messaging.Projectors.ConversationFollow,
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,
@@ -27,8 +28,11 @@ defmodule Memba.Application do
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.ClubInvitation,
       Memba.Membership.Projectors.Membership,
+      Memba.Membership.Projectors.Group,
+      Memba.Membership.Projectors.GroupMembership,
       Memba.Membership.Projectors.Role,
       Memba.Membership.Projectors.Person,
+      Memba.Membership.Policies.SystemGroupMembership,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       # Start a worker by calling: Memba.Worker.start_link(arg)
       # {Memba.Worker, arg},

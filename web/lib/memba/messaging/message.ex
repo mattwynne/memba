@@ -22,6 +22,7 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.ConversationReference
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.MessageSent
@@ -138,6 +139,7 @@ defmodule Memba.Messaging.Message do
 
   def apply(%__MODULE__{} = message, %ConversationFollowed{}), do: message
   def apply(%__MODULE__{} = message, %ConversationUnfollowed{}), do: message
+  def apply(%__MODULE__{} = message, %ConversationAccessGrantedToGroup{}), do: message
 
   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
   # product status. Keep this no-op so historic events can rehydrate aggregates
@@ -184,21 +186,29 @@ defmodule Memba.Messaging.Message do
     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+         {:ok, audience_group_id} <-
+           normalize_command_audience_group_id(command, conversation_id, reply_to_message_id),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
          {:ok, recipients} <- normalize_command_recipients(command) do
-      [
-        %MessageSent{
-          message_id: command.message_id,
-          club_id: command.club_id,
-          sender_id: command.sender_id,
-          conversation_id: conversation_id,
-          reply_to_message_id: reply_to_message_id,
-          subject: subject,
-          body: body
-        }
-        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
-      ]
+      message_sent = %MessageSent{
+        message_id: command.message_id,
+        club_id: command.club_id,
+        sender_id: command.sender_id,
+        conversation_id: conversation_id,
+        reply_to_message_id: reply_to_message_id,
+        subject: subject,
+        body: body
+      }
+
+      [message_sent] ++
+        conversation_access_events(
+          command,
+          conversation_id,
+          reply_to_message_id,
+          audience_group_id
+        ) ++
+        Enum.map(recipients, &email_delivery_created(command.message_id, &1))
     end
   end
 
@@ -296,6 +306,62 @@ defmodule Memba.Messaging.Message do
       recipient_email: recipient.email
     }
   end
+
+  defp conversation_access_events(
+         %SendMessage{message_id: message_id} = command,
+         conversation_id,
+         nil,
+         audience_group_id
+       )
+       when message_id == conversation_id and not is_nil(audience_group_id) do
+    [
+      %ConversationAccessGrantedToGroup{
+        conversation_id: conversation_id,
+        club_id: command.club_id,
+        group_id: audience_group_id,
+        access_level: "write"
+      }
+    ]
+  end
+
+  defp conversation_access_events(
+         _command,
+         _conversation_id,
+         _reply_to_message_id,
+         _audience_group_id
+       ),
+       do: []
+
+  defp normalize_command_audience_group_id(
+         %SendMessage{message_id: message_id, audience_group_id: audience_group_id},
+         conversation_id,
+         nil
+       )
+       when message_id == conversation_id do
+    case audience_group_id do
+      nil ->
+        {:ok, nil}
+
+      audience_group_id ->
+        with :ok <- validate_id(:group, audience_group_id, :invalid_audience_group_id) do
+          {:ok, audience_group_id}
+        end
+    end
+  end
+
+  defp normalize_command_audience_group_id(
+         %SendMessage{},
+         _conversation_id,
+         _reply_to_message_id
+       ),
+       do: {:ok, nil}
+
+  defp normalize_command_audience_group_id(
+         %PostMessageReply{},
+         _conversation_id,
+         _reply_to_message_id
+       ),
+       do: {:ok, nil}
 
   defp validate_id(type, value, error) do
     case ID.cast(type, value) do

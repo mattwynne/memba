@@ -26,8 +26,10 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -255,7 +257,7 @@ defmodule Memba.Membership do
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs),
          :ok <- prevent_duplicate_active_membership(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -343,7 +345,7 @@ defmodule Memba.Membership do
            invitation_add_member_command(invitation, person_id, membership_id),
          :ok <- prevent_duplicate_active_membership(add_member_command),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -380,7 +382,7 @@ defmodule Memba.Membership do
          {:ok, create_person_result} <-
            dispatch_acceptance_command(create_person_command, dispatch_opts),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -399,7 +401,7 @@ defmodule Memba.Membership do
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -459,7 +461,7 @@ defmodule Memba.Membership do
              command.person_id,
              command.membership_id
            ) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -487,7 +489,7 @@ defmodule Memba.Membership do
              command.membership_id
            ),
          :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -845,6 +847,70 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List active members of the given conversation group.
+
+  Returns plain maps containing the public identity needed outside the
+  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
+  Role names come from active club role assignments and are sorted
+  alphabetically for each member. Members whose group row or club membership is
+  inactive, members of other groups, members without a projected person, and
+  invalid group IDs are excluded.
+  """
+  def list_active_members_of_group(group_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id) do
+      members =
+        GroupMembershipProjection
+        |> join(:inner, [group_membership], membership in MembershipProjection,
+          on:
+            membership.membership_id == group_membership.membership_id and
+              membership.club_id == group_membership.club_id and
+              membership.person_id == group_membership.person_id
+        )
+        |> join(:inner, [_group_membership, membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(
+          :inner,
+          [_group_membership, _membership, person],
+          primary_email_address in PersonEmailAddress,
+          on:
+            primary_email_address.person_id == person.person_id and
+              primary_email_address.is_primary == true
+        )
+        |> where(
+          [group_membership, _membership, _person, _primary_email_address],
+          group_membership.group_id == ^group_id
+        )
+        |> where(
+          [group_membership, membership, _person, _primary_email_address],
+          group_membership.active == true and membership.active == true
+        )
+        |> order_by([_group_membership, _membership, person, _primary_email_address],
+          asc: person.name,
+          asc: person.person_id
+        )
+        |> select([_group_membership, membership, person, primary_email_address], %{
+          membership_id: membership.membership_id,
+          id: person.person_id,
+          name: person.name,
+          email: primary_email_address.email
+        })
+        |> Repo.all()
+
+      role_names_by_membership =
+        members
+        |> Enum.map(& &1.membership_id)
+        |> active_role_names_by_membership()
+
+      Enum.map(members, fn member ->
+        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
+      end)
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List active clubs for a member email address.
 
   Email lookup is normalized by trimming whitespace and comparing
@@ -888,6 +954,34 @@ defmodule Memba.Membership do
       |> where([membership], membership.club_id == ^club_id)
       |> where([membership], membership.person_id == ^person_id)
       |> where([membership], membership.active == true)
+      |> Repo.exists?()
+    else
+      :error -> false
+    end
+  end
+
+  @doc """
+  Return whether a person is currently an active member of a conversation group.
+
+  Both the projected group-membership row and the underlying club membership
+  must be active. Invalid group or person IDs return `false`.
+  """
+  def active_member_of_group?(group_id, person_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      GroupMembershipProjection
+      |> join(:inner, [group_membership], membership in MembershipProjection,
+        on:
+          membership.membership_id == group_membership.membership_id and
+            membership.club_id == group_membership.club_id and
+            membership.person_id == group_membership.person_id
+      )
+      |> where([group_membership, _membership], group_membership.group_id == ^group_id)
+      |> where([group_membership, _membership], group_membership.person_id == ^person_id)
+      |> where(
+        [group_membership, membership],
+        group_membership.active == true and membership.active == true
+      )
       |> Repo.exists?()
     else
       :error -> false
@@ -1669,6 +1763,50 @@ defmodule Memba.Membership do
       {:error, _reason} = error -> error
     end
   end
+
+  defp dispatch_system_group_membership_acceptance_command(command, dispatch_opts) do
+    command
+    |> dispatch_system_group_membership_command(dispatch_opts)
+    |> case do
+      :ok -> {:ok, :ok}
+      {:ok, _result} = ok -> ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_system_group_membership_command(command, dispatch_opts) do
+    dispatch(command, system_group_membership_consistency(dispatch_opts))
+  end
+
+  defp system_group_membership_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [SystemGroupMembership],
+      &include_system_group_membership_consistency/1
+    )
+  end
+
+  defp include_system_group_membership_consistency(:strong), do: :strong
+  defp include_system_group_membership_consistency(:eventual), do: [SystemGroupMembership]
+
+  defp include_system_group_membership_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &system_group_membership_handler?/1) do
+      handlers
+    else
+      [SystemGroupMembership | handlers]
+    end
+  end
+
+  defp include_system_group_membership_consistency(consistency), do: consistency
+
+  defp system_group_membership_handler?(SystemGroupMembership), do: true
+
+  defp system_group_membership_handler?(handler) when is_binary(handler) do
+    handler == inspect(SystemGroupMembership)
+  end
+
+  defp system_group_membership_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

@@ -6,6 +6,7 @@ defmodule Memba.Messaging do
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
@@ -18,6 +19,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
+  alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
@@ -30,6 +32,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.OutboundMessageID
+  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -42,7 +45,7 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @doc """
-  Send a message to the active members of a club.
+  Send a message to the active members of a club's Everyone group.
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
@@ -393,6 +396,31 @@ defmodule Memba.Messaging do
     case get_conversation_follow(conversation_id, member_id) do
       %ConversationFollowProjection{following: true} -> true
       _not_following -> false
+    end
+  end
+
+  @doc """
+  Return whether a group has the requested access to a projected conversation.
+
+  The `access_level` may be `:read`, `:write`, `"read"`, or `"write"`. A stored
+  `"write"` grant satisfies both read and write checks; a stored `"read"` grant
+  satisfies only read checks. Invalid IDs or access levels return `false`.
+  """
+  def group_has_conversation_access?(conversation_id, group_id, access_level) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.group_id == ^group_id and
+          access.access_level in ^grant_levels
+      )
+      |> Repo.exists?()
+    else
+      _invalid -> false
     end
   end
 
@@ -1253,14 +1281,17 @@ defmodule Memba.Messaging do
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, body} <- fetch_required(attrs, :body) do
+      audience_group_id = SystemGroups.everyone_group_id(club_id)
+
       {:ok,
        %SendMessage{
          message_id: message_id,
          club_id: club_id,
          sender_id: sender_id,
+         audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_recipients(club_id)
+         recipients: resolve_group_recipients(audience_group_id)
        }}
     end
   end
@@ -1430,11 +1461,11 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_recipients(club_id, opts \\ []) do
+  defp resolve_group_recipients(group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
-    club_id
-    |> Membership.list_active_members_of_club()
+    group_id
+    |> Membership.list_active_members_of_group()
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
   end

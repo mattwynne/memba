@@ -1,0 +1,29 @@
+# Implementation TODO
+
+- [x] 001 Inspect the existing Membership Club aggregate, membership lifecycle events, Admin-role assignment/removal paths, Commanded router, and projection-barrier setup.
+- [x] 002 Add the typed Group ID and the Group command/event modules using the project’s existing ID and event conventions.
+- [x] 003 Extend the Club aggregate state and commands so it owns group definitions and group memberships.
+- [x] 004 Define deterministic Everyone and Admin group IDs.
+- [x] 005 Make `CreateClub` emit `GroupCreated` for both system groups while preserving the existing Admin-role creation and permission grant.
+- [x] 006 Add Group aggregate-state validation and idempotent commands for creating a group and adding/removing a membership: a group belongs to its club; a membership is not added twice; commands carry club, group, membership, and person identities.
+- [x] 007 Keep custom-group behaviour unavailable through the public UI/API in this slice.
+- [x] 008 Add `membership_groups` and `membership_group_memberships` migrations, schemas, and strong-consistency projectors.
+- [x] 009 `membership_group_memberships` has one current-state row keyed by `(group_id, membership_id)`; add/remove toggles its `active` flag, so re-add reactivates the row and the event stream retains history.
+- [x] 010 Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a stateless `Commanded.Event.Handler` with a stable handler name, `consistency: :strong`, and `start_from: :origin`.
+- [x] 011 It handles each `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved` independently, dispatching idempotent Club-group membership commands for Everyone and the deterministic Admin role.
+- [x] 012 It retains no per-membership workflow state: the Club aggregate owns membership state and makes at-least-once handler redelivery safe.
+- [x] 013 Configure Group projectors as strong and dispatch affected member/role commands with strong consistency, so those commands return only after group membership is queryable.
+- [x] 014 Add public Membership queries such as active group members and whether a person is an active member of a group. Keep all Membership schema/query details behind these APIs, as required by ADR 0007.
+- [x] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
+- [x] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
+- [ ] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
+- [ ] 018 Change reply authorisation to require write access through an active group membership.
+- [ ] 019 Keep reply-recipient/follower delivery unchanged.
+- [ ] 020 Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated, idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto migrations and application/event-store startup.
+- [ ] 021 It scans authoritative current projections in dependency order (groups, memberships/Admin assignments, root conversations), dispatches only missing commands, logs counts, and aborts the release on an unrecoverable error.
+- [ ] 022 A subsequent release safely resumes; it is not an Ecto migration or an application-boot task.
+- [ ] 023 Do not modify or delete historic events.
+- [ ] 024 Extend `Memba.EventSourcedCase` with the new Group and conversation-access projectors/tables.
+- [ ] 025 Add a replay-parity test that dispatches representative setup and backfill facts, snapshots the group/membership/access queries, calls `rebuild_event_sourced_projections!/0`, awaits the new projectors through `Memba.ProjectionBarrier`, and asserts the same queries return the same state.
+- [ ] 026 Add tests for aggregate decisions; system-group event-handler commands and idempotency; system-group membership after member/role changes—including future role changes and member removal for memberships that were seeded by backfill; sender and reply authorisation; recipient/follower-delivery regression; release-backfill reruns; and replay parity.
+- [ ] 027 Run `dev check`.

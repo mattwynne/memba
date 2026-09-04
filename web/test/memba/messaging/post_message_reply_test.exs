@@ -6,6 +6,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Messaging
@@ -221,6 +222,8 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   end
 
   defp add_member(club_id, person_id) do
+    ensure_club(club_id)
+
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
@@ -234,6 +237,20 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              )
 
     membership_id
+  end
+
+  defp ensure_club(club_id) do
+    if is_nil(Memba.Membership.get_club(club_id)) do
+      assert :ok =
+               MembershipApp.dispatch(
+                 %CreateClub{
+                   club_id: club_id,
+                   name: "Kootenay Mountaineering Club",
+                   slug: membership_club_slug("Kootenay Mountaineering Club", club_id)
+                 },
+                 consistency: :strong
+               )
+    end
   end
 
   defp remove_member(membership_id) do

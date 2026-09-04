@@ -3,6 +3,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   alias Memba.Membership
   alias Memba.Messaging
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
@@ -54,6 +55,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     add_member!(kmc.club_id, alice.person_id)
     add_member!(kmc.club_id, bob.person_id)
     add_member!(npc.club_id, pat.person_id)
+    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
 
     assert {:ok,
             %{
@@ -79,6 +81,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
 
     assert %{
              message_id: ^message_id,

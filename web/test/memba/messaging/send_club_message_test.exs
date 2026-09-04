@@ -6,12 +6,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
-  alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
 
   @email_delivery_replay_projectors [
@@ -37,18 +40,23 @@ defmodule Memba.Messaging.SendClubMessageTest do
     :ok
   end
 
-  test "resolves active club members via Membership and records pending delivery work without provider handoff" do
+  test "resolves active Everyone group members via Membership and records pending delivery work without provider handoff" do
     kootenay_club_id = Memba.ID.generate(:club)
     nelson_club_id = Memba.ID.generate(:club)
+    create_club(kootenay_club_id, "Kootenay Mountaineering Club")
+    create_club(nelson_club_id, "Nelson Cycling Club")
+    everyone_group_id = SystemGroups.everyone_group_id(kootenay_club_id)
 
     alice = create_person(name: "Alice", email: "alice@example.com")
     bob = create_person(name: "Bob", email: "bob@example.com")
     carol = create_person(name: "Carol", email: "carol@example.com")
+    dana = create_person(name: "Dana", email: "dana@example.com")
     pat = create_person(name: "Pat", email: "pat@example.com")
 
     add_member(kootenay_club_id, alice.person_id)
     add_member(kootenay_club_id, bob.person_id)
     add_member(kootenay_club_id, carol.person_id)
+    insert_active_membership_projection_without_group(kootenay_club_id, dana.person_id)
     add_member(nelson_club_id, pat.person_id)
 
     message_id = Memba.ID.generate(:message)
@@ -56,7 +64,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 4,
+              aggregate_version: 5,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -64,6 +72,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                   sender_id: sender_id,
                   subject: "Trip planning night",
                   body: "Bring route ideas."
+                },
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^kootenay_club_id,
+                  group_id: ^everyone_group_id,
+                  access_level: "write"
                 }
                 | delivery_events
               ]
@@ -104,6 +118,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
            ] = delivery_events
 
     assert [alice_id, bob_id, carol_id] == [alice.person_id, bob.person_id, carol.person_id]
+    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
     refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
 
     delivery_ids = Enum.map(delivery_events, & &1.delivery_id)
@@ -149,6 +164,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   test "sends each active member once at the person's primary email address" do
     club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
 
     alice =
       create_person(
@@ -180,7 +197,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 3,
+              aggregate_version: 4,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -188,6 +205,12 @@ defmodule Memba.Messaging.SendClubMessageTest do
                   sender_id: ^alice_id,
                   subject: "Trip planning night",
                   body: "Bring route ideas."
+                },
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  access_level: "write"
                 },
                 %EmailDeliveryCreated{
                   message_id: ^message_id,
@@ -270,6 +293,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   test "does not call the provider when the send command is rejected" do
     club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
 
@@ -447,7 +471,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                %CreateClub{
                  club_id: club_id,
                  name: name,
-                 slug: "kootenay-mountaineering-club"
+                 slug: membership_club_slug(name, club_id)
                },
                consistency: :strong
              )
@@ -484,6 +508,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp add_member(club_id, person_id) do
+    ensure_club(club_id)
+
     assert :ok =
              MembershipApp.dispatch(
                %AddMember{
@@ -493,6 +519,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
                },
                consistency: :strong
              )
+  end
+
+  defp ensure_club(club_id) do
+    if is_nil(Memba.Membership.get_club(club_id)) do
+      create_club(club_id, "Kootenay Mountaineering Club")
+    end
+  end
+
+  defp insert_active_membership_projection_without_group(club_id, person_id) do
+    Repo.insert!(%MembershipProjection{
+      membership_id: Memba.ID.generate(:membership),
+      club_id: club_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

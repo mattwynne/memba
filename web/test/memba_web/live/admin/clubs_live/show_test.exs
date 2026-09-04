@@ -76,7 +76,15 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "club detail points message review to global Messages instead of embedding club rows", %{
     conn: conn
   } do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    club_id = Memba.ID.generate(:club)
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    club = Membership.get_club(club_id)
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     assert :ok =

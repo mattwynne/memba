@@ -8,11 +8,14 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Accounts.AuthEmailRequest
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Projections.RoleAssignment
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
@@ -1237,16 +1240,42 @@ defmodule MembaWeb.PageControllerTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: true
     })
 
+    insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+
     club
     |> Map.from_struct()
     |> Map.put(:person_id, person.person_id)
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp create_message(attrs) do
@@ -1311,7 +1340,12 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("footer")
            |> LazyHTML.text()
-           |> String.contains?("Red Donkey Technology Corp")
+           |> String.contains?("Matt Wynne")
+
+    assert html
+           |> LazyHTML.query("footer")
+           |> LazyHTML.text()
+           |> String.contains?("Built with")
 
     assert html
            |> LazyHTML.query("footer nav[aria-label='Footer navigation'] a[href='/about']")

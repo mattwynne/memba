@@ -13,6 +13,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
+  alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressAdded
@@ -26,14 +27,35 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroups
+
+  test "public Membership API does not expose custom group mutation functions in this slice" do
+    refute function_exported?(Membership, :create_group, 1)
+    refute function_exported?(Membership, :create_group, 2)
+    refute function_exported?(Membership, :create_custom_group, 1)
+    refute function_exported?(Membership, :create_custom_group, 2)
+
+    refute function_exported?(Membership, :add_group_member, 1)
+    refute function_exported?(Membership, :add_group_member, 2)
+    refute function_exported?(Membership, :add_custom_group_member, 1)
+    refute function_exported?(Membership, :add_custom_group_member, 2)
+
+    refute function_exported?(Membership, :remove_group_member, 1)
+    refute function_exported?(Membership, :remove_group_member, 2)
+    refute function_exported?(Membership, :remove_custom_group_member, 1)
+    refute function_exported?(Membership, :remove_custom_group_member, 2)
+  end
 
   test "create_club/2 dispatches CreateClub through the Membership context" do
     club_id = Memba.ID.generate(:club)
     role_id = Roles.membership_administrator_role_id(club_id)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -54,6 +76,18 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   role_id: ^role_id,
                   permission: "club.manage_members"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  group_key: "everyone",
+                  name: "Everyone"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  group_key: "admin",
+                  name: "Admin"
                 }
               ]
             }} =
@@ -70,6 +104,8 @@ defmodule Memba.Membership.PublicApiTest do
   test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
     club_id = Memba.ID.generate(:club)
     role_id = Roles.membership_administrator_role_id(club_id)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -90,6 +126,18 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   role_id: ^role_id,
                   permission: "club.manage_members"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  group_key: "everyone",
+                  name: "Everyone"
+                },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  group_key: "admin",
+                  name: "Admin"
                 }
               ]
             }} =
@@ -1081,6 +1129,118 @@ defmodule Memba.Membership.PublicApiTest do
     assert [] = Membership.list_active_members_of_club(club_id)
   end
 
+  test "member and Admin role APIs wait for system group membership projection by default" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: actor_person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: target_person_id, name: "Bob", email: "bob@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(%{
+               membership_id: actor_membership_id,
+               club_id: club_id,
+               person_id: actor_person_id
+             })
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^actor_membership_id,
+             person_id: ^actor_person_id
+           } = group_membership(everyone_group_id, actor_membership_id)
+
+    assert :ok =
+             Membership.add_member(%{
+               membership_id: target_membership_id,
+               club_id: club_id,
+               person_id: target_person_id
+             })
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(everyone_group_id, target_membership_id)
+
+    assert :ok =
+             App.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: actor_membership_id,
+                 person_id: actor_person_id,
+                 role_id: admin_role_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.assign_membership_administrator_as_club_member(%{
+               club_id: club_id,
+               membership_id: target_membership_id,
+               person_id: target_person_id,
+               actor_person_id: actor_person_id
+             })
+
+    assert %GroupMembershipProjection{
+             active: true,
+             club_id: ^club_id,
+             group_id: ^admin_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(admin_group_id, target_membership_id)
+
+    assert :ok =
+             Membership.remove_membership_administrator_as_club_member(%{
+               club_id: club_id,
+               membership_id: target_membership_id,
+               person_id: target_person_id,
+               actor_person_id: actor_person_id
+             })
+
+    assert %GroupMembershipProjection{
+             active: false,
+             club_id: ^club_id,
+             group_id: ^admin_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(admin_group_id, target_membership_id)
+
+    assert :ok = Membership.remove_member(%{membership_id: target_membership_id})
+
+    assert %GroupMembershipProjection{
+             active: false,
+             club_id: ^club_id,
+             group_id: ^everyone_group_id,
+             membership_id: ^target_membership_id,
+             person_id: ^target_person_id
+           } = group_membership(everyone_group_id, target_membership_id)
+  end
+
   test "invite_club_member/2 preserves Staff/system invitations without requiring a club-member actor" do
     club_id = Memba.ID.generate(:club)
     invitation_id = Memba.ID.generate(:club_invitation)
@@ -1473,6 +1633,15 @@ defmodule Memba.Membership.PublicApiTest do
              )
 
     refute Membership.person_has_club_permission?(club_id, person_id, permission)
+  end
+
+  defp group_membership(group_id, membership_id) do
+    Repo.one(
+      from(group_membership in GroupMembershipProjection,
+        where: group_membership.group_id == ^group_id,
+        where: group_membership.membership_id == ^membership_id
+      )
+    )
   end
 
   defp count_events do

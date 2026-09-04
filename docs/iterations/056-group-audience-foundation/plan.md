@@ -67,10 +67,12 @@ model. General roles within groups are intentionally deferred.
   - removes the member from system groups after `MemberRemoved`;
   - adds/removes the member from Admin when their existing Admin role is assigned or
     removed.
-  The handler starts at `:current` on deployment; it does not replay historic events
-  to create backfill facts. The release backfill seeds historic state, while the
-  handler keeps both newly created and already-existing memberships aligned after
-  deployment.
+  The handler starts at `:origin` so a first subscription replays history instead
+  of skipping events persisted during subscriber startup. Its commands are
+  idempotent, making that first-subscription replay safe. The release backfill
+  still seeds historic clubs that existed before these system-group facts were
+  introduced, while the handler keeps both newly created and already-existing
+  memberships aligned after deployment.
 - Project `membership_groups` and `membership_group_memberships` read models with
   one current-state row per `(group_id, membership_id)`, containing `club_id`,
   `person_id`, and `active`. Add/remove events toggle `active`; a later re-add
@@ -225,14 +227,15 @@ Confirmed decisions:
    `active` flag, so re-add reactivates the row and the event stream retains history.
 5. Implement and supervise `Memba.Membership.Policies.SystemGroupMembership` as a
    stateless `Commanded.Event.Handler` with a stable handler name,
-   `consistency: :strong`, and `start_from: :current`. It handles each
+   `consistency: :strong`, and `start_from: :origin`. It handles each
    `MemberAdded`, `MemberRemoved`, `MemberRoleAssigned`, and `MemberRoleRemoved`
    independently, dispatching idempotent Club-group membership commands for Everyone
    and the deterministic Admin role. It retains no per-membership workflow state:
-   the Club aggregate owns membership state and makes at-least-once handler
-   redelivery safe. Configure Group projectors as strong and dispatch affected
-   member/role commands with strong consistency, so those commands return only after
-   group membership is queryable.
+   the Club aggregate owns membership state and makes first-subscription replay and
+   at-least-once handler redelivery safe. Configure Group projectors as strong and
+   dispatch affected member/role commands with strong consistency, so those commands
+   return only after group membership is queryable. Keep release backfill for clubs
+   whose historic streams do not contain the new system-group facts.
 6. Add public Membership queries such as active group members and whether a person
    is an active member of a group. Keep all Membership schema/query details behind
    these APIs, as required by ADR 0007.
@@ -267,11 +270,15 @@ Confirmed decisions:
 ## Technical Decisions
 
 - **System-group policy:** `Memba.Membership.Policies.SystemGroupMembership` is a
-  stateless Commanded event handler with a stable name. It starts from `:current`,
+  stateless Commanded event handler with a stable name. It starts from `:origin`,
   uses strong consistency, and handles each membership/Admin-role lifecycle event
-  independently. The Club aggregate owns group-membership state; idempotent commands
-  make at-least-once handler redelivery safe. Because it holds no process state,
-  future role/removal events for memberships seeded by backfill work normally.
+  independently. Starting from origin lets a first subscription replay history
+  instead of skipping events written during subscriber startup. The Club aggregate
+  owns group-membership state; idempotent commands make first-subscription replay
+  and at-least-once handler redelivery safe. Release backfill remains required for
+  clubs whose historic streams predate the new system-group facts, and future
+  role/removal events for memberships seeded by backfill work normally because the
+  handler holds no process state.
 - **Membership projection:** `membership_group_memberships` is a current-state
   projection keyed by `(group_id, membership_id)` with `active`; remove/re-add
   toggles that row. The event stream is the membership history. Index current rows

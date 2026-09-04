@@ -7,6 +7,7 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryBounced
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -18,10 +19,11 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Recipient
 
   describe "execute/2 SendMessage" do
-    test "emits MessageSent as the root of its own conversation and one EmailDeliveryCreated per resolved recipient" do
+    test "emits MessageSent, the audience group write grant, and one EmailDeliveryCreated per resolved recipient" do
       message_id = Memba.ID.generate(:message)
       club_id = Memba.ID.generate(:club)
       sender_id = Memba.ID.generate(:person)
+      group_id = Memba.ID.generate(:group)
       alice_delivery_id = Memba.ID.generate(:delivery)
       bob_delivery_id = Memba.ID.generate(:delivery)
       bob_id = Memba.ID.generate(:person)
@@ -30,6 +32,7 @@ defmodule Memba.Messaging.MessageTest do
         message_id: message_id,
         club_id: club_id,
         sender_id: sender_id,
+        audience_group_id: group_id,
         subject: " Trail day ",
         body: " Meet at 9am. ",
         recipients: [
@@ -57,6 +60,12 @@ defmodule Memba.Messaging.MessageTest do
                  reply_to_message_id: nil,
                  subject: "Trail day",
                  body: "Meet at 9am."
+               },
+               %ConversationAccessGrantedToGroup{
+                 conversation_id: ^message_id,
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 access_level: "write"
                },
                %EmailDeliveryCreated{
                  message_id: ^message_id,
@@ -86,6 +95,12 @@ defmodule Memba.Messaging.MessageTest do
 
       assert {:error, :invalid_sender_id} =
                Message.execute(%Message{}, %SendMessage{valid_command | sender_id: nil})
+
+      assert {:error, :invalid_audience_group_id} =
+               Message.execute(%Message{}, %SendMessage{
+                 valid_command
+                 | audience_group_id: "not-a-group-id"
+               })
     end
 
     test "rejects blank subject or body" do
@@ -611,6 +626,7 @@ defmodule Memba.Messaging.MessageTest do
       message_id: Memba.ID.generate(:message),
       club_id: Memba.ID.generate(:club),
       sender_id: sender_id,
+      audience_group_id: Memba.ID.generate(:group),
       subject: "Trail day",
       body: "Meet at 9am.",
       recipients: [
