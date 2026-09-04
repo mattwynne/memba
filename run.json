@@ -1,0 +1,615 @@
+{
+  "title": "Validate that an iteration plan is ready for implementation and mark it validated without startin...",
+  "spec": {
+    "run_id": "01M1PG3CXYQB3JAKS086TX8C01",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation"
+        },
+        "working_dir": null,
+        "metadata": {
+          "kind": "plan-validation-eval",
+          "fixture": "unanimous-pass"
+        },
+        "inputs": {
+          "plan_path": ".fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md",
+          "publish": false
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": {},
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "steps": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false,
+          "commit_timeout_ms": 30000
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "default",
+          "provider": "docker",
+          "image": {
+            "docker": null,
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "PlanValidation",
+      "nodes": {
+        "not_ready": {
+          "id": "not_ready",
+          "attrs": {
+            "script": {
+              "String": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
+            },
+            "label": {
+              "String": "Fail: Plan Not Ready"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "synthesize": {
+          "id": "synthesize",
+          "attrs": {
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Sol Synthesis & Repair Brief"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are GPT-5.6 Sol acting as the repair coordinator for an iteration plan validation loop.\n\nUse the three model reviews and their routing context fields. The reviewer agents read the plan file directly, so do not require plan text to be present in your own summarized context.\n\nThe reviewer stages fan out independently and then fan in before this stage. In the merged context, inspect `parallel.results`: each branch must expose both its Markdown response and the routing context fields under that branch's `context_updates`. Do not assume those fields are promoted to top-level context.\n\nRequired fields:\n\n- Gemini: `gemini_review_decision`, `gemini_review_confidence`, `gemini_review_blocking_gap_count`, `gemini_review_blocking_gaps`, `gemini_review_required_edits`\n- Claude: `claude_review_decision`, `claude_review_confidence`, `claude_review_blocking_gap_count`, `claude_review_blocking_gaps`, `claude_review_required_edits`\n- GPT-5.6 Sol: `codex_review_decision`, `codex_review_confidence`, `codex_review_blocking_gap_count`, `codex_review_blocking_gaps`, `codex_review_required_edits`\n\nFail closed if you cannot see all three reviewer Markdown reports, decisions, and blocking-gap summaries in `parallel.results`. Missing reviewer evidence is a workflow/tooling failure for this validation pass, not proof that the plan is ready.\n\nYour job in this stage is to decide whether the plan is ready, needs only obvious editorial/structural correction, or needs human product/technical decisions before it can be ready.\n\nReadiness standard:\n\nA plan is READY only if an engineer can begin implementation without first resolving material product/business decisions or material technical design decisions, and if a reviewer can objectively validate success at the end.\n\nA plan is NOT READY if any of these are true:\n\n- The goal is materially ambiguous.\n- The scope is too broad or lacks a smallest useful slice.\n- Acceptance criteria are not concrete/testable enough.\n- The plan does not classify the iteration as behaviour-facing or technical/engineering.\n- A behaviour-facing or domain-policy plan lacks an `## Acceptance Scenarios / Feature Files` section with either named shared Cucumber feature file(s)/scenarios or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples.\n- Important business decisions remain open.\n- Implementation steps require major technical choices that are not made.\n- The expected new capability or success validation is unclear.\n- The plan expects shared acceptance `.feature` file edits but lacks a `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed.\n\nCorrection policy:\n\nGPT-5.6 Sol may only be asked to make obvious plan edits that do not require judgment calls, such as:\n\n- tightening wording without changing meaning\n- reorganizing existing content into clearer sections\n- turning already-stated expectations into objective acceptance criteria\n- making implicit boundaries explicit when the plan already clearly implies them\n- removing duplication or contradiction when the intended meaning is obvious\n\nDo not ask GPT-5.6 Sol to invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions. If the plan needs those decisions, fail the validation and raise them for Matt.\n\nSynthesis instructions:\n\n1. First verify that all three reviewer decisions and blocking-gap summaries are visible in context. If any are missing, route to Matt/human input and explain that validation evidence was incomplete.\n2. Compare the three reviews.\n3. Include a reviewer decision table with each reviewer's decision, confidence, blocking gap count, and notes.\n4. Identify consensus findings.\n5. Correct reviewer findings that are wrong, too vague, duplicated, or not actually blocking.\n6. Decide whether the plan is already ready, needs only obvious edits, or needs Matt's input.\n7. If only obvious edits are needed, produce a concrete repair brief for GPT-5.6 Sol.\n8. If Matt's input is needed, do not produce a repair brief as if GPT-5.6 Sol can solve it; list the decisions/questions clearly.\n\nVoting/consensus guardrails:\n\n- If two or more reviewers say NOT READY, you must not publish READY unless you explicitly quote or summarize each NOT READY blocker and explain why it is wrong or non-blocking.\n- If any reviewer says NOT READY, include a `Reviewer objections addressed` section that accounts for every blocking gap from that reviewer.\n- Do not treat successful reviewer node execution as readiness. Only the reviewer decision and findings content can support readiness.\n- If your response cannot include a real synthesis report with the sections below, route to Matt/human input rather than READY.\n\nReturn a Markdown report with:\n\n1. Provisional decision: READY, OBVIOUS FIXES NEEDED, or NEEDS MATT\n2. Reviewer decision table: Reviewer, Decision, Confidence, Blocking gaps count, Notes\n3. Consensus findings: 3-6 bullets\n4. Reviewer objections addressed: account for every NOT READY blocking gap, or \"No reviewer returned NOT READY\"\n5. Corrected findings: reviewer findings you changed, downgraded, combined, or rejected\n6. Blocking gaps: numbered list, each with why it blocks implementation\n7. GPT-5.6 Sol repair brief: exact instructions for obvious edits only, or \"None\"\n8. Questions for Matt: decisions that need human input, or \"None\"\n9. Validation checklist: what to check after any GPT-5.6 Sol update\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.\n\nIf the plan is already READY:\n\n{\"preferred_next_label\":\"validated\",\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n\nIf the plan is NOT READY but GPT-5.6 Sol should apply only obvious fixes:\n\n{\"preferred_next_label\":\"fix\",\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n\nIf the plan is NOT READY because Matt needs to answer questions or make decisions:\n\n{\"preferred_next_label\":\"needs_human\",\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}\n"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "review_fork": {
+          "id": "review_fork",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "component"
+            },
+            "max_parallel": {
+              "Integer": 3
+            },
+            "label": {
+              "String": "Fan Out Independent Reviews"
+            }
+          }
+        },
+        "gemini_review": {
+          "id": "gemini_review",
+          "attrs": {
+            "fidelity": {
+              "String": "truncate"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gemini-3.1-pro-preview"
+            },
+            "provider": {
+              "String": "openrouter"
+            },
+            "label": {
+              "String": "Gemini Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse your file-reading tools to read the complete plan file directly from `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.\n\nIf you cannot read the plan file completely with tools, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `gemini_review_decision`: `READY` or `NOT READY`\n- `gemini_review_confidence`: `High`, `Medium`, or `Low`\n- `gemini_review_blocking_gap_count`: integer count of blocking gaps\n- `gemini_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `gemini_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":2,\"gemini_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"gemini_review_required_edits\":\"State ordering; Define table columns and row identity\"}}"
+            }
+          }
+        },
+        "codex_update": {
+          "id": "codex_update",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Sol Updates Plan"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "prompt": {
+              "String": "You are GPT-5.6 Sol updating an iteration plan file after GPT-5.6 Sol has identified obvious fixes.\n\nUse the context from:\n\n- The original plan read stage\n- Gemini review\n- Claude review\n- GPT-5.6 Sol review\n- GPT-5.6 Sol Synthesis & Repair Brief\n- Any previous GPT-5.6 Sol Recheck stages if this is a later loop pass\n\nEdit the plan file at `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` directly.\n\nRules:\n\n1. Make only the obvious edits GPT-5.6 Sol requested.\n2. Preserve the author's intent and structure where possible.\n3. Do not invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions.\n4. Do not add speculative answers to open questions.\n5. Do not edit app code or unrelated files.\n6. If a GPT-5.6 Sol instruction cannot be applied without making a judgment call, leave the plan unchanged for that point and report that it needs Matt.\n7. Do not change the plan `Status:` to `validated`. Only the deterministic `publish_ready` stage may mark a plan validated after the final ready gate succeeds.\n\nGood edits include tightening wording, reorganizing existing content, converting already-stated expectations into objective acceptance criteria, making clearly implied boundaries explicit, and removing obvious duplication or contradiction.\n\nAfter editing, return a Markdown report with:\n\n- Files changed\n- Summary of edits\n- Which GPT-5.6 Sol instructions were applied\n- Any instructions you skipped because they require Matt's judgment\n- Anything GPT-5.6 Sol should pay special attention to in the recheck"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Exit"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "claude_review": {
+          "id": "claude_review",
+          "attrs": {
+            "model": {
+              "String": "claude-sonnet-5"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Claude Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse your file-reading tools to read the complete plan file directly from `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.\n\nIf you cannot read the plan file completely with tools, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `claude_review_decision`: `READY` or `NOT READY`\n- `claude_review_confidence`: `High`, `Medium`, or `Low`\n- `claude_review_blocking_gap_count`: integer count of blocking gaps\n- `claude_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `claude_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":2,\"claude_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"claude_review_required_edits\":\"State ordering; Define table columns and row identity\"}}"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "provider": {
+              "String": "openrouter"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "box"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Start"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            }
+          }
+        },
+        "opus_recheck": {
+          "id": "opus_recheck",
+          "attrs": {
+            "prompt": {
+              "String": "You are GPT-5.6 Sol performing the post-fix readiness check for an iteration plan.\n\nUse your file-reading tools to read the current complete plan file directly from `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.\n\nUse the context from:\n\n- The three independent model reviews\n- Your GPT-5.6 Sol Synthesis & Repair Brief\n- GPT-5.6 Sol Plan Update\n- Any previous recheck reports if this is a later loop pass\n\nYour job is to check the updated plan, decide whether it is ready, and decide whether another GPT-5.6 Sol edit pass is justified.\n\nReadiness standard:\n\nA plan is READY only if an engineer can begin implementation without first resolving material product/business decisions or material technical design decisions, and if a reviewer can objectively validate success at the end.\n\nA plan is NOT READY if any of these are true:\n\n- The goal is materially ambiguous.\n- The scope is too broad or lacks a smallest useful slice.\n- Acceptance criteria are not concrete/testable enough.\n- The plan does not classify the iteration as behaviour-facing or technical/engineering.\n- A behaviour-facing or domain-policy plan lacks an `## Acceptance Scenarios / Feature Files` section with either named shared Cucumber feature file(s)/scenarios or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples.\n- Important business decisions remain open.\n- Implementation steps require major technical choices that are not made.\n- The expected new capability or success validation is unclear.\n\nCorrection policy:\n\nOnly request another GPT-5.6 Sol pass for obvious editorial/structural edits that do not require judgment calls. Examples: tightening wording, reorganizing existing content, converting already-stated expectations into objective acceptance criteria, or making clearly implied boundaries explicit.\n\nDo not ask GPT-5.6 Sol to invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions. If remaining issues need Matt's judgment, fail the validation and list the questions for Matt.\n\nRecheck instructions:\n\n1. Compare the updated plan against your repair brief.\n2. Verify that GPT-5.6 Sol actually updated the plan file, not just described changes.\n3. Do not penalize the plan for non-blocking polish.\n4. If remaining problems are only obvious edits, set `plan_needs_fix` to true and give GPT-5.6 Sol exact follow-up instructions.\n5. If remaining problems require Matt's input, set `plan_needs_fix` to false and explain the unresolved decisions/questions.\n6. If the plan is ready, set `plan_ready` to true and `plan_needs_fix` to false.\n\nReturn a concise Markdown report with:\n\n1. Decision: READY or NOT READY\n2. Confidence: High, Medium, or Low\n3. What GPT-5.6 Sol fixed successfully\n4. Remaining blocking gaps, if any\n5. Follow-up repair instructions for GPT-5.6 Sol, only if another obvious edit pass is worthwhile\n6. Questions for Matt, if any\n7. Final validation plan: how we will know the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.\n\nIf READY:\n\n{\"preferred_next_label\":\"validated\",\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n\nIf NOT READY but another obvious GPT-5.6 Sol edit pass should be attempted:\n\n{\"preferred_next_label\":\"fix\",\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n\nIf NOT READY because remaining gaps require Matt's input or should stop the loop:\n\n{\"preferred_next_label\":\"needs_human\",\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Sol Recheck"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "box"
+            }
+          }
+        },
+        "codex_review": {
+          "id": "codex_review",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "box"
+            },
+            "fidelity": {
+              "String": "truncate"
+            },
+            "label": {
+              "String": "Sol Review"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse your file-reading tools to read the complete plan file directly from `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.\n\nIf you cannot read the plan file completely with tools, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `codex_review_decision`: `READY` or `NOT READY`\n- `codex_review_confidence`: `High`, `Medium`, or `Low`\n- `codex_review_blocking_gap_count`: integer count of blocking gaps\n- `codex_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `codex_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"codex_review_required_edits\":\"State ordering; Define table columns and row identity\"}}"
+            },
+            "output_schema": {
+              "String": "routing"
+            }
+          }
+        },
+        "publish_ready": {
+          "id": "publish_ready",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "script": {
+              "String": "if [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "label": {
+              "String": "Publish Validated Plan"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "review_merge": {
+          "id": "review_merge",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Collect Independent Reviews"
+            },
+            "model": {
+              "String": "gpt-5.6-sol"
+            },
+            "shape": {
+              "String": "tripleoctagon"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "review_fork",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "gemini_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "claude_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "codex_review",
+          "attrs": {}
+        },
+        {
+          "from": "gemini_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "claude_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "codex_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "review_merge",
+          "to": "synthesize",
+          "attrs": {}
+        },
+        {
+          "from": "synthesize",
+          "to": "publish_ready",
+          "attrs": {
+            "label": {
+              "String": "validated"
+            },
+            "condition": {
+              "String": "preferred_label=validated"
+            }
+          }
+        },
+        {
+          "from": "synthesize",
+          "to": "codex_update",
+          "attrs": {
+            "condition": {
+              "String": "preferred_label=fix"
+            },
+            "label": {
+              "String": "fix"
+            }
+          }
+        },
+        {
+          "from": "synthesize",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "needs_human"
+            }
+          }
+        },
+        {
+          "from": "codex_update",
+          "to": "opus_recheck",
+          "attrs": {}
+        },
+        {
+          "from": "opus_recheck",
+          "to": "publish_ready",
+          "attrs": {
+            "condition": {
+              "String": "preferred_label=validated"
+            },
+            "label": {
+              "String": "validated"
+            }
+          }
+        },
+        {
+          "from": "opus_recheck",
+          "to": "codex_update",
+          "attrs": {
+            "condition": {
+              "String": "preferred_label=fix && context.internal.node_visit_count < 3"
+            },
+            "label": {
+              "String": "fix"
+            }
+          }
+        },
+        {
+          "from": "opus_recheck",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "needs_human"
+            }
+          }
+        },
+        {
+          "from": "publish_ready",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "not_ready",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "model_stylesheet": {
+          "String": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        "
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "goal": {
+          "String": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        }
+      }
+    },
+    "graph_source": "digraph PlanValidation {\n    graph [\n        goal=\"Rigorously validate the iteration plan at {{ inputs.plan_path }} and mark it validated when it is ready for future implementation\",\n        default_fidelity=\"summary:high\",\n        model_stylesheet=\"\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    gemini_review [\n        label=\"Gemini Review\",\n        shape=box,\n        fidelity=\"truncate\",\n        output_schema=\"routing\",\n        prompt=\"@prompts/gemini_review.md\"\n    ]\n\n    claude_review [\n        label=\"Claude Review\",\n        shape=box,\n        fidelity=\"truncate\",\n        output_schema=\"routing\",\n        prompt=\"@prompts/claude_review.md\"\n    ]\n\n    codex_review [\n        label=\"Sol Review\",\n        shape=box,\n        fidelity=\"truncate\",\n        output_schema=\"routing\",\n        prompt=\"@prompts/codex_review.md\"\n    ]\n\n    review_fork [\n        label=\"Fan Out Independent Reviews\",\n        shape=component,\n        max_parallel=3\n    ]\n\n    review_merge [\n        label=\"Collect Independent Reviews\",\n        shape=tripleoctagon\n    ]\n\n    synthesize [\n        label=\"Sol Synthesis & Repair Brief\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/synthesize.md\"\n    ]\n\n    codex_update [\n        label=\"Sol Updates Plan\",\n        prompt=\"@prompts/apply_fixes.md\"\n    ]\n\n    opus_recheck [\n        label=\"Sol Recheck\",\n        shape=box,\n        prompt=\"@prompts/recheck.md\"\n    ]\n\n    publish_ready [\n        label=\"Publish Validated Plan\",\n        shape=parallelogram,\n        script=\"if [ '{{ inputs.publish }}' = 'false' ]; then\\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\\n  exit 0\\nfi\\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'\"\n    ]\n\n    not_ready [\n        label=\"Fail: Plan Not Ready\",\n        shape=parallelogram,\n        script=\"echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\\nexit 1\"\n    ]\n\n    start -> review_fork\n    review_fork -> gemini_review\n    review_fork -> claude_review\n    review_fork -> codex_review\n    gemini_review -> review_merge\n    claude_review -> review_merge\n    codex_review -> review_merge\n    review_merge -> synthesize\n    synthesize -> publish_ready [label=\"validated\", condition=\"preferred_label=validated\"]\n    synthesize -> codex_update [label=\"fix\", condition=\"preferred_label=fix\"]\n    synthesize -> not_ready [label=\"needs_human\"]\n    codex_update -> opus_recheck\n    opus_recheck -> publish_ready [label=\"validated\", condition=\"preferred_label=validated\"]\n    opus_recheck -> codex_update [label=\"fix\", condition=\"preferred_label=fix && context.internal.node_visit_count < 3\"]\n    opus_recheck -> not_ready [label=\"needs_human\"]\n    publish_ready -> exit\n    not_ready -> exit\n}\n",
+    "workflow_slug": "plan-validation",
+    "source_directory": "/Users/matt/git/mattwynne/memba-fabro-fan-in-spike",
+    "labels": {
+      "fixture": "unanimous-pass",
+      "kind": "plan-validation-eval"
+    },
+    "provenance": {
+      "server": {
+        "version": "0.316.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.316.0-nightly.0",
+        "name": "fabro-cli",
+        "version": "0.316.0-nightly.0"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "4100d86b5fd9b94b9b7e8e39c54867346e8b35ddbbc925c5ce891fe31238357f",
+    "definition_blob": "1666ba2e948e12d70296957652572ac9742538a1bf03260b781e06eb6034bb3a",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "spike/fabro-fan-in-evidence",
+      "sha": "48d680ff38abfe397bd97bcb7a09e515110326de",
+      "dirty": "clean"
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01M1PG3CXYQB3JAKS086TX8C01",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-09-04T15:20:23.438487328Z",
+  "last_event_at": "2026-09-04T15:20:26.923493787Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "kind": "ready",
+    "plan": {
+      "provider": "docker"
+    },
+    "instance": {
+      "provider": "docker",
+      "image": "buildpack-deps:noble",
+      "runtime": {
+        "id": "cdc0a0040be3db5c80f691d99099f4fc365015a40ef5ac767c5f885184c17bf5",
+        "working_directory": "/workspace/memba",
+        "repo_cloned": true,
+        "clone_origin_url": "https://github.com/mattwynne/memba",
+        "clone_branch": "spike/fabro-fan-in-evidence",
+        "workspace_root": "/workspace",
+        "repos_root": "/repos",
+        "primary_repo_path": "/repos/mattwynne/memba",
+        "primary_repo_link": "/workspace/memba"
+      }
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
