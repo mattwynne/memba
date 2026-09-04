@@ -30,21 +30,19 @@ digraph IterationReview {
     read_failed [
         label="Fail: Plan Missing",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
     ]
 
     preflight_sandbox [
         label="Preflight Review Sandbox",
         shape=parallelogram,
-        script="set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        script="bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
         timeout="600s"
     ]
 
     preflight_failed [
         label="Fail: Sandbox Preflight",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review failed before review: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
     ]
 
@@ -72,7 +70,6 @@ digraph IterationReview {
     collect_evidence_failed [
         label="Fail: Evidence Collection",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_sha visibility, then retry via bin/dev fabro review.' >&2\nexit 1"
     ]
 
@@ -117,7 +114,6 @@ digraph IterationReview {
     synthesis_unavailable [
         label="Fail: Review Synthesis Unavailable",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review could not collect usable evidence from every independent reviewer and synthesize it after parallel fan-in. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer acceptance or rejection.' >&2\nexit 1"
     ]
     review_gate [shape=diamond, label="Implementation accepted?"]
@@ -140,7 +136,6 @@ digraph IterationReview {
     not_ready [
         label="Fail: Needs Human Review",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\nexit 1"
     ]
 
@@ -155,7 +150,6 @@ digraph IterationReview {
     code_health_recording_failed [
         label="Fail: Code Health Recording",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review accepted the implementation, but judgement-worthy code-health findings were not recorded in docs/code-health.md. Inspect the Record Code Health Findings stage and rerun review or record the findings manually before finalizing.' >&2\nexit 1"
     ]
 
@@ -175,14 +169,12 @@ digraph IterationReview {
     final_artifact_failed [
         label="Fail: Final Artifact Gate",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review accepted the implementation, but final artifact policy failed. Check feature-file plan permissions and review-polish diffs, then rerun review.' >&2\nexit 1"
     ]
 
     publish_failed [
         label="Fail: Publish Review Polish",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review accepted the implementation, but could not publish green review polish to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\nexit 1"
     ]
 
@@ -190,13 +182,13 @@ digraph IterationReview {
         label="Finalize Iteration Status",
         shape=parallelogram,
         script="bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh '{{ inputs.plan_path }}'",
-        timeout="300s"
+        timeout="300s",
+        goal_gate=true
     ]
 
     finalize_failed [
         label="Fail: Finalize Iteration Status",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.' >&2\nexit 1"
     ]
 
