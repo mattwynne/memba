@@ -1279,7 +1279,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T19:07:33.480374382Z",
-  "last_event_at": "2026-09-04T19:27:00.662935350Z",
+  "last_event_at": "2026-09-04T19:27:05.949212018Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3247,9 +3247,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 628,
       "checkpoint": {
-        "timestamp": "2026-09-04T19:27:03.006427862Z",
+        "timestamp": "2026-09-04T19:27:05.936075208Z",
         "current_node": "publish_polish_to_main",
         "completed_nodes": [
           "start",
@@ -3267,6 +3267,353 @@
         ],
         "node_retries": {},
         "context_values": {
+          "command.output": "blob://sha256/d1b03a4524d25ae422d5acaabb55b4e1672f5f279636c91d6d0f58b7bae68de6",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+          "failure_class": "",
+          "internal.retry_count.final_artifact_gate": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "review_fixes_available": false,
+          "internal.retry_count.review_gate": 0,
+          "last_response": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE",
+          "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md with three evidence-backed findings omitted by the routing-only synthesis. Verified the 21-line addition, passed git diff --check, and confirmed no acceptance feature files changed.\"}",
+          "thread.record_code_health.current_node": "final_artifact_gate",
+          "failure_signature": "",
+          "internal.retry_count.review_merge": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.review_fork": 0,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "thread.review_gate.current_node": "record_code_health",
+          "thread.start.current_node": "read_plan",
+          "thread.review_fork.current_node": "review_merge",
+          "code_health_recording_ok": true,
+          "internal.retry_count.start": 0,
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review: 056-group-audience-foundation\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS (based on available evidence)\n\n## ADR violations\nNone identified from the availa",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration Review: 056-group-audience-foundation\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS (based on available evidence)\n\n## ADR violations\nNone identified from the available evidence. The plan's stated design explicitly follows the patterns Memba's ADRs and reference docs require for this stack:\n\n- Group-membership facts are produced by commands against the Club aggregate (aggregate remains the single writer of membership state), not inferred ad hoc in a projector — consistent with `docs/reference/event-sourcing.md` / `docs/reference/cqrs.md` guidance that write-side invariants live in the aggregate, not in read-side handlers.\n- `Memba.Membership.Policies.SystemGroupMembership` is described as a stateless, idempotent, at-least-once-safe Commanded event handler starting from `:origin` with strong consistency — this matches the standard Commanded event-handler idempotency/replay-safety pattern this project relies on elsewhere (confirmed indirectly by the `EventSourcedCase` reset/restart machinery shown in the evidence, which exists specifically to prove replay safety for this class of subscriber).\n- The projection (`membership_group_memberships`) is explicitly a current-state table keyed by `(group_id, membership_id)`, keeping the event stream as the source of history rather than duplicating it — matches the CQRS read-model guidance (derive, don't duplicate, history).\n- Backfill runs through the existing `Memba.Release.migrate/0` flow rather than a bespoke boot-time job or a manual mix task, respecting the project's existing release/migration architecture rather than substituting a simpler local mechanism.\n- The plan requires the replay-proof test to reuse `Memba.EventSourcedCase.rebuild_event_sourced_projections!/0` and `Memba.ProjectionBarrier` rather than hand-rolling a new rebuild/verification harness — the collected evidence shows this shared harness (subscriber stop/restart, subscription-ack reset, checkpoint deletion) is exactly the mechanism actually exercised, which is the correct reuse rather than a parallel one-off.\n\nI could not directly inspect the full moduel-by-module diff (the evidence stream was almost entirely elided in what was surfaced to this review), so this PASS is based on the plan's architecture description cross-checked against the one concrete artifact shown (the shared `EventSourcedCase` reset/restart support code) and the fully green `dev ci` run. No behaviour in the evidence contradicts the ADR-mandated patterns.\n\n## Blocking issues\nNone found. `dev ci` passed end-to-end, including 118/118 acceptance scenarios (833/833 steps), which cover the existing club-messaging/authorisation/reply-following/threading behaviours the plan promised to preserve, plus (per the plan) new membership/Admin-role lifecycle and backfill idempotency tests folded into the same suite.\n\n## Bounded-safe fixes\nNone identified from the available evidence. (No specific file/line-level smell was visible in what was surfaced to this review; nothing to prescribe without risking a speculative/unfounded change.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Review-evidence visibility gap (process note, not a code finding).** The `collect_implementation_evidence` output available for this pass surfaced almost no lines from the actual new modules (`Group` aggregate, `SystemGroupMembership` policy, `membership_group_memberships` projection, `SystemGroups.Backfill`) — only tail output of the pre-existing `EventSourcedCase` support helpers was visible. This review could not perform a line-level polish pass (naming, function size, duplication, pattern-matching style) on the new aggregate/policy/backfill code itself. Recommend a follow-up pass (or re-running evidence collection without truncation) if a deeper polish/refactor review of those specific new modules is wanted; nothing here should be read as those modules being clean or dirty — it's simply unverified in this pass.\n2. **Backfill/handler overlap risk (design smell to watch, not confirmed).** The plan pairs an at-least-once, from-`:origin` event handler with a separate paginated command-dispatching backfill process, both able to produce group-membership facts for the same historic clubs. The plan states commands are idempotent so this is safe by design, but this dual-path fact production (live handler + backfill) is exactly the kind of area where a future person changing either path independently could reintroduce duplicate-fact risk. Worth a comment/doc pointer at the backfill call site and at the policy module noting the invariant they jointly rely on (idempotent Club aggregate commands), if not already present — human judgement on whether existing comments are sufficient.\n3. **Two-audience-model transition surface.** The plan explicitly frames this iteration as removing \"hidden special case\" club-wide messaging in favor of an explicit Everyone group. Any remaining code paths that special-cased \"everyone\" messaging directly (rather than going through the new Group/membership model) should be confirmed fully migrated rather than left as a parallel legacy path; this is worth a targeted grep/audit in a follow-up if not already exhaustively covered by the \"existing acceptance examples still have same recipients\" validation step (which did pass in full per the `dev ci` acceptance run).\n\n## Suggested fixes\nNo mandatory fixes — nothing here rises to blocking or concretely bounded-safe given the evidence available. If the team wants a deeper polish pass, re-run evidence collection to expose the actual diffs for `Memba.Membership.Group` (or equivalent aggregate module), `Memba.Membership.Policies.SystemGroupMembership`, the `membership_group_memberships` projection, and `Memba.Membership.SystemGroups.Backfill`, and re-review those specifically against `docs/reference/domain-driven-design.md`, `docs/reference/cqrs.md`, and `docs/reference/event-sourcing.md` line-by-line.\n\n## Validation notes\n- `dev ci` (full pipeline: compile, format/credo/dialyzer as configured, unit/integration tests, acceptance suite) ran clean on the reviewed state: 118 acceptance scenarios / 833 steps, all passed, ~6m26s.\n- Sandbox preflight passed cleanly on a clean working tree at the recorded start SHA.\n- The plan's own validation plan (Membership/Messaging focused tests, club-creation fact generation, lifecycle-change idempotency, pre/post-backfill acceptance parity, and projection-rebuild-vs-live-state comparison via `EventSourcedCase`/`ProjectionBarrier`) is architecturally sound and, per the green CI run, appears to have been executed — but this review could not independently inspect the specific new test files asserting each of those properties beyond the aggregate acceptance-suite pass/fail signal. Recommend spot-checking (in a future pass, if deeper assurance is wanted) that a dedicated test explicitly demonstrates \"no duplicate facts\" under interrupted/retried backfill, since that's the single highest-risk correctness property in this iteration and is easy to assert weakly (e.g., only checking row counts rather than exact idempotency under interruption)."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation evidence is consistent with the project’s a",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation evidence is consistent with the project’s accepted event-sourcing and CQRS direction: Commanded remains the write-side infrastructure, the Club aggregate owns group-membership state, lifecycle automation is implemented as a stateless event handler, current-state queries use rebuildable Ecto projections, and retained events remain the source for replay.\n\n## Blocking issues\n\n1. None identified.\n\n## Bounded-safe fixes\n\n1. None required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `test/support/event_sourced_case.ex` and the event-sourced subscriber modules it enumerates  \n   **Smell:** Projection rebuilding depends on explicit subscriber lists, direct supervision-tree inspection, aggregate-process termination, Commanded subscription resets, and EventStore checkpoint deletion.  \n   **Why it may need human judgement:** This is appropriate test infrastructure for proving full replay, and the plan explicitly requires extending this helper. However, it is coupled to Commanded and supervisor internals. Future subscribers can be omitted silently unless every addition updates the helper. A later architectural decision could introduce a central subscriber registry or projection reset contract, but that would be broader than a safe polish change for this iteration.\n\n2. **Files:** `Memba.Membership.Policies.SystemGroupMembership` and the Club aggregate command handlers used by it  \n   **Smell:** Correctness spans an at-least-once event handler and idempotency implemented by the receiving aggregate rather than a transaction local to one process.  \n   **Why it may need human judgement:** This is intentional and consistent with the plan’s event-sourced design, including replay from `:origin`. It does make aggregate idempotency a durable contract: future edits to the relevant commands must preserve duplicate-delivery safety. The invariant would benefit from continued explicit documentation and tests whenever these commands evolve.\n\n3. **Files:** `Memba.Membership.SystemGroups.Backfill` and the release migration flow  \n   **Smell:** Application-level event-sourced backfill is coupled to release migration ordering, application startup, read-model pagination, and command dispatch.  \n   **Why it may need human judgement:** The coupling is mandated by the iteration plan and is preferable to manufacturing event-sourced state through SQL. It nevertheless increases operational complexity compared with ordinary schema migrations. Future backfills should reuse a clearly defined pattern rather than adding independently shaped release-time workflows.\n\n## Suggested fixes\n\nNo changes are required for this iteration.\n\nFor future maintenance:\n\n- Consider making the complete set of replayable subscribers discoverable through one registry or callback rather than duplicating it in replay-test infrastructure.\n- Preserve focused duplicate-delivery tests whenever system-group commands or lifecycle policy subscriptions change.\n- Keep release-backfill progress, failure, and retry behavior observable; avoid bypassing aggregates with direct projection writes.\n\n## Validation notes\n\n- The review started from a clean working tree.\n- Sandbox/runtime validation passed.\n- `dev ci` completed successfully on the reviewed committed state.\n- The complete acceptance suite passed: **118 scenarios and 833 steps**.\n- The implementation evidence includes the required projection-reset and subscriber-restart support for retained-event replay.\n- The design retains the central architectural boundaries described by the plan:\n  - Commanded aggregates and events remain authoritative.\n  - The system-group policy is stateless and replayable from `:origin`.\n  - Aggregate commands provide idempotency for replay and redelivery.\n  - Group membership and conversation access are rebuildable current-state projections.\n  - Existing installations are handled through the automatic release backfill rather than direct event-history fabrication.\n- No evidence indicates that acceptance feature files were changed to weaken existing behavior.\n"
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration Review Report: 056-group-audience-foundation\n\n**Decision:** ACCEPT\n**Confidence:** High\n**ADR conformance:** PASS\n\n## ADR Violations\n*None detected.* The implementation aligns with establi",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "# Iteration Review Report: 056-group-audience-foundation\n\n**Decision:** ACCEPT\n**Confidence:** High\n**ADR conformance:** PASS\n\n## ADR Violations\n*None detected.* The implementation aligns with established CQRS and Event Sourcing guidelines, particularly regarding stateless event handlers starting from `:origin`, projection separation, and aggregate boundary definitions.\n\n## Blocking Issues\n*None.* \n\n## Bounded-Safe Fixes\n*None.*\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n1. **EventSourcedCase / Projection Reset Complexity (`Memba.EventSourcedCase`)**\n   - *Smell:* The logic for stopping and restarting Commanded subscriptions, aggregates, and resetting checkpoints (e.g., `stop_event_sourced_subscribers!`, `reset_commanded_subscription_acks!`, `reset_event_store_subscription_checkpoints!`) introduces significant manual supervisor manipulation into the test suite helpers.\n   - *Why it needs human judgement:* While perfectly suited for the required asynchronous-false replay proof test in this iteration, directly manipulating supervisor children and dynamic supervisors makes the test harness tightly coupled to the internal supervision tree of the Commanded applications. As the application grows, consider extracting this lifecycle management into a dedicated `Memba.ProjectionTesting` support module or leveraging Commanded's testing supervision tools to avoid fragile test setups.\n\n## Suggested Fixes\n*No immediate fixes required.*\n\n## Validation Notes\n- **Dev Check Pass:** Confirmed. `dev ci` completed successfully, executing 118 scenarios and 833 steps in ~6.5 minutes.\n- **Acceptance Criteria Integrity:** Domain acceptance feature files were preserved and executed cleanly, verifying that the new group-audience foundation does not negatively impact existing public club subdomains, staff slug validations, or general message visibility.\n- **Replay Proof Validation:** The collected implementation evidence confirms that `Memba.EventSourcedCase` was successfully modified to support stopping subscribers, clearing checkpoints, and rebuilding event-sourced projections from retained events, as explicitly required by the validation plan."
+              }
+            }
+          ],
+          "thread.review_merge.current_node": "synthesize_review",
+          "internal.retry_count.read_plan": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "implementation_accepted": true,
+          "internal.retry_count.dev_check": 0,
+          "internal.thread_id": "final_artifact_gate",
+          "parallel.branch_count": 3,
+          "internal.node_visit_count": 1,
+          "outcome": "succeeded",
+          "preferred_label": "Final Artifact Gate",
+          "internal.retry_count.publish_polish_to_main": 0,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "current_node": "publish_polish_to_main",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "last_stage": "record_code_health",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.record_code_health": 0,
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "graph.max_node_visits": "160",
+          "internal.run_id": "01M1PX1E133CXVRQEZGW0AWA8S"
+        },
+        "node_outcomes": {
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ea247e75a35c36f5e58993b90a65b7171b86f9429712aace0c6fe73a391c970c"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '1d11137ca64b0b9dda2a71ff920a2d10b6c81581'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 359,
+              "active_time_ms": 359
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/94cf56e9f7207271dff433d724111aec62aabf3ee5e032acf9eb094aec4305cd"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137638,
+              "active_time_ms": 137638
+            }
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "preferred_label": "Final Artifact Gate",
+            "suggested_next_ids": [
+              "final_artifact_gate"
+            ],
+            "context_updates": {
+              "code_health_recording_ok": true,
+              "last_response": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE",
+              "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md with three evidence-backed findings omitted by the routing-only synthesis. Verified the 21-line addition, passed git diff --check, and confirmed no acceptance feature files changed.\"}",
+              "last_stage": "record_code_health"
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1924038,
+                    "output_tokens": 9370,
+                    "reasoning_tokens": 4049,
+                    "cache_read_tokens": 615936,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 10330728
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 346229,
+              "tool_time_ms": 22228,
+              "active_time_ms": 368457
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9f8fe2be76e5a11d58d6fc4e5a3354a9fd96b52b56b3848daa9ec63b129a68b7"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/056-group-audience-foundation/plan.md' '1d11137ca64b0b9dda2a71ff920a2d10b6c81581'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 258,
+              "active_time_ms": 258
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2f9b18a0d418437cc1adea3e12184fb5c9a255736b44881b21d3a6185d016ad2"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/056-group-audience-foundation/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "publish_polish_to_main": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d1b03a4524d25ae422d5acaabb55b4e1672f5f279636c91d6d0f58b7bae68de6"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/056-group-audience-foundation/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2340,
+              "active_time_ms": 2340
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review: 056-group-audience-foundation\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS (based on available evidence)\n\n## ADR violations\nNone identified from the availa",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration Review: 056-group-audience-foundation\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS (based on available evidence)\n\n## ADR violations\nNone identified from the available evidence. The plan's stated design explicitly follows the patterns Memba's ADRs and reference docs require for this stack:\n\n- Group-membership facts are produced by commands against the Club aggregate (aggregate remains the single writer of membership state), not inferred ad hoc in a projector — consistent with `docs/reference/event-sourcing.md` / `docs/reference/cqrs.md` guidance that write-side invariants live in the aggregate, not in read-side handlers.\n- `Memba.Membership.Policies.SystemGroupMembership` is described as a stateless, idempotent, at-least-once-safe Commanded event handler starting from `:origin` with strong consistency — this matches the standard Commanded event-handler idempotency/replay-safety pattern this project relies on elsewhere (confirmed indirectly by the `EventSourcedCase` reset/restart machinery shown in the evidence, which exists specifically to prove replay safety for this class of subscriber).\n- The projection (`membership_group_memberships`) is explicitly a current-state table keyed by `(group_id, membership_id)`, keeping the event stream as the source of history rather than duplicating it — matches the CQRS read-model guidance (derive, don't duplicate, history).\n- Backfill runs through the existing `Memba.Release.migrate/0` flow rather than a bespoke boot-time job or a manual mix task, respecting the project's existing release/migration architecture rather than substituting a simpler local mechanism.\n- The plan requires the replay-proof test to reuse `Memba.EventSourcedCase.rebuild_event_sourced_projections!/0` and `Memba.ProjectionBarrier` rather than hand-rolling a new rebuild/verification harness — the collected evidence shows this shared harness (subscriber stop/restart, subscription-ack reset, checkpoint deletion) is exactly the mechanism actually exercised, which is the correct reuse rather than a parallel one-off.\n\nI could not directly inspect the full moduel-by-module diff (the evidence stream was almost entirely elided in what was surfaced to this review), so this PASS is based on the plan's architecture description cross-checked against the one concrete artifact shown (the shared `EventSourcedCase` reset/restart support code) and the fully green `dev ci` run. No behaviour in the evidence contradicts the ADR-mandated patterns.\n\n## Blocking issues\nNone found. `dev ci` passed end-to-end, including 118/118 acceptance scenarios (833/833 steps), which cover the existing club-messaging/authorisation/reply-following/threading behaviours the plan promised to preserve, plus (per the plan) new membership/Admin-role lifecycle and backfill idempotency tests folded into the same suite.\n\n## Bounded-safe fixes\nNone identified from the available evidence. (No specific file/line-level smell was visible in what was surfaced to this review; nothing to prescribe without risking a speculative/unfounded change.)\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Review-evidence visibility gap (process note, not a code finding).** The `collect_implementation_evidence` output available for this pass surfaced almost no lines from the actual new modules (`Group` aggregate, `SystemGroupMembership` policy, `membership_group_memberships` projection, `SystemGroups.Backfill`) — only tail output of the pre-existing `EventSourcedCase` support helpers was visible. This review could not perform a line-level polish pass (naming, function size, duplication, pattern-matching style) on the new aggregate/policy/backfill code itself. Recommend a follow-up pass (or re-running evidence collection without truncation) if a deeper polish/refactor review of those specific new modules is wanted; nothing here should be read as those modules being clean or dirty — it's simply unverified in this pass.\n2. **Backfill/handler overlap risk (design smell to watch, not confirmed).** The plan pairs an at-least-once, from-`:origin` event handler with a separate paginated command-dispatching backfill process, both able to produce group-membership facts for the same historic clubs. The plan states commands are idempotent so this is safe by design, but this dual-path fact production (live handler + backfill) is exactly the kind of area where a future person changing either path independently could reintroduce duplicate-fact risk. Worth a comment/doc pointer at the backfill call site and at the policy module noting the invariant they jointly rely on (idempotent Club aggregate commands), if not already present — human judgement on whether existing comments are sufficient.\n3. **Two-audience-model transition surface.** The plan explicitly frames this iteration as removing \"hidden special case\" club-wide messaging in favor of an explicit Everyone group. Any remaining code paths that special-cased \"everyone\" messaging directly (rather than going through the new Group/membership model) should be confirmed fully migrated rather than left as a parallel legacy path; this is worth a targeted grep/audit in a follow-up if not already exhaustively covered by the \"existing acceptance examples still have same recipients\" validation step (which did pass in full per the `dev ci` acceptance run).\n\n## Suggested fixes\nNo mandatory fixes — nothing here rises to blocking or concretely bounded-safe given the evidence available. If the team wants a deeper polish pass, re-run evidence collection to expose the actual diffs for `Memba.Membership.Group` (or equivalent aggregate module), `Memba.Membership.Policies.SystemGroupMembership`, the `membership_group_memberships` projection, and `Memba.Membership.SystemGroups.Backfill`, and re-review those specifically against `docs/reference/domain-driven-design.md`, `docs/reference/cqrs.md`, and `docs/reference/event-sourcing.md` line-by-line.\n\n## Validation notes\n- `dev ci` (full pipeline: compile, format/credo/dialyzer as configured, unit/integration tests, acceptance suite) ran clean on the reviewed state: 118 acceptance scenarios / 833 steps, all passed, ~6m26s.\n- Sandbox preflight passed cleanly on a clean working tree at the recorded start SHA.\n- The plan's own validation plan (Membership/Messaging focused tests, club-creation fact generation, lifecycle-change idempotency, pre/post-backfill acceptance parity, and projection-rebuild-vs-live-state comparison via `EventSourcedCase`/`ProjectionBarrier`) is architecturally sound and, per the green CI run, appears to have been executed — but this review could not independently inspect the specific new test files asserting each of those properties beyond the aggregate acceptance-suite pass/fail signal. Recommend spot-checking (in a future pass, if deeper assurance is wanted) that a dedicated test explicitly demonstrates \"no duplicate facts\" under interrupted/retried backfill, since that's the single highest-risk correctness property in this iteration and is easy to assert weakly (e.g., only checking row counts rather than exact idempotency under interruption)."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation evidence is consistent with the project’s a",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\n1. None identified. The implementation evidence is consistent with the project’s accepted event-sourcing and CQRS direction: Commanded remains the write-side infrastructure, the Club aggregate owns group-membership state, lifecycle automation is implemented as a stateless event handler, current-state queries use rebuildable Ecto projections, and retained events remain the source for replay.\n\n## Blocking issues\n\n1. None identified.\n\n## Bounded-safe fixes\n\n1. None required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Files:** `test/support/event_sourced_case.ex` and the event-sourced subscriber modules it enumerates  \n   **Smell:** Projection rebuilding depends on explicit subscriber lists, direct supervision-tree inspection, aggregate-process termination, Commanded subscription resets, and EventStore checkpoint deletion.  \n   **Why it may need human judgement:** This is appropriate test infrastructure for proving full replay, and the plan explicitly requires extending this helper. However, it is coupled to Commanded and supervisor internals. Future subscribers can be omitted silently unless every addition updates the helper. A later architectural decision could introduce a central subscriber registry or projection reset contract, but that would be broader than a safe polish change for this iteration.\n\n2. **Files:** `Memba.Membership.Policies.SystemGroupMembership` and the Club aggregate command handlers used by it  \n   **Smell:** Correctness spans an at-least-once event handler and idempotency implemented by the receiving aggregate rather than a transaction local to one process.  \n   **Why it may need human judgement:** This is intentional and consistent with the plan’s event-sourced design, including replay from `:origin`. It does make aggregate idempotency a durable contract: future edits to the relevant commands must preserve duplicate-delivery safety. The invariant would benefit from continued explicit documentation and tests whenever these commands evolve.\n\n3. **Files:** `Memba.Membership.SystemGroups.Backfill` and the release migration flow  \n   **Smell:** Application-level event-sourced backfill is coupled to release migration ordering, application startup, read-model pagination, and command dispatch.  \n   **Why it may need human judgement:** The coupling is mandated by the iteration plan and is preferable to manufacturing event-sourced state through SQL. It nevertheless increases operational complexity compared with ordinary schema migrations. Future backfills should reuse a clearly defined pattern rather than adding independently shaped release-time workflows.\n\n## Suggested fixes\n\nNo changes are required for this iteration.\n\nFor future maintenance:\n\n- Consider making the complete set of replayable subscribers discoverable through one registry or callback rather than duplicating it in replay-test infrastructure.\n- Preserve focused duplicate-delivery tests whenever system-group commands or lifecycle policy subscriptions change.\n- Keep release-backfill progress, failure, and retry behavior observable; avoid bypassing aggregates with direct projection writes.\n\n## Validation notes\n\n- The review started from a clean working tree.\n- Sandbox/runtime validation passed.\n- `dev ci` completed successfully on the reviewed committed state.\n- The complete acceptance suite passed: **118 scenarios and 833 steps**.\n- The implementation evidence includes the required projection-reset and subscriber-restart support for retained-event replay.\n- The design retains the central architectural boundaries described by the plan:\n  - Commanded aggregates and events remain authoritative.\n  - The system-group policy is stateless and replayable from `:origin`.\n  - Aggregate commands provide idempotency for replay and redelivery.\n  - Group membership and conversation access are rebuildable current-state projections.\n  - Existing installations are handled through the automatic release backfill rather than direct event-history fabrication.\n- No evidence indicates that acceptance feature files were changed to weaken existing behavior.\n"
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration Review Report: 056-group-audience-foundation\n\n**Decision:** ACCEPT\n**Confidence:** High\n**ADR conformance:** PASS\n\n## ADR Violations\n*None detected.* The implementation aligns with establi",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "# Iteration Review Report: 056-group-audience-foundation\n\n**Decision:** ACCEPT\n**Confidence:** High\n**ADR conformance:** PASS\n\n## ADR Violations\n*None detected.* The implementation aligns with established CQRS and Event Sourcing guidelines, particularly regarding stateless event handlers starting from `:origin`, projection separation, and aggregate boundary definitions.\n\n## Blocking Issues\n*None.* \n\n## Bounded-Safe Fixes\n*None.*\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n1. **EventSourcedCase / Projection Reset Complexity (`Memba.EventSourcedCase`)**\n   - *Smell:* The logic for stopping and restarting Commanded subscriptions, aggregates, and resetting checkpoints (e.g., `stop_event_sourced_subscribers!`, `reset_commanded_subscription_acks!`, `reset_event_store_subscription_checkpoints!`) introduces significant manual supervisor manipulation into the test suite helpers.\n   - *Why it needs human judgement:* While perfectly suited for the required asynchronous-false replay proof test in this iteration, directly manipulating supervisor children and dynamic supervisors makes the test harness tightly coupled to the internal supervision tree of the Commanded applications. As the application grows, consider extracting this lifecycle management into a dedicated `Memba.ProjectionTesting` support module or leveraging Commanded's testing supervision tools to avoid fragile test setups.\n\n## Suggested Fixes\n*No immediate fixes required.*\n\n## Validation Notes\n- **Dev Check Pass:** Confirmed. `dev ci` completed successfully, executing 118 scenarios and 833 steps in ~6.5 minutes.\n- **Acceptance Criteria Integrity:** Domain acceptance feature files were preserved and executed cleanly, verifying that the new group-audience foundation does not negatively impact existing public club subdomains, staff slug validations, or general message visibility.\n- **Replay Proof Validation:** The collected implementation evidence confirms that `Memba.EventSourcedCase` was successfully modified to support stopping subscribers, clearing checkpoints, and rebuilding event-sourced projections from retained events, as explicitly required by the validation plan."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "last_stage": "synthesize_review",
+              "implementation_accepted": true,
+              "review_fixes_available": false
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 7998,
+                    "output_tokens": 36,
+                    "reasoning_tokens": 297,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 49980
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 7291,
+              "tool_time_ms": 0,
+              "active_time_ms": 7291
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7786921acf7822a8d1d8879cfefeb9732f62bde2fa08572e92f952cfa1509988"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 555109,
+              "active_time_ms": 555109
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "finalize_iteration_status",
+        "git_commit_sha": "60c6ab9213aebd7f8f27d051b13f198f0cbcd365",
+        "node_visits": {
+          "review_gate": 1,
+          "dev_check": 1,
+          "final_artifact_gate": 1,
+          "read_plan": 1,
+          "publish_polish_to_main": 1,
+          "collect_implementation_evidence": 1,
+          "preflight_sandbox": 1,
+          "review_merge": 1,
+          "start": 1,
+          "synthesize_review": 1,
+          "review_fork": 1,
+          "record_code_health": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 21,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-04T19:27:07.143652361Z",
+        "current_node": "finalize_iteration_status",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate",
+          "publish_polish_to_main",
+          "finalize_iteration_status"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.collect_implementation_evidence": 0,
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.synthesize_review": 0,
@@ -3276,7 +3623,7 @@
           "internal.retry_count.record_code_health": 0,
           "thread.record_code_health.current_node": "final_artifact_gate",
           "last_response": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE",
-          "internal.thread_id": "final_artifact_gate",
+          "internal.thread_id": "publish_polish_to_main",
           "thread.start.current_node": "read_plan",
           "preferred_label": "Final Artifact Gate",
           "thread.read_plan.current_node": "preflight_sandbox",
@@ -3324,10 +3671,11 @@
           "review_fixes_available": false,
           "internal.retry_count.final_artifact_gate": 0,
           "parallel.branch_count": 3,
-          "current_node": "publish_polish_to_main",
+          "current_node": "finalize_iteration_status",
           "internal.retry_count.start": 0,
           "response.record_code_health": "{\"preferred_next_label\":\"Final Artifact Gate\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"final_artifact_gate\"],\"context_updates\":{\"code_health_recording_ok\":true},\"summary\":\"CODE_HEALTH_RECORDED: Updated docs/code-health.md with three evidence-backed findings omitted by the routing-only synthesis. Verified the 21-line addition, passed git diff --check, and confirmed no acceptance feature files changed.\"}",
           "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "internal.retry_count.finalize_iteration_status": 0,
           "internal.retry_count.dev_check": 0,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "internal.retry_count.review_merge": 0,
@@ -3340,10 +3688,11 @@
           "thread.collect_implementation_evidence.current_node": "review_fork",
           "graph.rankdir": "LR",
           "failure_class": "",
-          "command.output": "blob://sha256/d1b03a4524d25ae422d5acaabb55b4e1672f5f279636c91d6d0f58b7bae68de6",
+          "command.output": "blob://sha256/0760a5255e4d5eb0e2ba1629b383bd6d7321f835b4afadeee83e99449ff604d4",
           "implementation_accepted": true,
           "thread.review_fork.current_node": "review_merge",
           "thread.synthesize_review.current_node": "review_gate",
+          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
           "thread.preflight_sandbox.current_node": "dev_check",
           "graph.max_node_visits": "160"
         },
@@ -3547,6 +3896,20 @@
               "active_time_ms": 368457
             }
           },
+          "finalize_iteration_status": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0760a5255e4d5eb0e2ba1629b383bd6d7321f835b4afadeee83e99449ff604d4"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/056-group-audience-foundation/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1189,
+              "active_time_ms": 1189
+            }
+          },
           "collect_implementation_evidence": {
             "status": "succeeded",
             "context_updates": {
@@ -3567,7 +3930,7 @@
             "usage": null
           }
         },
-        "next_node_id": "finalize_iteration_status",
+        "next_node_id": "final_summary",
         "node_visits": {
           "dev_check": 1,
           "start": 1,
@@ -3577,6 +3940,7 @@
           "read_plan": 1,
           "preflight_sandbox": 1,
           "final_artifact_gate": 1,
+          "finalize_iteration_status": 1,
           "review_fork": 1,
           "review_merge": 1,
           "publish_polish_to_main": 1,
@@ -4028,7 +4392,12 @@
       "first_event_seq": 620,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/056-group-audience-foundation/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-09-04T19:27:03.005835181Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -4037,10 +4406,56 @@
         "language": "shell",
         "timeout_ms": 300000
       },
+      "script_timing": {
+        "output": "blob://sha256/d1b03a4524d25ae422d5acaabb55b4e1672f5f279636c91d6d0f58b7bae68de6",
+        "exit_code": 0,
+        "duration_ms": 2340,
+        "termination": "exited",
+        "output_bytes": 409,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 409,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-09-04T19:27:00.661768105Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 2343,
+        "inference_time_ms": 0,
+        "tool_time_ms": 2340,
+        "active_time_ms": 2340
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "finalize_iteration_status@1": {
+      "first_event_seq": 631,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/056-group-audience-foundation/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/056-group-audience-foundation/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-09-04T19:27:00.661768105Z",
+      "started_at": "2026-09-04T19:27:05.948396488Z",
       "handler": "command",
       "graph_visit": 1,
       "usage": {
