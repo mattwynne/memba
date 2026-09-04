@@ -76,6 +76,12 @@ digraph IterationReview {
         script="echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_sha visibility, then retry via bin/dev fabro review.' >&2\nexit 1"
     ]
 
+    review_fork [
+        label="Fan Out Independent Reviews",
+        shape=component,
+        max_parallel=3
+    ]
+
     claude_review [
         label="Claude Review",
         shape=tab,
@@ -94,6 +100,12 @@ digraph IterationReview {
         prompt="@prompts/review.md",
         retry_policy="patient"
     ]
+
+    review_merge [
+        label="Collect Independent Reviews",
+        shape=tripleoctagon
+    ]
+
     synthesize_review [
         label="Synthesize Review",
         shape=tab,
@@ -106,7 +118,7 @@ digraph IterationReview {
         label="Fail: Review Synthesis Unavailable",
         shape=parallelogram,
         goal_gate=true,
-        script="echo 'Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
+        script="echo 'Iteration review could not collect usable evidence from every independent reviewer and synthesize it after parallel fan-in. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer acceptance or rejection.' >&2\nexit 1"
     ]
     review_gate [shape=diamond, label="Implementation accepted?"]
     snapshot_before_review_repair [
@@ -206,16 +218,18 @@ digraph IterationReview {
     dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
-    collect_implementation_evidence -> claude_review [condition="outcome=succeeded"]
+    collect_implementation_evidence -> review_fork [condition="outcome=succeeded"]
     collect_implementation_evidence -> collect_evidence_failed
     collect_evidence_failed -> exit
 
-    claude_review -> codex_review [condition="outcome=succeeded"]
-    claude_review -> synthesis_unavailable
-    codex_review -> gemini_review [condition="outcome=succeeded"]
-    codex_review -> synthesis_unavailable
-    gemini_review -> synthesize_review [condition="outcome=succeeded"]
-    gemini_review -> synthesis_unavailable
+    review_fork -> claude_review
+    review_fork -> codex_review
+    review_fork -> gemini_review
+    claude_review -> review_merge
+    codex_review -> review_merge
+    gemini_review -> review_merge
+    review_merge -> synthesize_review [condition="outcome=succeeded"]
+    review_merge -> synthesis_unavailable [label="Reviewer evidence unavailable"]
     synthesize_review -> review_gate [condition="outcome=succeeded"]
     synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]
     synthesis_unavailable -> exit

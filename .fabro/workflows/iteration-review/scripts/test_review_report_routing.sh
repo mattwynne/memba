@@ -41,21 +41,37 @@ if [ "$review_retry_count" -lt 4 ]; then
   exit 1
 fi
 
-# Review synthesis requires all independent reviewer Markdown reports. A failed
-# reviewer must not continue to synthesis with missing prior-stage context.
+# Review synthesis requires all independent reviewer Markdown reports. Reviewers
+# must fan out in parallel, fan in through Fabro's merge node, and fail closed
+# through the infrastructure route if the merged evidence is incomplete.
 assert_contains 'script="bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh'
-assert_contains 'claude_review -> codex_review [condition="outcome=succeeded"]'
-assert_contains 'claude_review -> synthesis_unavailable'
-assert_contains 'codex_review -> gemini_review [condition="outcome=succeeded"]'
-assert_contains 'codex_review -> synthesis_unavailable'
-assert_contains 'gemini_review -> synthesize_review [condition="outcome=succeeded"]'
-assert_contains 'gemini_review -> synthesis_unavailable'
+assert_contains 'review_fork ['
+assert_contains 'shape=component,'
+assert_contains 'max_parallel=3'
+assert_contains 'review_merge ['
+assert_contains 'shape=tripleoctagon'
+assert_contains 'collect_implementation_evidence -> review_fork [condition="outcome=succeeded"]'
+assert_contains 'review_fork -> claude_review'
+assert_contains 'review_fork -> codex_review'
+assert_contains 'review_fork -> gemini_review'
+assert_contains 'claude_review -> review_merge'
+assert_contains 'codex_review -> review_merge'
+assert_contains 'gemini_review -> review_merge'
+assert_contains 'review_merge -> synthesize_review [condition="outcome=succeeded"]'
+assert_contains 'review_merge -> synthesis_unavailable [label="Reviewer evidence unavailable"]'
 assert_contains 'synthesize_review -> review_gate [condition="outcome=succeeded"]'
 assert_contains 'synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]'
 
-assert_not_contains 'claude_review -> codex_review;'
-assert_not_contains 'codex_review -> gemini_review;'
-assert_not_contains 'gemini_review -> synthesize_review;'
+assert_not_contains 'claude_review -> codex_review'
+assert_not_contains 'codex_review -> gemini_review'
+assert_not_contains 'gemini_review -> synthesize_review'
+
+assert_file_contains "$synthesis_prompt_path" 'parallel.results'
+assert_file_contains "$synthesis_prompt_path" 'claude_review'
+assert_file_contains "$synthesis_prompt_path" 'codex_review'
+assert_file_contains "$synthesis_prompt_path" 'gemini_review'
+assert_file_contains "$synthesis_prompt_path" 'Fail closed if you cannot see usable, substantive reviewer evidence for all three required branches in `parallel.results`.'
+assert_file_contains "$synthesis_prompt_path" '{"outcome":"failed","failure_reason":"parallel fan-in did not expose usable review evidence for every required reviewer"}'
 
 # Review repair verification must fail closed when comparing the before/after
 # patches. `cmp` is not available in all Fabro sandboxes and can fail open when

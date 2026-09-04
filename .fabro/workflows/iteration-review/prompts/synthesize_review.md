@@ -9,10 +9,15 @@ Use the prior context from this workflow run:
 - The iteration plan text and its explicit requirements.
 - Implementation evidence collected from `{{ inputs.base_sha }}` to `HEAD`.
 - Successful `dev check` output.
-- The full Markdown responses from the Claude Review, Codex/GPT Review, and Gemini Review stages immediately preceding this stage.
+- The merged parallel fan-in evidence in `parallel.results` from the Claude Review (`claude_review`), Sol Review (`codex_review`), and Gemini Review (`gemini_review`) branches.
 - Previous synthesis decisions and repair summaries, if this is a repeated synthesis after repair.
 
-If you cannot see the substantive Markdown response from each independent review stage, do not silently accept. Return **FIX** and ask for a workflow repair that makes review reports visible to synthesis.
+The reviewer stages fan out independently and then fan in before this stage. In the merged context, inspect `parallel.results` explicitly. Each required branch must expose a completed outcome and the substantive Markdown response for that reviewer. Do not assume branch responses or routing fields are promoted to top-level context.
+
+Fail closed if you cannot see usable, substantive reviewer evidence for all three required branches in `parallel.results`. Branch status metadata, head SHAs, empty strings, or tool-call-looking JSON without an actual review report are not usable reviewer evidence. Missing reviewer evidence is a workflow/tooling failure, not proof that the implementation is acceptable and not a product-code fix.
+
+If any required reviewer evidence is missing or unusable, do not route **ACCEPTED** and do not route **FIX**. Return an infrastructure-failure synthesis that names the missing/unusable branch evidence and end with routing JSON that sets the stage outcome to failed, for example: `{"outcome":"failed","failure_reason":"parallel fan-in did not expose usable review evidence for every required reviewer"}`. This must route to the workflow's review-synthesis-unavailable failure path.
+
 Do not emit shell-command/tool-call JSON; return the Markdown synthesis and final routing JSON only.
 
 ## Standards
@@ -35,7 +40,11 @@ Return a concise Markdown synthesis with these sections:
 
 ### Decision
 
-One of: **ACCEPTED** or **FIX**.
+One of: **ACCEPTED**, **FIX**, or **INFRASTRUCTURE FAILURE**. Use **INFRASTRUCTURE FAILURE** only when the required reviewer evidence in `parallel.results` is missing or unusable.
+
+### Evidence preflight
+
+List Claude Review, Sol Review, and Gemini Review. For each, state whether usable substantive evidence was present in `parallel.results`. If any are missing or unusable, stop the synthesis after this section and route the stage outcome to failed.
 
 ### Review synthesis
 
@@ -67,5 +76,7 @@ Use one of these shapes:
   `{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}`
 - Automatic fixes appropriate:
   `{"context_updates":{"implementation_accepted":false,"review_fixes_available":true,"review_blockers":[{"id":"fix-id-1","title":"Short fix title","source":"review_synthesis","first_seen_stage":"synthesize_review","status":"open"}]}}`
+- Infrastructure/tooling failure because required merged review evidence is missing or unusable:
+  `{"outcome":"failed","failure_reason":"parallel fan-in did not expose usable review evidence for every required reviewer"}`
 
 Do not route to human input from this post-merge review. Human-judgement findings belong in the Markdown section above so the next step can record them in `docs/code-health.md`.
