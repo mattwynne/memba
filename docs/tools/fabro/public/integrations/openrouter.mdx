@@ -1,0 +1,126 @@
+---
+title: "OpenRouter"
+description: "Route Fabro model reviews through OpenRouter"
+---
+
+OpenRouter is an OpenAI-compatible gateway. Configure it in the Fabro server’s
+`~/.fabro/settings.toml`, then keep its API key in the server vault. Do not put the
+key in a repository, `server.env`, or a workflow file.
+
+## Configure the server
+
+Store the API key once:
+
+```bash
+fabro secret set OPENROUTER_API_KEY sk-or-...
+```
+
+Add the provider and each model that Fabro should route through it. Fabro
+`0.316.0-nightly.0` requires a complete custom-model catalog record: the model’s
+family, limits, feature flags, controls, and costs must all be explicit.
+
+```toml title="~/.fabro/settings.toml"
+[llm.providers.openrouter]
+display_name = "OpenRouter"
+adapter = "openai_compatible"
+base_url = "https://openrouter.ai/api/v1"
+
+[llm.providers.openrouter.auth]
+credentials = ["vault:OPENROUTER_API_KEY"]
+
+[llm.models."openrouter-claude-sonnet-5"]
+provider = "openrouter"
+api_id = "anthropic/claude-sonnet-5"
+agent_profile = "anthropic"
+display_name = "Claude Sonnet 5 via OpenRouter"
+family = "claude-5"
+aliases = ["or-claude-sonnet"]
+
+[llm.models."openrouter-claude-sonnet-5".limits]
+context_window = 1000000
+max_output = 128000
+
+[llm.models."openrouter-claude-sonnet-5".features]
+tools = true
+vision = true
+reasoning = true
+reasoning_effort = "levels"
+prompt_cache = true
+cache_control_breakpoints = false
+sampling_params = false
+
+[llm.models."openrouter-claude-sonnet-5".controls]
+reasoning_effort = ["low", "medium", "high", "xhigh", "max"]
+
+[llm.models."openrouter-claude-sonnet-5".costs]
+input_cost_per_mtok = 2.0
+output_cost_per_mtok = 10.0
+cache_input_cost_per_mtok = 0.2
+
+[llm.models."openrouter-gemini-3-1-pro"]
+provider = "openrouter"
+api_id = "google/gemini-3.1-pro-preview"
+agent_profile = "gemini"
+display_name = "Gemini 3.1 Pro Preview via OpenRouter"
+family = "gemini-3"
+aliases = ["or-gemini-pro"]
+estimated_output_tps = 85.0
+
+[llm.models."openrouter-gemini-3-1-pro".limits]
+context_window = 1048576
+max_output = 65536
+
+[llm.models."openrouter-gemini-3-1-pro".features]
+tools = true
+vision = true
+reasoning = true
+reasoning_effort = "levels"
+prompt_cache = false
+cache_control_breakpoints = false
+sampling_params = true
+
+[llm.models."openrouter-gemini-3-1-pro".controls]
+reasoning_effort = ["low", "medium", "high", "xhigh", "max"]
+
+[llm.models."openrouter-gemini-3-1-pro".costs]
+input_cost_per_mtok = 2.0
+output_cost_per_mtok = 12.0
+cache_input_cost_per_mtok = 0.5
+```
+
+The `api_id` values are OpenRouter model IDs. Check OpenRouter’s model catalogue
+before adding or changing a model; pricing, limits, and availability can change.
+
+Restart Fabro after editing its settings, then test the configured routes:
+
+```bash
+fabro model test --provider openrouter --model openrouter-claude-sonnet-5
+fabro model test --provider openrouter --model openrouter-gemini-3-1-pro
+```
+
+## Use OpenRouter models in a workflow
+
+Always specify the provider and model on deliberately independent review nodes. This
+prevents a workflow default from silently routing a Claude or Gemini-labelled review
+through OpenAI.
+
+```dot title="workflow.fabro"
+model_stylesheet="
+  * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+  #claude_review { provider: openrouter; model: openrouter-claude-sonnet-5; reasoning_effort: high; }
+  #gemini_review { provider: openrouter; model: openrouter-gemini-3-1-pro; reasoning_effort: high; }
+"
+```
+
+## Troubleshooting
+
+**Server exits while building the model catalog** — a custom model entry is incomplete.
+On Fabro `0.316.0-nightly.0`, add all fields shown above; partial examples that omit
+`family`, limits, complete feature flags, controls, or costs can prevent Fabro from
+starting.
+
+**Gemini direct provider is rate-limited** — an `OPENROUTER_API_KEY` does not repair the
+direct Gemini provider. Route the workflow node explicitly through `openrouter`.
+
+**A review named Gemini or Claude reports an OpenAI error** — inspect the workflow
+stylesheet. A label does not select a provider; the node must declare one explicitly.
