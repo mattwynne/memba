@@ -1,7 +1,7 @@
 # Admin group email conversations
 
 Date: 2026-09-03
-Status: ready
+Status: validated
 
 ## Goal
 
@@ -98,8 +98,8 @@ Planning adds future-facing scenarios tagged `@iteration-057 @todo-domain @todo-
     that conversation and follows the existing follower-delivery rule.
 
 The `@todo-domain` and `@todo-ui` tags exclude these scenarios from their respective
-runners until delivery supplies the required application and step support. Matt must
-review the scenario language as domain language before the plan is treated as final.
+runners until delivery supplies the required application and step support. Matt
+reviewed and approved the scenario language as domain language on 2026-09-03.
 
 ## Allowed acceptance feature changes
 
