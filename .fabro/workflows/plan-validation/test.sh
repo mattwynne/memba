@@ -45,6 +45,8 @@ require_parallel_fan_in() {
     'claude_review -> review_merge' \
     'codex_review -> review_merge' \
     'review_merge -> synthesize' \
+    '#terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }' \
+    'terra_recheck -> publish_ready' \
     'goal_gate=true'; do
     grep -Fq "$expected" "$workflow_graph" || \
       fail "parallel fan-in graph is missing: $expected"
@@ -54,7 +56,8 @@ require_parallel_fan_in() {
     'start -> gemini_review' \
     'gemini_review -> claude_review' \
     'claude_review -> codex_review' \
-    'codex_review -> synthesize'; do
+    'codex_review -> synthesize' \
+    'opus_recheck'; do
     if grep -Fq "$obsolete" "$workflow_graph"; then
       fail "parallel fan-in graph still contains sequential edge: $obsolete"
     fi

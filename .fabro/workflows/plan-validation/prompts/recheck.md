@@ -1,4 +1,4 @@
-You are GPT-5.6 Sol performing the post-fix readiness check for an iteration plan.
+You are GPT-5.6 Terra performing the post-fix readiness check for an iteration plan.
 
 Use your file-reading tools to read the current complete plan file directly from `{{ inputs.plan_path }}`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.
 
