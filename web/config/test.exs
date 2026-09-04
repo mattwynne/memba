@@ -18,7 +18,7 @@ repo_pool_config =
   if System.get_env("PHX_SERVER") == "true" do
     [pool_size: System.schedulers_online() * 2]
   else
-    [pool: Ecto.Adapters.SQL.Sandbox, pool_size: System.schedulers_online() * 2]
+    [pool: Ecto.Adapters.SQL.Sandbox, pool_size: System.schedulers_online() * 4]
   end
 
 config :memba,
