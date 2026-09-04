@@ -44,7 +44,8 @@ require_parallel_fan_in() {
     'gemini_review -> review_merge' \
     'claude_review -> review_merge' \
     'codex_review -> review_merge' \
-    'review_merge -> synthesize'; do
+    'review_merge -> synthesize' \
+    'goal_gate=true'; do
     grep -Fq "$expected" "$workflow_graph" || \
       fail "parallel fan-in graph is missing: $expected"
   done
