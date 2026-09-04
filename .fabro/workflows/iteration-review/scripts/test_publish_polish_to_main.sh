@@ -47,6 +47,18 @@ git commit -q -m 'fabro checkpoint review polish'
 remote_run_checkpoint=$(git rev-parse HEAD)
 git push -q origin HEAD:"$run_branch"
 
+other="$workdir/other-main-move"
+git clone -q "$workdir/origin.git" "$other"
+(
+  cd "$other"
+  git config user.name Other
+  git config user.email other@example.com
+  printf 'origin/main moved before review polish publication.\n' > docs/main-moved-before-review-polish.md
+  git add docs/main-moved-before-review-polish.md
+  git commit -q -m 'main moved before review polish publish'
+  git push -q origin main
+)
+
 FABRO_RUN_ID=REVIEW-RUN "$script_path" docs/iterations/001-example/plan.md >/tmp/publish-polish.out 2>/tmp/publish-polish.err
 
 git fetch -q origin main "$run_branch"
@@ -76,6 +88,10 @@ if [ "$(git config --local user.name)" != "Test" ] || [ "$(git config --local us
 fi
 if ! git show "$published:docs/code-health.md" | grep -q 'publication-history tests'; then
   echo "Expected review polish to be published" >&2
+  exit 1
+fi
+if ! git show "$published:docs/main-moved-before-review-polish.md" | grep -q 'origin/main moved'; then
+  echo "Expected review polish rebase to preserve unrelated origin/main movement" >&2
   exit 1
 fi
 if ! git merge-base --is-ancestor "$remote_run_checkpoint" HEAD; then

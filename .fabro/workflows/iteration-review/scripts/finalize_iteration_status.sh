@@ -92,7 +92,7 @@ git worktree add -q --detach "$publish_worktree" origin/main
 
   # Rebase the finalization candidate in the disposable worktree so origin/main
   # can move during review without ever rewriting the active Fabro run branch.
-  git pull --rebase origin main
+  fabro_git_with_identity pull --rebase origin main
   git push origin HEAD:main
 )
 

@@ -1,6 +1,6 @@
 You are resolving a publish-time rebase conflict for an iteration implementation.
 
-The deterministic publish step has already created a single attempted implementation commit, preserved it on a `fabro/rescue/...-publish-conflict` branch, and then failed while rebasing that commit onto the latest `origin/main`.
+The deterministic publish step has already created a single attempted implementation commit, preserved it on a `fabro/rescue/...-publish-conflict` branch, and then failed while rebasing that commit onto the latest `origin/main`. It has materialized the same conflict as an in-progress merge from `origin/main` on the active run branch, so recovery can remain fast-forward-compatible with the managed run branch.
 
 Goal: produce a new conflict-resolved candidate artifact, or fail closed with a clear handoff. Do not push to `main` from this node.
 
@@ -18,15 +18,15 @@ Required approach:
 3. Fail closed instead of guessing when conflict resolution requires product judgement, changes acceptance semantics, touches migrations/event schemas/security/authentication, or has unclear business meaning.
 4. After resolving files, run:
    - `git add` for resolved files;
-   - `GIT_EDITOR=true git rebase --continue` if a rebase is in progress;
-   - `git status --short --branch` to prove the rebase is complete and the tree is clean.
+   - `GIT_EDITOR=true git commit --no-edit` if a merge is in progress;
+   - `git status --short --branch` to prove the merge is complete and the tree is clean.
 5. Do not run the full validation suite here. The workflow will route this new candidate back through `dev_check` after this node succeeds.
 
 Success response requirements:
 
 - State which files conflicted.
 - State how each conflict was resolved.
-- Confirm the rebase is complete and the working tree is clean.
+- Confirm the merge is complete and the working tree is clean.
 - Confirm no push was performed.
 
 Failure response requirements:

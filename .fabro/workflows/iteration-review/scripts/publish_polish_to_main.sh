@@ -104,7 +104,7 @@ if ! git -C "$publish_worktree" fetch --quiet origin main:refs/remotes/origin/ma
   echo "Could not fetch origin/main before publishing review polish." >&2
   exit 1
 fi
-if ! git -C "$publish_worktree" rebase origin/main; then
+if ! fabro_git_with_identity -C "$publish_worktree" rebase origin/main; then
   conflicted_files=$(git -C "$publish_worktree" diff --name-only --diff-filter=U || true)
   echo "Publish rebase conflicted while replaying attempted review polish commit onto origin/main." >&2
   echo "Attempted publish commit: $attempted_publish_sha" >&2

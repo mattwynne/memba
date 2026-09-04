@@ -87,6 +87,31 @@ git clone -q "$workdir/origin.git" "$other"
   git push -q origin main
 )
 
+cat > .git/hooks/post-commit <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+marker="$workdir/finalize-main-move-hook.done"
+if [ -f "\$marker" ]; then
+  exit 0
+fi
+touch "\$marker"
+clone="$workdir/finalize-main-moved-during-rebase"
+git clone -q "$workdir/origin.git" "\$clone"
+(
+  cd "\$clone"
+  git fetch -q origin main
+  git switch -q -C main origin/main
+  git config user.name Other
+  git config user.email other@example.com
+  printf 'origin/main moved during finalization rebase.\n' > docs/main-moved-during-finalization.md
+  git add docs/main-moved-during-finalization.md
+  git commit -q -m 'main moved during finalization rebase'
+  git push -q origin main
+)
+EOF
+chmod +x .git/hooks/post-commit
+
 FABRO_RUN_ID=FINALIZE-RUN "$script_path" docs/iterations/001-example/plan.md >/tmp/finalize-iteration.out 2>/tmp/finalize-iteration.err
 
 git fetch -q origin main "$run_branch"
@@ -106,6 +131,22 @@ if ! git show "$published:docs/iterations/README.md" | grep -q '| 001 | 2026-01-
 fi
 if ! git show "$published:docs/main-moved.md" | grep -q 'Review polish was already published'; then
   echo "Expected finalization commit to preserve existing origin/main content" >&2
+  exit 1
+fi
+if ! git show "$published:docs/main-moved-during-finalization.md" | grep -q 'origin/main moved during finalization rebase'; then
+  echo "Expected finalization rebase to preserve origin/main movement that happened after the finalization commit" >&2
+  exit 1
+fi
+message=$(git log -1 --format=%B origin/main)
+if ! grep -q 'iteration 001: mark merged' <<<"$message"; then
+  echo "Expected finalization commit subject on origin/main" >&2
+  echo "$message" >&2
+  exit 1
+fi
+identity=$(git log -1 --format='%an <%ae>|%cn <%ce>' origin/main)
+if [ "$identity" != 'Fabro <noreply@fabro.sh>|Fabro <noreply@fabro.sh>' ]; then
+  echo "Expected rebased finalization commit to use the approved scoped Fabro identity" >&2
+  echo "$identity" >&2
   exit 1
 fi
 if ! git merge-base --is-ancestor "$remote_run_checkpoint" HEAD; then

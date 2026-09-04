@@ -109,13 +109,28 @@ if ! git -C "$publish_worktree" fetch --quiet origin main:refs/remotes/origin/ma
   echo "Could not fetch origin/main before publishing implementation." >&2
   exit 1
 fi
-if ! git -C "$publish_worktree" rebase origin/main; then
-  # Preserve the existing conflict-recovery workflow by reproducing the failed
-  # rebase in the active worktree, but do it from a detached HEAD so the
-  # fabro/run/* branch ref itself is not rewritten.
+if ! fabro_git_with_identity -C "$publish_worktree" rebase origin/main; then
+  # Preserve the existing conflict-recovery workflow by materializing the
+  # conflict on the active run branch as a merge from origin/main. Do not detach
+  # HEAD or rebase the managed branch: after the resolver commits the merge, the
+  # branch still descends from its last remote checkpoint and Fabro's automatic
+  # checkpoint push remains a fast-forward.
+  recovery_msg=$(mktemp)
+  {
+    printf 'fabro recovery candidate: iteration %s publish conflict\n\n' "$iteration_number"
+    printf 'Attempted-Publish-Sha: %s\n' "$attempted_publish_sha"
+    printf 'Plan-Path: %s\n' "$PLAN_PATH"
+    printf 'Fabro-Workflow: %s\n' "$workflow"
+    printf 'Fabro-Run-Id: %s\n' "$run_id"
+  } > "$recovery_msg"
+  recovery_candidate_sha=$(fabro_git_commit_tree "$tree_sha" -p HEAD -F "$recovery_msg")
+  rm -f "$recovery_msg"
+  recovery_branch="fabro/recover/${safe_run_id}-${iteration_number}-publish-conflict"
+  git branch -f "$recovery_branch" "$recovery_candidate_sha"
+
   materialized_conflict=false
-  if git reset --hard HEAD >/dev/null 2>&1 && git switch --detach "$attempted_publish_sha" >/dev/null 2>&1; then
-    if ! git rebase origin/main >/dev/null 2>&1; then
+  if git reset --hard "$recovery_candidate_sha" >/dev/null 2>&1; then
+    if ! git merge --no-commit --no-ff origin/main >/dev/null 2>&1; then
       materialized_conflict=true
     fi
   fi
@@ -127,6 +142,7 @@ if ! git -C "$publish_worktree" rebase origin/main; then
   echo "Publish rebase conflicted while replaying attempted implementation commit onto origin/main." >&2
   echo "Attempted publish commit: $attempted_publish_sha" >&2
   echo "Local rescue branch: $rescue_branch" >&2
+  echo "Local recovery branch: $recovery_branch" >&2
   if git push -f origin "$rescue_branch:$rescue_branch"; then
     echo "Pushed rescue branch: origin/$rescue_branch" >&2
   else
@@ -142,8 +158,8 @@ if ! git -C "$publish_worktree" rebase origin/main; then
 
 The workflow may route this state to resolve_publish_conflict. Conflict resolution
 must produce a new candidate artifact and return through dev_check before push.
-If resolving manually, inspect the rescue branch and current rebase state before
-running git rebase --continue or git rebase --abort.
+If resolving manually, inspect the rescue branch and current merge state before
+committing the merge resolution or aborting the merge.
 EOF
   exit 2
 fi
