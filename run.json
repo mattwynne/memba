@@ -567,7 +567,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T04:34:16.673024538Z",
-  "last_event_at": "2026-09-04T04:35:23.585576269Z",
+  "last_event_at": "2026-09-04T04:35:27.904461391Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -786,9 +786,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 82,
       "checkpoint": {
-        "timestamp": "2026-09-04T04:35:24.239466738Z",
+        "timestamp": "2026-09-04T04:35:27.893275796Z",
         "current_node": "codex_review",
         "completed_nodes": [
           "start",
@@ -798,14 +798,145 @@
         ],
         "node_retries": {},
         "context_values": {
+          "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Acceptance scenario language review**: Line 102 states \"Matt must review the scenario language as domain language before the plan is treated as final.\" This is acknowledged as a pending step but doesn't block implementation start since the scenarios are well-defined and tagged for progressive enablement.\n\n2. **Vision document update timing**: The plan notes (lines 27-28, 236-237) that the Groups vision document must be updated to reflect the `club_members_only` posting rule. This is a documentation debt that should be tracked but doesn't block the technical work.\n\n## Smallest Viable Iteration\n\nThe plan already describes the smallest viable slice: enable Admin-group email routing and delivery while deferring all UI, configuration, sender-copy suppression, and custom groups. This is appropriately minimal.\n\nThe only conceivable reduction would be to defer the generic group-ID queries (step 8) and keep web queries hard-coded to Everyone, but that would likely require throwaway work since the queries are needed immediately after for the group-display iteration.\n\n## Required Plan Edits\n\nNone. The plan is implementation-ready as written.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation approach (lines 217-231):\n\n- **Pre-implementation**: Verify acceptance test configuration excludes new scenarios from default runners\n- **During implementation**: Focused unit/integration tests for each component (slugs, routing, authorization, delivery, queries)\n- **Realistic payload testing**: Multiple sender scenarios (non-Admin, Admin, inactive, other-club, duplicates)\n- **Query boundary verification**: Group-scoped queries return correct conversations; web still uses Everyone\n- **Progressive BDD enablement**: Remove runner-debt tags as step support completes\n- **Final gate**: `dev check` passes on committed state\n\nSuccess criteria:\n- `admin@<club-slug>.clubs.memba.io` routes to Admin group\n- Active club members can send to Admin regardless of membership\n- Only active Admin members receive and can reply\n- Non-Admin senders get no copy, access, or follower status\n- Web UI shows no Admin conversations (Everyone-only constraint preserved)\n- All existing Everyone behavior unchanged\n- All acceptance scenarios executable with tags removed\n- `dev check` passes\n\n---\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Clear and outcome-focused** (lines 6-13). The goal states:\n- What: Make Admin a private, email-only conversation audience\n- Who: Active club members (senders) and active Admin members (recipients/replyers)\n- Benefit: Private Admin communication channel via `admin@<club-slug>.clubs.memba.io`\n- User experience: Clear sender/recipient/reply rules with web UI deliberately excluded\n\n### 2. Scope Focus ✅\n\n**Tightly scoped and coherent** (lines 35-73).\n\nIn scope:\n- Group email slugs and routing (`everyone`, `admin`)\n- Fixed posting policy (active club member can start conversation)\n- Admin-only delivery and reply rights\n- Generic group-ID queries for future UI (without exposing Admin in current UI)\n- Backfill for existing system groups\n\nOut of scope is comprehensive and well-justified:\n- No web UI changes\n- No policy configuration\n- No custom groups\n- No sender-copy suppression (deferred as documented problem)\n- No rejected-email inbox\n\nThe iteration cannot be meaningfully smaller while remaining useful. The email-slug infrastructure, routing, and access model are all necessary for the Admin email address to function.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Acceptance criteria** (lines 123-144) are concrete, complete, and testable:\n- Technical facts: email slugs, routing resolution, access grants\n- Authorization rules: who can send (active club member), who receives (active Admin), who can reply (active Admin)\n- Edge cases: sender outside Admin gets no copy/access, rejection rules preserved\n- State changes: write-access grant creation, follower non-creation for non-Admin sender\n- Regression coverage: Everyone behavior unchanged, `dev check` passes\n\n**BDD classification** (lines 75-79): Explicitly classified as behaviour-facing with clear rationale (inbound authorization, recipient privacy, conversation access, email replies all change).\n\n**Acceptance scenarios** (lines 81-114):\n- Required scenarios clearly enumerated for `member_message_deliverability.feature` and `club_message_replies.feature`\n- Scenarios cover: non-Admin sender (receives nothing), Admin sender (receives copy), other-club sender (rejected), Admin reply\n- Runner-debt tags documented (`@todo-domain`, `@todo-ui`) with progressive enablement plan\n- Caveat noted that Matt must review scenario language (line 102)—this is acknowledged as a gate but scenarios are well-specified\n\n**Business decisions** (lines 146-158):\n- No open decisions\n- All confirmed decisions documented: `club_members_only` policy, deferred future policies, deferred sender-copy problem\n- Vision document update identified as separate follow-up (not blocking)\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation steps** (lines 160-197) are clear, ordered, and specific:\n1. Verify iteration 056 foundation\n2. Add email-slug to Membership model/events/projections\n3. System-group creation and backfill with consistent slugs\n4. Generalize inbound routing from hard-coded `everyone` to slug lookup\n5. Introduce named posting-policy boundary in Messaging\n6. Extend inbound command for group-based delivery and access grants\n7. Reuse iteration-056 group-write reply authorization\n8. Add group-ID-based queries; refactor web to explicit Everyone\n9. Comprehensive tests (aggregate, policy, backfill, routing, authorization, delivery, reply)\n10. Implement BDD step support and run `dev check`\n\n**Named components and files**:\n- Membership context (groups, events, projections, slug lookup)\n- Messaging context (inbound routing, posting policy, commands, queries)\n- Release backfill\n- Acceptance features: `member_message_deliverability.feature`, `club_message_replies.feature`\n\n**Technical decisions** (lines 199-207):\n- All resolved\n- Email slug as immutable routing key (distinct from display name)\n- Fixed policy boundary (not persisted)\n- Email idempotency keyed by provider/message identity\n\n### 5. Expected Capability and Validation ✅\n\n**New capability** (lines 209-214): Clear statement of what becomes possible:\n- Admin email address for private conversations\n- Active members can contact Admin\n- Only Admin members receive/reply\n- APIs ready for future group UI\n\n**Stop condition**: All acceptance scenarios executable, existing behavior preserved, `dev check` passes (lines 217-231).\n\n**Validation plan**: Comprehensive as detailed above.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "last_stage": "claude_review",
+          "failure_signature": "codex_review|deterministic|api_deterministic|openai|authentication",
+          "claude_review_blocking_gap_count": 0,
+          "internal.retry_count.gemini_review": 0,
+          "internal.run_id": "01M1NB46MG95R2YMMHDYVB783H",
+          "thread.gemini_review.current_node": "claude_review",
+          "graph.rankdir": "LR",
+          "internal.fidelity": "truncate",
+          "claude_review_blocking_gaps": "None",
+          "claude_review_required_edits": "None",
+          "internal.node_visit_count": 1,
+          "current_node": "codex_review",
+          "internal.work_dir": "/workspace/memba",
+          "failure_class": "deterministic",
+          "graph.default_fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { provider: anthropic; model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.claude_review": 0,
+          "internal.thread_id": "claude_review",
+          "claude_review_confidence": "High",
+          "claude_review_decision": "READY",
+          "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-bl",
+          "outcome": "failed",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.codex_review": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "thread.start.current_node": "gemini_review"
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "failed",
+            "failure": {
+              "message": "LLM error: Authentication error for openai: Provided authentication token is expired.",
+              "category": "deterministic",
+              "signature": "api_deterministic|openai|authentication"
+            },
+            "usage": null
+          },
+          "gemini_review": {
+            "status": "failed",
+            "failure": {
+              "message": "LLM error: Authentication error for openai: Provided authentication token is expired.",
+              "category": "deterministic",
+              "signature": "api_deterministic|openai|authentication"
+            },
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_blocking_gap_count": 0,
+              "claude_review_confidence": "High",
+              "claude_review_required_edits": "None",
+              "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-bl",
+              "claude_review_decision": "READY",
+              "last_stage": "claude_review",
+              "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Acceptance scenario language review**: Line 102 states \"Matt must review the scenario language as domain language before the plan is treated as final.\" This is acknowledged as a pending step but doesn't block implementation start since the scenarios are well-defined and tagged for progressive enablement.\n\n2. **Vision document update timing**: The plan notes (lines 27-28, 236-237) that the Groups vision document must be updated to reflect the `club_members_only` posting rule. This is a documentation debt that should be tracked but doesn't block the technical work.\n\n## Smallest Viable Iteration\n\nThe plan already describes the smallest viable slice: enable Admin-group email routing and delivery while deferring all UI, configuration, sender-copy suppression, and custom groups. This is appropriately minimal.\n\nThe only conceivable reduction would be to defer the generic group-ID queries (step 8) and keep web queries hard-coded to Everyone, but that would likely require throwaway work since the queries are needed immediately after for the group-display iteration.\n\n## Required Plan Edits\n\nNone. The plan is implementation-ready as written.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation approach (lines 217-231):\n\n- **Pre-implementation**: Verify acceptance test configuration excludes new scenarios from default runners\n- **During implementation**: Focused unit/integration tests for each component (slugs, routing, authorization, delivery, queries)\n- **Realistic payload testing**: Multiple sender scenarios (non-Admin, Admin, inactive, other-club, duplicates)\n- **Query boundary verification**: Group-scoped queries return correct conversations; web still uses Everyone\n- **Progressive BDD enablement**: Remove runner-debt tags as step support completes\n- **Final gate**: `dev check` passes on committed state\n\nSuccess criteria:\n- `admin@<club-slug>.clubs.memba.io` routes to Admin group\n- Active club members can send to Admin regardless of membership\n- Only active Admin members receive and can reply\n- Non-Admin senders get no copy, access, or follower status\n- Web UI shows no Admin conversations (Everyone-only constraint preserved)\n- All existing Everyone behavior unchanged\n- All acceptance scenarios executable with tags removed\n- `dev check` passes\n\n---\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Clear and outcome-focused** (lines 6-13). The goal states:\n- What: Make Admin a private, email-only conversation audience\n- Who: Active club members (senders) and active Admin members (recipients/replyers)\n- Benefit: Private Admin communication channel via `admin@<club-slug>.clubs.memba.io`\n- User experience: Clear sender/recipient/reply rules with web UI deliberately excluded\n\n### 2. Scope Focus ✅\n\n**Tightly scoped and coherent** (lines 35-73).\n\nIn scope:\n- Group email slugs and routing (`everyone`, `admin`)\n- Fixed posting policy (active club member can start conversation)\n- Admin-only delivery and reply rights\n- Generic group-ID queries for future UI (without exposing Admin in current UI)\n- Backfill for existing system groups\n\nOut of scope is comprehensive and well-justified:\n- No web UI changes\n- No policy configuration\n- No custom groups\n- No sender-copy suppression (deferred as documented problem)\n- No rejected-email inbox\n\nThe iteration cannot be meaningfully smaller while remaining useful. The email-slug infrastructure, routing, and access model are all necessary for the Admin email address to function.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Acceptance criteria** (lines 123-144) are concrete, complete, and testable:\n- Technical facts: email slugs, routing resolution, access grants\n- Authorization rules: who can send (active club member), who receives (active Admin), who can reply (active Admin)\n- Edge cases: sender outside Admin gets no copy/access, rejection rules preserved\n- State changes: write-access grant creation, follower non-creation for non-Admin sender\n- Regression coverage: Everyone behavior unchanged, `dev check` passes\n\n**BDD classification** (lines 75-79): Explicitly classified as behaviour-facing with clear rationale (inbound authorization, recipient privacy, conversation access, email replies all change).\n\n**Acceptance scenarios** (lines 81-114):\n- Required scenarios clearly enumerated for `member_message_deliverability.feature` and `club_message_replies.feature`\n- Scenarios cover: non-Admin sender (receives nothing), Admin sender (receives copy), other-club sender (rejected), Admin reply\n- Runner-debt tags documented (`@todo-domain`, `@todo-ui`) with progressive enablement plan\n- Caveat noted that Matt must review scenario language (line 102)—this is acknowledged as a gate but scenarios are well-specified\n\n**Business decisions** (lines 146-158):\n- No open decisions\n- All confirmed decisions documented: `club_members_only` policy, deferred future policies, deferred sender-copy problem\n- Vision document update identified as separate follow-up (not blocking)\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation steps** (lines 160-197) are clear, ordered, and specific:\n1. Verify iteration 056 foundation\n2. Add email-slug to Membership model/events/projections\n3. System-group creation and backfill with consistent slugs\n4. Generalize inbound routing from hard-coded `everyone` to slug lookup\n5. Introduce named posting-policy boundary in Messaging\n6. Extend inbound command for group-based delivery and access grants\n7. Reuse iteration-056 group-write reply authorization\n8. Add group-ID-based queries; refactor web to explicit Everyone\n9. Comprehensive tests (aggregate, policy, backfill, routing, authorization, delivery, reply)\n10. Implement BDD step support and run `dev check`\n\n**Named components and files**:\n- Membership context (groups, events, projections, slug lookup)\n- Messaging context (inbound routing, posting policy, commands, queries)\n- Release backfill\n- Acceptance features: `member_message_deliverability.feature`, `club_message_replies.feature`\n\n**Technical decisions** (lines 199-207):\n- All resolved\n- Email slug as immutable routing key (distinct from display name)\n- Fixed policy boundary (not persisted)\n- Email idempotency keyed by provider/message identity\n\n### 5. Expected Capability and Validation ✅\n\n**New capability** (lines 209-214): Clear statement of what becomes possible:\n- Admin email address for private conversations\n- Active members can contact Admin\n- Only Admin members receive/reply\n- APIs ready for future group UI\n\n**Stop condition**: All acceptance scenarios executable, existing behavior preserved, `dev check` passes (lines 217-231).\n\n**Validation plan**: Comprehensive as detailed above.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "claude_review_blocking_gaps": "None"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5653,
+                    "output_tokens": 1878,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4766,
+                    "cache_write_tokens": 6114
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 6114,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 69485
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 55724,
+              "tool_time_ms": 46,
+              "active_time_ms": 55770
+            }
+          }
+        },
+        "next_node_id": "synthesize",
+        "git_commit_sha": "72fa483b0426737b5a00b1af92a562e42937aa2b",
+        "loop_failure_signatures": {
+          "codex_review|deterministic|api_deterministic|openai|authentication": 1,
+          "gemini_review|deterministic|api_deterministic|openai|authentication": 1
+        },
+        "node_visits": {
+          "codex_review": 1,
+          "gemini_review": 1,
+          "start": 1,
+          "claude_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-04T04:35:28.206595672Z",
+        "current_node": "synthesize",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.claude_review": 0,
           "failure_class": "deterministic",
-          "internal.thread_id": "claude_review",
+          "internal.thread_id": "codex_review",
           "claude_review_decision": "READY",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "thread.claude_review.current_node": "codex_review",
           "thread.gemini_review.current_node": "claude_review",
-          "internal.fidelity": "truncate",
+          "internal.fidelity": "summary:high",
           "internal.retry_count.codex_review": 0,
           "internal.node_visit_count": 1,
           "outcome": "failed",
@@ -817,14 +948,16 @@
           "response.claude_review": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Acceptance scenario language review**: Line 102 states \"Matt must review the scenario language as domain language before the plan is treated as final.\" This is acknowledged as a pending step but doesn't block implementation start since the scenarios are well-defined and tagged for progressive enablement.\n\n2. **Vision document update timing**: The plan notes (lines 27-28, 236-237) that the Groups vision document must be updated to reflect the `club_members_only` posting rule. This is a documentation debt that should be tracked but doesn't block the technical work.\n\n## Smallest Viable Iteration\n\nThe plan already describes the smallest viable slice: enable Admin-group email routing and delivery while deferring all UI, configuration, sender-copy suppression, and custom groups. This is appropriately minimal.\n\nThe only conceivable reduction would be to defer the generic group-ID queries (step 8) and keep web queries hard-coded to Everyone, but that would likely require throwaway work since the queries are needed immediately after for the group-display iteration.\n\n## Required Plan Edits\n\nNone. The plan is implementation-ready as written.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation approach (lines 217-231):\n\n- **Pre-implementation**: Verify acceptance test configuration excludes new scenarios from default runners\n- **During implementation**: Focused unit/integration tests for each component (slugs, routing, authorization, delivery, queries)\n- **Realistic payload testing**: Multiple sender scenarios (non-Admin, Admin, inactive, other-club, duplicates)\n- **Query boundary verification**: Group-scoped queries return correct conversations; web still uses Everyone\n- **Progressive BDD enablement**: Remove runner-debt tags as step support completes\n- **Final gate**: `dev check` passes on committed state\n\nSuccess criteria:\n- `admin@<club-slug>.clubs.memba.io` routes to Admin group\n- Active club members can send to Admin regardless of membership\n- Only active Admin members receive and can reply\n- Non-Admin senders get no copy, access, or follower status\n- Web UI shows no Admin conversations (Everyone-only constraint preserved)\n- All existing Everyone behavior unchanged\n- All acceptance scenarios executable with tags removed\n- `dev check` passes\n\n---\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✅\n\n**Clear and outcome-focused** (lines 6-13). The goal states:\n- What: Make Admin a private, email-only conversation audience\n- Who: Active club members (senders) and active Admin members (recipients/replyers)\n- Benefit: Private Admin communication channel via `admin@<club-slug>.clubs.memba.io`\n- User experience: Clear sender/recipient/reply rules with web UI deliberately excluded\n\n### 2. Scope Focus ✅\n\n**Tightly scoped and coherent** (lines 35-73).\n\nIn scope:\n- Group email slugs and routing (`everyone`, `admin`)\n- Fixed posting policy (active club member can start conversation)\n- Admin-only delivery and reply rights\n- Generic group-ID queries for future UI (without exposing Admin in current UI)\n- Backfill for existing system groups\n\nOut of scope is comprehensive and well-justified:\n- No web UI changes\n- No policy configuration\n- No custom groups\n- No sender-copy suppression (deferred as documented problem)\n- No rejected-email inbox\n\nThe iteration cannot be meaningfully smaller while remaining useful. The email-slug infrastructure, routing, and access model are all necessary for the Admin email address to function.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Acceptance criteria** (lines 123-144) are concrete, complete, and testable:\n- Technical facts: email slugs, routing resolution, access grants\n- Authorization rules: who can send (active club member), who receives (active Admin), who can reply (active Admin)\n- Edge cases: sender outside Admin gets no copy/access, rejection rules preserved\n- State changes: write-access grant creation, follower non-creation for non-Admin sender\n- Regression coverage: Everyone behavior unchanged, `dev check` passes\n\n**BDD classification** (lines 75-79): Explicitly classified as behaviour-facing with clear rationale (inbound authorization, recipient privacy, conversation access, email replies all change).\n\n**Acceptance scenarios** (lines 81-114):\n- Required scenarios clearly enumerated for `member_message_deliverability.feature` and `club_message_replies.feature`\n- Scenarios cover: non-Admin sender (receives nothing), Admin sender (receives copy), other-club sender (rejected), Admin reply\n- Runner-debt tags documented (`@todo-domain`, `@todo-ui`) with progressive enablement plan\n- Caveat noted that Matt must review scenario language (line 102)—this is acknowledged as a gate but scenarios are well-specified\n\n**Business decisions** (lines 146-158):\n- No open decisions\n- All confirmed decisions documented: `club_members_only` policy, deferred future policies, deferred sender-copy problem\n- Vision document update identified as separate follow-up (not blocking)\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation steps** (lines 160-197) are clear, ordered, and specific:\n1. Verify iteration 056 foundation\n2. Add email-slug to Membership model/events/projections\n3. System-group creation and backfill with consistent slugs\n4. Generalize inbound routing from hard-coded `everyone` to slug lookup\n5. Introduce named posting-policy boundary in Messaging\n6. Extend inbound command for group-based delivery and access grants\n7. Reuse iteration-056 group-write reply authorization\n8. Add group-ID-based queries; refactor web to explicit Everyone\n9. Comprehensive tests (aggregate, policy, backfill, routing, authorization, delivery, reply)\n10. Implement BDD step support and run `dev check`\n\n**Named components and files**:\n- Membership context (groups, events, projections, slug lookup)\n- Messaging context (inbound routing, posting policy, commands, queries)\n- Release backfill\n- Acceptance features: `member_message_deliverability.feature`, `club_message_replies.feature`\n\n**Technical decisions** (lines 199-207):\n- All resolved\n- Email slug as immutable routing key (distinct from display name)\n- Fixed policy boundary (not persisted)\n- Email idempotency keyed by provider/message identity\n\n### 5. Expected Capability and Validation ✅\n\n**New capability** (lines 209-214): Clear statement of what becomes possible:\n- Admin email address for private conversations\n- Active members can contact Admin\n- Only Admin members receive/reply\n- APIs ready for future group UI\n\n**Stop condition**: All acceptance scenarios executable, existing behavior preserved, `dev check` passes (lines 217-231).\n\n**Validation plan**: Comprehensive as detailed above.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
           "claude_review_blocking_gaps": "None",
           "internal.work_dir": "/workspace/memba",
-          "current_node": "codex_review",
+          "thread.codex_review.current_node": "synthesize",
+          "current_node": "synthesize",
           "claude_review_required_edits": "None",
-          "failure_signature": "codex_review|deterministic|api_deterministic|openai|authentication",
+          "failure_signature": "synthesize|deterministic|api_deterministic|openai|authentication",
           "claude_review_confidence": "High",
           "last_response": "Now I'll review the plan against all readiness criteria.\n\n---\n\n# Iteration 057 Plan Review: Admin Group Email Conversations\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-bl",
           "internal.retry_count.start": 0,
           "claude_review_blocking_gap_count": 0,
           "graph.default_fidelity": "summary:high",
+          "internal.retry_count.synthesize": 0,
           "internal.run_id": "01M1NB46MG95R2YMMHDYVB783H"
         },
         "node_outcomes": {
@@ -892,14 +1025,24 @@
               "signature": "api_deterministic|openai|authentication"
             },
             "usage": null
+          },
+          "synthesize": {
+            "status": "failed",
+            "failure": {
+              "message": "LLM error: Authentication error for openai: Provided authentication token is expired.",
+              "category": "deterministic",
+              "signature": "api_deterministic|openai|authentication"
+            },
+            "usage": null
           }
         },
-        "next_node_id": "synthesize",
+        "next_node_id": "synthesis_gate",
         "node_visits": {
           "claude_review": 1,
           "start": 1,
           "gemini_review": 1,
-          "codex_review": 1
+          "codex_review": 1,
+          "synthesize": 1
         }
       },
       "diff": {}
@@ -931,6 +1074,36 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "synthesize@1": {
+      "first_event_seq": 85,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-04T04:35:27.894569666Z",
+      "handler": "prompt",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
     "start@1": {
       "first_event_seq": 17,
       "prompt": null,
@@ -971,7 +1144,12 @@
       "first_event_seq": 66,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "LLM error: Authentication error for openai: Provided authentication token is expired.",
+        "timestamp": "2026-09-04T04:35:24.239359902Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -986,6 +1164,12 @@
       "started_at": "2026-09-04T04:35:23.268014140Z",
       "handler": "agent",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 970,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1114,17 +1298,8 @@
           "invoked": false
         }
       ],
-      "inference": {
-        "session_id": "bdcefdc7-898f-433e-aa69-0f4b113168b7",
-        "started_at": "2026-09-04T04:35:23.585576269Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.5"
-        },
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "failed"
     },
     "gemini_review@1": {
       "first_event_seq": 21,
