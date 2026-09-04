@@ -590,7 +590,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T15:25:59.294820008Z",
-  "last_event_at": "2026-09-04T15:27:09.979844711Z",
+  "last_event_at": "2026-09-04T15:27:21.609808232Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -947,9 +947,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 155,
       "checkpoint": {
-        "timestamp": "2026-09-04T15:27:17.846098541Z",
+        "timestamp": "2026-09-04T15:27:21.605575368Z",
         "current_node": "synthesize",
         "completed_nodes": [
           "start",
@@ -959,10 +959,226 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.review_merge.current_node": "synthesize",
+          "internal.retry_count.start": 0,
+          "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "internal.fidelity": "summary:high",
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "preferred_label": "validated",
+          "parallel.results": [
+            {
+              "id": "gemini_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "gemini_review_blocking_gap_count": 0,
+                "gemini_review_blocking_gaps": "None",
+                "gemini_review_confidence": "High",
+                "gemini_review_decision": "READY",
+                "gemini_review_required_edits": "None",
+                "last_response": "### Plan Validation Report\n\n- **Decision**: READY\n- **Confidence**: High\n- **Blocking gaps**: None\n- **Non-blocking improvements**: None\n- **Smallest viable iteration**: The proposed plan is already a",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "### Plan Validation Report\n\n- **Decision**: READY\n- **Confidence**: High\n- **Blocking gaps**: None\n- **Non-blocking improvements**: None\n- **Smallest viable iteration**: The proposed plan is already an excellent, right-sized vertical slice focusing entirely on the read-model export for a single message without scope creep.\n- **Required plan edits**: None\n- **Validation plan**: \n  - Execute automated tests (Phoenix controller tests, export module tests, and the specified Cucumber feature scenarios).\n  - Manually verify the behavior by creating a message with mixed recipient delivery states (delivered, problem, opened, sent), downloading the CSV, and confirming columns, ordering, and data mappings match the acceptance criteria.\n  - Run `dev check` to ensure all workspace standards are met.\n\n```json\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}\n```"
+              }
+            },
+            {
+              "id": "claude_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "claude_review_blocking_gap_count": 0,
+                "claude_review_blocking_gaps": "None",
+                "claude_review_confidence": "High",
+                "claude_review_decision": "READY",
+                "claude_review_required_edits": "None",
+                "last_response": "# Plan Validation Report\n\n**Plan reviewed:** `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` — \"Export validated member message delivery receipts as CSV\" (full 95-line file r",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Plan Validation Report\n\n**Plan reviewed:** `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` — \"Export validated member message delivery receipts as CSV\" (full 95-line file read in one pass).\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan names \"a focused CSV export module or context function\" without a concrete module name (e.g. `Memba.Messaging.DeliveryReceiptExport`); naming it up front would speed implementation but doesn't block review.\n2. No explicit tie-break rule for rows with identical `recipient_name` and `recipient_email` (unlikely given email uniqueness, but worth a one-line note).\n3. The plan doesn't state whether the CSV response needs a specific `Content-Disposition`/filename convention; likely a minor implementation detail but calling it out avoids a mid-build question.\n4. \"Non-addressed club members do not appear in the CSV\" is a good acceptance criterion — consider also adding one for a message with zero addressed recipients (header-only CSV) as an explicit edge case, though it's implied by the general row-per-recipient rule.\n\n## Smallest viable iteration\n\nThe plan as written already appears close to minimal: single-message CSV export, reusing existing read models, no new domain events, no new auth/permission machinery, fixed column set, no cross-message/club aggregation. I would not shrink it further — removing any of the status categories (delivered/opened/problem/sent) or the 404/ordering rules would leave real behaviour gaps rather than genuinely reducing risk.\n\n## Required plan edits\n\nNone required for readiness. Optional (non-blocking) edits:\n- Name the concrete export module/function.\n- Add a one-line note on CSV filename/Content-Disposition expectations.\n- Optionally add an explicit \"zero addressed recipients → header-only CSV\" acceptance line.\n\n## Validation plan\n\n- Confirm the plan's own Validation Plan is executed as written: focused controller/export tests; manual end-to-end check with delivered/problem/opened/sent recipients verifying columns, row count, ordering, statuses, and reasons; full `dev check` run.\n- Confirm the acceptance feature file (`acceptance-tests/features/member_message_deliverability.feature`) gains the scenarios named in the plan (delivered, problem, opened, sent, non-addressed exclusion, ordering, unknown-message) and that these stay green.\n- Confirm 404 behaviour is exercised for an unknown `message_id`.\n- Treat the iteration as done when: the CSV route returns correct, correctly-ordered, correctly-escaped rows for all four status categories, excludes non-addressed members, 404s for unknown messages, and `dev check` passes with the expanded feature coverage green.\n\nGoal, scope, acceptance criteria, business decisions, implementation plan, technical decisions, and expected capability/validation are all present, concrete, and internally consistent. No unresolved business or technical decisions are flagged, and the plan explicitly closes both \"Open Business Decisions\" and \"Open Technical Decisions\" sections with \"None.\"\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "codex_review_blocking_gap_count": 0,
+                "codex_review_blocking_gaps": "None",
+                "codex_review_confidence": "High",
+                "codex_review_decision": "READY",
+                "codex_review_required_edits": "None",
+                "last_response": "{\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. None required. During implementation, focused export tests shoul",
+                "last_stage": "codex_review",
+                "response.codex_review": "{\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. None required. During implementation, focused export tests should explicitly exercise commas, quotes, and newlines so the stated RFC 4180-style escaping rule is directly verified.\\n\\n## Smallest viable iteration\\n\\nImplement the planned synchronous, read-only CSV export for one already-sent message: one route and detail-page download link, one row per addressed recipient, the seven fixed columns and specified ordering/status mappings, exclusion of non-addressed members, and a 404 for an unknown message. Cross-message exports, new authorization machinery, background processing, and domain-status changes remain outside this slice.\\n\\n## Required plan edits\\n\\nNone. The goal and beneficiary are explicit; scope and non-goals are focused; the iteration is correctly classified as behaviour-facing; the shared Cucumber feature file and scenario coverage are named; acceptance criteria are objective; permissions, status variants, exclusion, ordering, blank reasons, escaping, and the unknown-message error are addressed; and no business or technical decisions remain unresolved.\\n\\n## Validation plan\\n\\nAdd the named stakeholder-readable acceptance scenarios, run focused controller/export tests covering every status mapping, row identity and count, ordering, non-addressed exclusion, blank reasons, unknown-message 404, and CSV escaping for commas, quotes, and newlines. Manually download a mixed-status report and inspect its columns, rows, ordering, statuses, and reasons. Finish when all acceptance criteria hold and `dev check` passes.\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}"
+              }
+            }
+          ],
+          "plan_needs_fix": false,
+          "graph.rankdir": "LR",
+          "failure_class": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.synthesize": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.review_fork.current_node": "review_merge",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.review_merge": 0,
+          "internal.retry_count.review_fork": 0,
+          "thread.start.current_node": "review_fork",
+          "current_node": "synthesize",
+          "graph.default_fidelity": "summary:high",
+          "internal.thread_id": "review_merge",
+          "internal.run_id": "01M1PGDH0WRH9B8D2Z42CHFXF7",
+          "plan_needs_human": false,
+          "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "plan_ready": true,
+          "last_stage": "synthesize",
+          "parallel.branch_count": 3
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "preferred_label": "validated",
+            "context_updates": {
+              "plan_needs_human": false,
+              "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "plan_ready": true,
+              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "last_stage": "synthesize",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 3660,
+                    "output_tokens": 54,
+                    "reasoning_tokens": 210,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 26220
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 7833,
+              "tool_time_ms": 0,
+              "active_time_ms": 7833
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "gemini_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "gemini_review_blocking_gap_count": 0,
+                    "gemini_review_blocking_gaps": "None",
+                    "gemini_review_confidence": "High",
+                    "gemini_review_decision": "READY",
+                    "gemini_review_required_edits": "None",
+                    "last_response": "### Plan Validation Report\n\n- **Decision**: READY\n- **Confidence**: High\n- **Blocking gaps**: None\n- **Non-blocking improvements**: None\n- **Smallest viable iteration**: The proposed plan is already a",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "### Plan Validation Report\n\n- **Decision**: READY\n- **Confidence**: High\n- **Blocking gaps**: None\n- **Non-blocking improvements**: None\n- **Smallest viable iteration**: The proposed plan is already an excellent, right-sized vertical slice focusing entirely on the read-model export for a single message without scope creep.\n- **Required plan edits**: None\n- **Validation plan**: \n  - Execute automated tests (Phoenix controller tests, export module tests, and the specified Cucumber feature scenarios).\n  - Manually verify the behavior by creating a message with mixed recipient delivery states (delivered, problem, opened, sent), downloading the CSV, and confirming columns, ordering, and data mappings match the acceptance criteria.\n  - Run `dev check` to ensure all workspace standards are met.\n\n```json\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}\n```"
+                  }
+                },
+                {
+                  "id": "claude_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "claude_review_blocking_gap_count": 0,
+                    "claude_review_blocking_gaps": "None",
+                    "claude_review_confidence": "High",
+                    "claude_review_decision": "READY",
+                    "claude_review_required_edits": "None",
+                    "last_response": "# Plan Validation Report\n\n**Plan reviewed:** `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` — \"Export validated member message delivery receipts as CSV\" (full 95-line file r",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Plan Validation Report\n\n**Plan reviewed:** `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md` — \"Export validated member message delivery receipts as CSV\" (full 95-line file read in one pass).\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan names \"a focused CSV export module or context function\" without a concrete module name (e.g. `Memba.Messaging.DeliveryReceiptExport`); naming it up front would speed implementation but doesn't block review.\n2. No explicit tie-break rule for rows with identical `recipient_name` and `recipient_email` (unlikely given email uniqueness, but worth a one-line note).\n3. The plan doesn't state whether the CSV response needs a specific `Content-Disposition`/filename convention; likely a minor implementation detail but calling it out avoids a mid-build question.\n4. \"Non-addressed club members do not appear in the CSV\" is a good acceptance criterion — consider also adding one for a message with zero addressed recipients (header-only CSV) as an explicit edge case, though it's implied by the general row-per-recipient rule.\n\n## Smallest viable iteration\n\nThe plan as written already appears close to minimal: single-message CSV export, reusing existing read models, no new domain events, no new auth/permission machinery, fixed column set, no cross-message/club aggregation. I would not shrink it further — removing any of the status categories (delivered/opened/problem/sent) or the 404/ordering rules would leave real behaviour gaps rather than genuinely reducing risk.\n\n## Required plan edits\n\nNone required for readiness. Optional (non-blocking) edits:\n- Name the concrete export module/function.\n- Add a one-line note on CSV filename/Content-Disposition expectations.\n- Optionally add an explicit \"zero addressed recipients → header-only CSV\" acceptance line.\n\n## Validation plan\n\n- Confirm the plan's own Validation Plan is executed as written: focused controller/export tests; manual end-to-end check with delivered/problem/opened/sent recipients verifying columns, row count, ordering, statuses, and reasons; full `dev check` run.\n- Confirm the acceptance feature file (`acceptance-tests/features/member_message_deliverability.feature`) gains the scenarios named in the plan (delivered, problem, opened, sent, non-addressed exclusion, ordering, unknown-message) and that these stay green.\n- Confirm 404 behaviour is exercised for an unknown `message_id`.\n- Treat the iteration as done when: the CSV route returns correct, correctly-ordered, correctly-escaped rows for all four status categories, excludes non-addressed members, 404s for unknown messages, and `dev check` passes with the expanded feature coverage green.\n\nGoal, scope, acceptance criteria, business decisions, implementation plan, technical decisions, and expected capability/validation are all present, concrete, and internally consistent. No unresolved business or technical decisions are flagged, and the plan explicitly closes both \"Open Business Decisions\" and \"Open Technical Decisions\" sections with \"None.\"\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "codex_review_blocking_gap_count": 0,
+                    "codex_review_blocking_gaps": "None",
+                    "codex_review_confidence": "High",
+                    "codex_review_decision": "READY",
+                    "codex_review_required_edits": "None",
+                    "last_response": "{\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. None required. During implementation, focused export tests shoul",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "{\"report_markdown\":\"## Decision\\n\\nREADY\\n\\n## Confidence\\n\\nHigh\\n\\n## Blocking gaps\\n\\n1. None.\\n\\n## Non-blocking improvements\\n\\n1. None required. During implementation, focused export tests should explicitly exercise commas, quotes, and newlines so the stated RFC 4180-style escaping rule is directly verified.\\n\\n## Smallest viable iteration\\n\\nImplement the planned synchronous, read-only CSV export for one already-sent message: one route and detail-page download link, one row per addressed recipient, the seven fixed columns and specified ordering/status mappings, exclusion of non-addressed members, and a 404 for an unknown message. Cross-message exports, new authorization machinery, background processing, and domain-status changes remain outside this slice.\\n\\n## Required plan edits\\n\\nNone. The goal and beneficiary are explicit; scope and non-goals are focused; the iteration is correctly classified as behaviour-facing; the shared Cucumber feature file and scenario coverage are named; acceptance criteria are objective; permissions, status variants, exclusion, ordering, blank reasons, escaping, and the unknown-message error are addressed; and no business or technical decisions remain unresolved.\\n\\n## Validation plan\\n\\nAdd the named stakeholder-readable acceptance scenarios, run focused controller/export tests covering every status mapping, row identity and count, ordering, non-addressed exclusion, blank reasons, unknown-message 404, and CSV escaping for commas, quotes, and newlines. Manually download a mixed-status report and inspect its columns, rows, ordering, statuses, and reasons. Finish when all acceptance criteria hold and `dev check` passes.\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}"
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "d3f284fc4de4582fd07be6ea9da835c1a44929ef",
+        "node_visits": {
+          "start": 1,
+          "review_fork": 1,
+          "synthesize": 1,
+          "review_merge": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-04T15:27:21.775500650Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "review_fork",
+          "review_merge",
+          "synthesize",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.synthesize.current_node": "publish_ready",
           "internal.run_id": "01M1PGDH0WRH9B8D2Z42CHFXF7",
           "internal.node_visit_count": 1,
           "internal.work_dir": "/workspace/memba",
           "preferred_label": "validated",
+          "internal.retry_count.publish_ready": 0,
           "plan_needs_fix": false,
           "internal.retry_count.start": 0,
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
@@ -1028,18 +1244,33 @@
           "plan_ready": true,
           "last_stage": "synthesize",
           "internal.retry_count.synthesize": 0,
-          "current_node": "synthesize",
+          "command.output": "blob://sha256/7c4ba476b23d30e3a3b72b994b830f401575465e1ca4bda6b51f3f04ee271ba4",
+          "current_node": "publish_ready",
           "failure_signature": "",
           "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
           "internal.fidelity": "summary:high",
           "plan_needs_human": false,
-          "internal.thread_id": "review_merge"
+          "internal.thread_id": "synthesize"
         },
         "node_outcomes": {
           "review_merge": {
             "status": "succeeded",
             "notes": "Joined 3 parallel branches",
             "usage": null
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7c4ba476b23d30e3a3b72b994b830f401575465e1ca4bda6b51f3f04ee271ba4"
+            },
+            "notes": "Script completed: if [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
           },
           "start": {
             "status": "succeeded",
@@ -1142,12 +1373,13 @@
             }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "start": 1,
           "review_fork": 1,
           "review_merge": 1,
-          "synthesize": 1
+          "synthesize": 1,
+          "publish_ready": 1
         }
       },
       "diff": {}
@@ -1378,11 +1610,45 @@
       "agent_control": "running",
       "state": "succeeded"
     },
+    "publish_ready@1": {
+      "first_event_seq": 158,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+        "command": "exec 2>&1\nif [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-04T15:27:21.609746718Z",
+      "handler": "command",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
     "synthesize@1": {
       "first_event_seq": 148,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-09-04T15:27:17.845930285Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1397,16 +1663,244 @@
       "started_at": "2026-09-04T15:27:09.972955178Z",
       "handler": "prompt",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 7871,
+        "inference_time_ms": 7833,
+        "tool_time_ms": 0,
+        "active_time_ms": 7833
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
+        "input_tokens": 3660,
+        "output_tokens": 54,
+        "total_tokens": 3924,
+        "reasoning_tokens": 210,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 26220
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.6-sol"
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
+    },
+    "claude_review@1": {
+      "first_event_seq": 28,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-04T15:26:28.946187198Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openrouter",
+        "model": "claude-sonnet-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "parallel_branch_id": "review_fork@1:1",
+      "output": null,
+      "started_at": "2026-09-04T15:26:01.818755583Z",
+      "handler": "agent",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 27127,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "live_inference_ms": 26578,
+      "live_tool_ms": 59,
+      "usage": {
+        "input_tokens": 3888,
+        "output_tokens": 1255,
+        "total_tokens": 21389,
+        "reasoning_tokens": 849,
+        "cache_read_tokens": 6915,
+        "cache_write_tokens": 8482,
+        "total_usd_micros": 51405
+      },
+      "model": {
+        "provider": "openrouter",
+        "model_id": "claude-sonnet-5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "Agent",
+          "description": "Launch a child agent for an independent task. Agents run in the background by default and notify the parent when they finish. Set run_in_background to false to wait for the result synchronously.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "AskUserQuestion",
+          "description": "Ask the human up to four questions when a decision is genuinely theirs to make. The UI automatically provides an Other option for custom text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "Bash",
+          "description": "Execute a Bash command in a fresh foreground non-login shell. Use this for searches, git inspection, builds, tests, package managers, and terminal operations. Prefer `rg` for content search and `rg --files` for file discovery. Working-directory and environment changes do not persist between calls. `timeout` is in milliseconds, defaults to 120000, and is capped at 600000.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": false
+        },
+        {
+          "name": "Edit",
+          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "Read",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "SendMessage",
+          "description": "Send additional instructions to a background agent by its task ID. A running agent receives them at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskCreate",
+          "description": "Create pending tasks in the current session. Use concise subjects, descriptions, optional activeForm text, and metadata. Check TaskList first to avoid duplicate tasks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskGet",
+          "description": "Get one task by taskId, including subject, status, description, owner, blockedBy, and blocks.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskList",
+          "description": "List tasks for the current session, including status, owner, and blocking dependencies. Use TaskGet with a taskId for full description and dependency details.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "TaskOutput",
+          "description": "Get a background agent's current status or wait for its final output. Automatic completion notifications make ordinary polling unnecessary.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskStop",
+          "description": "Stop a running or completed background agent by task ID.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "TaskUpdate",
+          "description": "Update an existing task's status, text, owner, metadata, or dependencies. Valid statuses are pending, in_progress, completed, and deleted. After completing a task, call TaskList to find newly unblocked work.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "WebFetch",
+          "description": "Fetch an HTTP or HTTPS URL and answer the supplied prompt from its contents.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "Write",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openrouter",
+        "model": "claude-sonnet-5",
+        "context_window_tokens": 1000000,
+        "input_tokens": 10801,
+        "usage_percent": 1.0801,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-09-04T15:26:28.945103330Z",
+        "event_seq": 104,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 2567,
+            "usage_percent": 0.2567
+          },
+          {
+            "category": "tools",
+            "tokens": 2929,
+            "usage_percent": 0.2929
+          },
+          {
+            "category": "memory",
+            "tokens": 1148,
+            "usage_percent": 0.1148
+          },
+          {
+            "category": "conversation",
+            "tokens": 4147,
+            "usage_percent": 0.4147
+          },
+          {
+            "category": "other",
+            "tokens": 10,
+            "usage_percent": 0.001
+          }
+        ],
+        "warnings": []
+      },
+      "agent_control": "running",
+      "state": "succeeded"
     },
     "review_fork@1": {
       "first_event_seq": 21,
@@ -1730,223 +2224,6 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
-      },
-      "agent_control": "running",
-      "state": "succeeded"
-    },
-    "claude_review@1": {
-      "first_event_seq": 28,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-09-04T15:26:28.946187198Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openrouter",
-        "model": "claude-sonnet-5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "parallel_branch_id": "review_fork@1:1",
-      "output": null,
-      "started_at": "2026-09-04T15:26:01.818755583Z",
-      "handler": "agent",
-      "graph_visit": 1,
-      "timing": {
-        "wall_time_ms": 27127,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "live_inference_ms": 26578,
-      "live_tool_ms": 59,
-      "usage": {
-        "input_tokens": 3888,
-        "output_tokens": 1255,
-        "total_tokens": 21389,
-        "reasoning_tokens": 849,
-        "cache_read_tokens": 6915,
-        "cache_write_tokens": 8482,
-        "total_usd_micros": 51405
-      },
-      "model": {
-        "provider": "openrouter",
-        "model_id": "claude-sonnet-5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "Agent",
-          "description": "Launch a child agent for an independent task. Agents run in the background by default and notify the parent when they finish. Set run_in_background to false to wait for the result synchronously.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "AskUserQuestion",
-          "description": "Ask the human up to four questions when a decision is genuinely theirs to make. The UI automatically provides an Other option for custom text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "Bash",
-          "description": "Execute a Bash command in a fresh foreground non-login shell. Use this for searches, git inspection, builds, tests, package managers, and terminal operations. Prefer `rg` for content search and `rg --files` for file discovery. Working-directory and environment changes do not persist between calls. `timeout` is in milliseconds, defaults to 120000, and is capped at 600000.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": false
-        },
-        {
-          "name": "Edit",
-          "description": "Edit a file by replacing an exact string. The old_string must be an exact match and unique unless replace_all is true; include surrounding context when needed. Read the file first and preserve existing indentation.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "Read",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "SendMessage",
-          "description": "Send additional instructions to a background agent by its task ID. A running agent receives them at a safe turn boundary. A completed agent starts another turn in the same session with its existing history.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "TaskCreate",
-          "description": "Create pending tasks in the current session. Use concise subjects, descriptions, optional activeForm text, and metadata. Check TaskList first to avoid duplicate tasks.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskGet",
-          "description": "Get one task by taskId, including subject, status, description, owner, blockedBy, and blocks.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskList",
-          "description": "List tasks for the current session, including status, owner, and blocking dependencies. Use TaskGet with a taskId for full description and dependency details.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "TaskOutput",
-          "description": "Get a background agent's current status or wait for its final output. Automatic completion notifications make ordinary polling unnecessary.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "TaskStop",
-          "description": "Stop a running or completed background agent by task ID.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "TaskUpdate",
-          "description": "Update an existing task's status, text, owner, metadata, or dependencies. Valid statuses are pending, in_progress, completed, and deleted. After completing a task, call TaskList to find newly unblocked work.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "WebFetch",
-          "description": "Fetch an HTTP or HTTPS URL and answer the supplied prompt from its contents.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "Write",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openrouter",
-        "model": "claude-sonnet-5",
-        "context_window_tokens": 1000000,
-        "input_tokens": 10801,
-        "usage_percent": 1.0801,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-09-04T15:26:28.945103330Z",
-        "event_seq": 104,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 2567,
-            "usage_percent": 0.2567
-          },
-          {
-            "category": "tools",
-            "tokens": 2929,
-            "usage_percent": 0.2929
-          },
-          {
-            "category": "memory",
-            "tokens": 1148,
-            "usage_percent": 0.1148
-          },
-          {
-            "category": "conversation",
-            "tokens": 4147,
-            "usage_percent": 0.4147
-          },
-          {
-            "category": "other",
-            "tokens": 10,
-            "usage_percent": 0.001
-          }
-        ],
-        "warnings": []
       },
       "agent_control": "running",
       "state": "succeeded"
