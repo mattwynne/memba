@@ -214,3 +214,21 @@ See also [implementation-workflow-terminal-success-gate](2026-09-04-implementati
 The answer is Fabro terminal-gate semantics: `record_code_health` genuinely succeeded and routed to publication, but `code_health_recording_failed` was correctly skipped. Because that failure-message node remains `goal_gate=true`, Fabro requires it to have succeeded at exit and reports the run failed. This is independent of the implementation run-branch history rewrite, although both runs also showed checkpoint-push warnings.
 
 Remove `goal_gate=true` from review failure-message terminal nodes, including `code_health_recording_failed`, and gate success positively at `finalize_iteration_status` (or an equivalent final successful publication milestone). Extend `test_review_report_routing.sh` with a graph-path simulation that proves recorded code-health findings reach `exit` successfully and a true recording failure fails because the positive finalization gate was skipped. Separately, record the fetched `origin/main` SHA rather than checkpointed `HEAD` during review preflight, preventing automatic `read_plan` checkpoint `81233840b` from being inherited by review polish.
+
+#### Resolution applied: positive review gate and stable publication base
+
+Date: 2026-09-04
+
+- Commit `10a0a10d7` removed `goal_gate=true` from review failure-message nodes, made successful iteration finalization the positive goal gate, and added success/failure path simulation coverage.
+- The same commit changed review preflight to fetch and record `origin/main`, preventing Fabro checkpoint commits from becoming the review-polish base.
+- The managed run-branch history rewrite was repaired separately in the cross-referenced implementation terminal-success note: review polish and iteration-status finalization now use `git commit-tree` when they need a `main` commit and leave `HEAD` on Fabro's fast-forward checkpoint history.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_preflight_sandbox.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed, including simulated Fabro checkpoint pushes after review publication and after iteration-status finalization.
+
+Remaining follow-up:
+
+- Confirm these repairs in the next real iteration 057 review run.

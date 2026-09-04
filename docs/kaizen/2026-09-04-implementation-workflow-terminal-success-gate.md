@@ -115,3 +115,30 @@ This is separate from, but operationally similar to, the review terminal-status 
 Investigation found a non-fast-forward rejection, not a GitHub ruleset rejection. Checkpoints through `final_artifact_gate` had already pushed `origin/fabro/run/01M1PW96PP532RAYZ4N9XTWECY` at `10129c70`. `publish_to_main.sh` then used `git reset --soft "$base_sha"` to squash the active run-branch history before pushing `70abb331` to `main`. Fabro's next automatic checkpoint was therefore not a descendant of the remote run-branch tip and its normal push failed.
 
 Keep the active `fabro/run/*` branch fast-forward-only: construct the squash/rebase publication candidate on a temporary branch/worktree (or with `git commit-tree`), publish that candidate to `main`, and leave the managed run branch untouched. Extend `test_publish_to_main.sh` and add a review-publish counterpart that seed a remote run checkpoint, publish, then prove a subsequent normal run-branch push still succeeds.
+
+#### Resolution applied: preserve managed run-branch history
+
+Date: 2026-09-04
+
+Root cause: the implementation and review publish scripts used `git reset --soft` on the checked-out managed run branch. Their squash commits were not descendants of the run branch already pushed by Fabro, so the automatic post-publish checkpoint push was non-fast-forward.
+
+Fix applied:
+
+- `.fabro/workflows/scripts/git_identity.sh`: added an identity-scoped `git commit-tree` helper.
+- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: construct the squashed implementation commit with `git commit-tree`, rebase and push it from a disposable worktree, and leave the active managed run branch on its checkpoint ancestry. If publication conflicts, preserve rescue/recovery branches and materialize a merge conflict without rebasing the run branch.
+- `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: seed a remote managed run branch and prove post-publish and post-conflict-recovery checkpoints fast-forward it.
+- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: apply the same detached-candidate/disposable-worktree publication strategy to review polish.
+- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: perform any main finalization commit and rebase in a disposable worktree, then stage matching lifecycle metadata on the active run branch for Fabro's next checkpoint.
+- `.fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` and `test_finalize_iteration_status.sh`: cover review publication, approved commit identity, code-health content, no-op review/finalization, concurrent main movement, and run-branch fast-forwards after publication and finalization.
+
+Validation:
+
+- Both new run-branch assertions failed against the old reset-based publishers.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh` — passed after the fix.
+- `bash .fabro/workflows/iteration-review/scripts/test_publish_polish_to_main.sh` — passed after the fix; an independent review first reproduced the remaining non-fast-forward through `finalize_iteration_status.sh`, and the integrated regression now covers that node too.
+- `bash .fabro/workflows/iteration-review/scripts/test_finalize_iteration_status.sh` — passed.
+- `bash -n` for the changed shell scripts — passed.
+
+Remaining follow-up:
+
+- Confirm implementation and review publication in the next real iteration 057 runs finish without managed run-branch push warnings.
