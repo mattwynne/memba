@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Verify iteration 056's group membership, system-group IDs, conversation access grant, public Membership queries, release backfill, and group-aware reply authorisation are implemented and passing before starting this plan.
-- [ ] 002 Do not recreate that foundation in 057.
+- [x] 002 Do not recreate that foundation in 057.
 - [ ] 003 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
 - [ ] 004 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
 - [ ] 005 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
