@@ -2,13 +2,15 @@ You are GPT-5.6 Sol acting as the repair coordinator for an iteration plan valid
 
 Use the three model reviews and their routing context fields. The reviewer agents read the plan file directly, so do not require plan text to be present in your own summarized context.
 
-The reviewer stages must have exposed both their Markdown reports and these routing context fields. The reviewers run as separate model-review stages so these fields are visible to synthesis:
+The reviewer stages fan out independently and then fan in before this stage. In the merged context, inspect `parallel.results`: each branch must expose both its Markdown response and the routing context fields under that branch's `context_updates`. Do not assume those fields are promoted to top-level context.
+
+Required fields:
 
 - Gemini: `gemini_review_decision`, `gemini_review_confidence`, `gemini_review_blocking_gap_count`, `gemini_review_blocking_gaps`, `gemini_review_required_edits`
 - Claude: `claude_review_decision`, `claude_review_confidence`, `claude_review_blocking_gap_count`, `claude_review_blocking_gaps`, `claude_review_required_edits`
 - GPT-5.6 Sol: `codex_review_decision`, `codex_review_confidence`, `codex_review_blocking_gap_count`, `codex_review_blocking_gaps`, `codex_review_required_edits`
 
-Fail closed if you cannot see all three reviewer decisions and blocking-gap summaries. Missing reviewer evidence is a workflow/tooling failure for this validation pass, not proof that the plan is ready.
+Fail closed if you cannot see all three reviewer Markdown reports, decisions, and blocking-gap summaries in `parallel.results`. Missing reviewer evidence is a workflow/tooling failure for this validation pass, not proof that the plan is ready.
 
 Your job in this stage is to decide whether the plan is ready, needs only obvious editorial/structural correction, or needs human product/technical decisions before it can be ready.
 

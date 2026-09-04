@@ -27,6 +27,42 @@ fail() {
   exit 1
 }
 
+require_parallel_fan_in() {
+  local workflow_graph="$REPO_ROOT/.fabro/workflows/plan-validation/workflow.fabro"
+  local synthesis_prompt="$REPO_ROOT/.fabro/workflows/plan-validation/prompts/synthesize.md"
+
+  for expected in \
+    'review_fork [' \
+    'shape=component,' \
+    'max_parallel=3' \
+    'review_merge [' \
+    'shape=tripleoctagon' \
+    'start -> review_fork' \
+    'review_fork -> gemini_review' \
+    'review_fork -> claude_review' \
+    'review_fork -> codex_review' \
+    'gemini_review -> review_merge' \
+    'claude_review -> review_merge' \
+    'codex_review -> review_merge' \
+    'review_merge -> synthesize'; do
+    grep -Fq "$expected" "$workflow_graph" || \
+      fail "parallel fan-in graph is missing: $expected"
+  done
+
+  for obsolete in \
+    'start -> gemini_review' \
+    'gemini_review -> claude_review' \
+    'claude_review -> codex_review' \
+    'codex_review -> synthesize'; do
+    if grep -Fq "$obsolete" "$workflow_graph"; then
+      fail "parallel fan-in graph still contains sequential edge: $obsolete"
+    fi
+  done
+
+  grep -Fq 'parallel.results' "$synthesis_prompt" || \
+    fail "synthesis prompt does not instruct the model to inspect merged branch evidence"
+}
+
 require_fabro_visible_inputs() {
   cd "$REPO_ROOT"
 
@@ -42,9 +78,12 @@ require_fabro_visible_inputs() {
   git diff --cached --quiet -- "${VISIBLE_PATHS[@]}" || \
     fail "eval inputs have staged but uncommitted changes. Commit and push them before running; Fabro sandboxes clone origin."
 
-  git fetch origin main --quiet
-  git diff --quiet origin/main..HEAD -- "${VISIBLE_PATHS[@]}" || \
-    fail "eval inputs differ from origin/main. Push them before running; Fabro sandboxes clone origin/main."
+  local upstream
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || \
+    fail "current branch has no upstream. Push it before running; Fabro sandboxes clone the source branch."
+  git fetch origin --quiet
+  git diff --quiet "$upstream..HEAD" -- "${VISIBLE_PATHS[@]}" || \
+    fail "eval inputs differ from $upstream. Push them before running; Fabro sandboxes clone the source branch."
 }
 
 run_eval() {
@@ -104,6 +143,7 @@ command -v fabro >/dev/null 2>&1 || fail "fabro CLI not found"
 
 cd "$REPO_ROOT"
 fabro validate "$WORKFLOW" --no-upgrade-check
+require_parallel_fan_in
 require_fabro_visible_inputs
 
 run_eval "unanimous-pass" "$PASS_PLAN" success
