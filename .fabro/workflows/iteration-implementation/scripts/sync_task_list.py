@@ -132,13 +132,19 @@ def task_texts(items: list[PlanItem]) -> list[str]:
     return tasks
 
 
+def is_implementation_task(task: str) -> bool:
+    """Return false for prerequisite checks and negative scope constraints."""
+    non_implementation_patterns = (
+        r"^no changes? to\b",
+        r"^do not\b",
+        r"^verify\b.*\bbefore (?:starting|implementing)\b",
+    )
+    return not any(re.search(pattern, task, re.IGNORECASE) for pattern in non_implementation_patterns)
+
+
 def implementation_tasks_only(tasks: list[str]) -> list[str]:
     """Drop explicit non-implementation constraints from the execution todo list."""
-    return [
-        task
-        for task in tasks
-        if not re.match(r"(?i)^no changes to\b", task)
-    ]
+    return [task for task in tasks if is_implementation_task(task)]
 
 
 def validate_granularity(tasks: list[str]) -> None:

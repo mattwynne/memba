@@ -45,6 +45,28 @@ if grep -Fq 'No changes to commands' "$tmpdir/todo.md"; then
   exit 1
 fi
 
+cat > "$tmpdir/prerequisite-plan.md" <<'PLAN'
+# 999 — Prerequisite and scope guards
+
+## Implementation Plan
+
+1. Verify iteration 998's event-sourced foundation is merged and passing before starting this plan. Do not recreate that foundation in iteration 999.
+2. Add the new routing behaviour and its focused tests.
+3. Do not add a persisted policy or a policy editor.
+
+## Open Technical Decisions
+
+None.
+PLAN
+
+python3 "$helper" "$tmpdir/prerequisite-plan.md" "$tmpdir/prerequisite-todo.md"
+assert_contains "$tmpdir/prerequisite-todo.md" '- [ ] 001 Add the new routing behaviour and its focused tests.'
+if grep -Eq 'Verify iteration 998|Do not recreate|Do not add a persisted policy' "$tmpdir/prerequisite-todo.md"; then
+  echo "Expected verification prerequisites and negative scope guards to be omitted from todo.md" >&2
+  cat "$tmpdir/prerequisite-todo.md" >&2
+  exit 1
+fi
+
 echo '# Implementation TODO
 
 - [x] 001 Already done
