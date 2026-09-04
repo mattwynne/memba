@@ -31,7 +31,6 @@ digraph IterationImplementation {
     read_failed [
         label="Fail: Plan Missing",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
     ]
 
@@ -45,7 +44,6 @@ digraph IterationImplementation {
     wip_blocked [
         label="Fail: Implementation WIP Occupied",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed before coding: iteration ordering or WIP checks did not pass. Plan validation may run in parallel, but implementation must wait until earlier iterations are merged and no other iteration occupies the WIP slot.' >&2\nexit 1"
     ]
 
@@ -59,7 +57,6 @@ digraph IterationImplementation {
     preflight_failed [
         label="Fail: Sandbox Preflight",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed before coding: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
     ]
 
@@ -80,7 +77,6 @@ digraph IterationImplementation {
     resume_failed [
         label="Fail: Dirty Resume State",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed before coding: resume gate found uncommitted changes. Commit, stash, or reset/clean the worktree, then retry.' >&2\nexit 1"
     ]
 
@@ -131,7 +127,6 @@ digraph IterationImplementation {
     task_not_ready [
         label="Fail: Task Needs Human Input",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed: task validation requires human input or exceeded retry budget.' >&2\nexit 1"
     ]
 
@@ -159,7 +154,6 @@ digraph IterationImplementation {
     collect_evidence_failed [
         label="Fail: Evidence Collection",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed before plan conformance: implementation evidence could not be collected.' >&2\nexit 1"
     ]
 
@@ -189,7 +183,6 @@ digraph IterationImplementation {
     plan_not_ready [
         label="Fail: Needs Human Plan Review",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed: plan conformance gate found violations that require human input or exceeded the automatic plan repair budget.' >&2\nexit 1"
     ]
 
@@ -199,11 +192,18 @@ digraph IterationImplementation {
         script="bash .fabro/workflows/iteration-implementation/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}'"
     ]
 
+    final_artifact_failed [
+        label="Fail: Final Artifact Gate",
+        shape=parallelogram,
+        script="echo 'Iteration implementation failed: final artifact evidence or acceptance feature-change policy did not pass, so the implementation was not published. Inspect the final_artifact_gate output for the exact missing artifact or policy violation.' >&2\nexit 1"
+    ]
+
     publish_to_main [
         label="Publish Implementation to Main",
         shape=parallelogram,
         script="bash .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh '{{ inputs.plan_path }}'",
-        timeout="300s"
+        timeout="300s",
+        goal_gate=true
     ]
 
     publish_conflict_recovery_gate [
@@ -223,7 +223,6 @@ digraph IterationImplementation {
     publish_failed [
         label="Fail: Publish to Main",
         shape=parallelogram,
-        goal_gate=true,
         script="echo 'Iteration implementation failed: could not squash and push the implementation to main. If the failure was a rebase conflict, inspect the rescue branch and .fabro/tmp/publish-conflict-evidence.md; otherwise check push credentials, branch protection, and origin/main movement.' >&2\nexit 1"
     ]
 
@@ -285,7 +284,9 @@ digraph IterationImplementation {
     verify_plan_repair -> plan_not_ready
     plan_not_ready -> exit
 
-    final_artifact_gate -> publish_to_main
+    final_artifact_gate -> publish_to_main [condition="outcome=succeeded"]
+    final_artifact_gate -> final_artifact_failed
+    final_artifact_failed -> exit
     publish_to_main -> final_summary [condition="outcome=succeeded"]
     publish_to_main -> publish_conflict_recovery_gate
     publish_conflict_recovery_gate -> resolve_publish_conflict [condition="outcome=succeeded"]
