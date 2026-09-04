@@ -163,3 +163,48 @@ Follow-up validation:
 - `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` — passed.
 - `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed with expected goal-gate retry warnings.
 - `dev check --quick` — passed: 758 tests, 0 failures.
+
+### Additional observation: 2026-09-04 — review recorded and published code-health findings but still ended failed
+
+#### Context
+
+After iteration 056 implementation reached `main`, we ran the isolated review workflow against `1d11137ca64b0b9dda2a71ff920a2d10b6c81581..70abb33129f595d9dd62a8bcf14f7d9060774f6f`.
+
+Review run `01M1PX1E133CXVRQEZGW0AWA8S` completed independent Claude, Codex, and Gemini reviews; the synthesis accepted the implementation; `Record Code Health Findings`, final artifact gate, review-polish publication, and iteration-status finalization all reported success.
+
+#### What happened
+
+The review committed and pushed:
+
+```text
+1c83009f852e520adff4e319e89e77a0270d9326
+review polish: iteration 056
+```
+
+The commit added the expected judgement-worthy observations to `docs/code-health.md`. The final summary said `REVIEW_ACCEPTED`, all reviewer findings were handled, and the final artifact gate passed.
+
+Despite those durable artifacts, Fabro returned:
+
+```text
+Failure: goal gate unsatisfied for node code_health_recording_failed and no retry target
+```
+
+The same run also logged managed run-branch push warnings. `origin/main` nevertheless contained the review-polish commit and preserved iteration 056 as `merged`.
+
+#### Impact
+
+A successful review was externally indistinguishable from a failed one unless the operator inspected the repository and final-summary evidence. This is especially misleading because the previous defect in this note was the opposite: unrecorded code-health findings could be hidden by a successful status. Here recorded findings and a successful publish were hidden by a failed status.
+
+#### What allowed it to happen
+
+The review graph retains `code_health_recording_failed` as a `goal_gate=true` terminal node. A positive success path can therefore still end with an unsatisfied failure-node gate under Fabro's terminal gate semantics, even when `record_code_health` succeeded and the review reached publication. The stage's routing and terminal gate configuration are not proved together by a real success-path regression.
+
+#### Cross-reference
+
+See also [implementation-workflow-terminal-success-gate](2026-09-04-implementation-workflow-terminal-success-gate.md), whose additional 2026-09-04 observation records a separate implementation-run mismatch caused by post-publish run-branch checkpoint status. Both failures require checking durable `origin/main` artifacts, but this note is specifically about iteration-review goal-gate routing.
+
+#### Open questions
+
+- Why was `code_health_recording_failed` treated as unsatisfied after the successful `Record Code Health Findings` node?
+- Should all failure-message terminal nodes be non-goal nodes, leaving only positive gates such as successful review publication/finalization?
+- What workflow simulation test can prove that a success path with recorded code-health findings ends `succeeded`, while a true recording failure ends `failed`?

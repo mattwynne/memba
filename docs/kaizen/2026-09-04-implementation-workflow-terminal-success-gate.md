@@ -58,3 +58,54 @@ The workflow also used `goal_gate=true` on terminal `Fail:` nodes. Under skipped
 - `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — `Validation: OK` with the expected `publish_to_main` goal-gate retry warning.
 - `dot -Tsvg .fabro/workflows/iteration-implementation/workflow.fabro >/tmp/iteration-implementation.svg` — not run locally because `dot` was not installed.
 - `dev check` — passed.
+
+### Additional observation: 2026-09-04 — main publication succeeded but Fabro reported the implementation run failed
+
+#### Context
+
+We completed local recovery for iteration 056 and started a fresh implementation workflow directly from pushed branch `work/056-finish`:
+
+```text
+fabro run .fabro/workflows/iteration-implementation/workflow.toml \
+  -I plan_path=docs/iterations/056-group-audience-foundation/plan.md \
+  --auto-approve
+```
+
+Run `01M1PW96PP532RAYZ4N9XTWECY` reported every delivery gate green, including its own `Run Dev Check`, plan-conformance gate, final artifact gate, and `Publish Implementation to Main`.
+
+#### What happened
+
+The deterministic publish stage created and pushed:
+
+```text
+70abb33129f595d9dd62a8bcf14f7d9060774f6f
+iteration 056: Group audience foundation: Everyone and Admin
+```
+
+and marked the plan and iteration index `merged` on `origin/main`.
+
+Nevertheless, Fabro returned an outer failed run status:
+
+```text
+Failure: failed to push run branch 'fabro/run/01M1PW96PP532RAYZ4N9XTWECY'
+```
+
+The run output repeated a warning that GitHub had rejected the run-branch push, with a branch-protection/ruleset hint. After `git fetch`, however, `origin/fabro/run/01M1PW96PP532RAYZ4N9XTWECY` was present, as were the run metadata branch and the published main commit.
+
+#### Impact
+
+The run-status signal contradicted the durable delivery artifact. An operator had to inspect `origin/main`, plan/index metadata, and run output to establish whether delivery had actually completed. A wrapper that treats this status as an ordinary failed implementation risks unnecessary rescue or lifecycle-status handling after a successful publish.
+
+#### What allowed it to happen
+
+The positive `publish_to_main` gate correctly protects the product artifact, but Fabro's managed checkpoint/run-branch push status can still override the run's terminal result after that gate has succeeded. The repository workflow has no deterministic reconciliation step that compares the remote main publication artifact with the final Fabro status before reporting delivery failure.
+
+#### Cross-reference
+
+This is separate from, but operationally similar to, the review terminal-status mismatch recorded in [iteration-review-code-health-recording-failure](2026-06-09-iteration-review-code-health-recording-failure.md). That observation concerns review routing/goal gates after code-health processing; this one concerns implementation run-branch checkpoint publication after a successful `main` publish.
+
+#### Open questions
+
+- Why did Fabro report rejected pushes while the named remote run branch existed after the run?
+- Is this a retry/reporting race in Fabro, a GitHub ruleset interaction, or both?
+- Can the delivery helper classify a run as successfully published when `origin/main` contains its deterministic publication commit, while still surfacing run-branch preservation as degraded recovery evidence?
