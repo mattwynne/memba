@@ -590,7 +590,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-04T15:56:05.800317252Z",
-  "last_event_at": "2026-09-04T16:02:58.225377434Z",
+  "last_event_at": "2026-09-04T16:03:02.211330179Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1160,9 +1160,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 305,
       "checkpoint": {
-        "timestamp": "2026-09-04T16:02:58.228999879Z",
+        "timestamp": "2026-09-04T16:03:02.211241903Z",
         "current_node": "not_ready",
         "completed_nodes": [
           "start",
@@ -1173,15 +1173,23 @@
         ],
         "node_retries": {},
         "context_values": {
-          "thread.review_merge.current_node": "synthesize",
-          "preferred_label": "needs_human",
-          "current_node": "not_ready",
+          "internal.thread_id": "synthesize",
+          "response.synthesize": "{\n  \"preferred_next_label\": \"needs_human\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"NEEDS MATT\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [\n    \"The plan explicitly requires an opened delivery status despite prior product decisions retiring open tracking and the opened status. Matt must confirm whether to remove that behavior or intentionally reverse the prior decision.\",\n    \"The plan does not explicitly require message-to-club ownership validation for the CSV endpoint, leaving a potential cross-club data disclosure path.\"\n  ],\n  \"non_blocking_improvements\": [\n    \"Name the router scope and pipelines for the endpoint.\",\n    \"Specify the query or join that supplies recipient_email.\",\n    \"Add explicit Content-Type and Content-Disposition expectations.\",\n    \"Test CSV escaping for commas, double quotes, and newlines.\"\n  ],\n  \"questions_for_matt\": [\n    \"Should the opened scenario and status mapping be removed to preserve the existing no-open-tracking policy, or should this iteration intentionally reverse that policy? If it should be reversed, the plan needs an explicit product decision and a wider implementation/data-model design.\"\n  ],\n  \"markdown_report\": \"# Provisional decision: NEEDS MATT\\n\\nAll required evidence is present in `parallel.results`, including each reviewer's decision, confidence, blocking-gap count, blocking-gap summary, and required-edits field. The validation cannot be marked READY because Claude identified a specific conflict with an existing product decision. That conflict cannot safely be resolved as an editorial correction.\\n\\n## Reviewer decision table\\n\\n| Reviewer | Decision | Confidence | Blocking gaps count | Notes |\\n|---|---|---:|---:|---|\\n| Gemini | READY | High | 0 | Considered the iteration focused, implementable, and adequately testable without plan edits. |\\n| Claude | NOT READY | High | 2 | Found that the requested `opened` behavior conflicts with the retired open-tracking policy and that the endpoint lacks an explicit cross-club message-ownership check. |\\n| GPT-5.6 Sol | READY | High | 0 | Considered the slice coherent; suggested explicit download headers and more complete RFC 4180 escaping tests as non-blocking improvements. |\\n\\n## Consensus findings\\n\\n- The plan is otherwise a focused, useful iteration centered on exporting delivery receipts for one message.\\n- The proposed validation approach is generally concrete: focused tests, acceptance scenarios, a manual download check, and eventual `dev check` execution.\\n- CSV response headers and comprehensive escaping cases would improve objective validation but are not, by themselves, readiness blockers.\\n- The reviewers disagree on readiness because two reviews did not account for the existing removal of open tracking or the endpoint-specific tenant boundary identified by Claude.\\n- No implementation should begin until the `opened` requirement is reconciled with the existing product policy.\\n\\n## Reviewer objections addressed\\n\\n### 1. Unsupported `opened` status\\n\\n**Upheld as blocking.** Claude supplied specific evidence that `opened` is not merely an omitted mapping:\\n\\n- provider webhook statuses exclude it;\\n- the member-facing presentation vocabulary excludes it;\\n- Postmark open events are rejected;\\n- legacy opened-event projector clauses are replay no-ops; and\\n- prior iterations and ADR guidance deliberately retired open tracking and require a new product decision before reintroducing it.\\n\\nThe plan nevertheless explicitly asks for an opened scenario and opened receipt/delivery values while declaring no open business decisions. Removing that criterion would alter explicitly requested behavior; reintroducing it would reverse product policy and require broader technical work. The coordinator therefore cannot choose between those outcomes as an obvious editorial repair.\\n\\n### 2. Cross-club message authorization\\n\\n**Upheld as a blocking plan omission, but not as a new product-policy question.** Membership middleware establishes that the requester belongs to the club associated with the host, but it does not by itself establish that the requested message belongs to that club. An unscoped lookup by message ID can therefore expose another club's receipt data unless the action performs a message-to-club ownership check.\\n\\nThe likely correction is straightforward and should follow existing message-detail semantics: put the endpoint in the authenticated active-club-member scope, verify that the message belongs to the resolved club, and return the existing not-found response for a mismatch. The plan must state and test this explicitly.\\n\\n## Corrected findings\\n\\n1. The two READY votes do not establish readiness because they did not rebut Claude's concrete evidence concerning the retired `opened` status. This is not a majority-vote decision.\\n2. The cross-club issue does not appear to require Matt to invent a new access policy. Existing tenant-isolation behavior supplies the intended rule, so it can become an obvious plan correction once the product blocker is resolved.\\n3. Naming the router scope and the source or join for `recipient_email` improves implementation precision. These are not independently material design decisions if the existing projections and active-club routing conventions are followed.\\n4. Explicit `Content-Type`, `Content-Disposition`, filename, and comma/quote/newline escaping checks are valuable validation improvements, but they are not the reason the plan requires human input.\\n\\n## Blocking gaps\\n\\n1. **A product decision is required for the `opened` behavior.** The plan explicitly requires behavior that prior product work deliberately removed and that current read models cannot produce. An engineer cannot implement the criterion faithfully without either silently changing the requested scope or designing a reversal of the no-open-tracking policy.\\n2. **The tenant boundary is not explicit for the new endpoint.** Receipt exports contain member delivery information. The plan must require the requested message to belong to the active club and must include an objective cross-club rejection scenario before implementation can safely begin.\\n\\n## GPT-5.6 Sol repair brief\\n\\nNone. The principal blocker requires Matt's product decision. Do not ask GPT-5.6 Sol to remove or reintroduce `opened` behavior based on inference. After Matt answers, the mechanical plan edits can be prepared from that decision.\\n\\n## Questions for Matt\\n\\n1. Should the `opened` scenario and status mapping be removed, preserving the product's existing no-open-tracking policy?\\n2. Alternatively, is this iteration intended to reverse that policy? If so, the plan must explicitly record that product decision and address event ingestion, supported status vocabulary, projection behavior, historical data expectations, and the larger acceptance scope before another readiness review.\\n\\nThe existing tenant-isolation convention appears sufficient to resolve the authorization omission without a separate product decision: cross-club message IDs should receive the same not-found treatment used by message detail.\\n\\n## Validation checklist\\n\\nAfter Matt's decision and any resulting plan update, verify that:\\n\\n- every `opened` reference is removed consistently from scope, scenarios, criteria, mappings, implementation steps, and validation if the existing policy is retained; or\\n- if open tracking is intentionally restored, the plan records the decision and fully specifies ingestion, projection, presentation, migration/history, and validation behavior;\\n- the exact shared `.feature` file and allowed acceptance changes remain named;\\n- the route is placed in the existing browser/active-club-member scope;\\n- the controller or context lookup verifies `message.club_id` against the active club;\\n- an acceptance criterion and test reject a message belonging to another club, preferably with the existing 404 semantics;\\n- the implementation plan identifies the projection/query source for `recipient_email`;\\n- response tests assert the CSV media type, attachment disposition, and intended filename;\\n- CSV tests cover commas, double quotes, and embedded newlines;\\n- focused tests cover ordering, inclusion/exclusion, status/reason mappings, unknown IDs, and cross-club IDs;\\n- the plan retains `dev check` as the implementation stop condition; and\\n- no implementation work is started during this validation/repair loop.\",\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "internal.run_id": "01M1PJ4063FZVCHDJYAG9SRHSD",
+          "internal.retry_count.review_merge": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.review_fork": 0,
+          "thread.start.current_node": "review_fork",
+          "internal.fidelity": "summary:high",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "failure_class": "deterministic",
-          "graph.default_fidelity": "summary:high",
-          "internal.node_visit_count": 1,
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
           "command.output": "blob://sha256/118e40e0c216282a20952a82f528d08d3f763ef89ee278dfb29f44289fb92227",
+          "thread.review_merge.current_node": "synthesize",
+          "internal.retry_count.synthesize": 0,
+          "last_response": "{\n  \"preferred_next_label\": \"needs_human\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"NEEDS MATT\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [\n    \"T",
+          "thread.synthesize.current_node": "not_ready",
+          "internal.node_visit_count": 1,
           "last_stage": "synthesize",
           "parallel.results": [
             {
@@ -1230,32 +1238,42 @@
               }
             }
           ],
-          "internal.thread_id": "synthesize",
-          "internal.retry_count.start": 0,
-          "last_response": "{\n  \"preferred_next_label\": \"needs_human\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"NEEDS MATT\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [\n    \"T",
-          "internal.retry_count.review_merge": 0,
-          "internal.work_dir": "/workspace/memba",
-          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the synthesis report for remaining gaps or decisions that need human input.",
+          "graph.default_fidelity": "summary:high",
           "parallel.branch_count": 3,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "thread.review_fork.current_node": "review_merge",
-          "internal.retry_count.synthesize": 0,
-          "internal.retry_count.not_ready": 0,
-          "internal.fidelity": "summary:high",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the synthesis report for remaining gaps or decisions that need human input.",
           "plan_needs_fix": false,
           "plan_needs_human": true,
-          "graph.rankdir": "LR",
-          "thread.start.current_node": "review_fork",
-          "internal.retry_count.review_fork": 0,
+          "internal.retry_count.not_ready": 0,
+          "current_node": "not_ready",
           "plan_ready": false,
-          "response.synthesize": "{\n  \"preferred_next_label\": \"needs_human\",\n  \"outcome\": \"succeeded\",\n  \"failure_reason\": \"\",\n  \"suggested_next_ids\": [],\n  \"decision\": \"NEEDS MATT\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [\n    \"The plan explicitly requires an opened delivery status despite prior product decisions retiring open tracking and the opened status. Matt must confirm whether to remove that behavior or intentionally reverse the prior decision.\",\n    \"The plan does not explicitly require message-to-club ownership validation for the CSV endpoint, leaving a potential cross-club data disclosure path.\"\n  ],\n  \"non_blocking_improvements\": [\n    \"Name the router scope and pipelines for the endpoint.\",\n    \"Specify the query or join that supplies recipient_email.\",\n    \"Add explicit Content-Type and Content-Disposition expectations.\",\n    \"Test CSV escaping for commas, double quotes, and newlines.\"\n  ],\n  \"questions_for_matt\": [\n    \"Should the opened scenario and status mapping be removed to preserve the existing no-open-tracking policy, or should this iteration intentionally reverse that policy? If it should be reversed, the plan needs an explicit product decision and a wider implementation/data-model design.\"\n  ],\n  \"markdown_report\": \"# Provisional decision: NEEDS MATT\\n\\nAll required evidence is present in `parallel.results`, including each reviewer's decision, confidence, blocking-gap count, blocking-gap summary, and required-edits field. The validation cannot be marked READY because Claude identified a specific conflict with an existing product decision. That conflict cannot safely be resolved as an editorial correction.\\n\\n## Reviewer decision table\\n\\n| Reviewer | Decision | Confidence | Blocking gaps count | Notes |\\n|---|---|---:|---:|---|\\n| Gemini | READY | High | 0 | Considered the iteration focused, implementable, and adequately testable without plan edits. |\\n| Claude | NOT READY | High | 2 | Found that the requested `opened` behavior conflicts with the retired open-tracking policy and that the endpoint lacks an explicit cross-club message-ownership check. |\\n| GPT-5.6 Sol | READY | High | 0 | Considered the slice coherent; suggested explicit download headers and more complete RFC 4180 escaping tests as non-blocking improvements. |\\n\\n## Consensus findings\\n\\n- The plan is otherwise a focused, useful iteration centered on exporting delivery receipts for one message.\\n- The proposed validation approach is generally concrete: focused tests, acceptance scenarios, a manual download check, and eventual `dev check` execution.\\n- CSV response headers and comprehensive escaping cases would improve objective validation but are not, by themselves, readiness blockers.\\n- The reviewers disagree on readiness because two reviews did not account for the existing removal of open tracking or the endpoint-specific tenant boundary identified by Claude.\\n- No implementation should begin until the `opened` requirement is reconciled with the existing product policy.\\n\\n## Reviewer objections addressed\\n\\n### 1. Unsupported `opened` status\\n\\n**Upheld as blocking.** Claude supplied specific evidence that `opened` is not merely an omitted mapping:\\n\\n- provider webhook statuses exclude it;\\n- the member-facing presentation vocabulary excludes it;\\n- Postmark open events are rejected;\\n- legacy opened-event projector clauses are replay no-ops; and\\n- prior iterations and ADR guidance deliberately retired open tracking and require a new product decision before reintroducing it.\\n\\nThe plan nevertheless explicitly asks for an opened scenario and opened receipt/delivery values while declaring no open business decisions. Removing that criterion would alter explicitly requested behavior; reintroducing it would reverse product policy and require broader technical work. The coordinator therefore cannot choose between those outcomes as an obvious editorial repair.\\n\\n### 2. Cross-club message authorization\\n\\n**Upheld as a blocking plan omission, but not as a new product-policy question.** Membership middleware establishes that the requester belongs to the club associated with the host, but it does not by itself establish that the requested message belongs to that club. An unscoped lookup by message ID can therefore expose another club's receipt data unless the action performs a message-to-club ownership check.\\n\\nThe likely correction is straightforward and should follow existing message-detail semantics: put the endpoint in the authenticated active-club-member scope, verify that the message belongs to the resolved club, and return the existing not-found response for a mismatch. The plan must state and test this explicitly.\\n\\n## Corrected findings\\n\\n1. The two READY votes do not establish readiness because they did not rebut Claude's concrete evidence concerning the retired `opened` status. This is not a majority-vote decision.\\n2. The cross-club issue does not appear to require Matt to invent a new access policy. Existing tenant-isolation behavior supplies the intended rule, so it can become an obvious plan correction once the product blocker is resolved.\\n3. Naming the router scope and the source or join for `recipient_email` improves implementation precision. These are not independently material design decisions if the existing projections and active-club routing conventions are followed.\\n4. Explicit `Content-Type`, `Content-Disposition`, filename, and comma/quote/newline escaping checks are valuable validation improvements, but they are not the reason the plan requires human input.\\n\\n## Blocking gaps\\n\\n1. **A product decision is required for the `opened` behavior.** The plan explicitly requires behavior that prior product work deliberately removed and that current read models cannot produce. An engineer cannot implement the criterion faithfully without either silently changing the requested scope or designing a reversal of the no-open-tracking policy.\\n2. **The tenant boundary is not explicit for the new endpoint.** Receipt exports contain member delivery information. The plan must require the requested message to belong to the active club and must include an objective cross-club rejection scenario before implementation can safely begin.\\n\\n## GPT-5.6 Sol repair brief\\n\\nNone. The principal blocker requires Matt's product decision. Do not ask GPT-5.6 Sol to remove or reintroduce `opened` behavior based on inference. After Matt answers, the mechanical plan edits can be prepared from that decision.\\n\\n## Questions for Matt\\n\\n1. Should the `opened` scenario and status mapping be removed, preserving the product's existing no-open-tracking policy?\\n2. Alternatively, is this iteration intended to reverse that policy? If so, the plan must explicitly record that product decision and address event ingestion, supported status vocabulary, projection behavior, historical data expectations, and the larger acceptance scope before another readiness review.\\n\\nThe existing tenant-isolation convention appears sufficient to resolve the authorization omission without a separate product decision: cross-club message IDs should receive the same not-found treatment used by message detail.\\n\\n## Validation checklist\\n\\nAfter Matt's decision and any resulting plan update, verify that:\\n\\n- every `opened` reference is removed consistently from scope, scenarios, criteria, mappings, implementation steps, and validation if the existing policy is retained; or\\n- if open tracking is intentionally restored, the plan records the decision and fully specifies ingestion, projection, presentation, migration/history, and validation behavior;\\n- the exact shared `.feature` file and allowed acceptance changes remain named;\\n- the route is placed in the existing browser/active-club-member scope;\\n- the controller or context lookup verifies `message.club_id` against the active club;\\n- an acceptance criterion and test reject a message belonging to another club, preferably with the existing 404 semantics;\\n- the implementation plan identifies the projection/query source for `recipient_email`;\\n- response tests assert the CSV media type, attachment disposition, and intended filename;\\n- CSV tests cover commas, double quotes, and embedded newlines;\\n- focused tests cover ordering, inclusion/exclusion, status/reason mappings, unknown IDs, and cross-club IDs;\\n- the plan retains `dev check` as the implementation stop condition; and\\n- no implementation work is started during this validation/repair loop.\",\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
-          "thread.synthesize.current_node": "not_ready",
+          "preferred_label": "needs_human",
+          "internal.retry_count.start": 0,
+          "thread.review_fork.current_node": "review_merge",
+          "failure_class": "deterministic",
           "outcome": "failed"
         },
         "node_outcomes": {
-          "start": {
+          "review_merge": {
             "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
             "usage": null
+          },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/118e40e0c216282a20952a82f528d08d3f763ef89ee278dfb29f44289fb92227"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the synthesis report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 145,
+              "active_time_ms": 145
+            }
           },
           "review_fork": {
             "status": "succeeded",
@@ -1313,9 +1331,8 @@
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
           },
-          "review_merge": {
+          "start": {
             "status": "succeeded",
-            "notes": "Joined 3 parallel branches",
             "usage": null
           },
           "synthesize": {
@@ -1357,38 +1374,123 @@
               "tool_time_ms": 0,
               "active_time_ms": 51202
             }
-          },
-          "not_ready": {
-            "status": "failed",
-            "context_updates": {
-              "command.output": "blob://sha256/118e40e0c216282a20952a82f528d08d3f763ef89ee278dfb29f44289fb92227"
-            },
-            "failure": {
-              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the synthesis report for remaining gaps or decisions that need human input.\n",
-              "category": "deterministic"
-            },
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 145,
-              "active_time_ms": 145
-            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "ff088686736512e04591d03ff42725d1ef09d857",
+        "loop_failure_signatures": {
+          "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the synthesis report for remaining gaps or decisions that need human input.": 1
+        },
         "node_visits": {
-          "review_merge": 1,
+          "synthesize": 1,
+          "not_ready": 1,
           "review_fork": 1,
           "start": 1,
-          "synthesize": 1,
-          "not_ready": 1
+          "review_merge": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-09-04T16:03:02.247336775Z",
+    "status": "failed",
+    "timing": {
+      "wall_time_ms": 416413,
+      "inference_time_ms": 51202,
+      "tool_time_ms": 145,
+      "active_time_ms": 51347
+    },
+    "failure": {
+      "reason": "workflow_error",
+      "detail": {
+        "message": "goal gate unsatisfied for node publish_ready and no retry target",
+        "category": "deterministic"
+      }
+    },
+    "final_git_commit_sha": "ff088686736512e04591d03ff42725d1ef09d857",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "review_fork",
+        "stage_label": "review_fork",
+        "timing": {
+          "wall_time_ms": 346703,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "review_merge",
+        "stage_label": "review_merge",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 51235,
+          "inference_time_ms": 51202,
+          "tool_time_ms": 0,
+          "active_time_ms": 51202
+        },
+        "billing_usd_micros": 108160,
+        "retries": 0
+      },
+      {
+        "stage_id": "not_ready",
+        "stage_label": "not_ready",
+        "timing": {
+          "wall_time_ms": 149,
+          "inference_time_ms": 0,
+          "tool_time_ms": 145,
+          "active_time_ms": 145
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 43233,
+      "output_tokens": 10723,
+      "total_tokens": 801076,
+      "reasoning_tokens": 23051,
+      "cache_read_tokens": 665852,
+      "cache_write_tokens": 58217,
+      "total_usd_micros": 868808
+    },
+    "total_retries": 0,
+    "diff": {
+      "summary": {
+        "files_changed": 0,
+        "additions": 0,
+        "deletions": 0
+      }
+    }
+  },
   "sandbox": {
     "kind": "ready",
     "plan": {
@@ -1907,7 +2009,12 @@
       "first_event_seq": 298,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the synthesis report for remaining gaps or decisions that need human input.\n",
+        "timestamp": "2026-09-04T16:02:58.227803746Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -1931,6 +2038,12 @@
       "started_at": "2026-09-04T16:02:58.076968934Z",
       "handler": "command",
       "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 149,
+        "inference_time_ms": 0,
+        "tool_time_ms": 145,
+        "active_time_ms": 145
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1940,7 +2053,7 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "failed"
     },
     "claude_review@1": {
       "first_event_seq": 28,
