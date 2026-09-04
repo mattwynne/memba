@@ -1,0 +1,53 @@
+digraph FanInEvidenceSpike {
+    graph [
+        goal="Prove that a Fabro parallel fan-in exposes every branch response to the downstream synthesis prompt",
+        default_fidelity="summary:high",
+        model_stylesheet="
+            * { provider: openai; model: gpt-5.6-luna; reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit [shape=Msquare, label="Exit"]
+
+    fork [
+        label="Fan Out",
+        shape=component,
+        max_parallel=3
+    ]
+
+    alpha [
+        label="Alpha Review",
+        shape=tab,
+        prompt="Reply with exactly this text and nothing else: FANOUT-EVIDENCE-ALPHA-71C3"
+    ]
+    bravo [
+        label="Bravo Review",
+        shape=tab,
+        prompt="Reply with exactly this text and nothing else: FANOUT-EVIDENCE-BRAVO-4A9E"
+    ]
+    charlie [
+        label="Charlie Review",
+        shape=tab,
+        prompt="Reply with exactly this text and nothing else: FANOUT-EVIDENCE-CHARLIE-8F2B"
+    ]
+
+    merge [label="Fan In", shape=tripleoctagon]
+
+    synthesize [
+        label="Verify Evidence",
+        shape=tab,
+        prompt="Inspect the completed review-stage responses in your context. If and only if you can see all three distinct response tokens, return one line beginning `FANIN-EVIDENCE-PRESENT:` followed by the three exact tokens, separated by ` | `. Otherwise return exactly `FANIN-EVIDENCE-MISSING`."
+    ]
+
+    start -> fork
+    fork -> alpha
+    fork -> bravo
+    fork -> charlie
+    alpha -> merge
+    bravo -> merge
+    charlie -> merge
+    merge -> synthesize
+    synthesize -> exit
+}
