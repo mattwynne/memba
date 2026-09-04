@@ -17,8 +17,8 @@
 - [x] 015 Add `ConversationAccessGrantedToGroup` and make the root-message path in the Message aggregate emit it for the audience group.
 - [x] 016 Add the `messaging_conversation_group_access` migration, schema, and strong projector; validate access level and make write imply read in the Messaging query API.
 - [x] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
-- [ ] 018 Change reply authorisation to require write access through an active group membership.
-- [ ] 019 Keep reply-recipient/follower delivery unchanged.
+- [x] 018 Change reply authorisation to require write access through an active group membership.
+- [x] 019 Keep reply-recipient/follower delivery unchanged.
 - [ ] 020 Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated, idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto migrations and application/event-store startup.
 - [ ] 021 It scans authoritative current projections in dependency order (groups, memberships/Admin assignments, root conversations), dispatches only missing commands, logs counts, and aborts the release on an unrecoverable error.
 - [ ] 022 A subsequent release safely resumes; it is not an Ecto migration or an application-boot task.

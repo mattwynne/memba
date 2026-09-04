@@ -65,12 +65,13 @@ defmodule Memba.Messaging do
 
   The caller supplies the reply `:message_id`, root `:conversation_id`, replying
   `:sender_id`, and non-blank `:body`. The reply inherits the root message's
-  club and subject, and only a current member of that club may reply.
+  club and subject. Reply authorization requires the sender to hold active
+  membership in a group that has write access to the root conversation.
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- post_message_reply_command(attrs),
-         :ok <- authorize_reply_sender(command.club_id, command.sender_id),
+         :ok <- authorize_reply_sender(command),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -1414,8 +1415,18 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_reply_sender(club_id, sender_id) do
-    if Membership.active_member_of_club?(club_id, sender_id) do
+  defp authorize_reply_sender(%PostMessageReply{} = command) do
+    command.conversation_id
+    |> conversation_write_group_ids(command.club_id)
+    |> Enum.any?(&Membership.active_member_of_group?(&1, command.sender_id))
+    |> case do
+      true -> :ok
+      false -> {:error, :not_current_member}
+    end
+  end
+
+  defp authorize_current_club_member(club_id, person_id) do
+    if Membership.active_member_of_club?(club_id, person_id) do
       :ok
     else
       {:error, :not_current_member}
@@ -1423,13 +1434,29 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_current_member_conversation_action(command) do
-    with :ok <- authorize_reply_sender(command.club_id, command.member_id),
+    with :ok <- authorize_current_club_member(command.club_id, command.member_id),
          {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
       if root_message.club_id == command.club_id do
         :ok
       else
         {:error, :conversation_not_found}
       end
+    end
+  end
+
+  defp conversation_write_group_ids(conversation_id, club_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, club_id} <- ID.cast(:club, club_id) do
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.club_id == ^club_id and
+          access.access_level == "write"
+      )
+      |> select([access], access.group_id)
+      |> Repo.all()
+    else
+      _invalid -> []
     end
   end
 
