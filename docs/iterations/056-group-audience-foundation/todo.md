@@ -19,10 +19,10 @@
 - [x] 017 Change web compose and accepted inbound Everyone-mail command construction to resolve the deterministic Everyone group and resolve recipients through the Membership group API.
 - [x] 018 Change reply authorisation to require write access through an active group membership.
 - [x] 019 Keep reply-recipient/follower delivery unchanged.
-- [ ] 020 Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated, idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto migrations and application/event-store startup.
-- [ ] 021 It scans authoritative current projections in dependency order (groups, memberships/Admin assignments, root conversations), dispatches only missing commands, logs counts, and aborts the release on an unrecoverable error.
-- [ ] 022 A subsequent release safely resumes; it is not an Ecto migration or an application-boot task.
-- [ ] 023 Do not modify or delete historic events.
+- [x] 020 Implement `Memba.Membership.SystemGroups.Backfill` as a reusable, paginated, idempotent service, then invoke it from `Memba.Release.migrate/0` after Ecto migrations and application/event-store startup.
+- [x] 021 It scans authoritative current projections in dependency order (groups, memberships/Admin assignments, root conversations), dispatches only missing commands, logs counts, and aborts the release on an unrecoverable error.
+- [x] 022 A subsequent release safely resumes; it is not an Ecto migration or an application-boot task.
+- [x] 023 Do not modify or delete historic events.
 - [ ] 024 Extend `Memba.EventSourcedCase` with the new Group and conversation-access projectors/tables.
 - [ ] 025 Add a replay-parity test that dispatches representative setup and backfill facts, snapshots the group/membership/access queries, calls `rebuild_event_sourced_projections!/0`, awaits the new projectors through `Memba.ProjectionBarrier`, and asserts the same queries return the same state.
 - [ ] 026 Add tests for aggregate decisions; system-group event-handler commands and idempotency; system-group membership after member/role changes—including future role changes and member removal for memberships that were seeded by backfill; sender and reply authorisation; recipient/follower-delivery regression; release-backfill reruns; and replay parity.
