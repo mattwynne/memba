@@ -117,6 +117,21 @@ Feature: Club message replies (conversations)
       Then Alice should see the message "Re: Paddle planning" in Kootenay Mountaineering Club
       And the conversation for "Paddle planning" should not show Alice's reply "Re: Paddle planning details."
 
+  @iteration-057
+  Rule: Admin-group members can reply by email to an Admin conversation
+
+    @iteration-057 @todo-domain @todo-ui
+    Scenario: Carol replies by email to Bob's Admin conversation
+      Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
+      And Bob emailed "Committee meeting" to admin@kmc.clubs.memba.io
+      When Carol replies by email to "Committee meeting" with:
+        """
+        I can attend.
+        """
+      Then the Admin conversation for "Committee meeting" should show Carol's reply "I can attend."
+      And Bob should receive Carol's reply by email from Kootenay Mountaineering Club via Memba
+      And Alice should not receive Carol's reply by email from Kootenay Mountaineering Club via Memba
+
   Rule: Email replies use the everyone address on the club email subdomain
 
     @iteration-042
