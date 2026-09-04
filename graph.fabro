@@ -1,0 +1,104 @@
+digraph PlanValidation {
+    graph [
+        goal="Rigorously validate the iteration plan at {{ inputs.plan_path }} and mark it validated when it is ready for future implementation",
+        default_fidelity="summary:high",
+        model_stylesheet="
+            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }
+            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }
+            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #opus_recheck { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
+            #publish_ready { reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    gemini_review [
+        label="Gemini Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/gemini_review.md"
+    ]
+
+    claude_review [
+        label="Claude Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/claude_review.md"
+    ]
+
+    codex_review [
+        label="Sol Review",
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
+        prompt="@prompts/codex_review.md"
+    ]
+
+    review_fork [
+        label="Fan Out Independent Reviews",
+        shape=component,
+        max_parallel=3
+    ]
+
+    review_merge [
+        label="Collect Independent Reviews",
+        shape=tripleoctagon
+    ]
+
+    synthesize [
+        label="Sol Synthesis & Repair Brief",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/synthesize.md"
+    ]
+
+    codex_update [
+        label="Sol Updates Plan",
+        prompt="@prompts/apply_fixes.md"
+    ]
+
+    opus_recheck [
+        label="Sol Recheck",
+        shape=box,
+        prompt="@prompts/recheck.md"
+    ]
+
+    publish_ready [
+        label="Publish Validated Plan",
+        shape=parallelogram,
+        goal_gate=true,
+        script="if [ '{{ inputs.publish }}' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'"
+    ]
+
+    not_ready [
+        label="Fail: Plan Not Ready",
+        shape=parallelogram,
+        script="echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
+    ]
+
+    start -> review_fork
+    review_fork -> gemini_review
+    review_fork -> claude_review
+    review_fork -> codex_review
+    gemini_review -> review_merge
+    claude_review -> review_merge
+    codex_review -> review_merge
+    review_merge -> synthesize
+    synthesize -> publish_ready [label="validated", condition="preferred_label=validated"]
+    synthesize -> codex_update [label="fix", condition="preferred_label=fix"]
+    synthesize -> not_ready [label="needs_human"]
+    codex_update -> opus_recheck
+    opus_recheck -> publish_ready [label="validated", condition="preferred_label=validated"]
+    opus_recheck -> codex_update [label="fix", condition="preferred_label=fix && context.internal.node_visit_count < 3"]
+    opus_recheck -> not_ready [label="needs_human"]
+    publish_ready -> exit
+    not_ready -> exit
+}
