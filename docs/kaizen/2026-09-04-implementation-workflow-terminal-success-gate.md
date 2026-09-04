@@ -109,3 +109,9 @@ This is separate from, but operationally similar to, the review terminal-status 
 - Why did Fabro report rejected pushes while the named remote run branch existed after the run?
 - Is this a retry/reporting race in Fabro, a GitHub ruleset interaction, or both?
 - Can the delivery helper classify a run as successfully published when `origin/main` contains its deterministic publication commit, while still surfacing run-branch preservation as degraded recovery evidence?
+
+#### Investigation result and possible prevention
+
+Investigation found a non-fast-forward rejection, not a GitHub ruleset rejection. Checkpoints through `final_artifact_gate` had already pushed `origin/fabro/run/01M1PW96PP532RAYZ4N9XTWECY` at `10129c70`. `publish_to_main.sh` then used `git reset --soft "$base_sha"` to squash the active run-branch history before pushing `70abb331` to `main`. Fabro's next automatic checkpoint was therefore not a descendant of the remote run-branch tip and its normal push failed.
+
+Keep the active `fabro/run/*` branch fast-forward-only: construct the squash/rebase publication candidate on a temporary branch/worktree (or with `git commit-tree`), publish that candidate to `main`, and leave the managed run branch untouched. Extend `test_publish_to_main.sh` and add a review-publish counterpart that seed a remote run checkpoint, publish, then prove a subsequent normal run-branch push still succeeds.
