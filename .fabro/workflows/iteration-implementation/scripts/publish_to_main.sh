@@ -11,6 +11,16 @@ if [ ! -f "$PLAN_PATH" ]; then
   exit 1
 fi
 
+stage_publish_artifact() {
+  local path
+  while IFS= read -r -d '' path; do
+    case "$path" in
+      .fabro/tmp|.fabro/tmp/*) continue ;;
+    esac
+    git add -- "$path"
+  done < <(git ls-files -z --modified --deleted --others --exclude-standard)
+}
+
 git fetch --quiet origin main:refs/remotes/origin/main
 base_sha=$(git merge-base HEAD origin/main)
 head_sha=$(git rev-parse HEAD)
@@ -49,17 +59,19 @@ validation="dev check passed; plan conformance passed"
 # and iteration index cannot drift apart.
 .fabro/workflows/scripts/iteration_status.py mark "$PLAN_PATH" merged
 
-git add -A -- . ':!.fabro/tmp' ':!.fabro/tmp/**'
+stage_publish_artifact
 
 # Collapse Fabro checkpoint commits and any remaining working-tree changes into
-# one trunk commit that represents the delivered iteration.
-git reset --soft "$base_sha"
-
-if git diff --cached --quiet; then
-  echo 'No staged implementation diff remains after squash reset.' >&2
+# one trunk commit object that represents the delivered iteration, without
+# moving the active fabro/run/* branch. Fabro will checkpoint this working tree
+# after publication; preserving the branch ancestry keeps that ordinary push a
+# fast-forward from the last remote run checkpoint.
+if git diff --cached --quiet "$base_sha"; then
+  echo 'No staged implementation diff remains after squash preparation.' >&2
   exit 1
 fi
 
+tree_sha=$(git write-tree)
 commit_msg=$(mktemp)
 {
   printf '%s\n\n' "$subject"
@@ -71,17 +83,47 @@ commit_msg=$(mktemp)
   printf 'Validation: %s\n' "$validation"
 } > "$commit_msg"
 
-fabro_git_commit -F "$commit_msg"
+attempted_publish_sha=$(fabro_git_commit_tree "$tree_sha" -p "$base_sha" -F "$commit_msg")
 rm -f "$commit_msg"
-
-attempted_publish_sha=$(git rev-parse HEAD)
 safe_run_id=$(printf '%s' "$run_id" | tr -c '[:alnum:]_.-' '-')
 rescue_branch="fabro/rescue/${safe_run_id}-${iteration_number}-publish-conflict"
 git branch -f "$rescue_branch" "$attempted_publish_sha"
 
-# Rebase rather than force-push if main moved while this run was executing.
-if ! git pull --rebase origin main; then
-  conflicted_files=$(git diff --name-only --diff-filter=U || true)
+publish_tmp=$(mktemp -d)
+publish_worktree="$publish_tmp/worktree"
+cleanup_publish_worktree() {
+  if [ -e "$publish_worktree/.git" ]; then
+    git -C "$publish_worktree" rebase --abort >/dev/null 2>&1 || true
+    git worktree remove -f "$publish_worktree" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$publish_tmp"
+}
+trap cleanup_publish_worktree EXIT
+
+git worktree add -q --detach "$publish_worktree" "$attempted_publish_sha"
+
+# Rebase the candidate in a disposable worktree rather than force-pushing if
+# main moved while this run was executing. The active run branch is left at its
+# checkpoint history throughout.
+if ! git -C "$publish_worktree" fetch --quiet origin main:refs/remotes/origin/main; then
+  echo "Could not fetch origin/main before publishing implementation." >&2
+  exit 1
+fi
+if ! git -C "$publish_worktree" rebase origin/main; then
+  # Preserve the existing conflict-recovery workflow by reproducing the failed
+  # rebase in the active worktree, but do it from a detached HEAD so the
+  # fabro/run/* branch ref itself is not rewritten.
+  materialized_conflict=false
+  if git reset --hard HEAD >/dev/null 2>&1 && git switch --detach "$attempted_publish_sha" >/dev/null 2>&1; then
+    if ! git rebase origin/main >/dev/null 2>&1; then
+      materialized_conflict=true
+    fi
+  fi
+  if [ "$materialized_conflict" = true ]; then
+    conflicted_files=$(git diff --name-only --diff-filter=U || true)
+  else
+    conflicted_files=$(git -C "$publish_worktree" diff --name-only --diff-filter=U || true)
+  fi
   echo "Publish rebase conflicted while replaying attempted implementation commit onto origin/main." >&2
   echo "Attempted publish commit: $attempted_publish_sha" >&2
   echo "Local rescue branch: $rescue_branch" >&2
@@ -94,7 +136,7 @@ if ! git pull --rebase origin main; then
     echo "Conflicted files:" >&2
     printf '%s\n' "$conflicted_files" >&2
   else
-    echo "No unmerged files were reported; inspect git status for the publish failure state." >&2
+    echo "No unmerged files were reported; inspect the rescue branch for the publish failure state." >&2
   fi
   cat >&2 <<EOF
 
@@ -106,6 +148,7 @@ EOF
   exit 2
 fi
 
-git push origin HEAD:main
+published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
+git push origin "$published_sha:main"
 
-echo "Published implementation to main: $(git rev-parse HEAD)"
+echo "Published implementation to main: $published_sha"

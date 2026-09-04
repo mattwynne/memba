@@ -11,6 +11,17 @@ if [ ! -f "$PLAN_PATH" ]; then
   echo "Plan file not found: $PLAN_PATH" >&2
   exit 1
 fi
+
+stage_publish_artifact() {
+  local path
+  while IFS= read -r -d '' path; do
+    case "$path" in
+      .fabro/tmp|.fabro/tmp/*) continue ;;
+    esac
+    git add -- "$path"
+  done < <(git ls-files -z --modified --deleted --others --exclude-standard)
+}
+
 if [ ! -f "$START_SHA_FILE" ]; then
   echo "Missing review start SHA file: $START_SHA_FILE" >&2
   exit 1
@@ -40,13 +51,13 @@ if printf '%s\n' "$changed_paths" | grep -E '\.feature$'; then
   exit 1
 fi
 
-git add -A -- . ':!.fabro/tmp' ':!.fabro/tmp/**'
+stage_publish_artifact
 
-# Collapse Fabro review checkpoint commits into one follow-up polish commit.
-git reset --soft "$start_sha"
-
-if git diff --cached --quiet; then
-  echo 'No staged review diff remains after squash reset; main remains unchanged.'
+# Collapse Fabro review checkpoint commits into one follow-up polish commit
+# object without moving the active fabro/run/* branch. Fabro's next checkpoint
+# can then push the still-descendant run branch normally.
+if git diff --cached --quiet "$start_sha"; then
+  echo 'No staged review diff remains after squash preparation; main remains unchanged.'
   exit 0
 fi
 
@@ -68,10 +79,51 @@ commit_msg=$(mktemp)
   printf 'Validation: dev check passed after review changes\n'
 } > "$commit_msg"
 
-fabro_git_commit -F "$commit_msg"
+tree_sha=$(git write-tree)
+attempted_publish_sha=$(fabro_git_commit_tree "$tree_sha" -p "$start_sha" -F "$commit_msg")
 rm -f "$commit_msg"
 
-git pull --rebase origin main
-git push origin HEAD:main
+safe_run_id=$(printf '%s' "$run_id" | tr -c '[:alnum:]_.-' '-')
+rescue_branch="fabro/rescue/${safe_run_id}-${iteration_number}-review-polish-conflict"
+git branch -f "$rescue_branch" "$attempted_publish_sha"
 
-echo "Published review polish to main: $(git rev-parse HEAD)"
+publish_tmp=$(mktemp -d)
+publish_worktree="$publish_tmp/worktree"
+cleanup_publish_worktree() {
+  if [ -e "$publish_worktree/.git" ]; then
+    git -C "$publish_worktree" rebase --abort >/dev/null 2>&1 || true
+    git worktree remove -f "$publish_worktree" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$publish_tmp"
+}
+trap cleanup_publish_worktree EXIT
+
+git worktree add -q --detach "$publish_worktree" "$attempted_publish_sha"
+
+if ! git -C "$publish_worktree" fetch --quiet origin main:refs/remotes/origin/main; then
+  echo "Could not fetch origin/main before publishing review polish." >&2
+  exit 1
+fi
+if ! git -C "$publish_worktree" rebase origin/main; then
+  conflicted_files=$(git -C "$publish_worktree" diff --name-only --diff-filter=U || true)
+  echo "Publish rebase conflicted while replaying attempted review polish commit onto origin/main." >&2
+  echo "Attempted publish commit: $attempted_publish_sha" >&2
+  echo "Local rescue branch: $rescue_branch" >&2
+  if git push -f origin "$rescue_branch:$rescue_branch"; then
+    echo "Pushed rescue branch: origin/$rescue_branch" >&2
+  else
+    echo "Could not push rescue branch origin/$rescue_branch; local branch still exists in this sandbox." >&2
+  fi
+  if [ -n "$conflicted_files" ]; then
+    echo "Conflicted files:" >&2
+    printf '%s\n' "$conflicted_files" >&2
+  else
+    echo "No unmerged files were reported; inspect the rescue branch for the publish failure state." >&2
+  fi
+  exit 2
+fi
+
+published_sha=$(git -C "$publish_worktree" rev-parse HEAD)
+git push origin "$published_sha:main"
+
+echo "Published review polish to main: $published_sha"
