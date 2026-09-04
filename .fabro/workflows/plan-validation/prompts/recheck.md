@@ -55,12 +55,12 @@ At the end of your response, include one final JSON object for workflow routing.
 
 If READY:
 
-{"context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
+{"preferred_next_label":"validated","context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
 
 If NOT READY but another obvious Codex edit pass should be attempted:
 
-{"context_updates":{"plan_ready":false,"plan_needs_fix":true,"plan_needs_human":false}}
+{"preferred_next_label":"fix","context_updates":{"plan_ready":false,"plan_needs_fix":true,"plan_needs_human":false}}
 
 If NOT READY because remaining gaps require Matt's input or should stop the loop:
 
-{"context_updates":{"plan_ready":false,"plan_needs_fix":false,"plan_needs_human":true}}
+{"preferred_next_label":"needs_human","context_updates":{"plan_ready":false,"plan_needs_fix":false,"plan_needs_human":true}}

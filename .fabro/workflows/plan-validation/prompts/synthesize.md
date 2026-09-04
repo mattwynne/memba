@@ -74,12 +74,12 @@ At the end of your response, include one final JSON object for workflow routing.
 
 If the plan is already READY:
 
-{"context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
+{"preferred_next_label":"validated","context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
 
 If the plan is NOT READY but Codex should apply only obvious fixes:
 
-{"context_updates":{"plan_ready":false,"plan_needs_fix":true,"plan_needs_human":false}}
+{"preferred_next_label":"fix","context_updates":{"plan_ready":false,"plan_needs_fix":true,"plan_needs_human":false}}
 
 If the plan is NOT READY because Matt needs to answer questions or make decisions:
 
-{"context_updates":{"plan_ready":false,"plan_needs_fix":false,"plan_needs_human":true}}
+{"preferred_next_label":"needs_human","context_updates":{"plan_ready":false,"plan_needs_fix":false,"plan_needs_human":true}}
