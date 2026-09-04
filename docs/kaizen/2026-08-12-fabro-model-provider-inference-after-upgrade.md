@@ -63,3 +63,27 @@ Multi-provider review is deliberate independent evidence. Silent provider misrou
 - Make provider resolution from a named model deterministic and visible in validation/preflight output.
 - Keep explicit provider declarations for deliberately multi-provider workflow nodes.
 - Add a post-upgrade preflight of each project workflow with representative inputs.
+
+## Additional observation: 2026-09-04
+
+After explicit OpenRouter routing was added for the Gemini and Claude review nodes,
+Fabro `0.316.0-nightly.0` successfully probed both providers. Plan-validation run
+`01M1NDT58SH9TAP20NC0QG9PTK` then failed before Gemini could review:
+
+```text
+model 'gemini-3.1-pro-preview' does not support reasoning_effort 'high'
+```
+
+The workflow’s global model stylesheet assigns `reasoning_effort: high`. Fabro’s
+OpenRouter Gemini catalog entry reports `reasoning_effort: "none"`, so the global
+setting is incompatible even though a basic `fabro model test` succeeds. The model
+probe does not exercise the workflow’s requested controls.
+
+This is distinct from provider inference: the node selected OpenRouter as intended,
+but the model-control contract was not preflighted. A review workflow can therefore
+start with one independent reviewer already impossible to run, while later nodes still
+produce a superficially successful run result.
+
+Possible prevention: preflight every resolved node with its effective provider, model,
+and controls—not merely a basic prompt—and make a failed required reviewer prevent
+synthesis or a READY outcome.
