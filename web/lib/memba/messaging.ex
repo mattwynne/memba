@@ -6,9 +6,11 @@ defmodule Memba.Messaging do
   alias Commanded.Commands.ExecutionResult
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
@@ -18,6 +20,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
+  alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
@@ -30,6 +33,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.OutboundMessageID
+  alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -42,7 +46,7 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @doc """
-  Send a message to the active members of a club.
+  Send a message to the active members of a club's Everyone group.
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
@@ -62,12 +66,30 @@ defmodule Memba.Messaging do
 
   The caller supplies the reply `:message_id`, root `:conversation_id`, replying
   `:sender_id`, and non-blank `:body`. The reply inherits the root message's
-  club and subject, and only a current member of that club may reply.
+  club and subject. Reply authorization requires the sender to hold active
+  membership in a group that has write access to the root conversation.
   """
   def post_message_reply(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- post_message_reply_command(attrs),
-         :ok <- authorize_reply_sender(command.club_id, command.sender_id),
+         :ok <- authorize_reply_sender(command),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Grant a club-scoped group read or write access to an existing root conversation.
+
+  This API is intended for system/backfill use. It dispatches with strong
+  consistency for conversation-access projections so callers can query the grant
+  immediately after the function returns.
+  """
+  def grant_conversation_access_to_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    dispatch_opts = Keyword.put(dispatch_opts, :consistency, :strong)
+
+    with {:ok, command} <- grant_conversation_access_to_group_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -237,9 +259,11 @@ defmodule Memba.Messaging do
   @doc """
   Authorize a resolved inbound sender to post to a resolved club destination.
 
-  Only active members of the destination club may post by email. Known people who
-  belong only to another club, or whose destination-club membership is inactive,
-  receive a typed rejection reason for later rejection-email handling.
+  Only active members of the destination club's deterministic Everyone group may
+  post by email. Known people who belong only to another club, whose
+  destination-club membership is absent from Everyone, or whose destination-club
+  membership is inactive receive a typed rejection reason for later
+  rejection-email handling.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
     InboundClubAuthorization.authorize(sender, destination)
@@ -394,6 +418,67 @@ defmodule Memba.Messaging do
       %ConversationFollowProjection{following: true} -> true
       _not_following -> false
     end
+  end
+
+  @doc """
+  Return whether a group has the requested access to a projected conversation.
+
+  The `access_level` may be `:read`, `:write`, `"read"`, or `"write"`. A stored
+  `"write"` grant satisfies both read and write checks; a stored `"read"` grant
+  satisfies only read checks. Invalid IDs or access levels return `false`.
+  """
+  def group_has_conversation_access?(conversation_id, group_id, access_level) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.group_id == ^group_id and
+          access.access_level in ^grant_levels
+      )
+      |> Repo.exists?()
+    else
+      _invalid -> false
+    end
+  end
+
+  @doc """
+  Return one keyset page of root conversations missing Everyone write access.
+
+  The page scans projected root messages in ascending `message_id` order and
+  returns plain maps for root conversations whose club's deterministic Everyone
+  group does not yet have a projected write grant. `cursor` is the last scanned
+  `message_id` from a previous page; callers keep it in process only and may
+  safely restart from `nil`.
+  """
+  def list_everyone_conversation_access_backfill_page(cursor \\ nil, limit \\ 1_000) do
+    root_conversations =
+      MessageProjection
+      |> where([message], message.message_id == message.conversation_id)
+      |> after_backfill_cursor(:message_id, cursor)
+      |> order_by([message], asc: message.message_id)
+      |> limit(^normalize_backfill_page_size(limit))
+      |> select([message], %{
+        conversation_id: message.message_id,
+        club_id: message.club_id
+      })
+      |> Repo.all()
+
+    entries =
+      root_conversations
+      |> Enum.map(fn root ->
+        Map.put(root, :group_id, SystemGroups.everyone_group_id(root.club_id))
+      end)
+      |> reject_write_conversation_access()
+
+    %{
+      entries: entries,
+      next_cursor: backfill_next_cursor(root_conversations, :conversation_id),
+      source_count: length(root_conversations)
+    }
   end
 
   @doc """
@@ -846,6 +931,44 @@ defmodule Memba.Messaging do
     |> String.downcase()
   end
 
+  defp reject_write_conversation_access([]), do: []
+
+  defp reject_write_conversation_access(entries) do
+    conversation_ids = Enum.map(entries, & &1.conversation_id)
+    group_ids = Enum.map(entries, & &1.group_id)
+
+    existing_write_access =
+      ConversationGroupAccessProjection
+      |> where([access], access.conversation_id in ^conversation_ids)
+      |> where([access], access.group_id in ^group_ids)
+      |> where([access], access.access_level == "write")
+      |> select([access], {access.conversation_id, access.group_id})
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.reject(entries, fn entry ->
+      MapSet.member?(existing_write_access, {entry.conversation_id, entry.group_id})
+    end)
+  end
+
+  defp after_backfill_cursor(query, _field, nil), do: query
+  defp after_backfill_cursor(query, _field, ""), do: query
+
+  defp after_backfill_cursor(query, field, cursor) when is_binary(cursor) do
+    where(query, [row], field(row, ^field) > ^cursor)
+  end
+
+  defp normalize_backfill_page_size(limit) when is_integer(limit) and limit > 0, do: limit
+  defp normalize_backfill_page_size(_limit), do: 1_000
+
+  defp backfill_next_cursor([], _field), do: nil
+
+  defp backfill_next_cursor(rows, field) do
+    rows
+    |> List.last()
+    |> Map.fetch!(field)
+  end
+
   defp dispatch_command(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> {:ok, :ok}
@@ -1247,20 +1370,39 @@ defmodule Memba.Messaging do
   defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
   defp rejection_reason(reason) when is_binary(reason), do: reason
 
+  defp grant_conversation_access_to_group_command(attrs) do
+    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+         {:ok, access_level} <- fetch_required(attrs, :access_level),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      {:ok,
+       %GrantConversationAccessToGroup{
+         conversation_id: conversation_id,
+         club_id: club_id,
+         group_id: group_id,
+         access_level: access_level
+       }}
+    end
+  end
+
   defp send_club_message_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, body} <- fetch_required(attrs, :body) do
+      audience_group_id = SystemGroups.everyone_group_id(club_id)
+
       {:ok,
        %SendMessage{
          message_id: message_id,
          club_id: club_id,
          sender_id: sender_id,
+         audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_recipients(club_id)
+         recipients: resolve_group_recipients(audience_group_id)
        }}
     end
   end
@@ -1370,6 +1512,19 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp fetch_required_id(attrs, key, type) do
+    with {:ok, value} <- fetch_required(attrs, key) do
+      case ID.cast(type, value) do
+        {:ok, ^value} -> {:ok, value}
+        :error -> {:error, invalid_id_reason(key)}
+      end
+    end
+  end
+
+  defp invalid_id_reason(:conversation_id), do: :invalid_conversation_id
+  defp invalid_id_reason(:club_id), do: :invalid_club_id
+  defp invalid_id_reason(:group_id), do: :invalid_group_id
+
   defp fetch_conversation_root(conversation_id) do
     with {:ok, conversation_id} <- ID.cast(:message, conversation_id) do
       case Repo.get(MessageProjection, conversation_id) do
@@ -1381,8 +1536,18 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp authorize_reply_sender(club_id, sender_id) do
-    if Membership.active_member_of_club?(club_id, sender_id) do
+  defp authorize_reply_sender(%PostMessageReply{} = command) do
+    command.conversation_id
+    |> conversation_write_group_ids(command.club_id)
+    |> Enum.any?(&Membership.active_member_of_group?(&1, command.sender_id))
+    |> case do
+      true -> :ok
+      false -> {:error, :not_current_member}
+    end
+  end
+
+  defp authorize_current_club_member(club_id, person_id) do
+    if Membership.active_member_of_club?(club_id, person_id) do
       :ok
     else
       {:error, :not_current_member}
@@ -1390,13 +1555,29 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_current_member_conversation_action(command) do
-    with :ok <- authorize_reply_sender(command.club_id, command.member_id),
+    with :ok <- authorize_current_club_member(command.club_id, command.member_id),
          {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
       if root_message.club_id == command.club_id do
         :ok
       else
         {:error, :conversation_not_found}
       end
+    end
+  end
+
+  defp conversation_write_group_ids(conversation_id, club_id) do
+    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
+         {:ok, club_id} <- ID.cast(:club, club_id) do
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.club_id == ^club_id and
+          access.access_level == "write"
+      )
+      |> select([access], access.group_id)
+      |> Repo.all()
+    else
+      _invalid -> []
     end
   end
 
@@ -1430,11 +1611,11 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp resolve_recipients(club_id, opts \\ []) do
+  defp resolve_group_recipients(group_id, opts \\ []) do
     except_person_id = Keyword.get(opts, :except_person_id)
 
-    club_id
-    |> Membership.list_active_members_of_club()
+    group_id
+    |> Membership.list_active_members_of_group()
     |> Enum.reject(&(&1.id == except_person_id))
     |> Enum.map(&resolved_recipient/1)
   end

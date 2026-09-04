@@ -26,8 +26,12 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Policies.SystemGroupMembership
+  alias Memba.Membership.SystemGroups
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.ClubInvitation
+  alias Memba.Membership.Projections.Group, as: GroupProjection
+  alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -255,7 +259,7 @@ defmodule Memba.Membership do
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs),
          :ok <- prevent_duplicate_active_membership(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -343,7 +347,7 @@ defmodule Memba.Membership do
            invitation_add_member_command(invitation, person_id, membership_id),
          :ok <- prevent_duplicate_active_membership(add_member_command),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -380,7 +384,7 @@ defmodule Memba.Membership do
          {:ok, create_person_result} <-
            dispatch_acceptance_command(create_person_command, dispatch_opts),
          {:ok, add_member_result} <-
-           dispatch_acceptance_command(add_member_command, dispatch_opts),
+           dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -399,7 +403,7 @@ defmodule Memba.Membership do
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -459,7 +463,7 @@ defmodule Memba.Membership do
              command.person_id,
              command.membership_id
            ) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -487,7 +491,7 @@ defmodule Memba.Membership do
              command.membership_id
            ),
          :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
-      dispatch(command, dispatch_opts)
+      dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
 
@@ -845,6 +849,186 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List active members of the given conversation group.
+
+  Returns plain maps containing the public identity needed outside the
+  Membership context: `:membership_id`, `:id`, `:name`, `:email`, and `:roles`.
+  Role names come from active club role assignments and are sorted
+  alphabetically for each member. Members whose group row or club membership is
+  inactive, members of other groups, members without a projected person, and
+  invalid group IDs are excluded.
+  """
+  def list_active_members_of_group(group_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id) do
+      members =
+        GroupMembershipProjection
+        |> join(:inner, [group_membership], membership in MembershipProjection,
+          on:
+            membership.membership_id == group_membership.membership_id and
+              membership.club_id == group_membership.club_id and
+              membership.person_id == group_membership.person_id
+        )
+        |> join(:inner, [_group_membership, membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(
+          :inner,
+          [_group_membership, _membership, person],
+          primary_email_address in PersonEmailAddress,
+          on:
+            primary_email_address.person_id == person.person_id and
+              primary_email_address.is_primary == true
+        )
+        |> where(
+          [group_membership, _membership, _person, _primary_email_address],
+          group_membership.group_id == ^group_id
+        )
+        |> where(
+          [group_membership, membership, _person, _primary_email_address],
+          group_membership.active == true and membership.active == true
+        )
+        |> order_by([_group_membership, _membership, person, _primary_email_address],
+          asc: person.name,
+          asc: person.person_id
+        )
+        |> select([_group_membership, membership, person, primary_email_address], %{
+          membership_id: membership.membership_id,
+          id: person.person_id,
+          name: person.name,
+          email: primary_email_address.email
+        })
+        |> Repo.all()
+
+      role_names_by_membership =
+        members
+        |> Enum.map(& &1.membership_id)
+        |> active_role_names_by_membership()
+
+      Enum.map(members, fn member ->
+        Map.put(member, :roles, Map.get(role_names_by_membership, member.membership_id, []))
+      end)
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  Return one keyset page of missing system-group definitions for release backfill.
+
+  The page scans projected clubs in ascending `club_id` order and returns plain
+  maps for deterministic Everyone/Admin group definitions whose projected row is
+  absent. `cursor` is the last scanned `club_id` from a previous page; callers
+  keep it in process only and may safely restart from `nil`.
+  """
+  def list_system_group_definition_backfill_page(cursor \\ nil, limit \\ 1_000) do
+    clubs =
+      Club
+      |> after_backfill_cursor(:club_id, cursor)
+      |> order_by([club], asc: club.club_id)
+      |> limit(^normalize_backfill_page_size(limit))
+      |> select([club], %{club_id: club.club_id})
+      |> Repo.all()
+
+    group_definitions = Enum.flat_map(clubs, &system_group_definitions(&1.club_id))
+    existing_group_ids = existing_group_ids(Enum.map(group_definitions, & &1.group_id))
+
+    %{
+      entries:
+        Enum.reject(group_definitions, fn definition ->
+          MapSet.member?(existing_group_ids, definition.group_id)
+        end),
+      next_cursor: backfill_next_cursor(clubs, :club_id),
+      source_count: length(clubs)
+    }
+  end
+
+  @doc """
+  Return one keyset page of active memberships missing active Everyone membership.
+
+  The page scans active projected club memberships in ascending `membership_id`
+  order and returns plain maps suitable for an idempotent `AddGroupMember`
+  command. `cursor` is the last scanned `membership_id` from a previous page.
+  """
+  def list_everyone_group_membership_backfill_page(cursor \\ nil, limit \\ 1_000) do
+    memberships =
+      MembershipProjection
+      |> where([membership], membership.active == true)
+      |> after_backfill_cursor(:membership_id, cursor)
+      |> order_by([membership], asc: membership.membership_id)
+      |> limit(^normalize_backfill_page_size(limit))
+      |> select([membership], %{
+        club_id: membership.club_id,
+        membership_id: membership.membership_id,
+        person_id: membership.person_id
+      })
+      |> Repo.all()
+
+    entries =
+      memberships
+      |> Enum.map(fn membership ->
+        Map.put(membership, :group_id, SystemGroups.everyone_group_id(membership.club_id))
+      end)
+      |> reject_active_group_memberships()
+
+    %{
+      entries: entries,
+      next_cursor: backfill_next_cursor(memberships, :membership_id),
+      source_count: length(memberships)
+    }
+  end
+
+  @doc """
+  Return one keyset page of active Admin-role memberships missing active Admin-group membership.
+
+  The page scans active projected Admin role assignments for active projected club
+  memberships in ascending `membership_id` order and returns plain maps suitable
+  for an idempotent `AddGroupMember` command.
+  """
+  def list_admin_group_membership_backfill_page(cursor \\ nil, limit \\ 1_000) do
+    assignments =
+      RoleAssignment
+      |> join(:inner, [assignment], role in RoleProjection,
+        on: role.club_id == assignment.club_id and role.role_id == assignment.role_id
+      )
+      |> join(:inner, [assignment, _role], membership in MembershipProjection,
+        on:
+          membership.club_id == assignment.club_id and
+            membership.membership_id == assignment.membership_id and
+            membership.person_id == assignment.person_id
+      )
+      |> where(
+        [assignment, _role, membership],
+        assignment.active == true and membership.active == true
+      )
+      |> where(
+        [_assignment, role, _membership],
+        role.role_key == ^Roles.membership_administrator_key()
+      )
+      |> after_backfill_cursor(:membership_id, cursor)
+      |> order_by([assignment, _role, _membership], asc: assignment.membership_id)
+      |> limit(^normalize_backfill_page_size(limit))
+      |> select([assignment, _role, _membership], %{
+        club_id: assignment.club_id,
+        membership_id: assignment.membership_id,
+        person_id: assignment.person_id
+      })
+      |> Repo.all()
+
+    entries =
+      assignments
+      |> Enum.map(fn assignment ->
+        Map.put(assignment, :group_id, SystemGroups.admin_group_id(assignment.club_id))
+      end)
+      |> reject_active_group_memberships()
+
+    %{
+      entries: entries,
+      next_cursor: backfill_next_cursor(assignments, :membership_id),
+      source_count: length(assignments)
+    }
+  end
+
+  @doc """
   List active clubs for a member email address.
 
   Email lookup is normalized by trimming whitespace and comparing
@@ -888,6 +1072,34 @@ defmodule Memba.Membership do
       |> where([membership], membership.club_id == ^club_id)
       |> where([membership], membership.person_id == ^person_id)
       |> where([membership], membership.active == true)
+      |> Repo.exists?()
+    else
+      :error -> false
+    end
+  end
+
+  @doc """
+  Return whether a person is currently an active member of a conversation group.
+
+  Both the projected group-membership row and the underlying club membership
+  must be active. Invalid group or person IDs return `false`.
+  """
+  def active_member_of_group?(group_id, person_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
+      GroupMembershipProjection
+      |> join(:inner, [group_membership], membership in MembershipProjection,
+        on:
+          membership.membership_id == group_membership.membership_id and
+            membership.club_id == group_membership.club_id and
+            membership.person_id == group_membership.person_id
+      )
+      |> where([group_membership, _membership], group_membership.group_id == ^group_id)
+      |> where([group_membership, _membership], group_membership.person_id == ^person_id)
+      |> where(
+        [group_membership, membership],
+        group_membership.active == true and membership.active == true
+      )
       |> Repo.exists?()
     else
       :error -> false
@@ -989,6 +1201,71 @@ defmodule Memba.Membership do
     end)
     |> Enum.uniq()
     |> Enum.reverse()
+  end
+
+  defp system_group_definitions(club_id) do
+    [
+      %{
+        club_id: club_id,
+        group_id: SystemGroups.everyone_group_id(club_id),
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      %{
+        club_id: club_id,
+        group_id: SystemGroups.admin_group_id(club_id),
+        group_key: SystemGroups.admin_key(),
+        name: SystemGroups.admin_name()
+      }
+    ]
+  end
+
+  defp existing_group_ids([]), do: MapSet.new()
+
+  defp existing_group_ids(group_ids) do
+    GroupProjection
+    |> where([group], group.group_id in ^group_ids)
+    |> select([group], group.group_id)
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  defp reject_active_group_memberships([]), do: []
+
+  defp reject_active_group_memberships(entries) do
+    group_ids = Enum.map(entries, & &1.group_id)
+    membership_ids = Enum.map(entries, & &1.membership_id)
+
+    existing_active_memberships =
+      GroupMembershipProjection
+      |> where([group_membership], group_membership.group_id in ^group_ids)
+      |> where([group_membership], group_membership.membership_id in ^membership_ids)
+      |> where([group_membership], group_membership.active == true)
+      |> select([group_membership], {group_membership.group_id, group_membership.membership_id})
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.reject(entries, fn entry ->
+      MapSet.member?(existing_active_memberships, {entry.group_id, entry.membership_id})
+    end)
+  end
+
+  defp after_backfill_cursor(query, _field, nil), do: query
+  defp after_backfill_cursor(query, _field, ""), do: query
+
+  defp after_backfill_cursor(query, field, cursor) when is_binary(cursor) do
+    where(query, [row], field(row, ^field) > ^cursor)
+  end
+
+  defp normalize_backfill_page_size(limit) when is_integer(limit) and limit > 0, do: limit
+  defp normalize_backfill_page_size(_limit), do: 1_000
+
+  defp backfill_next_cursor([], _field), do: nil
+
+  defp backfill_next_cursor(rows, field) do
+    rows
+    |> List.last()
+    |> Map.fetch!(field)
   end
 
   defp person_email_summaries([]), do: %{}
@@ -1669,6 +1946,50 @@ defmodule Memba.Membership do
       {:error, _reason} = error -> error
     end
   end
+
+  defp dispatch_system_group_membership_acceptance_command(command, dispatch_opts) do
+    command
+    |> dispatch_system_group_membership_command(dispatch_opts)
+    |> case do
+      :ok -> {:ok, :ok}
+      {:ok, _result} = ok -> ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_system_group_membership_command(command, dispatch_opts) do
+    dispatch(command, system_group_membership_consistency(dispatch_opts))
+  end
+
+  defp system_group_membership_consistency(dispatch_opts) do
+    Keyword.update(
+      dispatch_opts,
+      :consistency,
+      [SystemGroupMembership],
+      &include_system_group_membership_consistency/1
+    )
+  end
+
+  defp include_system_group_membership_consistency(:strong), do: :strong
+  defp include_system_group_membership_consistency(:eventual), do: [SystemGroupMembership]
+
+  defp include_system_group_membership_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &system_group_membership_handler?/1) do
+      handlers
+    else
+      [SystemGroupMembership | handlers]
+    end
+  end
+
+  defp include_system_group_membership_consistency(consistency), do: consistency
+
+  defp system_group_membership_handler?(SystemGroupMembership), do: true
+
+  defp system_group_membership_handler?(handler) when is_binary(handler) do
+    handler == inspect(SystemGroupMembership)
+  end
+
+  defp system_group_membership_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

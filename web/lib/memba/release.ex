@@ -6,19 +6,18 @@ defmodule Memba.Release do
   @app :memba
 
   def migrate do
-    load_app()
-    init_event_stores()
+    run_release_step(:load_app, &load_app/0)
+    run_release_step(:init_event_stores, &init_event_stores/0)
+    run_release_step(:migrate_repos, &migrate_repos!/0)
+    run_release_step(:ensure_release_services_started, &ensure_release_services_started!/0)
 
-    for repo <- repos() do
-      {:ok, _, _} =
-        Ecto.Migrator.with_repo(repo, fn repo ->
-          migrated = Ecto.Migrator.run(repo, :up, all: true)
-          verify_repo_schema!(repo)
-          migrated
-        end)
-    end
+    run_release_step(
+      :await_system_group_backfill_source_projections,
+      &await_system_group_backfill_source_projections!/0
+    )
 
-    ensure_production_smoke_fixtures!()
+    run_release_step(:run_system_groups_backfill, &run_system_groups_backfill!/0)
+    run_release_step(:ensure_production_smoke_fixtures, &ensure_production_smoke_fixtures!/0)
   end
 
   def verify_schema! do
@@ -58,17 +57,31 @@ defmodule Memba.Release do
     Memba.Accounts.SignInToken,
     Memba.Membership.EmailAddressVerificationToken,
     Memba.Membership.Projections.Club,
+    Memba.Membership.Projections.Group,
+    Memba.Membership.Projections.GroupMembership,
     Memba.Membership.Projections.MemberPermission,
     Memba.Membership.Projections.Membership,
     Memba.Membership.Projections.Person,
     Memba.Membership.Projections.Role,
     Memba.Membership.Projections.RoleAssignment,
     Memba.Membership.Projections.RolePermission,
+    Memba.Messaging.Projections.ConversationGroupAccess,
     Memba.Messaging.Projections.EmailDelivery,
     Memba.Messaging.Projections.InboundEmailSource,
     Memba.Messaging.Projections.MemberEmailDelivery,
     Memba.Messaging.Projections.MembaStaffEmailDelivery,
     Memba.Messaging.Projections.Message
+  ]
+
+  @system_group_backfill_source_projectors [
+    Memba.Membership.Projectors.Club,
+    Memba.Membership.Projectors.Group,
+    Memba.Membership.Projectors.GroupMembership,
+    Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Role,
+    Memba.Membership.Projectors.RoleAssignment,
+    Memba.Messaging.Projectors.ConversationGroupAccess,
+    Memba.Messaging.Projectors.Message
   ]
 
   @required_manual_columns %{
@@ -149,6 +162,19 @@ defmodule Memba.Release do
     |> Enum.join("; ")
   end
 
+  defp migrate_repos! do
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn repo ->
+          migrated = Ecto.Migrator.run(repo, :up, all: true)
+          verify_repo_schema!(repo)
+          migrated
+        end)
+    end
+
+    :ok
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end
@@ -178,8 +204,25 @@ defmodule Memba.Release do
     true = Process.exit(conn, :shutdown)
   end
 
-  defp ensure_production_smoke_fixtures! do
+  defp ensure_release_services_started! do
     {:ok, _started} = Application.ensure_all_started(@app)
+    :ok
+  end
+
+  defp await_system_group_backfill_source_projections! do
+    timeout =
+      Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
+
+    Memba.ProjectionBarrier.await!(@system_group_backfill_source_projectors, timeout: timeout)
+    :ok
+  end
+
+  defp run_system_groups_backfill! do
+    Memba.Membership.SystemGroups.Backfill.run!()
+    :ok
+  end
+
+  defp ensure_production_smoke_fixtures! do
     Memba.ProductionSmokeFixtures.ensure!()
     :ok
   end
@@ -189,5 +232,16 @@ defmodule Memba.Release do
     Application.ensure_all_started(:ssl)
     Application.ensure_all_started(:postgrex)
     Application.ensure_loaded(@app)
+  end
+
+  defp run_release_step(name, default) when is_atom(name) and is_function(default, 0) do
+    case Keyword.get(release_step_overrides(), name) do
+      nil -> default.()
+      override when is_function(override, 0) -> override.()
+    end
+  end
+
+  defp release_step_overrides do
+    Application.get_env(@app, :release_step_overrides, [])
   end
 end

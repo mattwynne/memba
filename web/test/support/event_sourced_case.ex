@@ -14,14 +14,20 @@ defmodule Memba.EventSourcedCase do
     Memba.Membership.Projectors.Club,
     Memba.Membership.Projectors.ClubInvitation,
     Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Group,
+    Memba.Membership.Projectors.GroupMembership,
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
+    Memba.Messaging.Projectors.ConversationGroupAccess,
     Memba.Messaging.Projectors.ConversationFollow,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,
     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
     Memba.Messaging.Projectors.InboundEmailSource
+  ]
+  @event_handlers [
+    Memba.Membership.Policies.SystemGroupMembership
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 
@@ -49,29 +55,29 @@ defmodule Memba.EventSourcedCase do
       raise "Memba.EventSourcedCase resets shared EventStore state and cannot be used with async: true"
     end
 
-    projector_child_ids = stop_event_sourced_projectors!()
+    subscriber_child_ids = stop_event_sourced_subscribers!()
     stop_commanded_aggregate_instances!()
     reset_event_sourced_storage!()
     reset_commanded_subscription_acks!()
     Memba.DataCase.setup_sandbox(tags)
-    start_event_sourced_projectors!(projector_child_ids)
+    start_event_sourced_subscribers!(subscriber_child_ids)
     :ok
   end
 
   @doc """
-  Reset shared event-sourced storage while keeping projector subscriptions coherent.
+  Reset shared event-sourced storage while keeping EventStore subscriber subscriptions coherent.
 
   Use this from tests that are not using `Memba.EventSourcedCase` but need to
-  truncate EventStore/projection state. Resetting the tables while projectors
+  truncate EventStore/projection state. Resetting the tables while subscribers
   remain subscribed can leave later strong-consistency dispatches waiting for
   acknowledgements that will never arrive.
   """
   def reset_event_sourced_system! do
-    projector_child_ids = stop_event_sourced_projectors!()
+    subscriber_child_ids = stop_event_sourced_subscribers!()
     stop_commanded_aggregate_instances!()
     reset_event_sourced_storage!()
     reset_commanded_subscription_acks!()
-    start_event_sourced_projectors!(projector_child_ids)
+    start_event_sourced_subscribers!(subscriber_child_ids)
     :ok
   end
 
@@ -89,21 +95,68 @@ defmodule Memba.EventSourcedCase do
   Rebuild configured event-sourced projections from the retained EventStore history.
 
   This clears projection read models and Commanded subscription acknowledgements
-  without deleting EventStore events, then restarts the supervised projectors so
+  without deleting EventStore events, then restarts the supervised subscribers so
   callers can wait for them to replay with `Memba.ProjectionBarrier`.
   """
   def rebuild_event_sourced_projections! do
-    projector_child_ids = stop_event_sourced_projectors!()
+    subscriber_child_ids = stop_event_sourced_subscribers!()
 
     try do
       reset_projection_tables_in_sandbox!()
       reset_commanded_subscription_acks!()
       reset_event_store_subscription_checkpoints!()
     after
-      start_event_sourced_projectors!(projector_child_ids)
+      start_event_sourced_subscribers!(subscriber_child_ids)
     end
 
     :ok
+  end
+
+  @doc """
+  Return each Ecto projector's current processed event number.
+
+  Mixed Membership and Messaging replay tests cannot use the global EventStore
+  checkpoint for every projector because a projector's `projection_versions` row
+  advances only when it processes events relevant to its Commanded application.
+  Snapshot positions before a rebuild, then await the same positions after the
+  rebuild to prove those projectors have replayed the events that built the
+  public query state under test.
+  """
+  def event_sourced_projection_positions(projectors) when is_list(projectors) do
+    projection_names = Enum.map(projectors, &projection_name/1)
+
+    positions =
+      case projection_names do
+        [] ->
+          %{}
+
+        projection_names ->
+          rows =
+            Memba.Repo.query!(
+              """
+              SELECT projection_name, last_seen_event_number
+              FROM projection_versions
+              WHERE projection_name = ANY($1)
+              """,
+              [projection_names]
+            ).rows
+
+          Map.new(rows, fn [projection_name, last_seen_event_number] ->
+            {projection_name, last_seen_event_number}
+          end)
+      end
+
+    Map.new(projection_names, &{&1, Map.get(positions, &1, 0)})
+  end
+
+  @doc """
+  Await projector positions captured by `event_sourced_projection_positions/1`.
+  """
+  def await_event_sourced_projection_positions!(positions, opts \\ []) when is_map(positions) do
+    Enum.each(positions, fn {projection_name, event_number} ->
+      opts = Keyword.put(opts, :checkpoint, event_number)
+      Memba.ProjectionBarrier.await!([projection_name], opts)
+    end)
   end
 
   @doc """
@@ -119,9 +172,9 @@ defmodule Memba.EventSourcedCase do
     end)
   end
 
-  defp stop_event_sourced_projectors! do
+  defp stop_event_sourced_subscribers! do
     for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
-        module in @projectors do
+        module in event_sourced_subscribers() do
       if is_pid(pid) do
         :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
       end
@@ -130,7 +183,7 @@ defmodule Memba.EventSourcedCase do
     end
   end
 
-  defp start_event_sourced_projectors!(child_ids) do
+  defp start_event_sourced_subscribers!(child_ids) do
     Enum.each(child_ids, fn child_id ->
       case Supervisor.restart_child(Memba.Supervisor, child_id) do
         {:ok, _pid} -> :ok
@@ -161,23 +214,31 @@ defmodule Memba.EventSourcedCase do
   end
 
   defp reset_event_store_subscription_checkpoints! do
-    Enum.each(@projectors, fn projector ->
+    Enum.each(event_sourced_subscribers(), fn subscriber ->
       :ok =
         Commanded.EventStore.delete_subscription(
-          projector_commanded_app(projector),
+          subscriber_commanded_app(subscriber),
           :all,
-          inspect(projector)
+          inspect(subscriber)
         )
     end)
   end
 
-  defp projector_commanded_app(projector) do
-    projector_name = inspect(projector)
+  defp subscriber_commanded_app(subscriber) do
+    subscriber_name = inspect(subscriber)
 
     cond do
-      String.starts_with?(projector_name, "Memba.Messaging.") -> Memba.Messaging.App
-      String.starts_with?(projector_name, "Memba.Membership.") -> Memba.Membership.App
+      String.starts_with?(subscriber_name, "Memba.Messaging.") -> Memba.Messaging.App
+      String.starts_with?(subscriber_name, "Memba.Membership.") -> Memba.Membership.App
     end
+  end
+
+  defp event_sourced_subscribers, do: @projectors ++ @event_handlers
+
+  defp projection_name(projector) when is_atom(projector), do: inspect(projector)
+
+  defp projection_name(projector) when is_binary(projector) do
+    String.trim_leading(projector, "Elixir.")
   end
 
   defp reset_event_store!(conn) do

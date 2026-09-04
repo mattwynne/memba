@@ -15,13 +15,16 @@ defmodule Memba.Messaging.Message do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
+  alias Memba.Messaging.Commands.GrantConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationReference
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.MessageSent
@@ -45,7 +48,8 @@ defmodule Memba.Messaging.Message do
     :body,
     delivery_statuses: %{},
     email_delivery_ids: MapSet.new(),
-    recipient_ids: MapSet.new()
+    recipient_ids: MapSet.new(),
+    group_access: %{}
   ]
 
   @impl Aggregate
@@ -76,6 +80,25 @@ defmodule Memba.Messaging.Message do
   end
 
   def execute(%__MODULE__{}, %PostMessageReply{}), do: {:error, :already_sent}
+
+  def execute(%__MODULE__{} = message, %GrantConversationAccessToGroup{} = command) do
+    with :ok <- validate_conversation_access_command(message, command),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(command.access_level) do
+      if conversation_access_satisfied?(
+           Map.get(message.group_access, command.group_id),
+           access_level
+         ) do
+        []
+      else
+        %ConversationAccessGrantedToGroup{
+          conversation_id: command.conversation_id,
+          club_id: command.club_id,
+          group_id: command.group_id,
+          access_level: access_level
+        }
+      end
+    end
+  end
 
   def execute(%__MODULE__{} = message, %ReportEmailDeliveryDelivered{} = command) do
     report_status(message, command, :delivered, EmailDeliveryDelivered)
@@ -139,6 +162,19 @@ defmodule Memba.Messaging.Message do
   def apply(%__MODULE__{} = message, %ConversationFollowed{}), do: message
   def apply(%__MODULE__{} = message, %ConversationUnfollowed{}), do: message
 
+  def apply(%__MODULE__{} = message, %ConversationAccessGrantedToGroup{} = event) do
+    case ConversationAccess.normalize_access_level(event.access_level) do
+      {:ok, access_level} ->
+        %__MODULE__{
+          message
+          | group_access: Map.put(message.group_access, event.group_id, access_level)
+        }
+
+      {:error, :invalid_access_level} ->
+        message
+    end
+  end
+
   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
   # product status. Keep this no-op so historic events can rehydrate aggregates
   # without changing current delivery state. Do not extend.
@@ -174,6 +210,40 @@ defmodule Memba.Messaging.Message do
     end
   end
 
+  defp validate_conversation_access_command(%__MODULE__{} = message, command) do
+    with :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+         {:ok, _access_level} <- ConversationAccess.normalize_access_level(command.access_level),
+         :ok <- validate_conversation_root_exists(message),
+         :ok <- validate_root_conversation_identity(message, command.conversation_id) do
+      validate_message_club_identity(message, command.club_id)
+    end
+  end
+
+  defp validate_conversation_root_exists(%__MODULE__{message_id: nil}),
+    do: {:error, :conversation_not_found}
+
+  defp validate_conversation_root_exists(%__MODULE__{}), do: :ok
+
+  defp validate_root_conversation_identity(
+         %__MODULE__{message_id: conversation_id, conversation_id: conversation_id},
+         conversation_id
+       ),
+       do: :ok
+
+  defp validate_root_conversation_identity(%__MODULE__{}, _conversation_id),
+    do: {:error, :conversation_id_mismatch}
+
+  defp validate_message_club_identity(%__MODULE__{club_id: club_id}, club_id), do: :ok
+  defp validate_message_club_identity(%__MODULE__{}, _club_id), do: {:error, :club_id_mismatch}
+
+  defp conversation_access_satisfied?(nil, _requested_access_level), do: false
+
+  defp conversation_access_satisfied?(current_access_level, requested_access_level) do
+    current_access_level in ConversationAccess.grant_levels_including(requested_access_level)
+  end
+
   defp validate_message_sent(%__MODULE__{message_id: nil}), do: {:error, :message_not_sent}
   defp validate_message_sent(%__MODULE__{}), do: :ok
 
@@ -184,21 +254,29 @@ defmodule Memba.Messaging.Message do
     with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
          :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+         {:ok, audience_group_id} <-
+           normalize_command_audience_group_id(command, conversation_id, reply_to_message_id),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
          {:ok, recipients} <- normalize_command_recipients(command) do
-      [
-        %MessageSent{
-          message_id: command.message_id,
-          club_id: command.club_id,
-          sender_id: command.sender_id,
-          conversation_id: conversation_id,
-          reply_to_message_id: reply_to_message_id,
-          subject: subject,
-          body: body
-        }
-        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
-      ]
+      message_sent = %MessageSent{
+        message_id: command.message_id,
+        club_id: command.club_id,
+        sender_id: command.sender_id,
+        conversation_id: conversation_id,
+        reply_to_message_id: reply_to_message_id,
+        subject: subject,
+        body: body
+      }
+
+      [message_sent] ++
+        conversation_access_events(
+          command,
+          conversation_id,
+          reply_to_message_id,
+          audience_group_id
+        ) ++
+        Enum.map(recipients, &email_delivery_created(command.message_id, &1))
     end
   end
 
@@ -296,6 +374,62 @@ defmodule Memba.Messaging.Message do
       recipient_email: recipient.email
     }
   end
+
+  defp conversation_access_events(
+         %SendMessage{message_id: message_id} = command,
+         conversation_id,
+         nil,
+         audience_group_id
+       )
+       when message_id == conversation_id and not is_nil(audience_group_id) do
+    [
+      %ConversationAccessGrantedToGroup{
+        conversation_id: conversation_id,
+        club_id: command.club_id,
+        group_id: audience_group_id,
+        access_level: "write"
+      }
+    ]
+  end
+
+  defp conversation_access_events(
+         _command,
+         _conversation_id,
+         _reply_to_message_id,
+         _audience_group_id
+       ),
+       do: []
+
+  defp normalize_command_audience_group_id(
+         %SendMessage{message_id: message_id, audience_group_id: audience_group_id},
+         conversation_id,
+         nil
+       )
+       when message_id == conversation_id do
+    case audience_group_id do
+      nil ->
+        {:ok, nil}
+
+      audience_group_id ->
+        with :ok <- validate_id(:group, audience_group_id, :invalid_audience_group_id) do
+          {:ok, audience_group_id}
+        end
+    end
+  end
+
+  defp normalize_command_audience_group_id(
+         %SendMessage{},
+         _conversation_id,
+         _reply_to_message_id
+       ),
+       do: {:ok, nil}
+
+  defp normalize_command_audience_group_id(
+         %PostMessageReply{},
+         _conversation_id,
+         _reply_to_message_id
+       ),
+       do: {:ok, nil}
 
   defp validate_id(type, value, error) do
     case ID.cast(type, value) do

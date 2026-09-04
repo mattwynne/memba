@@ -22,7 +22,12 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert source =~ "def list_person_email_addresses("
     assert source =~ "def list_active_club_memberships_for_person("
     assert source =~ "def list_active_members_of_club("
+    assert source =~ "def list_active_members_of_group("
+    assert source =~ "def list_system_group_definition_backfill_page("
+    assert source =~ "def list_everyone_group_membership_backfill_page("
+    assert source =~ "def list_admin_group_membership_backfill_page("
     assert source =~ "def list_active_clubs_for_member_email("
+    assert source =~ "def active_member_of_group?("
     assert source =~ "def active_member_of_club_by_email?("
 
     list_functions =
@@ -40,6 +45,10 @@ defmodule Memba.Membership.NoCrudSpikeTest do
              "list_person_email_addresses",
              "list_active_club_memberships_for_person",
              "list_active_members_of_club",
+             "list_active_members_of_group",
+             "list_system_group_definition_backfill_page",
+             "list_everyone_group_membership_backfill_page",
+             "list_admin_group_membership_backfill_page",
              "list_active_clubs_for_member_email"
            ]
 

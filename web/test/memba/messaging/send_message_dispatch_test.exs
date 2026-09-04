@@ -2,9 +2,11 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
@@ -15,6 +17,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
     message_id = Memba.ID.generate(:message)
     club_id = Memba.ID.generate(:club)
     sender_id = Memba.ID.generate(:person)
+    group_id = Memba.ID.generate(:group)
     bob_id = Memba.ID.generate(:person)
     alice_delivery_id = Memba.ID.generate(:delivery)
     bob_delivery_id = Memba.ID.generate(:delivery)
@@ -23,6 +26,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
       message_id: message_id,
       club_id: club_id,
       sender_id: sender_id,
+      audience_group_id: group_id,
       subject: "Trail day",
       body: "Meet at 9am.",
       recipients: [
@@ -44,7 +48,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^message_id,
-              aggregate_version: 3,
+              aggregate_version: 4,
               events: [
                 %MessageSent{
                   message_id: ^message_id,
@@ -52,6 +56,12 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                   sender_id: ^sender_id,
                   subject: "Trail day",
                   body: "Meet at 9am."
+                },
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  access_level: "write"
                 },
                 %EmailDeliveryCreated{
                   message_id: ^message_id,
@@ -79,6 +89,8 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
     assert MapSet.equal?(email_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
+    assert Messaging.group_has_conversation_access?(message_id, group_id, :write)
+    assert Messaging.group_has_conversation_access?(message_id, group_id, :read)
 
     assert %Message{
              message_id: ^message_id,

@@ -3,11 +3,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   alias Memba.Membership
   alias Memba.Messaging
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryProviders.Resend
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
@@ -49,11 +51,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
     bob = create_person!(name: "Bob Example", email: "bob@example.com")
+    dana = create_person!(name: "Dana Example", email: "dana@example.com")
     pat = create_person!(name: "Pat Example", email: "pat@example.com")
 
     add_member!(kmc.club_id, alice.person_id)
     add_member!(kmc.club_id, bob.person_id)
+    insert_active_membership_projection_without_group(kmc.club_id, dana.person_id)
     add_member!(npc.club_id, pat.person_id)
+    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
 
     assert {:ok,
             %{
@@ -79,6 +84,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert kmc_id == kmc.club_id
     assert alice_id == alice.person_id
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :write)
+    assert Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
 
     assert %{
              message_id: ^message_id,
@@ -157,7 +164,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            ] = Fake.deliveries()
 
     delivered_recipient_ids = Enum.map(Fake.deliveries(), & &1.recipient_id)
+    refute dana.person_id in delivered_recipient_ids
     refute pat.person_id in delivered_recipient_ids
+
+    assert 1 == count_events(ConversationAccessGrantedToGroup)
 
     assert %InboundEmailSourceProjection{
              inbound_email_id: _inbound_email_id,
@@ -173,6 +183,55 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              rejection_reason: nil,
              rejection_email_delivery_reference: nil
            } = Messaging.get_inbound_email_source("resend", "task-011-email")
+  end
+
+  test "active destination-club member absent from Everyone cannot send inbound club email" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    dana = create_person!(name: "Dana Example", email: "dana@example.com")
+
+    insert_active_membership_projection_without_group(kmc.club_id, dana.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: _inbound_email_id,
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
+              from_address: "dana@example.com",
+              to_address: "everyone@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-017-everyone-absent-sender",
+                 provider_event_id: "task-017-everyone-absent-sender-event",
+                 from_address: "dana@example.com",
+                 recipient_addresses: ["everyone@kmc.clubs.memba.io"],
+                 subject: "Can I send?",
+                 text_body: "I have a club membership row but no Everyone membership."
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(ConversationAccessGrantedToGroup)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "sender_not_active_member",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-017-everyone-absent-sender")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "dana@example.com",
+      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
+    )
   end
 
   test "recognized same-club reply headers post inbound email into the existing conversation" do
@@ -1632,6 +1691,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       club_id: club_id,
       person_id: person_id,
       active: false
+    })
+  end
+
+  defp insert_active_membership_projection_without_group(club_id, person_id) do
+    Repo.insert!(%MembershipProjection{
+      membership_id: Memba.ID.generate(:membership),
+      club_id: club_id,
+      person_id: person_id,
+      active: true
     })
   end
 

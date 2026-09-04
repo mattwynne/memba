@@ -1,12 +1,13 @@
 defmodule Memba.Messaging.InboundClubAuthorization do
   @moduledoc """
-  Active-membership authorization for inbound club-message email.
+  Everyone-group authorization for inbound club-message email.
 
   Authorization deliberately uses Membership's public query API so Messaging can
   enforce posting rules without coupling to Membership projection storage.
   """
 
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
 
@@ -23,9 +24,10 @@ defmodule Memba.Messaging.InboundClubAuthorization do
   Authorize a resolved sender to post to a resolved club destination.
 
   Returns `:ok` only when the sender person currently has an active membership in
-  the destination club. Known people who are active only in other clubs, inactive
-  destination-club members, and invalid inputs are rejected without relying on
-  Messaging-owned membership state.
+  the destination club's deterministic Everyone group. Known people who are
+  active only in other clubs, destination-club members absent from Everyone,
+  inactive destination-club members, and invalid inputs are rejected without
+  relying on Messaging-owned membership state.
   """
   @spec authorize(InboundClubSender.t() | term(), InboundClubDestination.t() | term()) ::
           :ok | rejection()
@@ -33,7 +35,9 @@ defmodule Memba.Messaging.InboundClubAuthorization do
         %InboundClubSender{} = sender,
         %InboundClubDestination{} = destination
       ) do
-    if Membership.active_member_of_club?(destination.club_id, sender.person_id) do
+    everyone_group_id = SystemGroups.everyone_group_id(destination.club_id)
+
+    if Membership.active_member_of_group?(everyone_group_id, sender.person_id) do
       :ok
     else
       {:error, :sender_not_active_member, rejection_details(sender, destination)}

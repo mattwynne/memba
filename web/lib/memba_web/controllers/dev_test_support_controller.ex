@@ -12,19 +12,26 @@ defmodule MembaWeb.DevTestSupportController do
   alias Memba.Repo
 
   @projection_versions_table :projection_versions
-  @projectors [
+  @event_sourced_projectors [
     Memba.Membership.Projectors.Club,
     Memba.Membership.Projectors.ClubInvitation,
     Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Group,
+    Memba.Membership.Projectors.GroupMembership,
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
+    Memba.Messaging.Projectors.ConversationGroupAccess,
     Memba.Messaging.Projectors.ConversationFollow,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,
     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
     Memba.Messaging.Projectors.InboundEmailSource
   ]
+  @event_sourced_event_handlers [
+    Memba.Membership.Policies.SystemGroupMembership
+  ]
+  @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
   @public_reset_tables [:auth_email_requests, :auth_sign_in_tokens, :onboarding_requests]
 
   @messaging_email_delivery_providers %{
@@ -56,14 +63,16 @@ defmodule MembaWeb.DevTestSupportController do
   end
 
   def reset_acceptance_state(conn, _params) do
-    projector_child_ids = stop_event_sourced_projectors!()
+    subscriber_child_ids = stop_event_sourced_subscribers!()
 
     try do
+      stop_commanded_aggregate_instances!()
       reset_event_store!()
       reset_public_tables!()
+      reset_commanded_subscription_acks!()
       reset_acceptance_application_state!()
     after
-      start_event_sourced_projectors!(projector_child_ids)
+      start_event_sourced_subscribers!(subscriber_child_ids)
     end
 
     send_resp(conn, :no_content, "")
@@ -185,9 +194,9 @@ defmodule MembaWeb.DevTestSupportController do
   defp read_model_change_key(key) when is_binary(key), do: key
   defp read_model_change_key(key), do: inspect(key)
 
-  defp stop_event_sourced_projectors! do
+  defp stop_event_sourced_subscribers! do
     for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
-        module in @projectors do
+        module in event_sourced_subscribers() do
       if is_pid(pid) do
         :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
       end
@@ -196,7 +205,7 @@ defmodule MembaWeb.DevTestSupportController do
     end
   end
 
-  defp start_event_sourced_projectors!(child_ids) do
+  defp start_event_sourced_subscribers!(child_ids) do
     Enum.each(child_ids, fn child_id ->
       case Supervisor.restart_child(Memba.Supervisor, child_id) do
         {:ok, _pid} -> :ok
@@ -204,6 +213,28 @@ defmodule MembaWeb.DevTestSupportController do
         {:error, :running} -> :ok
       end
     end)
+  end
+
+  defp event_sourced_subscribers, do: @event_sourced_projectors ++ @event_sourced_event_handlers
+
+  defp stop_commanded_aggregate_instances! do
+    Enum.each(@commanded_apps, fn app ->
+      supervisor_name = Module.concat([app, Commanded.Aggregates.Supervisor])
+
+      if supervisor_pid = Process.whereis(supervisor_name) do
+        supervisor_pid
+        |> DynamicSupervisor.which_children()
+        |> Enum.each(fn {_child_id, aggregate_pid, _type, _modules} ->
+          if is_pid(aggregate_pid) do
+            DynamicSupervisor.terminate_child(supervisor_pid, aggregate_pid)
+          end
+        end)
+      end
+    end)
+  end
+
+  defp reset_commanded_subscription_acks! do
+    Enum.each(@commanded_apps, &Commanded.Subscriptions.reset/1)
   end
 
   defp reset_event_store! do

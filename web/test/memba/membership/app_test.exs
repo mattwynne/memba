@@ -5,15 +5,18 @@ defmodule Memba.Membership.AppTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.RemovePersonEmailAddress
@@ -26,6 +29,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Projectors.Role, as: RoleProjector
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -75,21 +79,33 @@ defmodule Memba.Membership.AppTest do
              _child ->
                false
            end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{SystemGroupMembership, _opts}, pid, :worker, [SystemGroupMembership]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
   end
 
   test "Membership Commanded app includes the Membership router" do
     expected_commands =
       MapSet.new([
         AcceptClubMemberInvitation,
+        AddGroupMember,
         AddMember,
         AddPersonEmailAddress,
         AssignMemberRole,
         CreateClub,
+        CreateGroup,
         CreatePerson,
         DefineClubRole,
         GrantClubRolePermission,
         InviteClubMember,
         MakePersonEmailAddressPrimary,
+        RemoveGroupMember,
         RemoveMember,
         RemoveMemberRole,
         RemovePersonEmailAddress,

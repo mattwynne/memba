@@ -4,8 +4,11 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Permissions
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -208,6 +211,8 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
         active: true
       })
 
+    insert_everyone_group_membership!(club.club_id, membership.membership_id, person.person_id)
+
     club
     |> Map.from_struct()
     |> Map.merge(%{
@@ -215,6 +220,28 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
       person_id: person.person_id,
       name: person.name,
       email: person.email
+    })
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
     })
   end
 
