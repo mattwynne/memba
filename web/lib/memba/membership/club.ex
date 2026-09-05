@@ -464,6 +464,7 @@ defmodule Memba.Membership.Club do
 
       :error ->
         with :ok <- ensure_group_key_available(club, group_key),
+             :ok <- require_new_group_email_slug(email_slug),
              :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
           group_created_event = %GroupCreated{
             club_id: command.club_id,
@@ -479,6 +480,9 @@ defmodule Memba.Membership.Club do
 
   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
   defp normalize_optional_group_email_slug(email_slug), do: Slug.normalize_for_lookup(email_slug)
+
+  defp require_new_group_email_slug(nil), do: {:error, :invalid_format}
+  defp require_new_group_email_slug(_email_slug), do: :ok
 
   defp ensure_optional_group_email_slug_available(_club, nil), do: :ok
 

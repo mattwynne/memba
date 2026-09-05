@@ -7,6 +7,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -172,13 +173,22 @@ defmodule Memba.Messaging.SendClubMessageTest do
     alice = create_person(name: "Alice Admin", email: "alice@example.com")
     bob = create_person(name: "Bob Admin", email: "bob@example.com")
     carol = create_person(name: "Carol Member", email: "carol@example.com")
+    dana = create_person(name: "Dana Former Admin", email: "dana@example.com")
 
     alice_membership_id = add_member(club_id, alice.person_id)
     bob_membership_id = add_member(club_id, bob.person_id)
     add_member(club_id, carol.person_id)
+    dana_membership_id = add_member(club_id, dana.person_id)
 
     assign_admin_role(club_id, alice_membership_id, alice.person_id)
     assign_admin_role(club_id, bob_membership_id, bob.person_id)
+    assign_admin_role(club_id, dana_membership_id, dana.person_id)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveMember{membership_id: dana_membership_id},
+               consistency: :strong
+             )
 
     message_id = Memba.ID.generate(:message)
 
@@ -217,6 +227,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
     refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert is_nil(Messaging.get_member_email_delivery(message_id, dana.person_id))
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
   end
 

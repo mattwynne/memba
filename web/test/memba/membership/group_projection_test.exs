@@ -1,11 +1,16 @@
 defmodule Memba.Membership.GroupProjectionTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Commanded.Commands.ExecutionResult
+  alias Commanded.Event.Mapper
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Projectors.Group
@@ -58,24 +63,40 @@ defmodule Memba.Membership.GroupProjectionTest do
 
   test "AssignGroupEmailSlug projects the normalized routing key" do
     club_id = Memba.ID.generate(:club)
-    group_id = SystemGroups.everyone_group_id(club_id)
+    group_id = Memba.ID.generate(:group)
 
-    create_club!(club_id)
+    append_historic_group!(club_id, group_id)
 
-    assert :ok =
+    assert %GroupProjection{
+             group_id: ^group_id,
+             club_id: ^club_id,
+             email_slug: nil
+           } = Repo.get(GroupProjection, group_id)
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  email_slug: "trip-planners"
+                }
+              ]
+            }} =
              App.dispatch(
                %AssignGroupEmailSlug{
                  club_id: club_id,
                  group_id: group_id,
-                 email_slug: " Everyone "
+                 email_slug: " Trip-Planners "
                },
+               returning: :execution_result,
                consistency: :strong
              )
 
     assert %GroupProjection{
              group_id: ^group_id,
              club_id: ^club_id,
-             email_slug: "everyone"
+             email_slug: "trip-planners"
            } = Repo.get(GroupProjection, group_id)
   end
 
@@ -208,6 +229,29 @@ defmodule Memba.Membership.GroupProjectionTest do
                },
                consistency: :strong
              )
+  end
+
+  defp append_historic_group!(club_id, group_id) do
+    events =
+      [
+        %ClubCreated{
+          club_id: club_id,
+          name: "Kootenay Mountaineering Club",
+          slug: "kmc"
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: group_id,
+          group_key: "trip_planners",
+          name: "Trip Planners"
+        }
+      ]
+      |> Enum.map(&Mapper.map_to_event_data/1)
+
+    assert :ok = Commanded.EventStore.append_to_stream(App, club_id, 0, events)
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    Memba.ProjectionBarrier.await!([Group], checkpoint: checkpoint)
   end
 
   defp group_membership_count(group_id, membership_id) do

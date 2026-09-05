@@ -228,6 +228,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+
+    assert [%{recipient_id: alice_id}] = Messaging.list_recipient_deliveries(message_id)
+    assert alice_id == alice.person_id
+    assert Messaging.following_conversation?(message_id, alice.person_id)
   end
 
   test "an active Admin member can reply to an inbound Admin conversation" do
@@ -480,6 +484,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
     refute Messaging.following_conversation?(message_id, alice.person_id)
+
+    assert [%{message_id: ^message_id}] =
+             Messaging.list_conversation_messages_for_group(message_id, admin_group_id)
+
+    assert [] =
+             Messaging.list_conversation_messages_for_group(message_id, everyone_group_id)
+
     assert 1 == count_events(ConversationAccessGrantedToGroup)
     assert 2 == count_events(EmailDeliveryCreated)
   end
@@ -1006,6 +1017,56 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(MessageSent)
     assert 1 == count_events(InboundClubEmailAccepted)
+  end
+
+  test "duplicate Admin provider message ids do not duplicate its private conversation or delivery" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Member", email: "alice@example.com")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-057-duplicate-admin-email",
+      provider_event_id: "task-057-duplicate-admin-event-first",
+      from_address: "alice@example.com",
+      recipient_addresses: ["admin@kmc.clubs.memba.io"],
+      subject: "Private Admin topic",
+      text_body: "Please discuss this with the Admin group."
+    }
+
+    assert {:ok, %{message_id: message_id}} =
+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert [%{recipient_id: bob_id, status: "pending"}] =
+             Messaging.list_recipient_deliveries(message_id)
+
+    assert bob_id == bob.person_id
+
+    event_counts = %{
+      messages: count_events(MessageSent),
+      deliveries: count_events(EmailDeliveryCreated),
+      grants: count_events(ConversationAccessGrantedToGroup),
+      accepted: count_events(InboundClubEmailAccepted)
+    }
+
+    assert {:ok, %{duplicate?: true, status: :accepted, message_id: ^message_id}} =
+             inbound_attrs
+             |> Map.put(:provider_event_id, "task-057-duplicate-admin-event-retry")
+             |> Messaging.receive_inbound_club_email(consistency: :strong)
+
+    assert ^event_counts = %{
+             messages: count_events(MessageSent),
+             deliveries: count_events(EmailDeliveryCreated),
+             grants: count_events(ConversationAccessGrantedToGroup),
+             accepted: count_events(InboundClubEmailAccepted)
+           }
+
+    assert [%{message_id: ^message_id, recipient_id: ^bob_id}] =
+             Messaging.list_recipient_deliveries(message_id)
   end
 
   test "accepted inbound email uses normalized plain text and ignores HTML" do
@@ -1673,6 +1734,57 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       to: "alice@example.com",
       reason: "This email address isn't an active member of Kootenay Mountaineering Club"
     )
+  end
+
+  test "the Admin route rejects inactive and other-club senders before private delivery" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    dana = create_person!(name: "Dana Inactive", email: "dana@example.com")
+    pat = create_person!(name: "Pat Other Club", email: "pat@example.com")
+
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
+    insert_inactive_membership!(kmc.club_id, dana.person_id)
+    add_member!(npc.club_id, pat.person_id)
+
+    for {provider_message_id, from_address} <- [
+          {"task-057-inactive-admin-sender", "dana@example.com"},
+          {"task-057-other-club-admin-sender", "pat@example.com"}
+        ] do
+      assert {:ok,
+              %{
+                status: :rejected,
+                rejection_reason: "sender_not_active_member",
+                from_address: ^from_address,
+                to_address: "admin@kmc.clubs.memba.io"
+              }} =
+               Messaging.receive_inbound_club_email(
+                 %{
+                   provider: "resend",
+                   provider_message_id: provider_message_id,
+                   from_address: from_address,
+                   recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                   subject: "Private Admin topic",
+                   text_body: "This must not reach the Admin group."
+                 },
+                 consistency: :strong
+               )
+
+      assert %InboundEmailSourceProjection{
+               status: "rejected",
+               message_id: nil,
+               rejection_reason: "sender_not_active_member"
+             } = Messaging.get_inbound_email_source("resend", provider_message_id)
+    end
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(EmailDeliveryCreated)
+    assert 0 == count_events(ConversationAccessGrantedToGroup)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 2 == count_events(InboundClubEmailRejected)
   end
 
   test "unknown club subdomain is rejected without creating a club message" do

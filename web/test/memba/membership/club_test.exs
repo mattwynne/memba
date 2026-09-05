@@ -313,15 +313,23 @@ defmodule Memba.Membership.ClubTest do
       person_id = Memba.ID.generate(:person)
       club = created_club(club_id)
 
-      assert %GroupCreated{
-               club_id: ^club_id,
-               group_id: ^group_id,
-               group_key: "everyone",
-               name: "Everyone"
-             } =
+      assert [
+               %GroupCreated{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 group_key: "everyone",
+                 name: "Everyone"
+               },
+               %GroupEmailSlugAssigned{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 email_slug: "everyone"
+               }
+             ] =
                Club.execute(club, %CreateGroup{
                  club_id: club_id,
                  group_id: group_id,
+                 email_slug: "everyone",
                  group_key: "everyone",
                  name: " Everyone "
                })
@@ -381,6 +389,19 @@ defmodule Memba.Membership.ClubTest do
                  email_slug: " Trip-Planners ",
                  group_key: "trip_planners",
                  name: " Trip Planners "
+               })
+    end
+
+    test "new group creation requires an email slug" do
+      club_id = Memba.ID.generate(:club)
+      club = created_club(club_id)
+
+      assert {:error, :invalid_format} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 group_key: "trip_planners",
+                 name: "Trip Planners"
                })
     end
 
