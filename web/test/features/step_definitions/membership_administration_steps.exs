@@ -14,7 +14,30 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
+  alias Memba.Membership.SystemGroups
   alias Memba.Repo
+
+  step ~r/^(.+) are members of the (.+) Admin group$/,
+       %{args: [person_names_text, club_name]} = context do
+    context =
+      person_names_text
+      |> parse_person_list()
+      |> Enum.reduce(context, fn person_name, context ->
+        ensure_membership_administrator(context, person_name, club_name)
+      end)
+
+    club_id = fetch_club_id!(context, club_name)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    person_names_text
+    |> parse_person_list()
+    |> Enum.each(fn person_name ->
+      person = fetch_person!(context, person_name)
+      assert Membership.active_member_of_group?(admin_group_id, person.person_id)
+    end)
+
+    context
+  end
 
   step "{word} is an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
@@ -241,6 +264,9 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
       %{person_id: person_id} when is_binary(person_id) ->
         context
 
+      person_id when is_binary(person_id) ->
+        context
+
       _missing ->
         person_id = Memba.ID.generate(:person)
         email = default_email_for(context, person_name)
@@ -283,6 +309,10 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   defp fetch_person!(context, person_name) do
     case get_in(context, [:people, person_name]) do
       %{person_id: person_id} when is_binary(person_id) ->
+        Membership.get_person(person_id) ||
+          flunk("Expected #{person_name} to exist as a projected person")
+
+      person_id when is_binary(person_id) ->
         Membership.get_person(person_id) ||
           flunk("Expected #{person_name} to exist as a projected person")
 
@@ -348,6 +378,12 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   end
 
   defp club_name(word_1, word_2, word_3), do: Enum.join([word_1, word_2, word_3], " ")
+
+  defp parse_person_list(text) do
+    text
+    |> String.replace(~r/,?\s+and\s+/, ", ")
+    |> String.split(~r/\s*,\s*/, trim: true)
+  end
 
   defp scenario_slug(context, club_name) do
     case Slug.default_from_name(club_name) do

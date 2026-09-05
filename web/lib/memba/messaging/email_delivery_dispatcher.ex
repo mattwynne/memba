@@ -22,6 +22,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
+  alias Memba.Messaging.Projections.ConversationGroupAccess
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.ReadModelChanges
@@ -364,6 +365,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          recipient_id: delivery.recipient_id,
          recipient_name: delivery.recipient_name,
          recipient_address: delivery.recipient_address,
+         audience_group_id: audience_group_id(message),
          club_name: club_name(club),
          club_slug: club_slug(club),
          sender_name: sender_name,
@@ -430,6 +432,15 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp club_slug(%{slug: slug}), do: slug
   defp club_slug(_club), do: nil
+
+  defp audience_group_id(%MessageProjection{conversation_id: conversation_id}) do
+    ConversationGroupAccess
+    |> where([access], access.conversation_id == ^conversation_id)
+    |> order_by([access], asc: access.group_id)
+    |> select([access], access.group_id)
+    |> limit(1)
+    |> Repo.one()
+  end
 
   defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}
 

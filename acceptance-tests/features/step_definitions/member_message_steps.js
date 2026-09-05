@@ -1,5 +1,8 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const {
+  assertAdminConversationShowsReply,
+  assertAdminMessageDeliveredToMembers,
+  assertAdminMessageNotDeliveredToMember,
   assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
@@ -30,12 +33,14 @@ const {
   assertConversationShowsReply,
   assertMemberEmailDeliveryStatus,
   assertMemberCannotReplyToMessage,
+  assertMemberDoesNotSeeAdminMessage,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
   assertMessageDetailBackLink,
   assertNoAddressedMemberReceivedEmail,
+  assertNoAdminMessageCreated,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
@@ -56,9 +61,11 @@ const {
   makeClubMessageSendingUnavailable,
   nelsonClubName,
   openMemberMessage,
+  openMemberClubHome,
   reportRecipientEmailStatus,
   removeMemberFromClub,
   recordMembershipProjectionCheckpoint,
+  recordAcceptedInboundRootMessage,
   postMemberReply,
   sendInboundClubEmail,
   sendInboundClubEmailReply,
@@ -121,6 +128,12 @@ When(
 When(/^(\w+) emails "([^"]+)" to ([^\s]+)$/, async function (senderName, subject, toAddress) {
   await prepareInboundClubEmailRouting(this, toAddress);
   await sendInboundClubEmail(this, senderName, subject, toAddress);
+});
+
+Given(/^(\w+) emailed "([^"]+)" to ([^\s]+)$/, async function (senderName, subject, toAddress) {
+  await prepareInboundClubEmailRouting(this, toAddress);
+  await sendInboundClubEmail(this, senderName, subject, toAddress);
+  await recordAcceptedInboundRootMessage(this, subject);
 });
 
 When(
@@ -409,6 +422,17 @@ Then(/^(.+) should not receive (\w+)'s reply by email$/, async function (recipie
   );
 });
 
+Then(
+  /^(.+) should not receive (\w+)'s reply by email from (.+) via Memba$/,
+  async function (recipientNamesText, senderName) {
+    await assertReplyEmailNotDeliveredToMembers(
+      this,
+      senderName,
+      parsePersonList(recipientNamesText)
+    );
+  }
+);
+
 Then("{word} should not receive his own reply by email", async function (senderName) {
   await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
 });
@@ -546,6 +570,53 @@ Then(
     await withMemberHarness(this, "Alice", (member) =>
       assertNoMemberMessageCreated(member, kootenayClubName, subject)
     );
+  }
+);
+
+Then(
+  "no Kootenay Mountaineering Club Admin message named {string} should be created",
+  async function (subject) {
+    await assertNoAdminMessageCreated(this, kootenayClubName, subject);
+  }
+);
+
+Then(
+  /^(.+) should each receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
+  async function (recipientNamesText, subject, clubName) {
+    await assertAdminMessageDeliveredToMembers(
+      this,
+      subject,
+      parsePersonList(recipientNamesText),
+      clubName
+    );
+  }
+);
+
+Then(
+  /^(\w+) should not receive the Admin message "([^"]+)" by email$/,
+  async function (recipientName, subject) {
+    await assertAdminMessageNotDeliveredToMember(this, subject, recipientName);
+  }
+);
+
+Then(
+  /^(.+) should not see the Admin message "([^"]+)" in the (.+) web app$/,
+  async function (viewerNamesText, subject, clubName) {
+    await recordAcceptedInboundRootMessage(this, subject);
+
+    for (const viewerName of parsePersonList(viewerNamesText)) {
+      await withMemberHarness(this, viewerName, async (member) => {
+        await openMemberClubHome(member, clubName);
+        await assertMemberDoesNotSeeAdminMessage(member, subject);
+      });
+    }
+  }
+);
+
+Then(
+  /^the Admin conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
+  async function (subject, senderName, body) {
+    await assertAdminConversationShowsReply(this, subject, senderName, body);
   }
 );
 

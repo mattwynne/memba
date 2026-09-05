@@ -120,7 +120,7 @@ Feature: Club message replies (conversations)
   @iteration-057
   Rule: Admin-group members can reply by email to an Admin conversation
 
-    @iteration-057 @todo-domain @todo-ui
+    @iteration-057
     Scenario: Carol replies by email to Bob's Admin conversation
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       And Bob emailed "Committee meeting" to admin@kmc.clubs.memba.io

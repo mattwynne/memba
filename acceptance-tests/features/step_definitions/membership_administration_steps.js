@@ -14,6 +14,12 @@ Given(/^(\w+) is an Admin of (.+)$/, function (personName, clubName) {
   ensureMembershipAdministrator(this, personName, clubName);
 });
 
+Given(/^(.+) are members of the (.+) Admin group$/, function (personNamesText, clubName) {
+  for (const personName of parsePersonList(personNamesText)) {
+    ensureMembershipAdministrator(this, personName, clubName);
+  }
+});
+
 Given(/^(\w+) is the only Admin of (.+)$/, function (personName, clubName) {
   ensureOnlyMembershipAdministrator(this, personName, clubName);
 });
@@ -48,3 +54,11 @@ Then(/^(\w+) should still be an Admin of (.+)$/, function (personName, clubName)
 Then(/^(\w+) should not be an Admin of (.+)$/, function (personName, clubName) {
   assertNotMembershipAdministrator(this, personName, clubName);
 });
+
+function parsePersonList(text) {
+  return text
+    .replace(/,?\s+and\s+/g, ", ")
+    .split(/\s*,\s*/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}

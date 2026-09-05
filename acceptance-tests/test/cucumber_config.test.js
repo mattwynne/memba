@@ -62,6 +62,22 @@ test("iteration 031 scenarios are no longer blocked from the browser runner", ()
   );
 });
 
+test("iteration 057 scenarios are no longer blocked from either acceptance runner", () => {
+  const iterationScenarios = browserFeatures().flatMap((feature) =>
+    feature.scenarios
+      .filter((scenario) => scenario.tags.includes("@iteration-057"))
+      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
+  );
+
+  assert.equal(iterationScenarios.length, 4);
+  assert.deepEqual(
+    iterationScenarios.filter(
+      (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")
+    ),
+    []
+  );
+});
+
 function browserSelectedFeatureNames() {
   return browserFeatures()
     .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))

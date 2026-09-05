@@ -17,6 +17,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.Projections.EmailDelivery
   alias Memba.Messaging.ConversationStopFollowToken
+  alias Memba.Membership.SystemGroups
 
   @kmc_everyone_address "everyone@kmc.clubs.memba.io"
 
@@ -126,7 +127,7 @@ defmodule Memba.Cucumber.MessagingSteps do
        %{args: [recipient_names_text, sender_name, club_name]} = context do
     assert_reply_email_delivered_to_members(
       context,
-      "Trip planning night",
+      Map.fetch!(context, :last_reply).subject,
       sender_name,
       parse_person_list(recipient_names_text),
       club_name
@@ -137,7 +138,17 @@ defmodule Memba.Cucumber.MessagingSteps do
        %{args: [recipient_names_text, sender_name]} = context do
     assert_reply_email_not_delivered_to_members(
       context,
-      "Trip planning night",
+      Map.fetch!(context, :last_reply).subject,
+      sender_name,
+      parse_person_list(recipient_names_text)
+    )
+  end
+
+  step ~r/^(.+) should not receive (\w+)'s reply by email from (.+) via Memba$/,
+       %{args: [recipient_names_text, sender_name, _club_name]} = context do
+    assert_reply_email_not_delivered_to_members(
+      context,
+      Map.fetch!(context, :last_reply).subject,
       sender_name,
       parse_person_list(recipient_names_text)
     )
@@ -252,6 +263,11 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step ~r/^(\w+) emails "([^"]+)" to ([^\s]+)$/,
+       %{args: [sender_name, subject, to_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, to_address)
+  end
+
+  step ~r/^(\w+) emailed "([^"]+)" to ([^\s]+)$/,
        %{args: [sender_name, subject, to_address]} = context do
     receive_inbound_club_email(context, sender_name, subject, to_address)
   end
@@ -564,6 +580,41 @@ defmodule Memba.Cucumber.MessagingSteps do
   step "no Kootenay Mountaineering Club message named {string} should be created",
        %{args: [subject]} = context do
     assert_no_club_message(context, "Kootenay Mountaineering Club", subject)
+  end
+
+  step "no Kootenay Mountaineering Club Admin message named {string} should be created",
+       %{args: [subject]} = context do
+    assert_no_admin_message(context, "Kootenay Mountaineering Club", subject)
+  end
+
+  step ~r/^(.+) should each receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
+       %{args: [recipient_names_text, subject, club_name]} = context do
+    assert_admin_message_delivered_to_members(
+      context,
+      subject,
+      parse_person_list(recipient_names_text),
+      club_name
+    )
+  end
+
+  step ~r/^(\w+) should not receive the Admin message "([^"]+)" by email$/,
+       %{args: [recipient_name, subject]} = context do
+    assert_admin_message_not_delivered_to_member(context, subject, recipient_name)
+  end
+
+  step ~r/^(.+) should not see the Admin message "([^"]+)" in the (.+) web app$/,
+       %{args: [viewer_names_text, subject, club_name]} = context do
+    assert_admin_message_not_visible_in_web_app(
+      context,
+      subject,
+      parse_person_list(viewer_names_text),
+      club_name
+    )
+  end
+
+  step ~r/^the Admin conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
+       %{args: [subject, sender_name, body]} = context do
+    assert_admin_conversation_shows_reply(context, subject, sender_name, body)
   end
 
   step "no addressed member should receive an email for {string}", %{args: [subject]} = context do
@@ -1158,6 +1209,119 @@ defmodule Memba.Cucumber.MessagingSteps do
     refute Enum.any?(Messaging.list_messages_for_club(club_id), &(&1.subject == subject))
 
     context
+  end
+
+  defp assert_no_admin_message(context, club_name, subject) do
+    admin_group_id = admin_group_id(context, club_name)
+
+    refute Enum.any?(
+             Messaging.list_conversations_for_group(admin_group_id),
+             &(&1.subject == subject)
+           )
+
+    assert_no_club_message(context, club_name, subject)
+  end
+
+  defp assert_admin_message_delivered_to_members(
+         context,
+         subject,
+         expected_recipient_names,
+         club_name
+       ) do
+    message = fetch_from_context!(context, :messages, subject)
+    admin_group_id = admin_group_id(context, club_name)
+
+    assert Messaging.group_has_conversation_access?(message.message_id, admin_group_id, :write)
+
+    deliveries = Messaging.list_recipient_deliveries(message.message_id)
+
+    assert Enum.sort(Enum.map(deliveries, & &1.recipient_name)) ==
+             Enum.sort(expected_recipient_names)
+
+    dispatch_pending_email_deliveries()
+
+    provider_deliveries =
+      Enum.filter(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
+        request.message_id == message.message_id
+      end)
+
+    assert length(provider_deliveries) == length(expected_recipient_names)
+
+    Enum.each(provider_deliveries, fn %EmailDeliveryRequest{} = request ->
+      assert request.recipient_name in expected_recipient_names
+      assert request.subject == subject
+      assert request.body == message.body
+      assert MemberMessageEmail.from_display_name(request) == "#{club_name} via Memba"
+    end)
+
+    context
+  end
+
+  defp assert_admin_message_not_delivered_to_member(context, subject, recipient_name) do
+    message = fetch_from_context!(context, :messages, subject)
+    recipient_id = person_id_from_context!(context, recipient_name)
+
+    refute Enum.any?(Messaging.list_recipient_deliveries(message.message_id), fn delivery ->
+             delivery.recipient_id == recipient_id
+           end)
+
+    dispatch_pending_email_deliveries()
+
+    refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
+             request.message_id == message.message_id and request.recipient_id == recipient_id
+           end)
+
+    context
+  end
+
+  defp assert_admin_message_not_visible_in_web_app(
+         context,
+         subject,
+         viewer_names,
+         club_name
+       ) do
+    message = fetch_from_context!(context, :messages, subject)
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    Enum.each(viewer_names, &assert_active_member!(context, &1, club_name))
+
+    refute Enum.any?(
+             Messaging.list_conversations_for_group(everyone_group_id),
+             &(&1.subject == subject)
+           )
+
+    assert Messaging.list_conversation_messages_for_group(
+             message.message_id,
+             everyone_group_id
+           ) == []
+
+    context
+  end
+
+  defp assert_admin_conversation_shows_reply(context, subject, sender_name, body) do
+    root_message = fetch_from_context!(context, :messages, subject)
+    admin_group_id = admin_group_id(context, "Kootenay Mountaineering Club")
+    sender_id = person_id_from_context!(context, sender_name)
+
+    assert Enum.any?(
+             Messaging.list_conversation_messages_for_group(
+               root_message.message_id,
+               admin_group_id
+             ),
+             fn message ->
+               message.sender_id == sender_id and message.body == body and
+                 is_binary(message.reply_to_message_id)
+             end
+           )
+
+    context
+  end
+
+  defp admin_group_id(context, club_name) do
+    context
+    |> fetch_from_context!(:clubs, club_name)
+    |> SystemGroups.admin_group_id()
   end
 
   defp assert_rejection_email(context, sender_name, expected_text) do
