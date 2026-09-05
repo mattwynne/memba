@@ -1,0 +1,139 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 6c1a41f..2f77e4c 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
+ - [x] 006 Introduce a named fixed group-email posting policy in Messaging.
+ - [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+-- [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
++- [x] 008 Carry the resolved audience group through the existing inbound root-message command.
+ - [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.
+ - [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
+ - [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index d2397bd..a79429f 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -1274,6 +1274,7 @@ defmodule Memba.Messaging do
+              message_id: message_id,
+              club_id: destination.club_id,
+              sender_id: sender.person_id,
++             audience_group_id: destination.group_id,
+              subject: inbound_email.subject,
+              body: body
+            },
+@@ -1392,7 +1393,8 @@ defmodule Memba.Messaging do
+          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
+          {:ok, subject} <- fetch_required(attrs, :subject),
+          {:ok, body} <- fetch_required(attrs, :body) do
+-      audience_group_id = SystemGroups.everyone_group_id(club_id)
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++      audience_group_id = optional_audience_group_id(attrs, everyone_group_id)
+ 
+       {:ok,
+        %SendMessage{
+@@ -1402,11 +1404,18 @@ defmodule Memba.Messaging do
+          audience_group_id: audience_group_id,
+          subject: subject,
+          body: body,
+-         recipients: resolve_group_recipients(audience_group_id)
++         recipients: resolve_group_recipients(everyone_group_id)
+        }}
+     end
+   end
+ 
++  defp optional_audience_group_id(attrs, default_group_id) do
++    case fetch_required(attrs, :audience_group_id) do
++      {:ok, audience_group_id} -> audience_group_id
++      {:error, {:missing_required_attribute, :audience_group_id}} -> default_group_id
++    end
++  end
++
+   defp post_message_reply_command(attrs) do
+     with {:ok, message_id} <- fetch_required(attrs, :message_id),
+          {:ok, conversation_id} <- fetch_required(attrs, :conversation_id),
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 85e4f5b..ba62949 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -2,8 +2,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Memba.Membership
+-  alias Memba.Messaging
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
++  alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryDispatcher
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+@@ -201,6 +204,32 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
+   end
+ 
++  test "an inbound root message carries the resolved Admin audience group into SendMessage" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++    membership_id = add_member!(kmc.club_id, alice.person_id)
++    assign_admin_role!(kmc.club_id, membership_id, alice.person_id)
++    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
++
++    assert {:ok, %{message_id: message_id}} =
++             Messaging.receive_inbound_club_email(
++               %{
++                 provider: "resend",
++                 provider_message_id: "task-057-admin-audience",
++                 provider_event_id: "task-057-admin-audience-event",
++                 from_address: "alice@example.com",
++                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
++                 subject: "Private Admin topic",
++                 text_body: "Please discuss this with the Admin group."
++               },
++               consistency: :strong
++             )
++
++    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
++    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
++  end
++
+   test "recognized same-club reply headers post inbound email into the existing conversation" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+ 
+@@ -1606,15 +1635,32 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+   end
+ 
+   defp add_member!(club_id, person_id) do
++    membership_id = Memba.ID.generate(:membership)
++
+     assert :ok =
+              Membership.add_member(
+                %{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id,
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
++
++    membership_id
++  end
++
++  defp assign_admin_role!(club_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
+   end
+ 
+   defp send_club_message!(attrs) do
