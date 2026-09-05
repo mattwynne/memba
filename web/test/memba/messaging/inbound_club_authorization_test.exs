@@ -93,6 +93,9 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
       club_id: club.club_id,
       club_slug: club.slug,
       club_name: club.name,
+      group_id: SystemGroups.everyone_group_id(club.club_id),
+      group_email_slug: SystemGroups.everyone_email_slug(),
+      group_name: SystemGroups.everyone_name(),
       to_address: to_address
     }
   end
