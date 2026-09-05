@@ -1,0 +1,189 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 163118b..91abff6 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
+ - [x] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
+ - [x] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
+-- [ ] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
++- [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
+ - [ ] 006 Introduce a named fixed group-email posting policy in Messaging.
+ - [ ] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+ - [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 77a6ee3..6af0b05 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -239,7 +239,8 @@ defmodule Memba.Messaging do
+   Supports `<group-email-slug>@<club-slug>.<configured inbound domain>`, returning
+   a resolved destination with club and group identity plus the normalized
+   to-address, or a typed rejection reason for unsupported recipient addresses
+-  and unknown club slugs.
++  and unknown club slugs. Unknown group slugs retain the existing unsupported
++  recipient outcome and inbound rejection path.
+   """
+   def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
+     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
+diff --git a/web/lib/memba/messaging/inbound_club_destination.ex b/web/lib/memba/messaging/inbound_club_destination.ex
+index d2a985d..75aa9dc 100644
+--- a/web/lib/memba/messaging/inbound_club_destination.ex
++++ b/web/lib/memba/messaging/inbound_club_destination.ex
+@@ -54,9 +54,11 @@ defmodule Memba.Messaging.InboundClubDestination do
+   ignored once a supported group destination is found.
+ 
+   Returns `{:error, :unknown_club_slug, to_address}` when a supported subdomain
+-  address is present but no matching club exists, or
+-  `{:error, :unsupported_recipient_address, address_or_nil}` when no supported
+-  group address shape is present.
++  address is present but no matching club exists. A valid but unknown group slug
++  in a known club retains the existing
++  `{:error, :unsupported_recipient_address, to_address}` outcome. Other
++  unsupported inputs return the same reason with the first relevant address, or
++  with `nil` when no usable address is present.
+   """
+   @spec resolve(InboundEmail.t() | [String.t()] | term()) :: {:ok, t()} | rejection()
+   def resolve(%InboundEmail{recipient_addresses: recipient_addresses}),
+@@ -142,7 +144,10 @@ defmodule Memba.Messaging.InboundClubDestination do
+ 
+   defp resolve_candidates(candidates) do
+     candidates
+-    |> Enum.reduce(%{destination: nil, unknown: nil, unsupported: nil}, &accumulate_candidate/2)
++    |> Enum.reduce(
++      %{destination: nil, unknown_club: nil, unknown_group: nil, unsupported: nil},
++      &accumulate_candidate/2
++    )
+     |> resolve_accumulator()
+   end
+ 
+@@ -154,7 +159,7 @@ defmodule Memba.Messaging.InboundClubDestination do
+          accumulator
+        ) do
+     case Membership.get_club_by_slug(club_slug) do
+-      nil -> record_first(accumulator, :unknown, to_address)
++      nil -> record_first(accumulator, :unknown_club, to_address)
+       club -> resolve_group_candidate(accumulator, club, group_email_slug, to_address)
+     end
+   end
+@@ -173,17 +178,21 @@ defmodule Memba.Messaging.InboundClubDestination do
+ 
+   defp resolve_group_candidate(accumulator, club, group_email_slug, to_address) do
+     case Membership.get_group_by_email_slug(club.club_id, group_email_slug) do
+-      nil -> record_first(accumulator, :unsupported, to_address)
++      nil -> record_first(accumulator, :unknown_group, to_address)
+       group -> %{accumulator | destination: destination(club, group, to_address)}
+     end
+   end
+ 
+   defp resolve_accumulator(%{destination: %__MODULE__{} = destination}), do: {:ok, destination}
+ 
+-  defp resolve_accumulator(%{unknown: to_address}) when is_binary(to_address) do
++  defp resolve_accumulator(%{unknown_club: to_address}) when is_binary(to_address) do
+     {:error, :unknown_club_slug, to_address}
+   end
+ 
++  defp resolve_accumulator(%{unknown_group: to_address}) when is_binary(to_address) do
++    {:error, :unsupported_recipient_address, to_address}
++  end
++
+   defp resolve_accumulator(%{unsupported: address}) do
+     {:error, :unsupported_recipient_address, address}
+   end
+diff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs
+index e619ea0..e77c61b 100644
+--- a/web/test/memba/messaging/inbound_club_destination_test.exs
++++ b/web/test/memba/messaging/inbound_club_destination_test.exs
+@@ -124,11 +124,14 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+       end)
+     end
+ 
+-    test "rejects unsupported local parts at a known club subdomain" do
+-      insert_membership_club!(slug: "kmc")
++    test "rejects an unknown group slug through the unsupported-recipient outcome" do
++      club = insert_membership_club!(slug: "kmc")
++      insert_addressable_system_group!(club, :everyone)
++      insert_addressable_system_group!(club, :admin)
+ 
+       assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
+                Messaging.resolve_inbound_club_email_destination([
++                 "friend@example.org",
+                  "committee@kmc.clubs.memba.io"
+                ])
+     end
+@@ -140,10 +143,10 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
+                Messaging.resolve_inbound_club_email_destination(["everyone@example.org"])
+     end
+ 
+-    test "rejects unknown club subdomains at the inbound club domain" do
+-      assert {:error, :unknown_club_slug, "everyone@unknown.clubs.memba.io"} ==
++    test "rejects a known group slug on an unknown club subdomain" do
++      assert {:error, :unknown_club_slug, "admin@unknown.clubs.memba.io"} ==
+                Messaging.resolve_inbound_club_email_destination([
+-                 "everyone@unknown.clubs.memba.io"
++                 "admin@unknown.clubs.memba.io"
+                ])
+     end
+ 
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 813aed2..b5d1bf5 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -1474,7 +1474,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     )
+   end
+ 
+-  test "unsupported recipient routes are rejected through the inbound rejection pathway" do
++  test "unsupported routes and unknown group or club slugs use the rejection pathway" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     alice = create_person!(name: "Alice Example", email: "alice@example.com")
+ 
+@@ -1482,23 +1482,27 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     cases = [
+       %{
+-        provider_message_id: "task-042-unsupported-local-part",
+-        recipient_address: "committee@kmc.clubs.memba.io",
++        provider_message_id: "task-057-unknown-group-slug",
++        recipient_addresses: ["friend@example.org", "committee@kmc.clubs.memba.io"],
++        rejected_to_address: "committee@kmc.clubs.memba.io",
+         rejection_reason: "unsupported_recipient_address"
+       },
+       %{
+         provider_message_id: "task-042-unsupported-domain",
+-        recipient_address: "everyone@example.org",
++        recipient_addresses: ["everyone@example.org"],
++        rejected_to_address: "everyone@example.org",
+         rejection_reason: "unsupported_recipient_address"
+       },
+       %{
+         provider_message_id: "task-042-old-flat-address",
+-        recipient_address: "kmc@clubs.memba.io",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        rejected_to_address: "kmc@clubs.memba.io",
+         rejection_reason: "unsupported_recipient_address"
+       },
+       %{
+         provider_message_id: "task-042-unknown-club-subdomain",
+-        recipient_address: "everyone@unknown.clubs.memba.io",
++        recipient_addresses: ["everyone@unknown.clubs.memba.io"],
++        rejected_to_address: "everyone@unknown.clubs.memba.io",
+         rejection_reason: "unknown_club_slug"
+       }
+     ]
+@@ -1518,14 +1522,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+                    provider: "resend",
+                    provider_message_id: provider_message_id,
+                    from_address: "alice@example.com",
+-                   recipient_addresses: [rejection_case.recipient_address],
++                   recipient_addresses: rejection_case.recipient_addresses,
+                    subject: "Unsupported recipient #{provider_message_id}",
+                    text_body: "This should not post."
+                  },
+                  consistency: :strong
+                )
+ 
+-      assert recipient_address == rejection_case.recipient_address
++      assert recipient_address == rejection_case.rejected_to_address
+       assert rejection_reason == rejection_case.rejection_reason
+       assert is_binary(rejection_email_delivery_reference)
+ 
