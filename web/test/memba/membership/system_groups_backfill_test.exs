@@ -84,11 +84,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
 
     assert ^event_counts = backfill_event_counts(club.club_id, conversation_id)
     assert event_counts.group_created == 2
+    assert event_counts.group_email_slug_assigned == 2
     assert event_counts.group_member_added == 2
     assert event_counts.conversation_access_granted == 1
   end
 
-  test "appends email-slug facts when historic system groups already exist" do
+  test "appends email-slug facts to historic system groups once across safe reruns" do
     club = seed_historic_club!()
     append_historic_system_groups!(club.club_id)
 
@@ -106,6 +107,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
 
     assert %{email_slug: "admin"} =
              Membership.get_group_by_email_slug(club.club_id, "admin")
+
+    assert %{system_group_definitions: %{dispatched_count: 0}} =
+             Backfill.run!(page_size: 2)
+
+    assert membership_event_count(club.club_id, GroupCreated) == 2
+    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
   end
 
   test "backfill-seeded memberships follow later role and member lifecycle events" do
@@ -264,6 +271,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     end
 
     assert membership_event_count(club.club_id, GroupCreated) == 1
+    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 1
 
     assert %{
              system_group_definitions: %{dispatched_count: 1},
@@ -276,6 +284,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     admin_group_id = SystemGroups.admin_group_id(club.club_id)
 
     assert membership_event_count(club.club_id, GroupCreated) == 2
+    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
     assert membership_event_count(club.club_id, GroupMemberAdded) == 2
     assert messaging_event_count(conversation_id, ConversationAccessGrantedToGroup) == 1
     assert active_group_membership?(everyone_group_id, member.membership_id)
@@ -311,6 +320,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
 
     assert %{
              group_created: 2,
+             group_email_slug_assigned: 2,
              group_member_added: 2,
              conversation_access_granted: 1
            } = backfill_event_counts(club.club_id, conversation_id)
@@ -447,6 +457,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   defp backfill_event_counts(club_id, conversation_id) do
     %{
       group_created: membership_event_count(club_id, GroupCreated),
+      group_email_slug_assigned: membership_event_count(club_id, GroupEmailSlugAssigned),
       group_member_added: membership_event_count(club_id, GroupMemberAdded),
       conversation_access_granted:
         messaging_event_count(conversation_id, ConversationAccessGrantedToGroup)
