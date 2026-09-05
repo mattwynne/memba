@@ -68,6 +68,12 @@ if [ -n "$review_feature_changes" ]; then
   exit 1
 fi
 
+if ! git diff --quiet "$start_sha" -- docs/code-health.md; then
+  echo 'Code-health changes recorded during this review:'
+  git diff --unified=3 "$start_sha" -- docs/code-health.md
+  echo ''
+fi
+
 if [ -z "$status" ] && [ -z "$changed_files" ]; then
   echo 'No review artifact changes detected; review can still complete without touching main.'
 else

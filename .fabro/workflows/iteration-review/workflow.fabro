@@ -120,7 +120,7 @@ digraph IterationReview {
     snapshot_before_review_repair [
         label="Snapshot Before Review Repair",
         shape=parallelogram,
-        script="set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='review'\nbefore_head=$(git rev-parse HEAD)\nprintf '%s\\n' \"$before_head\" > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary \"$before_head\" > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only \"$before_head\" > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat \"$before_head\" > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\\n' \"$kind\" \"$before_head\""
     ]
     apply_review_fixes [
         label="Apply Review Fixes",
@@ -131,7 +131,7 @@ digraph IterationReview {
     verify_review_repair [
         label="Verify Review Repair",
         shape=parallelogram,
-        script="set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif git diff --no-index --quiet \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nelse\n  diff_status=$?\n  if [ \"$diff_status\" -gt 1 ]; then\n    echo \"Could not compare ${kind} repair patches.\" >&2\n    exit \"$diff_status\"\n  fi\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+        script="bash .fabro/workflows/iteration-review/scripts/verify_review_repair.sh"
     ]
     not_ready [
         label="Fail: Needs Human Review",

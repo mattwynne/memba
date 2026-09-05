@@ -31,7 +31,7 @@ cd "$workdir"
 git init -q
 git config user.name Test
 git config user.email test@example.com
-mkdir -p .fabro/workflows/iteration-implementation/scripts .fabro/tmp acceptance-tests/features docs/iterations/001-example
+mkdir -p .fabro/workflows/iteration-implementation/scripts .fabro/tmp acceptance-tests/features docs/iterations/001-example docs
 cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py
 cat > acceptance-tests/features/example.feature <<'FEATURE'
 Feature: Example
@@ -43,6 +43,9 @@ FEATURE
 cat > docs/iterations/001-example/plan.md <<'PLAN'
 # Example plan
 PLAN
+cat > docs/code-health.md <<'HEALTH'
+# Code health
+HEALTH
 git add .
 git commit -q -m initial
 base_sha=$(git rev-parse HEAD)
@@ -82,6 +85,16 @@ git add acceptance-tests/features/example.feature
 git commit -q -m 'implementation adds planned tag'
 git rev-parse HEAD > .fabro/tmp/review-start-sha.txt
 assert_passes
+
+cat >> docs/code-health.md <<'HEALTH'
+
+## Review finding: exact evidence
+
+The final summary must report this exact finding.
+HEALTH
+git add docs/code-health.md
+assert_passes
+grep -Fq '## Review finding: exact evidence' /tmp/review-final-gate.out
 
 # Review polish must not edit feature files, even when implementation edits were planned.
 python3 - <<'PY'

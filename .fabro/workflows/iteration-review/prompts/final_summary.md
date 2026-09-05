@@ -7,7 +7,7 @@ Critical requirements:
 - Cite the final artifact gate output to confirm the reviewed implementation evidence.
 - Do not claim files were changed unless they appear in the final artifact gate evidence.
 - If review repairs were applied, list only files shown in final artifact evidence.
-- If `docs/code-health.md` was updated, summarize the recorded judgement-worthy non-blocking findings.
+- If `docs/code-health.md` was updated, use the exact `Code-health changes recorded during this review` diff from the final artifact gate. Summarize only the finding headings and dispositions shown there; do not substitute findings from an earlier synthesis or reviewer response.
 - If reviewer or synthesis findings were not fixed and not recorded in `docs/code-health.md`, call that out explicitly as a workflow failure/gap rather than presenting the run as fully handled.
 - Summarize every substantive review finding as fixed, recorded, dismissed with reason, or still unhandled.
 - Do not invent, assume, or hallucinate changed files that are not present in the artifact evidence.
