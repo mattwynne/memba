@@ -4,10 +4,12 @@ defmodule Memba.Membership.SystemGroupsTest do
   alias Memba.ID
   alias Memba.Membership.SystemGroups
 
-  test "defines stable keys and display names for built-in conversation groups" do
+  test "defines stable keys, email slugs, and display names for built-in conversation groups" do
     assert SystemGroups.everyone_key() == "everyone"
+    assert SystemGroups.everyone_email_slug() == "everyone"
     assert SystemGroups.everyone_name() == "Everyone"
     assert SystemGroups.admin_key() == "admin"
+    assert SystemGroups.admin_email_slug() == "admin"
     assert SystemGroups.admin_name() == "Admin"
   end
 

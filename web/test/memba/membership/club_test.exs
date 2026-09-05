@@ -62,11 +62,21 @@ defmodule Memba.Membership.ClubTest do
                  group_key: "everyone",
                  name: "Everyone"
                },
+               %GroupEmailSlugAssigned{
+                 club_id: ^club_id,
+                 group_id: ^everyone_group_id,
+                 email_slug: "everyone"
+               },
                %GroupCreated{
                  club_id: ^club_id,
                  group_id: ^admin_group_id,
                  group_key: "admin",
                  name: "Admin"
+               },
+               %GroupEmailSlugAssigned{
+                 club_id: ^club_id,
+                 group_id: ^admin_group_id,
+                 email_slug: "admin"
                }
              ] = Club.execute(%Club{}, command)
     end

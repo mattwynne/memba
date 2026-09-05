@@ -10,10 +10,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projectors.Club, as: ClubProjector
+  alias Memba.Membership.Projectors.Group, as: GroupProjector
   alias Memba.Membership.Projectors.Role, as: RoleProjector
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
@@ -44,10 +46,14 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
     admin_group_id = SystemGroups.admin_group_id(club.club_id)
 
-    assert %GroupProjection{group_key: "everyone", name: "Everyone"} =
+    assert %GroupProjection{
+             email_slug: "everyone",
+             group_key: "everyone",
+             name: "Everyone"
+           } =
              Repo.get(GroupProjection, everyone_group_id)
 
-    assert %GroupProjection{group_key: "admin", name: "Admin"} =
+    assert %GroupProjection{email_slug: "admin", group_key: "admin", name: "Admin"} =
              Repo.get(GroupProjection, admin_group_id)
 
     assert active_group_membership?(everyone_group_id, alice.membership_id)
@@ -80,6 +86,26 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     assert event_counts.group_created == 2
     assert event_counts.group_member_added == 2
     assert event_counts.conversation_access_granted == 1
+  end
+
+  test "appends email-slug facts when historic system groups already exist" do
+    club = seed_historic_club!()
+    append_historic_system_groups!(club.club_id)
+
+    assert membership_event_count(club.club_id, GroupCreated) == 2
+    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 0
+
+    assert %{system_group_definitions: %{dispatched_count: 2}} =
+             Backfill.run!(page_size: 2)
+
+    assert membership_event_count(club.club_id, GroupCreated) == 2
+    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
+
+    assert %{email_slug: "everyone"} =
+             Membership.get_group_by_email_slug(club.club_id, "everyone")
+
+    assert %{email_slug: "admin"} =
+             Membership.get_group_by_email_slug(club.club_id, "admin")
   end
 
   test "backfill-seeded memberships follow later role and member lifecycle events" do
@@ -337,6 +363,30 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
              )
 
     %{membership_id: membership_id, person_id: person_id}
+  end
+
+  defp append_historic_system_groups!(club_id) do
+    events =
+      [
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.everyone_group_id(club_id),
+          group_key: SystemGroups.everyone_key(),
+          name: SystemGroups.everyone_name()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: SystemGroups.admin_group_id(club_id),
+          group_key: SystemGroups.admin_key(),
+          name: SystemGroups.admin_name()
+        }
+      ]
+      |> Enum.map(&Mapper.map_to_event_data/1)
+
+    assert :ok = Commanded.EventStore.append_to_stream(MembershipApp, club_id, 3, events)
+
+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+    Memba.ProjectionBarrier.await!([GroupProjector], checkpoint: checkpoint)
   end
 
   defp assign_admin_role!(club_id, member) do

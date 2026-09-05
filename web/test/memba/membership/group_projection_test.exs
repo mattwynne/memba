@@ -42,6 +42,7 @@ defmodule Memba.Membership.GroupProjectionTest do
     assert %GroupProjection{
              group_id: ^everyone_group_id,
              club_id: ^club_id,
+             email_slug: "everyone",
              group_key: "everyone",
              name: "Everyone"
            } = Repo.get(GroupProjection, everyone_group_id)
@@ -49,6 +50,7 @@ defmodule Memba.Membership.GroupProjectionTest do
     assert %GroupProjection{
              group_id: ^admin_group_id,
              club_id: ^club_id,
+             email_slug: "admin",
              group_key: "admin",
              name: "Admin"
            } = Repo.get(GroupProjection, admin_group_id)

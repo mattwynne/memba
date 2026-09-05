@@ -72,11 +72,21 @@ defmodule Memba.Membership.Club do
           group_key: SystemGroups.everyone_key(),
           name: SystemGroups.everyone_name()
         },
+        %GroupEmailSlugAssigned{
+          club_id: command.club_id,
+          group_id: SystemGroups.everyone_group_id(command.club_id),
+          email_slug: SystemGroups.everyone_email_slug()
+        },
         %GroupCreated{
           club_id: command.club_id,
           group_id: SystemGroups.admin_group_id(command.club_id),
           group_key: SystemGroups.admin_key(),
           name: SystemGroups.admin_name()
+        },
+        %GroupEmailSlugAssigned{
+          club_id: command.club_id,
+          group_id: SystemGroups.admin_group_id(command.club_id),
+          email_slug: SystemGroups.admin_email_slug()
         }
       ]
     end

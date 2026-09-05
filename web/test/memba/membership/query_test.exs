@@ -10,6 +10,7 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
+  alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Roles
@@ -47,6 +48,41 @@ defmodule Memba.Membership.QueryTest do
       assert is_nil(Membership.get_club_by_slug("kmc.club"))
       assert is_nil(Membership.get_club_by_slug("-kmc"))
       assert is_nil(Membership.get_club_by_slug(nil))
+    end
+  end
+
+  describe "get_group_by_email_slug/2" do
+    test "returns a public group summary scoped to the selected club" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+      other_club = create_club("Nelson Cycling Club", slug: "ncc")
+
+      assert %{
+               club_id: club_id,
+               group_id: group_id,
+               email_slug: "admin",
+               group_key: "admin",
+               name: "Admin"
+             } = Membership.get_group_by_email_slug(club.club_id, " ADMIN ")
+
+      assert club_id == club.club_id
+      assert group_id == SystemGroups.admin_group_id(club.club_id)
+      refute match?(%GroupProjection{}, Membership.get_group_by_email_slug(club.club_id, "admin"))
+
+      assert %{club_id: other_club_id, group_id: other_group_id, email_slug: "admin"} =
+               Membership.get_group_by_email_slug(other_club.club_id, "admin")
+
+      assert other_club_id == other_club.club_id
+      assert other_group_id == SystemGroups.admin_group_id(other_club.club_id)
+    end
+
+    test "returns nil for invalid IDs and invalid, unknown, or non-string email slugs" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+
+      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "unknown"))
+      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "admin group"))
+      assert is_nil(Membership.get_group_by_email_slug(club.club_id, nil))
+      assert is_nil(Membership.get_group_by_email_slug("not-a-uuid", "admin"))
+      assert is_nil(Membership.get_group_by_email_slug(nil, "admin"))
     end
   end
 

@@ -14,6 +14,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressAdded
@@ -83,11 +84,21 @@ defmodule Memba.Membership.PublicApiTest do
                   group_key: "everyone",
                   name: "Everyone"
                 },
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  email_slug: "everyone"
+                },
                 %GroupCreated{
                   club_id: ^club_id,
                   group_id: ^admin_group_id,
                   group_key: "admin",
                   name: "Admin"
+                },
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  email_slug: "admin"
                 }
               ]
             }} =
@@ -133,11 +144,21 @@ defmodule Memba.Membership.PublicApiTest do
                   group_key: "everyone",
                   name: "Everyone"
                 },
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^everyone_group_id,
+                  email_slug: "everyone"
+                },
                 %GroupCreated{
                   club_id: ^club_id,
                   group_id: ^admin_group_id,
                   group_key: "admin",
                   name: "Admin"
+                },
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  email_slug: "admin"
                 }
               ]
             }} =
