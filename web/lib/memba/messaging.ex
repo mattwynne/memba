@@ -1274,6 +1274,7 @@ defmodule Memba.Messaging do
              message_id: message_id,
              club_id: destination.club_id,
              sender_id: sender.person_id,
+             audience_group_id: destination.group_id,
              subject: inbound_email.subject,
              body: body
            },
@@ -1392,7 +1393,8 @@ defmodule Memba.Messaging do
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, body} <- fetch_required(attrs, :body) do
-      audience_group_id = SystemGroups.everyone_group_id(club_id)
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+      audience_group_id = optional_audience_group_id(attrs, everyone_group_id)
 
       {:ok,
        %SendMessage{
@@ -1402,8 +1404,15 @@ defmodule Memba.Messaging do
          audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_group_recipients(audience_group_id)
+         recipients: resolve_group_recipients(everyone_group_id)
        }}
+    end
+  end
+
+  defp optional_audience_group_id(attrs, default_group_id) do
+    case fetch_required(attrs, :audience_group_id) do
+      {:ok, audience_group_id} -> audience_group_id
+      {:error, {:missing_required_attribute, :audience_group_id}} -> default_group_id
     end
   end
 

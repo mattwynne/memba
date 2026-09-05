@@ -2,8 +2,11 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership
-  alias Memba.Messaging
+  alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
+  alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryDispatcher
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
@@ -199,6 +202,32 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert {:ok, sender} = Messaging.resolve_inbound_club_email_sender("dana@example.com")
     refute Membership.active_member_of_group?(destination.group_id, sender.person_id)
     assert :ok = Messaging.authorize_inbound_club_email_sender(sender, destination)
+  end
+
+  test "an inbound root message carries the resolved Admin audience group into SendMessage" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    membership_id = add_member!(kmc.club_id, alice.person_id)
+    assign_admin_role!(kmc.club_id, membership_id, alice.person_id)
+    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
+    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
+
+    assert {:ok, %{message_id: message_id}} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-057-admin-audience",
+                 provider_event_id: "task-057-admin-audience-event",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                 subject: "Private Admin topic",
+                 text_body: "Please discuss this with the Admin group."
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
   end
 
   test "recognized same-club reply headers post inbound email into the existing conversation" do
@@ -1606,12 +1635,29 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   end
 
   defp add_member!(club_id, person_id) do
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    membership_id
+  end
+
+  defp assign_admin_role!(club_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: Roles.membership_administrator_role_id(club_id)
                },
                consistency: :strong
              )

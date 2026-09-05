@@ -7,7 +7,7 @@
 - [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
 - [x] 006 Introduce a named fixed group-email posting policy in Messaging.
 - [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
-- [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
+- [x] 008 Carry the resolved audience group through the existing inbound root-message command.
 - [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.
 - [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
 - [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
