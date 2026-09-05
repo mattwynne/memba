@@ -5,7 +5,7 @@
 - [x] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
 - [x] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
 - [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
-- [ ] 006 Introduce a named fixed group-email posting policy in Messaging.
+- [x] 006 Introduce a named fixed group-email posting policy in Messaging.
 - [ ] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
 - [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
 - [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.

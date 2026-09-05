@@ -25,7 +25,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
-  alias Memba.Messaging.InboundClubAuthorization
+  alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
   alias Memba.Messaging.InboundClubSender
@@ -260,14 +260,13 @@ defmodule Memba.Messaging do
   @doc """
   Authorize a resolved inbound sender to post to a resolved club destination.
 
-  Only active members of the destination club's deterministic Everyone group may
-  post by email. Known people who belong only to another club, whose
-  destination-club membership is absent from Everyone, or whose destination-club
-  membership is inactive receive a typed rejection reason for later
-  rejection-email handling.
+  Applies the fixed, named `:club_members_only` group-email posting policy. Known
+  people who belong only to another club, whose destination-club membership is
+  absent from Everyone, or whose destination-club membership is inactive receive
+  a typed rejection reason for later rejection-email handling.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
-    InboundClubAuthorization.authorize(sender, destination)
+    GroupEmailPostingPolicy.authorize(sender, destination)
   end
 
   @doc """

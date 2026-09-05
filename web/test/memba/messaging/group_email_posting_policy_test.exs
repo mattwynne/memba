@@ -1,12 +1,17 @@
-defmodule Memba.Messaging.InboundClubAuthorizationTest do
+defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
   use Memba.DataCase, async: true
 
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
+  alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
+
+  test "the fixed group-email posting policy is named club_members_only" do
+    assert GroupEmailPostingPolicy.name() == :club_members_only
+  end
 
   describe "authorize_inbound_club_email_sender/2" do
     test "authorizes a resolved sender who is an active member of the destination club's Everyone group" do
