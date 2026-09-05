@@ -1,0 +1,1027 @@
+diff --git a/acceptance-tests/features/club_message_replies.feature b/acceptance-tests/features/club_message_replies.feature
+index 81687ea..5944f02 100644
+--- a/acceptance-tests/features/club_message_replies.feature
++++ b/acceptance-tests/features/club_message_replies.feature
+@@ -120,7 +120,7 @@ Feature: Club message replies (conversations)
+   @iteration-057
+   Rule: Admin-group members can reply by email to an Admin conversation
+ 
+-    @iteration-057 @todo-domain @todo-ui
++    @iteration-057
+     Scenario: Carol replies by email to Bob's Admin conversation
+       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
+       And Bob emailed "Committee meeting" to admin@kmc.clubs.memba.io
+diff --git a/acceptance-tests/features/member_message_deliverability.feature b/acceptance-tests/features/member_message_deliverability.feature
+index 6f420f7..14937e2 100644
+--- a/acceptance-tests/features/member_message_deliverability.feature
++++ b/acceptance-tests/features/member_message_deliverability.feature
+@@ -81,7 +81,7 @@ Rule: Active members can send new club messages by email
+ 
+ Rule: Active club members can start a private Admin conversation by email
+ 
+-    @iteration-057 @todo-domain @todo-ui
++    @iteration-057
+     Scenario: Alice emails the KMC Admin address without belonging to Admin
+       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
+       When Alice emails "Committee meeting" to admin@kmc.clubs.memba.io
+@@ -89,14 +89,14 @@ Rule: Active club members can start a private Admin conversation by email
+       And Alice should not receive the Admin message "Committee meeting" by email
+       And Alice and Bob should not see the Admin message "Committee meeting" in the Kootenay Mountaineering Club web app
+ 
+-    @iteration-057 @todo-domain @todo-ui
++    @iteration-057
+     Scenario: Bob emails the KMC Admin address as an Admin member
+       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
+       When Bob emails "Committee meeting" to admin@kmc.clubs.memba.io
+       Then Bob and Carol should each receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
+       And Alice should not receive the Admin message "Committee meeting" by email
+ 
+-    @iteration-057 @todo-domain @todo-ui
++    @iteration-057
+     Scenario: A member of another club emails the KMC Admin address
+       When Pat emails "Committee meeting" to admin@kmc.clubs.memba.io
+       Then no Kootenay Mountaineering Club Admin message named "Committee meeting" should be created
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index 03d788c..ac38069 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -1,5 +1,8 @@
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
++  assertAdminConversationShowsReply,
++  assertAdminMessageDeliveredToMembers,
++  assertAdminMessageNotDeliveredToMember,
+   assertEveryAddressedMemberEmailDeliveryStatus,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+   assertEachDeliverySentThroughEmailProvider,
+@@ -30,12 +33,14 @@ const {
+   assertConversationShowsReply,
+   assertMemberEmailDeliveryStatus,
+   assertMemberCannotReplyToMessage,
++  assertMemberDoesNotSeeAdminMessage,
+   assertMemberSeesMessageInClub,
+   assertMemberWasToldMessageBodyCannotBeBlank,
+   assertMemberWasToldMessageWasNotSent,
+   assertMemberWasToldToContactSupport,
+   assertMessageDetailBackLink,
+   assertNoAddressedMemberReceivedEmail,
++  assertNoAdminMessageCreated,
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+@@ -56,9 +61,11 @@ const {
+   makeClubMessageSendingUnavailable,
+   nelsonClubName,
+   openMemberMessage,
++  openMemberClubHome,
+   reportRecipientEmailStatus,
+   removeMemberFromClub,
+   recordMembershipProjectionCheckpoint,
++  recordAcceptedInboundRootMessage,
+   postMemberReply,
+   sendInboundClubEmail,
+   sendInboundClubEmailReply,
+@@ -123,6 +130,12 @@ When(/^(\w+) emails "([^"]+)" to ([^\s]+)$/, async function (senderName, subject
+   await sendInboundClubEmail(this, senderName, subject, toAddress);
+ });
+ 
++Given(/^(\w+) emailed "([^"]+)" to ([^\s]+)$/, async function (senderName, subject, toAddress) {
++  await prepareInboundClubEmailRouting(this, toAddress);
++  await sendInboundClubEmail(this, senderName, subject, toAddress);
++  await recordAcceptedInboundRootMessage(this, subject);
++});
++
+ When(
+   /^(\w+) emails "([^"]+)" to ([^\s]+) from "([^"]+)"$/,
+   async function (senderName, subject, toAddress, fromAddress) {
+@@ -409,6 +422,17 @@ Then(/^(.+) should not receive (\w+)'s reply by email$/, async function (recipie
+   );
+ });
+ 
++Then(
++  /^(.+) should not receive (\w+)'s reply by email from (.+) via Memba$/,
++  async function (recipientNamesText, senderName) {
++    await assertReplyEmailNotDeliveredToMembers(
++      this,
++      senderName,
++      parsePersonList(recipientNamesText)
++    );
++  }
++);
++
+ Then("{word} should not receive his own reply by email", async function (senderName) {
+   await withMemberHarness(this, "Alice", (member) => assertReplyEmailNotDeliveredToAuthor(member, senderName));
+ });
+@@ -549,6 +573,53 @@ Then(
+   }
+ );
+ 
++Then(
++  "no Kootenay Mountaineering Club Admin message named {string} should be created",
++  async function (subject) {
++    await assertNoAdminMessageCreated(this, kootenayClubName, subject);
++  }
++);
++
++Then(
++  /^(.+) should each receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
++  async function (recipientNamesText, subject, clubName) {
++    await assertAdminMessageDeliveredToMembers(
++      this,
++      subject,
++      parsePersonList(recipientNamesText),
++      clubName
++    );
++  }
++);
++
++Then(
++  /^(\w+) should not receive the Admin message "([^"]+)" by email$/,
++  async function (recipientName, subject) {
++    await assertAdminMessageNotDeliveredToMember(this, subject, recipientName);
++  }
++);
++
++Then(
++  /^(.+) should not see the Admin message "([^"]+)" in the (.+) web app$/,
++  async function (viewerNamesText, subject, clubName) {
++    await recordAcceptedInboundRootMessage(this, subject);
++
++    for (const viewerName of parsePersonList(viewerNamesText)) {
++      await withMemberHarness(this, viewerName, async (member) => {
++        await openMemberClubHome(member, clubName);
++        await assertMemberDoesNotSeeAdminMessage(member, subject);
++      });
++    }
++  }
++);
++
++Then(
++  /^the Admin conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
++  async function (subject, senderName, body) {
++    await assertAdminConversationShowsReply(this, subject, senderName, body);
++  }
++);
++
+ Then(
+   "{word} should receive a rejection email explaining the message was not posted",
+   async function (senderName) {
+diff --git a/acceptance-tests/features/step_definitions/membership_administration_steps.js b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+index ee5ed1d..5613e85 100644
+--- a/acceptance-tests/features/step_definitions/membership_administration_steps.js
++++ b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+@@ -14,6 +14,12 @@ Given(/^(\w+) is an Admin of (.+)$/, function (personName, clubName) {
+   ensureMembershipAdministrator(this, personName, clubName);
+ });
+ 
++Given(/^(.+) are members of the (.+) Admin group$/, function (personNamesText, clubName) {
++  for (const personName of parsePersonList(personNamesText)) {
++    ensureMembershipAdministrator(this, personName, clubName);
++  }
++});
++
+ Given(/^(\w+) is the only Admin of (.+)$/, function (personName, clubName) {
+   ensureOnlyMembershipAdministrator(this, personName, clubName);
+ });
+@@ -48,3 +54,11 @@ Then(/^(\w+) should still be an Admin of (.+)$/, function (personName, clubName)
+ Then(/^(\w+) should not be an Admin of (.+)$/, function (personName, clubName) {
+   assertNotMembershipAdministrator(this, personName, clubName);
+ });
++
++function parsePersonList(text) {
++  return text
++    .replace(/,?\s+and\s+/g, ", ")
++    .split(/\s*,\s*/)
++    .map((name) => name.trim())
++    .filter(Boolean);
++}
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index f69cab8..9f1aa8d 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1237,6 +1237,40 @@ async function sendInboundClubEmail(
+   return world;
+ }
+ 
++async function recordAcceptedInboundRootMessage(world, subject) {
++  ensureState(world);
++
++  const inboundEmail = world.inboundEmails[subject];
++  assert.ok(inboundEmail, `Expected inbound email state for ${JSON.stringify(subject)}`);
++
++  const result = await waitForInboundEmailResult(world, inboundEmail.providerMessageId);
++
++  assert.equal(
++    result.source.status,
++    "accepted",
++    `Expected inbound email for ${JSON.stringify(subject)} to be accepted; saw ${JSON.stringify(result.source)}`
++  );
++  assert.ok(result.message, `Expected accepted inbound email ${JSON.stringify(subject)} to create a message`);
++  assert.equal(
++    result.message.replyToMessageId,
++    null,
++    `Expected ${JSON.stringify(subject)} to be a root message`
++  );
++
++  const club = clubById(world, result.message.clubId);
++
++  world.messages[subject] = {
++    body: result.message.body,
++    clubId: result.message.clubId,
++    clubSlug: club && club.slug,
++    messageId: result.message.messageId,
++    senderName: inboundEmail.senderName,
++    subject: result.message.subject
++  };
++
++  return world.messages[subject];
++}
++
+ async function sendInboundClubEmailReply(
+   world,
+   senderName,
+@@ -1255,8 +1289,13 @@ async function sendInboundClubEmailReply(
+ 
+   const providerMessageId = `acceptance-reply-${randomUUID()}`;
+   const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
++  const rootInboundEmail = world.inboundEmails[subject];
++  const replyAddress =
++    toAddress ||
++    (rootInboundEmail && rootInboundEmail.toAddress) ||
++    clubEveryoneAddress(club);
+ 
+-  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, toAddress || clubEveryoneAddress(club), {
++  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, replyAddress, {
+     expect,
+     headers: { "In-Reply-To": outboundMessageId },
+     providerMessageId,
+@@ -1560,6 +1599,138 @@ async function assertNoMemberMessageCreated(
+   return world;
+ }
+ 
++async function assertNoAdminMessageCreated(world, clubName, subject) {
++  ensureState(world);
++
++  const inboundEmail = world.inboundEmails[subject];
++  assert.ok(inboundEmail, `Expected inbound email state for ${JSON.stringify(subject)}`);
++
++  const result = await waitForInboundEmailResult(world, inboundEmail.providerMessageId);
++
++  assert.equal(
++    result.source.status,
++    "rejected",
++    `Expected inbound Admin email for ${JSON.stringify(subject)} to be rejected`
++  );
++  assert.equal(result.source.messageId, null);
++  assert.equal(result.message, null);
++
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to have been created`);
++
++  const matchingConversations = serverCommands.runCommand(
++    `
++club_id = Map.fetch!(payload, "clubId")
++subject = Map.fetch!(payload, "subject")
++
++case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
++  nil -> []
++  group ->
++    group.group_id
++    |> Memba.Messaging.list_conversations_for_group()
++    |> Enum.filter(&(&1.subject == subject))
++    |> Enum.map(&%{messageId: &1.message_id, subject: &1.subject})
++end
++`,
++    { clubId: club.clubId, subject }
++  );
++
++  assert.deepEqual(
++    matchingConversations,
++    [],
++    `Expected no Admin conversation named ${JSON.stringify(subject)}`
++  );
++
++  return world;
++}
++
++async function assertAdminMessageDeliveredToMembers(
++  world,
++  subject,
++  expectedRecipientNames,
++  clubName
++) {
++  const message = await recordAcceptedInboundRootMessage(world, subject);
++  serverCommands.dispatchPendingEmailDeliveries();
++
++  const baseline = world.localDeliveryFactsBeforeSend || [];
++  const facts = await waitForLocalDeliveryFacts(
++    world,
++    baseline.length + expectedRecipientNames.length,
++    `Admin message deliveries for ${JSON.stringify(subject)}`
++  );
++  const messageFacts = facts.filter((fact) => fact.message_id === message.messageId);
++  const expectedSubject = memberMessageEmailSubjectFor(world, subject);
++
++  assertFinalBrowserState(`Admin message recipients for ${JSON.stringify(subject)}`, () => {
++    assert.deepEqual(
++      messageFacts.map((fact) => fact.recipient_name).sort(),
++      [...expectedRecipientNames].sort()
++    );
++  });
++
++  for (const recipientName of expectedRecipientNames) {
++    const person = world.people[recipientName];
++    assert.ok(person, `Expected ${recipientName} to have been created`);
++
++    const matchingFact = messageFacts.find(
++      (fact) =>
++        fact.recipient_id === person.personId &&
++        fact.subject === expectedSubject &&
++        fact.from.startsWith(`${clubName} via Memba <`) &&
++        fact.text_body.includes(message.body)
++    );
++
++    assertFinalBrowserState(`Admin message email for ${recipientName}`, () =>
++      assert.ok(
++        matchingFact,
++        `Expected Admin message ${JSON.stringify(subject)} for ${recipientName}; ` +
++          `saw ${JSON.stringify(messageFacts.map(mailboxEmailSummary))}`
++      )
++    );
++  }
++
++  world.adminMessageDeliveryFacts = world.adminMessageDeliveryFacts || {};
++  world.adminMessageDeliveryFacts[subject] = messageFacts;
++
++  return world;
++}
++
++async function assertAdminMessageNotDeliveredToMember(world, subject, recipientName) {
++  const message = await recordAcceptedInboundRootMessage(world, subject);
++  const person = world.people[recipientName];
++  assert.ok(person, `Expected ${recipientName} to have been created`);
++
++  serverCommands.dispatchPendingEmailDeliveries();
++
++  const facts = world.adminMessageDeliveryFacts && world.adminMessageDeliveryFacts[subject]
++    ? world.adminMessageDeliveryFacts[subject]
++    : (await testLocalDeliveryFacts(world)).filter((fact) => fact.message_id === message.messageId);
++
++  assertFinalBrowserState(`no Admin message email for ${recipientName}`, () => {
++    assert.equal(
++      facts.find((fact) => fact.recipient_id === person.personId),
++      undefined,
++      `Expected no Admin message ${JSON.stringify(subject)} for ${recipientName}; ` +
++        `saw ${JSON.stringify(facts.map(mailboxEmailSummary))}`
++    );
++  });
++
++  return world;
++}
++
++async function assertMemberDoesNotSeeAdminMessage(
++  world,
++  subject,
++  { expect = playwrightExpect } = {}
++) {
++  const rows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
++
++  await expect(rows).toHaveCount(0);
++
++  return world;
++}
++
+ async function assertMemberMessageBody(world, expectedBody, { expect = playwrightExpect } = {}) {
+   const subject = world.lastMessageSubject;
+   assert.ok(subject, "Expected a current message subject before checking the message body");
+@@ -2063,6 +2234,48 @@ async function assertConversationShowsReply(
+   return world;
+ }
+ 
++async function assertAdminConversationShowsReply(world, subject, senderName, body) {
++  const rootMessage = world.messages[subject] || await recordAcceptedInboundRootMessage(world, subject);
++  const sender = world.people[senderName];
++  assert.ok(sender, `Expected ${senderName} to have been created`);
++
++  const result = serverCommands.runCommand(
++    `
++message_id = Map.fetch!(payload, "messageId")
++club_id = Map.fetch!(payload, "clubId")
++
++messages =
++case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
++  nil -> []
++  group -> Memba.Messaging.list_conversation_messages_for_group(message_id, group.group_id)
++end
++
++Enum.map(messages, &%{
++  body: &1.body,
++  messageId: &1.message_id,
++  replyToMessageId: &1.reply_to_message_id,
++  senderId: &1.sender_id
++})
++`,
++    { clubId: rootMessage.clubId, messageId: rootMessage.messageId }
++  );
++
++  assertFinalBrowserState(`Admin conversation reply from ${senderName}`, () =>
++    assert.ok(
++      result.find(
++        (message) =>
++          message.senderId === sender.personId &&
++          message.replyToMessageId &&
++          message.body === body
++      ),
++      `Expected Admin conversation ${JSON.stringify(subject)} to include ${senderName}'s ` +
++        `reply ${JSON.stringify(body)}; saw ${JSON.stringify(result)}`
++    )
++  );
++
++  return world;
++}
++
+ async function assertConversationDoesNotShowReply(world, subject, senderName, body) {
+   ensureState(world);
+ 
+@@ -3447,14 +3660,9 @@ async function outboundMessageIdForSubject(world, subject, preferredRecipientNam
+   return outboundMessageId;
+ }
+ 
+-async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
+-  const timeoutMs = requireReply ? projectionTimeoutMs(world) : 0;
+-  const deadline = Date.now() + timeoutMs;
+-  let result;
+-
+-  do {
+-    result = serverCommands.runCommand(
+-      `
++function inboundEmailResult(providerMessageId) {
++  return serverCommands.runCommand(
++    `
+ provider_message_id = Map.fetch!(payload, "providerMessageId")
+ source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
+ 
+@@ -3482,21 +3690,24 @@ message =
+   }, else: nil)
+ }
+ `,
+-      { providerMessageId }
+-    );
+-
+-    if (result.source && result.source.status === "rejected") {
+-      if (requireReply) {
+-        throw new Error(
+-          `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
+-        );
+-      }
++    { providerMessageId }
++  );
++}
+ 
+-      return;
+-    }
++async function waitForInboundEmailResult(world, providerMessageId) {
++  const timeoutMs = projectionTimeoutMs(world);
++  const deadline = Date.now() + timeoutMs;
++  let result;
+ 
+-    if (result.message && result.message.replyToMessageId) {
+-      break;
++  do {
++    result = inboundEmailResult(providerMessageId);
++
++    if (
++      result.source &&
++      (result.source.status === "rejected" ||
++        (result.source.status === "accepted" && result.message))
++    ) {
++      return result;
+     }
+ 
+     if (Date.now() <= deadline) {
+@@ -3504,6 +3715,27 @@ message =
+     }
+   } while (Date.now() <= deadline);
+ 
++  throw new Error(
++    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for inbound email ` +
++      `${providerMessageId}; saw ${JSON.stringify(result)}`
++  );
++}
++
++async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
++  const result = requireReply
++    ? await waitForInboundEmailResult(world, providerMessageId)
++    : inboundEmailResult(providerMessageId);
++
++  if (result.source && result.source.status === "rejected") {
++    if (requireReply) {
++      throw new Error(
++        `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
++      );
++    }
++
++    return;
++  }
++
+   const message = result && result.message;
+ 
+   if (!message || !message.replyToMessageId) {
+@@ -3511,10 +3743,7 @@ message =
+       return;
+     }
+ 
+-    assert.ok(
+-      message && message.replyToMessageId,
+-      `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`
+-    );
++    assert.ok(message && message.replyToMessageId, `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`);
+   }
+ 
+   const reply = {
+@@ -3880,6 +4109,9 @@ module.exports = {
+   addMembers,
+   appUrl,
+   clubSiteUrl,
++  assertAdminConversationShowsReply,
++  assertAdminMessageDeliveredToMembers,
++  assertAdminMessageNotDeliveredToMember,
+   assertEveryAddressedMemberEmailDeliveryStatus,
+   assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+@@ -3905,6 +4137,7 @@ module.exports = {
+   assertInboundRejectionEmailUsesStandardMembaFooter,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertMemberDoesNotSeeAdminMessage,
+   assertMemberMessageAddressedTo,
+   assertMemberMessageBody,
+   assertMemberMessageNotAddressedTo,
+@@ -3920,6 +4153,7 @@ module.exports = {
+   assertMemberWasToldToContactSupport,
+   assertMessageDetailBackLink,
+   assertNoAddressedMemberReceivedEmail,
++  assertNoAdminMessageCreated,
+   assertNoMemberMessageCreated,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+@@ -3964,6 +4198,7 @@ module.exports = {
+   openClub,
+   openMessage,
+   removeMemberFromClub,
++  recordAcceptedInboundRootMessage,
+   recordMembershipProjectionCheckpoint,
+   restoreClubMessageSending,
+   sendInboundClubEmailReply,
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 2876f4d..b19a228 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -62,6 +62,22 @@ test("iteration 031 scenarios are no longer blocked from the browser runner", ()
+   );
+ });
+ 
++test("iteration 057 scenarios are no longer blocked from either acceptance runner", () => {
++  const iterationScenarios = browserFeatures().flatMap((feature) =>
++    feature.scenarios
++      .filter((scenario) => scenario.tags.includes("@iteration-057"))
++      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
++  );
++
++  assert.equal(iterationScenarios.length, 4);
++  assert.deepEqual(
++    iterationScenarios.filter(
++      (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")
++    ),
++    []
++  );
++});
++
+ function browserSelectedFeatureNames() {
+   return browserFeatures()
+     .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))
+diff --git a/web/lib/memba/messaging/email_delivery_dispatcher.ex b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+index 0ced9d9..dd7704d 100644
+--- a/web/lib/memba/messaging/email_delivery_dispatcher.ex
++++ b/web/lib/memba/messaging/email_delivery_dispatcher.ex
+@@ -22,6 +22,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.Events.EmailDeliveryCreated
+   alias Memba.Messaging.Projectors.EmailDelivery, as: EmailDeliveryProjector
++  alias Memba.Messaging.Projections.ConversationGroupAccess
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.ReadModelChanges
+@@ -364,6 +365,7 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+          recipient_id: delivery.recipient_id,
+          recipient_name: delivery.recipient_name,
+          recipient_address: delivery.recipient_address,
++         audience_group_id: audience_group_id(message),
+          club_name: club_name(club),
+          club_slug: club_slug(club),
+          sender_name: sender_name,
+@@ -431,6 +433,15 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
+   defp club_slug(%{slug: slug}), do: slug
+   defp club_slug(_club), do: nil
+ 
++  defp audience_group_id(%MessageProjection{conversation_id: conversation_id}) do
++    ConversationGroupAccess
++    |> where([access], access.conversation_id == ^conversation_id)
++    |> order_by([access], asc: access.group_id)
++    |> select([access], access.group_id)
++    |> limit(1)
++    |> Repo.one()
++  end
++
+   defp reply_context(%MessageProjection{reply_to_message_id: nil}, _club, _delivery), do: %{}
+ 
+   defp reply_context(%MessageProjection{} = message, club, %EmailDeliveryProjection{} = delivery) do
+diff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex
+index d73f593..daf1719 100644
+--- a/web/lib/memba/messaging/email_delivery_request.ex
++++ b/web/lib/memba/messaging/email_delivery_request.ex
+@@ -30,6 +30,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :recipient_id,
+     :recipient_name,
+     :recipient_address,
++    :audience_group_id,
+     :club_name,
+     :club_slug,
+     :sender_name,
+@@ -55,6 +56,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+           recipient_id: String.t(),
+           recipient_name: String.t(),
+           recipient_address: String.t(),
++          audience_group_id: String.t() | nil,
+           club_name: String.t() | nil,
+           club_slug: String.t() | nil,
+           sender_name: String.t(),
+diff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex
+index 357e4dd..32511d6 100644
+--- a/web/lib/memba/messaging/member_message_email.ex
++++ b/web/lib/memba/messaging/member_message_email.ex
+@@ -8,12 +8,13 @@ defmodule Memba.Messaging.MemberMessageEmail do
+ 
+   alias Memba.ClubInboundEmailAddress
+   alias Memba.EmailTemplates
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.OutboundMessageID
+ 
+   @doc "Return the sanitized From display name for a member-message email."
+   def from_display_name(%EmailDeliveryRequest{} = request) do
+-    if reply?(request) do
++    if reply?(request) or private_group_root?(request) do
+       "#{group_name(request)} via Memba"
+     else
+       "#{sender_name(request)} via Memba"
+@@ -376,6 +377,16 @@ defmodule Memba.Messaging.MemberMessageEmail do
+     is_binary(reply_to_message_id) and String.trim(reply_to_message_id) != ""
+   end
+ 
++  defp private_group_root?(%EmailDeliveryRequest{
++         audience_group_id: audience_group_id,
++         club_id: club_id
++       })
++       when is_binary(audience_group_id) and is_binary(club_id) do
++    audience_group_id != SystemGroups.everyone_group_id(club_id)
++  end
++
++  defp private_group_root?(%EmailDeliveryRequest{}), do: false
++
+   defp maybe_header(headers, _name, nil), do: headers
+ 
+   defp maybe_header(headers, name, value) when is_binary(value) do
+diff --git a/web/test/features/step_definitions/membership_administration_steps.exs b/web/test/features/step_definitions/membership_administration_steps.exs
+index 6b5c848..4e1dc74 100644
+--- a/web/test/features/step_definitions/membership_administration_steps.exs
++++ b/web/test/features/step_definitions/membership_administration_steps.exs
+@@ -14,8 +14,31 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
+   alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
+   alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
++  alias Memba.Membership.SystemGroups
+   alias Memba.Repo
+ 
++  step ~r/^(.+) are members of the (.+) Admin group$/,
++       %{args: [person_names_text, club_name]} = context do
++    context =
++      person_names_text
++      |> parse_person_list()
++      |> Enum.reduce(context, fn person_name, context ->
++        ensure_membership_administrator(context, person_name, club_name)
++      end)
++
++    club_id = fetch_club_id!(context, club_name)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    person_names_text
++    |> parse_person_list()
++    |> Enum.each(fn person_name ->
++      person = fetch_person!(context, person_name)
++      assert Membership.active_member_of_group?(admin_group_id, person.person_id)
++    end)
++
++    context
++  end
++
+   step "{word} is an Admin of {word} {word} {word}",
+        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
+     ensure_membership_administrator(
+@@ -241,6 +264,9 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
+       %{person_id: person_id} when is_binary(person_id) ->
+         context
+ 
++      person_id when is_binary(person_id) ->
++        context
++
+       _missing ->
+         person_id = Memba.ID.generate(:person)
+         email = default_email_for(context, person_name)
+@@ -286,6 +312,10 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
+         Membership.get_person(person_id) ||
+           flunk("Expected #{person_name} to exist as a projected person")
+ 
++      person_id when is_binary(person_id) ->
++        Membership.get_person(person_id) ||
++          flunk("Expected #{person_name} to exist as a projected person")
++
+       _missing ->
+         PersonProjection
+         |> where([person], person.name == ^person_name)
+@@ -349,6 +379,12 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
+ 
+   defp club_name(word_1, word_2, word_3), do: Enum.join([word_1, word_2, word_3], " ")
+ 
++  defp parse_person_list(text) do
++    text
++    |> String.replace(~r/,?\s+and\s+/, ", ")
++    |> String.split(~r/\s*,\s*/, trim: true)
++  end
++
+   defp scenario_slug(context, club_name) do
+     case Slug.default_from_name(club_name) do
+       {:ok, slug} -> slug
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 3a6a6b1..327659a 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -17,6 +17,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+   alias Memba.Messaging.MemberMessageEmail
+   alias Memba.Messaging.Projections.EmailDelivery
+   alias Memba.Messaging.ConversationStopFollowToken
++  alias Memba.Membership.SystemGroups
+ 
+   @kmc_everyone_address "everyone@kmc.clubs.memba.io"
+ 
+@@ -126,7 +127,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+        %{args: [recipient_names_text, sender_name, club_name]} = context do
+     assert_reply_email_delivered_to_members(
+       context,
+-      "Trip planning night",
++      Map.fetch!(context, :last_reply).subject,
+       sender_name,
+       parse_person_list(recipient_names_text),
+       club_name
+@@ -137,7 +138,17 @@ defmodule Memba.Cucumber.MessagingSteps do
+        %{args: [recipient_names_text, sender_name]} = context do
+     assert_reply_email_not_delivered_to_members(
+       context,
+-      "Trip planning night",
++      Map.fetch!(context, :last_reply).subject,
++      sender_name,
++      parse_person_list(recipient_names_text)
++    )
++  end
++
++  step ~r/^(.+) should not receive (\w+)'s reply by email from (.+) via Memba$/,
++       %{args: [recipient_names_text, sender_name, _club_name]} = context do
++    assert_reply_email_not_delivered_to_members(
++      context,
++      Map.fetch!(context, :last_reply).subject,
+       sender_name,
+       parse_person_list(recipient_names_text)
+     )
+@@ -256,6 +267,11 @@ defmodule Memba.Cucumber.MessagingSteps do
+     receive_inbound_club_email(context, sender_name, subject, to_address)
+   end
+ 
++  step ~r/^(\w+) emailed "([^"]+)" to ([^\s]+)$/,
++       %{args: [sender_name, subject, to_address]} = context do
++    receive_inbound_club_email(context, sender_name, subject, to_address)
++  end
++
+   step ~r/^(\w+) emails "([^"]+)" to ([^\s]+) from "([^"]+)"$/,
+        %{args: [sender_name, subject, to_address, from_address]} = context do
+     receive_inbound_club_email(context, sender_name, subject, to_address,
+@@ -566,6 +582,41 @@ defmodule Memba.Cucumber.MessagingSteps do
+     assert_no_club_message(context, "Kootenay Mountaineering Club", subject)
+   end
+ 
++  step "no Kootenay Mountaineering Club Admin message named {string} should be created",
++       %{args: [subject]} = context do
++    assert_no_admin_message(context, "Kootenay Mountaineering Club", subject)
++  end
++
++  step ~r/^(.+) should each receive the Admin message "([^"]+)" by email from (.+) via Memba$/,
++       %{args: [recipient_names_text, subject, club_name]} = context do
++    assert_admin_message_delivered_to_members(
++      context,
++      subject,
++      parse_person_list(recipient_names_text),
++      club_name
++    )
++  end
++
++  step ~r/^(\w+) should not receive the Admin message "([^"]+)" by email$/,
++       %{args: [recipient_name, subject]} = context do
++    assert_admin_message_not_delivered_to_member(context, subject, recipient_name)
++  end
++
++  step ~r/^(.+) should not see the Admin message "([^"]+)" in the (.+) web app$/,
++       %{args: [viewer_names_text, subject, club_name]} = context do
++    assert_admin_message_not_visible_in_web_app(
++      context,
++      subject,
++      parse_person_list(viewer_names_text),
++      club_name
++    )
++  end
++
++  step ~r/^the Admin conversation for "([^"]+)" should show (\w+)'s reply "([^"]+)"$/,
++       %{args: [subject, sender_name, body]} = context do
++    assert_admin_conversation_shows_reply(context, subject, sender_name, body)
++  end
++
+   step "no addressed member should receive an email for {string}", %{args: [subject]} = context do
+     refute Enum.any?(Fake.deliveries(), &(&1.subject == subject))
+ 
+@@ -1160,6 +1211,119 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp assert_no_admin_message(context, club_name, subject) do
++    admin_group_id = admin_group_id(context, club_name)
++
++    refute Enum.any?(
++             Messaging.list_conversations_for_group(admin_group_id),
++             &(&1.subject == subject)
++           )
++
++    assert_no_club_message(context, club_name, subject)
++  end
++
++  defp assert_admin_message_delivered_to_members(
++         context,
++         subject,
++         expected_recipient_names,
++         club_name
++       ) do
++    message = fetch_from_context!(context, :messages, subject)
++    admin_group_id = admin_group_id(context, club_name)
++
++    assert Messaging.group_has_conversation_access?(message.message_id, admin_group_id, :write)
++
++    deliveries = Messaging.list_recipient_deliveries(message.message_id)
++
++    assert Enum.sort(Enum.map(deliveries, & &1.recipient_name)) ==
++             Enum.sort(expected_recipient_names)
++
++    dispatch_pending_email_deliveries()
++
++    provider_deliveries =
++      Enum.filter(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
++        request.message_id == message.message_id
++      end)
++
++    assert length(provider_deliveries) == length(expected_recipient_names)
++
++    Enum.each(provider_deliveries, fn %EmailDeliveryRequest{} = request ->
++      assert request.recipient_name in expected_recipient_names
++      assert request.subject == subject
++      assert request.body == message.body
++      assert MemberMessageEmail.from_display_name(request) == "#{club_name} via Memba"
++    end)
++
++    context
++  end
++
++  defp assert_admin_message_not_delivered_to_member(context, subject, recipient_name) do
++    message = fetch_from_context!(context, :messages, subject)
++    recipient_id = person_id_from_context!(context, recipient_name)
++
++    refute Enum.any?(Messaging.list_recipient_deliveries(message.message_id), fn delivery ->
++             delivery.recipient_id == recipient_id
++           end)
++
++    dispatch_pending_email_deliveries()
++
++    refute Enum.any?(Fake.deliveries(), fn %EmailDeliveryRequest{} = request ->
++             request.message_id == message.message_id and request.recipient_id == recipient_id
++           end)
++
++    context
++  end
++
++  defp assert_admin_message_not_visible_in_web_app(
++         context,
++         subject,
++         viewer_names,
++         club_name
++       ) do
++    message = fetch_from_context!(context, :messages, subject)
++    club_id = fetch_from_context!(context, :clubs, club_name)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++    Enum.each(viewer_names, &assert_active_member!(context, &1, club_name))
++
++    refute Enum.any?(
++             Messaging.list_conversations_for_group(everyone_group_id),
++             &(&1.subject == subject)
++           )
++
++    assert Messaging.list_conversation_messages_for_group(
++             message.message_id,
++             everyone_group_id
++           ) == []
++
++    context
++  end
++
++  defp assert_admin_conversation_shows_reply(context, subject, sender_name, body) do
++    root_message = fetch_from_context!(context, :messages, subject)
++    admin_group_id = admin_group_id(context, "Kootenay Mountaineering Club")
++    sender_id = person_id_from_context!(context, sender_name)
++
++    assert Enum.any?(
++             Messaging.list_conversation_messages_for_group(
++               root_message.message_id,
++               admin_group_id
++             ),
++             fn message ->
++               message.sender_id == sender_id and message.body == body and
++                 is_binary(message.reply_to_message_id)
++             end
++           )
++
++    context
++  end
++
++  defp admin_group_id(context, club_name) do
++    context
++    |> fetch_from_context!(:clubs, club_name)
++    |> SystemGroups.admin_group_id()
++  end
++
+   defp assert_rejection_email(context, sender_name, expected_text) do
+     assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
+ 
+diff --git a/web/test/memba/messaging/member_message_email_test.exs b/web/test/memba/messaging/member_message_email_test.exs
+index 5d170e7..41a9f87 100644
+--- a/web/test/memba/messaging/member_message_email_test.exs
++++ b/web/test/memba/messaging/member_message_email_test.exs
+@@ -4,6 +4,36 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.MemberMessageEmail
+   alias Memba.Messaging.OutboundMessageID
++  alias Memba.Membership.SystemGroups
++
++  test "Admin root messages use the club as the From identity" do
++    club_id = Memba.ID.generate(:club)
++
++    request =
++      email_delivery_request(
++        club_id: club_id,
++        club_name: "Kootenay Mountaineering Club",
++        audience_group_id: SystemGroups.admin_group_id(club_id),
++        sender_name: "Alice Adams"
++      )
++
++    assert MemberMessageEmail.from_display_name(request) ==
++             "Kootenay Mountaineering Club via Memba"
++  end
++
++  test "Everyone root messages keep the member sender as the From identity" do
++    club_id = Memba.ID.generate(:club)
++
++    request =
++      email_delivery_request(
++        club_id: club_id,
++        club_name: "Kootenay Mountaineering Club",
++        audience_group_id: SystemGroups.everyone_group_id(club_id),
++        sender_name: "Alice Adams"
++      )
++
++    assert MemberMessageEmail.from_display_name(request) == "Alice Adams via Memba"
++  end
+ 
+   test "reply notifications use the club email subdomain destination and preserve threading headers" do
+     request =
+@@ -53,6 +83,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
+       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
++      audience_group_id: Keyword.get(overrides, :audience_group_id),
+       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
+       club_slug: Keyword.get(overrides, :club_slug),
+       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
