@@ -36,12 +36,14 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
     assert %CreateGroup{
              club_id: ids.club_id,
              group_id: ids.group_id,
+             email_slug: "everyone",
              group_key: "everyone",
              name: "Everyone"
            } ==
              struct!(CreateGroup, %{
                club_id: ids.club_id,
                group_id: ids.group_id,
+               email_slug: "everyone",
                group_key: "everyone",
                name: "Everyone"
              })
@@ -81,6 +83,8 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
       group_key: "admin",
       name: "Admin"
     })
+
+    refute Map.has_key?(GroupCreated.__struct__(), :email_slug)
 
     assert_json_encodable(%GroupEmailSlugAssigned{
       club_id: ids.club_id,

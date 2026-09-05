@@ -2,6 +2,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Commanded.Event.Mapper
   alias Commanded.EventStore
   alias Memba.Membership
   alias Memba.Membership.App
@@ -20,6 +21,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
@@ -104,6 +106,89 @@ defmodule Memba.Membership.CreateClubDispatchTest do
              App.aggregate_state(Club, club_id)
 
     assert MapSet.member?(persisted_role_permissions, Permissions.club_manage_members())
+  end
+
+  test "CreateGroup appends missing email-slug facts to historic system groups once" do
+    club_id = Memba.ID.generate(:club)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    historic_events =
+      [
+        %ClubCreated{
+          club_id: club_id,
+          name: "Kootenay Mountaineering Club",
+          slug: "kmc"
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: everyone_group_id,
+          group_key: SystemGroups.everyone_key(),
+          name: SystemGroups.everyone_name()
+        },
+        %GroupCreated{
+          club_id: club_id,
+          group_id: admin_group_id,
+          group_key: SystemGroups.admin_key(),
+          name: SystemGroups.admin_name()
+        }
+      ]
+      |> Enum.map(&Mapper.map_to_event_data/1)
+
+    assert :ok = EventStore.append_to_stream(App, club_id, 0, historic_events)
+
+    commands = [
+      %CreateGroup{
+        club_id: club_id,
+        group_id: everyone_group_id,
+        email_slug: "everyone",
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      %CreateGroup{
+        club_id: club_id,
+        group_id: admin_group_id,
+        email_slug: "admin",
+        group_key: SystemGroups.admin_key(),
+        name: SystemGroups.admin_name()
+      }
+    ]
+
+    Enum.each(commands, fn command ->
+      assert {:ok,
+              %ExecutionResult{
+                events: [
+                  %GroupEmailSlugAssigned{
+                    club_id: ^club_id,
+                    group_id: group_id,
+                    email_slug: email_slug
+                  }
+                ]
+              }} =
+               App.dispatch(
+                 command,
+                 returning: :execution_result,
+                 consistency: :strong
+               )
+
+      assert group_id == command.group_id
+      assert email_slug == command.email_slug
+
+      assert {:ok, %ExecutionResult{events: []}} =
+               App.dispatch(
+                 command,
+                 returning: :execution_result,
+                 consistency: :strong
+               )
+    end)
+
+    stream_events =
+      App
+      |> EventStore.stream_forward(club_id)
+      |> Enum.map(& &1.data)
+
+    assert Enum.count(stream_events, &match?(%GroupCreated{}, &1)) == 2
+    assert Enum.count(stream_events, &match?(%GroupEmailSlugAssigned{}, &1)) == 2
   end
 
   test "Membership.create_club succeeds when the system-group policy subscriber has just restarted" do
@@ -312,13 +397,18 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 6,
+              aggregate_version: 7,
               events: [
                 %GroupCreated{
                   club_id: ^club_id,
                   group_id: ^group_id,
                   group_key: "trail_crew",
                   name: "Trail Crew"
+                },
+                %GroupEmailSlugAssigned{
+                  club_id: ^club_id,
+                  group_id: ^group_id,
+                  email_slug: "trail-crew"
                 }
               ]
             }} =
@@ -326,6 +416,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                %CreateGroup{
                  club_id: club_id,
                  group_id: group_id,
+                 email_slug: " Trail-Crew ",
                  group_key: "trail_crew",
                  name: "Trail Crew"
                },
@@ -338,6 +429,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                %CreateGroup{
                  club_id: club_id,
                  group_id: group_id,
+                 email_slug: " TRAIL-CREW ",
                  group_key: " trail_crew ",
                  name: " Trail Crew "
                },
@@ -348,7 +440,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 7,
+              aggregate_version: 8,
               events: [
                 %GroupMemberAdded{
                   club_id: ^club_id,
@@ -384,7 +476,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 8,
+              aggregate_version: 9,
               events: [
                 %GroupMemberRemoved{
                   club_id: ^club_id,

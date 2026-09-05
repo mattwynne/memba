@@ -347,6 +347,88 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
+    test "new group creation carries its normalized email slug as a separate fact" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      club = created_club(club_id)
+
+      assert [
+               %GroupCreated{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 group_key: "trip_planners",
+                 name: "Trip Planners"
+               },
+               %GroupEmailSlugAssigned{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 email_slug: "trip-planners"
+               }
+             ] =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: " Trip-Planners ",
+                 group_key: "trip_planners",
+                 name: " Trip Planners "
+               })
+    end
+
+    test "matching historic Everyone and Admin definitions append their missing slug fact once" do
+      club_id = Memba.ID.generate(:club)
+
+      historic_club =
+        club_id
+        |> created_club()
+        |> create_group(
+          SystemGroups.everyone_group_id(club_id),
+          SystemGroups.everyone_key(),
+          SystemGroups.everyone_name()
+        )
+        |> create_group(
+          SystemGroups.admin_group_id(club_id),
+          SystemGroups.admin_key(),
+          SystemGroups.admin_name()
+        )
+
+      Enum.each(
+        [
+          {
+            SystemGroups.everyone_group_id(club_id),
+            SystemGroups.everyone_key(),
+            SystemGroups.everyone_name(),
+            "everyone"
+          },
+          {
+            SystemGroups.admin_group_id(club_id),
+            SystemGroups.admin_key(),
+            SystemGroups.admin_name(),
+            "admin"
+          }
+        ],
+        fn {group_id, group_key, name, email_slug} ->
+          command = %CreateGroup{
+            club_id: club_id,
+            group_id: group_id,
+            email_slug: String.upcase(email_slug),
+            group_key: group_key,
+            name: name
+          }
+
+          assert %GroupEmailSlugAssigned{
+                   club_id: ^club_id,
+                   group_id: ^group_id,
+                   email_slug: ^email_slug
+                 } = event = Club.execute(historic_club, command)
+
+          assert [] =
+                   historic_club
+                   |> Club.apply(event)
+                   |> Club.execute(command)
+        end
+      )
+    end
+
     test "creates each group once and rejects conflicting group IDs or keys" do
       club_id = Memba.ID.generate(:club)
       group_id = Memba.ID.generate(:group)
@@ -378,6 +460,25 @@ defmodule Memba.Membership.ClubTest do
                  group_id: Memba.ID.generate(:group),
                  group_key: "everyone",
                  name: "Everyone"
+               })
+    end
+
+    test "rejects a new group before creation when its email slug is already defined" do
+      club_id = Memba.ID.generate(:club)
+      first_group_id = Memba.ID.generate(:group)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(first_group_id, nil, "Trip Planners")
+        |> assign_group_email_slug(first_group_id, "trip-planners")
+
+      assert {:error, :group_email_slug_already_defined} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 email_slug: " TRIP-PLANNERS ",
+                 name: "Other Trip Planners"
                })
     end
 
