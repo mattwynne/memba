@@ -1,0 +1,75 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 1842cbc..e5db935 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -15,6 +15,6 @@
+ - [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+ - [x] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+ - [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
+-- [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
++- [x] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
+ - [ ] 017 Keep existing Everyone acceptance regressions passing.
+ - [ ] 018 Implement the accepted scenarios' domain and browser support, removing or narrowing `@todo-domain` / `@todo-ui` only when each runner can execute the relevant scenario. Run `dev check`.
+diff --git a/web/test/memba/membership/system_groups_backfill_test.exs b/web/test/memba/membership/system_groups_backfill_test.exs
+index 0b41f80..0fdebcb 100644
+--- a/web/test/memba/membership/system_groups_backfill_test.exs
++++ b/web/test/memba/membership/system_groups_backfill_test.exs
+@@ -84,11 +84,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+ 
+     assert ^event_counts = backfill_event_counts(club.club_id, conversation_id)
+     assert event_counts.group_created == 2
++    assert event_counts.group_email_slug_assigned == 2
+     assert event_counts.group_member_added == 2
+     assert event_counts.conversation_access_granted == 1
+   end
+ 
+-  test "appends email-slug facts when historic system groups already exist" do
++  test "appends email-slug facts to historic system groups once across safe reruns" do
+     club = seed_historic_club!()
+     append_historic_system_groups!(club.club_id)
+ 
+@@ -106,6 +107,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+ 
+     assert %{email_slug: "admin"} =
+              Membership.get_group_by_email_slug(club.club_id, "admin")
++
++    assert %{system_group_definitions: %{dispatched_count: 0}} =
++             Backfill.run!(page_size: 2)
++
++    assert membership_event_count(club.club_id, GroupCreated) == 2
++    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
+   end
+ 
+   test "backfill-seeded memberships follow later role and member lifecycle events" do
+@@ -264,6 +271,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     end
+ 
+     assert membership_event_count(club.club_id, GroupCreated) == 1
++    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 1
+ 
+     assert %{
+              system_group_definitions: %{dispatched_count: 1},
+@@ -276,6 +284,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     admin_group_id = SystemGroups.admin_group_id(club.club_id)
+ 
+     assert membership_event_count(club.club_id, GroupCreated) == 2
++    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
+     assert membership_event_count(club.club_id, GroupMemberAdded) == 2
+     assert messaging_event_count(conversation_id, ConversationAccessGrantedToGroup) == 1
+     assert active_group_membership?(everyone_group_id, member.membership_id)
+@@ -311,6 +320,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+ 
+     assert %{
+              group_created: 2,
++             group_email_slug_assigned: 2,
+              group_member_added: 2,
+              conversation_access_granted: 1
+            } = backfill_event_counts(club.club_id, conversation_id)
+@@ -447,6 +457,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+   defp backfill_event_counts(club_id, conversation_id) do
+     %{
+       group_created: membership_event_count(club_id, GroupCreated),
++      group_email_slug_assigned: membership_event_count(club_id, GroupEmailSlugAssigned),
+       group_member_added: membership_event_count(club_id, GroupMemberAdded),
+       conversation_access_granted:
+         messaging_event_count(conversation_id, ConversationAccessGrantedToGroup)
