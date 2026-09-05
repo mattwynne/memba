@@ -1,0 +1,574 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 50e9965..4e1dbed 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
+ - [x] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+ - [x] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+-- [ ] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
++- [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+ - [ ] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+ - [ ] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
+ - [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 3e7ae98..1708c72 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -364,6 +364,27 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List projected root conversations readable through a group's access grants.
++
++  Both read and write grants permit reading. Invalid or missing group IDs return
++  an empty list. Results have the same overview shape and stable ordering as
++  `list_conversations_for_club/1`.
++
++  This query establishes access through the supplied group. Callers remain
++  responsible for deciding whether a person may act through that group.
++  """
++  def list_conversations_for_group(group_id) do
++    with {:ok, group_id} <- ID.cast(:group, group_id) do
++      group_id
++      |> conversations_for_group_query()
++      |> Repo.all()
++      |> add_latest_replier_names()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   List the projected conversation containing a message.
+ 
+@@ -375,25 +396,37 @@ defmodule Memba.Messaging do
+     with {:ok, message_id} <- ID.cast(:message, message_id),
+          %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
+          {:ok, conversation_id} <- conversation_id_for_message(message),
+-         %MessageProjection{} <- fetch_conversation_root_projection(conversation_id) do
+-      MessageProjection
+-      |> where([message], message.conversation_id == ^conversation_id)
+-      |> order_by([message],
+-        asc:
+-          fragment(
+-            "CASE WHEN ? = ? THEN 0 ELSE 1 END",
+-            message.message_id,
+-            ^conversation_id
+-          ),
+-        asc: message.inserted_at,
+-        asc: message.message_id
+-      )
+-      |> Repo.all()
++         %MessageProjection{} = root <- fetch_conversation_root_projection(conversation_id) do
++      list_projected_conversation_messages(conversation_id, root.club_id)
+     else
+       _invalid_or_missing -> []
+     end
+   end
+ 
++  @doc """
++  List the projected conversation readable through a group's access grant.
++
++  The message argument may identify the root or any reply; access is always
++  checked against the root conversation. Both read and write grants permit
++  reading. Invalid IDs, missing or orphaned messages, and conversations without
++  a matching same-club grant return an empty list.
++
++  This query establishes access through the supplied group. Callers remain
++  responsible for deciding whether a person may act through that group.
++  """
++  def list_conversation_messages_for_group(message_id, group_id) do
++    with {:ok, message_id} <- ID.cast(:message, message_id),
++         {:ok, group_id} <- ID.cast(:group, group_id),
++         %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
++         {:ok, conversation_id} <- conversation_id_for_message(message),
++         %MessageProjection{} = root <- fetch_conversation_root_projection(conversation_id),
++         true <- conversation_readable_through_group?(root, group_id) do
++      list_projected_conversation_messages(conversation_id, root.club_id)
++    else
++      _invalid_missing_or_inaccessible -> []
++    end
++  end
++
+   @doc """
+   Return a projected follow state for a member in a conversation.
+ 
+@@ -785,47 +818,70 @@ defmodule Memba.Messaging do
+   end
+ 
+   defp conversations_for_club_query(club_id) do
++    {:club, club_id}
++    |> conversations_query()
++  end
++
++  defp conversations_for_group_query(group_id) do
++    {:group, group_id}
++    |> conversations_query()
++  end
++
++  defp conversations_query(scope) do
+     reply_counts_query =
+-      from reply in MessageProjection,
+-        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
+-        group_by: reply.conversation_id,
+-        select: %{
+-          conversation_id: reply.conversation_id,
+-          reply_count: count(reply.message_id)
+-        }
++      MessageProjection
++      |> where([reply], reply.message_id != reply.conversation_id)
++      |> scope_conversation_entries_query(scope)
++      |> group_by([reply, ...], [reply.club_id, reply.conversation_id])
++      |> select([reply, ...], %{
++        club_id: reply.club_id,
++        conversation_id: reply.conversation_id,
++        reply_count: count(reply.message_id)
++      })
+ 
+     latest_replies_query =
+-      from reply in MessageProjection,
+-        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
+-        distinct: [asc: reply.conversation_id],
+-        order_by: [asc: reply.conversation_id, desc: reply.inserted_at, desc: reply.message_id],
+-        select: %{
+-          conversation_id: reply.conversation_id,
+-          latest_replier_id: reply.sender_id
+-        }
++      MessageProjection
++      |> where([reply], reply.message_id != reply.conversation_id)
++      |> scope_conversation_entries_query(scope)
++      |> distinct([reply, ...], [asc: reply.club_id, asc: reply.conversation_id])
++      |> order_by([reply, ...],
++        asc: reply.club_id,
++        asc: reply.conversation_id,
++        desc: reply.inserted_at,
++        desc: reply.message_id
++      )
++      |> select([reply, ...], %{
++        club_id: reply.club_id,
++        conversation_id: reply.conversation_id,
++        latest_replier_id: reply.sender_id
++      })
+ 
+     participant_first_replies_query =
+-      from reply in MessageProjection,
+-        join: root in MessageProjection,
++      MessageProjection
++      |> join(:inner, [reply], root in MessageProjection,
+         on:
+           root.club_id == reply.club_id and
+             root.message_id == reply.conversation_id and
+-            root.message_id == root.conversation_id,
+-        where:
+-          reply.club_id == ^club_id and
+-            reply.message_id != reply.conversation_id and
+-            reply.sender_id != root.sender_id,
+-        group_by: [reply.conversation_id, reply.sender_id],
+-        select: %{
+-          conversation_id: reply.conversation_id,
+-          sender_id: reply.sender_id,
+-          first_replied_at: min(reply.inserted_at)
+-        }
++            root.message_id == root.conversation_id
++      )
++      |> where(
++        [reply, root],
++        reply.message_id != reply.conversation_id and reply.sender_id != root.sender_id
++      )
++      |> scope_conversation_entries_query(scope)
++      |> group_by([reply, ...], [reply.club_id, reply.conversation_id, reply.sender_id])
++      |> select([reply, ...], %{
++        club_id: reply.club_id,
++        conversation_id: reply.conversation_id,
++        sender_id: reply.sender_id,
++        first_replied_at: min(reply.inserted_at)
++      })
+ 
+     participants_query =
+       from participant in subquery(participant_first_replies_query),
+-        group_by: participant.conversation_id,
++        group_by: [participant.club_id, participant.conversation_id],
+         select: %{
++          club_id: participant.club_id,
+           conversation_id: participant.conversation_id,
+           participant_ids:
+             fragment(
+@@ -836,29 +892,68 @@ defmodule Memba.Messaging do
+             )
+         }
+ 
+-    from root in MessageProjection,
+-      left_join: reply_counts in subquery(reply_counts_query),
+-      on: reply_counts.conversation_id == root.message_id,
+-      left_join: latest_reply in subquery(latest_replies_query),
+-      on: latest_reply.conversation_id == root.message_id,
+-      left_join: participants in subquery(participants_query),
+-      on: participants.conversation_id == root.message_id,
+-      where: root.club_id == ^club_id and root.message_id == root.conversation_id,
+-      order_by: [desc: root.inserted_at, desc: root.message_id],
+-      select: %{
+-        message: root,
+-        message_id: root.message_id,
+-        conversation_id: root.conversation_id,
+-        club_id: root.club_id,
+-        sender_id: root.sender_id,
+-        subject: root.subject,
+-        body: root.body,
+-        inserted_at: root.inserted_at,
+-        updated_at: root.updated_at,
+-        reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
+-        latest_replier_id: latest_reply.latest_replier_id,
+-        participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
+-      }
++    query =
++      from root in MessageProjection,
++        left_join: reply_counts in subquery(reply_counts_query),
++        on:
++          reply_counts.club_id == root.club_id and
++            reply_counts.conversation_id == root.message_id,
++        left_join: latest_reply in subquery(latest_replies_query),
++        on:
++          latest_reply.club_id == root.club_id and
++            latest_reply.conversation_id == root.message_id,
++        left_join: participants in subquery(participants_query),
++        on:
++          participants.club_id == root.club_id and
++            participants.conversation_id == root.message_id,
++        where: root.message_id == root.conversation_id,
++        order_by: [desc: root.inserted_at, desc: root.message_id],
++        select: %{
++          message: root,
++          message_id: root.message_id,
++          conversation_id: root.conversation_id,
++          club_id: root.club_id,
++          sender_id: root.sender_id,
++          subject: root.subject,
++          body: root.body,
++          inserted_at: root.inserted_at,
++          updated_at: root.updated_at,
++          reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
++          latest_replier_id: latest_reply.latest_replier_id,
++          participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
++        }
++
++    scope_conversation_roots_query(query, scope)
++  end
++
++  defp scope_conversation_entries_query(query, {:club, club_id}) do
++    where(query, [entry, ...], entry.club_id == ^club_id)
++  end
++
++  defp scope_conversation_entries_query(query, {:group, group_id}) do
++    read_grant_levels = ConversationAccess.grant_levels_including("read")
++
++    from [entry, ...] in query,
++      join: access in ConversationGroupAccessProjection,
++      on:
++        access.conversation_id == entry.conversation_id and
++          access.club_id == entry.club_id,
++      where: access.group_id == ^group_id and access.access_level in ^read_grant_levels
++  end
++
++  defp scope_conversation_roots_query(query, {:club, club_id}) do
++    where(query, [root, _reply_counts, _latest_reply, _participants], root.club_id == ^club_id)
++  end
++
++  defp scope_conversation_roots_query(query, {:group, group_id}) do
++    read_grant_levels = ConversationAccess.grant_levels_including("read")
++
++    from [root, _reply_counts, _latest_reply, _participants] in query,
++      join: access in ConversationGroupAccessProjection,
++      on:
++        access.conversation_id == root.message_id and
++          access.club_id == root.club_id,
++      where: access.group_id == ^group_id and access.access_level in ^read_grant_levels
+   end
+ 
+   defp add_latest_replier_names(conversation_rows) do
+@@ -895,6 +990,44 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp conversation_readable_through_group?(
++         %MessageProjection{
++           message_id: conversation_id,
++           conversation_id: conversation_id,
++           club_id: club_id
++         },
++         group_id
++       ) do
++    read_grant_levels = ConversationAccess.grant_levels_including("read")
++
++    ConversationGroupAccessProjection
++    |> where(
++      [access],
++      access.conversation_id == ^conversation_id and access.club_id == ^club_id and
++        access.group_id == ^group_id and access.access_level in ^read_grant_levels
++    )
++    |> Repo.exists?()
++  end
++
++  defp list_projected_conversation_messages(conversation_id, club_id) do
++    MessageProjection
++    |> where(
++      [message],
++      message.conversation_id == ^conversation_id and message.club_id == ^club_id
++    )
++    |> order_by([message],
++      asc:
++        fragment(
++          "CASE WHEN ? = ? THEN 0 ELSE 1 END",
++          message.message_id,
++          ^conversation_id
++        ),
++      asc: message.inserted_at,
++      asc: message.message_id
++    )
++    |> Repo.all()
++  end
++
+   defp operator_deliveries_query(opts) do
+     query =
+       from deliverability in MembaStaffEmailDeliveryProjection,
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index b309fc7..e02d7e4 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -4,8 +4,11 @@ defmodule Memba.Messaging.MessageProjectionTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.SendMessage
+-  alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
++  alias Memba.Messaging.Projections.ConversationGroupAccess,
++    as: ConversationGroupAccessProjection
++
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.OutboundMessageID
+   alias Memba.Messaging.Recipient
+ 
+@@ -135,6 +138,18 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert Messaging.list_conversations_for_club(nil) == []
+     assert Messaging.list_conversations_for_club("not-a-uuid") == []
+ 
++    assert Messaging.list_conversations_for_group(Memba.ID.generate(:group)) == []
++    assert Messaging.list_conversations_for_group(nil) == []
++    assert Messaging.list_conversations_for_group("not-a-uuid") == []
++
++    assert Messaging.list_conversation_messages_for_group(
++             Memba.ID.generate(:message),
++             Memba.ID.generate(:group)
++           ) == []
++
++    assert Messaging.list_conversation_messages_for_group(nil, Memba.ID.generate(:group)) == []
++    assert Messaging.list_conversation_messages_for_group("not-a-uuid", "not-a-uuid") == []
++
+     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
+     assert is_nil(Messaging.get_email_delivery(nil))
+     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
+@@ -348,6 +363,105 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     end
+   end
+ 
++  describe "list_conversations_for_group/1" do
++    test "returns only conversations with a read-capable grant for the supplied group" do
++      club_id = Memba.ID.generate(:club)
++      everyone_group_id = Memba.ID.generate(:group)
++      admin_group_id = Memba.ID.generate(:group)
++      sender_id = Memba.ID.generate(:person)
++      replier_id = Memba.ID.generate(:person)
++
++      insert_membership_person!(
++        person_id: replier_id,
++        name: "Robin Replier",
++        email: "robin-replier@example.com"
++      )
++
++      everyone_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: sender_id,
++          subject: "Everyone conversation",
++          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
++        )
++
++      _everyone_reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: replier_id,
++          conversation_id: everyone_root.message_id,
++          reply_to_message_id: everyone_root.message_id,
++          subject: "Everyone conversation",
++          inserted_at: ~U[2026-06-05 10:05:00.000000Z]
++        )
++
++      admin_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: sender_id,
++          subject: "Admin conversation",
++          inserted_at: ~U[2026-06-05 11:00:00.000000Z]
++        )
++
++      shared_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: sender_id,
++          subject: "Shared conversation",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      _ungranted_root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: sender_id,
++          subject: "No group access",
++          inserted_at: ~U[2026-06-05 13:00:00.000000Z]
++        )
++
++      grant_group_access!(everyone_root, everyone_group_id, "write")
++      grant_group_access!(admin_root, admin_group_id, "write")
++      grant_group_access!(shared_root, everyone_group_id, "read")
++      grant_group_access!(shared_root, admin_group_id, "write")
++
++      assert [
++               %{message_id: shared_root_id, reply_count: 0, latest_replier_name: nil},
++               %{
++                 message_id: everyone_root_id,
++                 reply_count: 1,
++                 latest_replier_id: ^replier_id,
++                 latest_replier_name: "Robin Replier"
++               }
++             ] = Messaging.list_conversations_for_group(everyone_group_id)
++
++      assert shared_root_id == shared_root.message_id
++      assert everyone_root_id == everyone_root.message_id
++
++      assert [
++               %{message_id: shared_root_id},
++               %{message_id: admin_root_id}
++             ] = Messaging.list_conversations_for_group(admin_group_id)
++
++      assert shared_root_id == shared_root.message_id
++      assert admin_root_id == admin_root.message_id
++    end
++
++    test "does not expose a conversation through a cross-club access row" do
++      root =
++        insert_message_projection!(
++          club_id: Memba.ID.generate(:club),
++          sender_id: Memba.ID.generate(:person),
++          subject: "Private conversation",
++          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
++        )
++
++      group_id = Memba.ID.generate(:group)
++      grant_group_access!(root, group_id, "read", club_id: Memba.ID.generate(:club))
++
++      assert Messaging.list_conversations_for_group(group_id) == []
++    end
++  end
++
+   describe "list_conversation_messages/1" do
+     test "returns the root message followed by replies in posted order" do
+       club_id = Memba.ID.generate(:club)
+@@ -463,6 +577,59 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     end
+   end
+ 
++  describe "list_conversation_messages_for_group/2" do
++    test "returns a complete conversation through its root access grant" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      other_group_id = Memba.ID.generate(:group)
++
++      root =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: Memba.ID.generate(:person),
++          subject: "Private trip planning",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      reply =
++        insert_message_projection!(
++          club_id: club_id,
++          sender_id: Memba.ID.generate(:person),
++          conversation_id: root.message_id,
++          reply_to_message_id: root.message_id,
++          subject: "Private trip planning",
++          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
++        )
++
++      grant_group_access!(root, group_id, "read")
++
++      assert [
++               %MessageProjection{message_id: root_id},
++               %MessageProjection{message_id: reply_id}
++             ] = Messaging.list_conversation_messages_for_group(reply.message_id, group_id)
++
++      assert root_id == root.message_id
++      assert reply_id == reply.message_id
++
++      assert Messaging.list_conversation_messages_for_group(root.message_id, other_group_id) == []
++    end
++
++    test "requires the access row to match the root conversation's club" do
++      root =
++        insert_message_projection!(
++          club_id: Memba.ID.generate(:club),
++          sender_id: Memba.ID.generate(:person),
++          subject: "Private conversation",
++          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++        )
++
++      group_id = Memba.ID.generate(:group)
++      grant_group_access!(root, group_id, "write", club_id: Memba.ID.generate(:club))
++
++      assert Messaging.list_conversation_messages_for_group(root.message_id, group_id) == []
++    end
++  end
++
+   describe "list_operator_messages/0" do
+     test "returns projected messages with club and sender context where available" do
+       kootenay = insert_membership_club!(name: "Kootenay Mountaineering Club")
+@@ -560,4 +727,13 @@ defmodule Memba.Messaging.MessageProjectionTest do
+       updated_at: Keyword.get(attrs, :updated_at, inserted_at)
+     })
+   end
++
++  defp grant_group_access!(conversation, group_id, access_level, opts \\ []) do
++    Repo.insert!(%ConversationGroupAccessProjection{
++      conversation_id: conversation.message_id,
++      club_id: Keyword.get(opts, :club_id, conversation.club_id),
++      group_id: group_id,
++      access_level: access_level
++    })
++  end
+ end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 7f3d526..c4df11a 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -13,7 +13,9 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def get_message("
+     assert source =~ "def list_messages_for_club("
+     assert source =~ "def list_conversations_for_club("
++    assert source =~ "def list_conversations_for_group("
+     assert source =~ "def list_conversation_messages("
++    assert source =~ "def list_conversation_messages_for_group("
+     assert source =~ "def list_everyone_conversation_access_backfill_page("
+     assert source =~ "def get_conversation_follow("
+     assert source =~ "def following_conversation?("
+@@ -38,7 +40,9 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert list_functions == [
+              "list_messages_for_club",
+              "list_conversations_for_club",
++             "list_conversations_for_group",
+              "list_conversation_messages",
++             "list_conversation_messages_for_group",
+              "list_everyone_conversation_access_backfill_page",
+              "list_conversation_followers",
+              "list_operator_messages",
