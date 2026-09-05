@@ -1,0 +1,124 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 91abff6..6de7f50 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
+ - [x] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
+ - [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
+-- [ ] 006 Introduce a named fixed group-email posting policy in Messaging.
++- [x] 006 Introduce a named fixed group-email posting policy in Messaging.
+ - [ ] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+ - [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
+ - [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 6af0b05..9ed42e6 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -25,7 +25,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.ConversationFollowers
+   alias Memba.Messaging.ConversationStopFollowToken
+   alias Memba.Messaging.EmailDeliveryDispatcher
+-  alias Memba.Messaging.InboundClubAuthorization
++  alias Memba.Messaging.GroupEmailPostingPolicy
+   alias Memba.Messaging.InboundClubDestination
+   alias Memba.Messaging.InboundClubRejectionEmail
+   alias Memba.Messaging.InboundClubSender
+@@ -260,14 +260,13 @@ defmodule Memba.Messaging do
+   @doc """
+   Authorize a resolved inbound sender to post to a resolved club destination.
+ 
+-  Only active members of the destination club's deterministic Everyone group may
+-  post by email. Known people who belong only to another club, whose
+-  destination-club membership is absent from Everyone, or whose destination-club
+-  membership is inactive receive a typed rejection reason for later
+-  rejection-email handling.
++  Applies the fixed, named `:club_members_only` group-email posting policy. Known
++  people who belong only to another club, whose destination-club membership is
++  absent from Everyone, or whose destination-club membership is inactive receive
++  a typed rejection reason for later rejection-email handling.
+   """
+   def authorize_inbound_club_email_sender(sender, destination) do
+-    InboundClubAuthorization.authorize(sender, destination)
++    GroupEmailPostingPolicy.authorize(sender, destination)
+   end
+ 
+   @doc """
+diff --git a/web/lib/memba/messaging/inbound_club_authorization.ex b/web/lib/memba/messaging/group_email_posting_policy.ex
+similarity index 68%
+rename from web/lib/memba/messaging/inbound_club_authorization.ex
+rename to web/lib/memba/messaging/group_email_posting_policy.ex
+index 7a3d208..6fc6654 100644
+--- a/web/lib/memba/messaging/inbound_club_authorization.ex
++++ b/web/lib/memba/messaging/group_email_posting_policy.ex
+@@ -1,9 +1,15 @@
+-defmodule Memba.Messaging.InboundClubAuthorization do
++defmodule Memba.Messaging.GroupEmailPostingPolicy do
+   @moduledoc """
+-  Everyone-group authorization for inbound club-message email.
++  Fixed posting policy for new group-email conversations.
+ 
+-  Authorization deliberately uses Membership's public query API so Messaging can
+-  enforce posting rules without coupling to Membership projection storage.
++  The policy is named `:club_members_only`: only active members of the
++  destination club may start a conversation by email. It is deliberately fixed
++  in code rather than persisted or configurable.
++
++  Authorization uses Membership's public query API so Messaging can enforce the
++  policy without coupling to Membership projection storage. Active club
++  membership is currently represented by membership of the club's deterministic
++  Everyone group.
+   """
+ 
+   alias Memba.Membership
+@@ -11,6 +17,9 @@ defmodule Memba.Messaging.InboundClubAuthorization do
+   alias Memba.Messaging.InboundClubDestination
+   alias Memba.Messaging.InboundClubSender
+ 
++  @fixed_name :club_members_only
++
++  @type name :: :club_members_only
+   @type rejection_reason :: :sender_not_active_member | :invalid_inbound_authorization
+   @type rejection_details :: %{
+           sender_id: String.t(),
+@@ -20,8 +29,12 @@ defmodule Memba.Messaging.InboundClubAuthorization do
+         }
+   @type rejection :: {:error, rejection_reason(), rejection_details() | nil}
+ 
++  @doc "Return the stable name of the fixed group-email posting policy."
++  @spec name() :: name()
++  def name, do: @fixed_name
++
+   @doc """
+-  Authorize a resolved sender to post to a resolved club destination.
++  Authorize a resolved sender under the fixed group-email posting policy.
+ 
+   Returns `:ok` only when the sender person currently has an active membership in
+   the destination club's deterministic Everyone group. Known people who are
+diff --git a/web/test/memba/messaging/inbound_club_authorization_test.exs b/web/test/memba/messaging/group_email_posting_policy_test.exs
+similarity index 94%
+rename from web/test/memba/messaging/inbound_club_authorization_test.exs
+rename to web/test/memba/messaging/group_email_posting_policy_test.exs
+index 461fc88..7391c10 100644
+--- a/web/test/memba/messaging/inbound_club_authorization_test.exs
++++ b/web/test/memba/messaging/group_email_posting_policy_test.exs
+@@ -1,13 +1,18 @@
+-defmodule Memba.Messaging.InboundClubAuthorizationTest do
++defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
+   use Memba.DataCase, async: true
+ 
+   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
++  alias Memba.Messaging.GroupEmailPostingPolicy
+   alias Memba.Messaging.InboundClubDestination
+   alias Memba.Messaging.InboundClubSender
+ 
++  test "the fixed group-email posting policy is named club_members_only" do
++    assert GroupEmailPostingPolicy.name() == :club_members_only
++  end
++
+   describe "authorize_inbound_club_email_sender/2" do
+     test "authorizes a resolved sender who is an active member of the destination club's Everyone group" do
+       club = insert_membership_club!(slug: "kmc")
