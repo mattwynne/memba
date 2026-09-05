@@ -1,0 +1,79 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 9c67b92..f5b39d4 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Carry the resolved audience group through the existing inbound root-message command.
+ - [x] 009 Resolve deliveries through active group members and emit the group write-access grant.
+ - [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
+-- [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
++- [x] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+ - [ ] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+ - [ ] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+ - [ ] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 33f2f16..75c84f2 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -230,6 +230,61 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+   end
+ 
++  test "an active Admin member can reply to an inbound Admin conversation" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Member", email: "alice@example.com")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
++    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
++
++    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
++
++    assert {:ok, %{message_id: root_message_id}} =
++             Messaging.receive_inbound_club_email(
++               %{
++                 provider: "resend",
++                 provider_message_id: "task-057-admin-reply-root",
++                 provider_event_id: "task-057-admin-reply-root-event",
++                 from_address: "alice@example.com",
++                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
++                 subject: "Private Admin topic",
++                 text_body: "Please discuss this with the Admin group."
++               },
++               consistency: :strong
++             )
++
++    assert Membership.active_member_of_group?(admin_group_id, bob.person_id)
++    assert Messaging.group_has_conversation_access?(root_message_id, admin_group_id, :write)
++
++    reply_message_id = Memba.ID.generate(:message)
++
++    assert :ok =
++             Messaging.post_message_reply(
++               %{
++                 message_id: reply_message_id,
++                 conversation_id: root_message_id,
++                 sender_id: bob.person_id,
++                 body: "I will follow this up."
++               },
++               consistency: :strong
++             )
++
++    assert %{
++             message_id: ^reply_message_id,
++             club_id: kmc_id,
++             sender_id: bob_id,
++             conversation_id: ^root_message_id,
++             reply_to_message_id: ^root_message_id,
++             subject: "Private Admin topic",
++             body: "I will follow this up."
++           } = Messaging.get_message(reply_message_id)
++
++    assert kmc_id == kmc.club_id
++    assert bob_id == bob.person_id
++  end
++
+   test "an active non-Admin sender receives no Admin delivery, receipt, access, or follow" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     alice = create_person!(name: "Alice Member", email: "alice@example.com")
