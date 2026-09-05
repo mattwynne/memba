@@ -1,0 +1,554 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 38ec74f..1842cbc 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -14,7 +14,7 @@
+ - [x] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+ - [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+ - [x] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+-- [ ] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
++- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
+ - [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
+ - [ ] 017 Keep existing Everyone acceptance regressions passing.
+ - [ ] 018 Implement the accepted scenarios' domain and browser support, removing or narrowing `@todo-domain` / `@todo-ui` only when each runner can execute the relevant scenario. Run `dev check`.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index bf8b111..2b5be69 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -464,6 +464,7 @@ defmodule Memba.Membership.Club do
+ 
+       :error ->
+         with :ok <- ensure_group_key_available(club, group_key),
++             :ok <- require_new_group_email_slug(email_slug),
+              :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
+           group_created_event = %GroupCreated{
+             club_id: command.club_id,
+@@ -480,6 +481,9 @@ defmodule Memba.Membership.Club do
+   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
+   defp normalize_optional_group_email_slug(email_slug), do: Slug.normalize_for_lookup(email_slug)
+ 
++  defp require_new_group_email_slug(nil), do: {:error, :invalid_format}
++  defp require_new_group_email_slug(_email_slug), do: :ok
++
+   defp ensure_optional_group_email_slug_available(_club, nil), do: :ok
+ 
+   defp ensure_optional_group_email_slug_available(%__MODULE__{} = club, email_slug) do
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 04dc71e..6bb47b1 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -313,15 +313,23 @@ defmodule Memba.Membership.ClubTest do
+       person_id = Memba.ID.generate(:person)
+       club = created_club(club_id)
+ 
+-      assert %GroupCreated{
+-               club_id: ^club_id,
+-               group_id: ^group_id,
+-               group_key: "everyone",
+-               name: "Everyone"
+-             } =
++      assert [
++               %GroupCreated{
++                 club_id: ^club_id,
++                 group_id: ^group_id,
++                 group_key: "everyone",
++                 name: "Everyone"
++               },
++               %GroupEmailSlugAssigned{
++                 club_id: ^club_id,
++                 group_id: ^group_id,
++                 email_slug: "everyone"
++               }
++             ] =
+                Club.execute(club, %CreateGroup{
+                  club_id: club_id,
+                  group_id: group_id,
++                 email_slug: "everyone",
+                  group_key: "everyone",
+                  name: " Everyone "
+                })
+@@ -384,6 +392,19 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "new group creation requires an email slug" do
++      club_id = Memba.ID.generate(:club)
++      club = created_club(club_id)
++
++      assert {:error, :invalid_format} =
++               Club.execute(club, %CreateGroup{
++                 club_id: club_id,
++                 group_id: Memba.ID.generate(:group),
++                 group_key: "trip_planners",
++                 name: "Trip Planners"
++               })
++    end
++
+     test "matching historic Everyone and Admin definitions append their missing slug fact once" do
+       club_id = Memba.ID.generate(:club)
+ 
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index b011371..fd9826f 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -1,11 +1,16 @@
+ defmodule Memba.Membership.GroupProjectionTest do
+   use Memba.EventSourcedCase, async: false
+ 
++  alias Commanded.Commands.ExecutionResult
++  alias Commanded.Event.Mapper
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Projectors.Group
+@@ -58,24 +63,40 @@ defmodule Memba.Membership.GroupProjectionTest do
+ 
+   test "AssignGroupEmailSlug projects the normalized routing key" do
+     club_id = Memba.ID.generate(:club)
+-    group_id = SystemGroups.everyone_group_id(club_id)
++    group_id = Memba.ID.generate(:group)
+ 
+-    create_club!(club_id)
++    append_historic_group!(club_id, group_id)
+ 
+-    assert :ok =
++    assert %GroupProjection{
++             group_id: ^group_id,
++             club_id: ^club_id,
++             email_slug: nil
++           } = Repo.get(GroupProjection, group_id)
++
++    assert {:ok,
++            %ExecutionResult{
++              events: [
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  email_slug: "trip-planners"
++                }
++              ]
++            }} =
+              App.dispatch(
+                %AssignGroupEmailSlug{
+                  club_id: club_id,
+                  group_id: group_id,
+-                 email_slug: " Everyone "
++                 email_slug: " Trip-Planners "
+                },
++               returning: :execution_result,
+                consistency: :strong
+              )
+ 
+     assert %GroupProjection{
+              group_id: ^group_id,
+              club_id: ^club_id,
+-             email_slug: "everyone"
++             email_slug: "trip-planners"
+            } = Repo.get(GroupProjection, group_id)
+   end
+ 
+@@ -210,6 +231,29 @@ defmodule Memba.Membership.GroupProjectionTest do
+              )
+   end
+ 
++  defp append_historic_group!(club_id, group_id) do
++    events =
++      [
++        %ClubCreated{
++          club_id: club_id,
++          name: "Kootenay Mountaineering Club",
++          slug: "kmc"
++        },
++        %GroupCreated{
++          club_id: club_id,
++          group_id: group_id,
++          group_key: "trip_planners",
++          name: "Trip Planners"
++        }
++      ]
++      |> Enum.map(&Mapper.map_to_event_data/1)
++
++    assert :ok = Commanded.EventStore.append_to_stream(App, club_id, 0, events)
++
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++    Memba.ProjectionBarrier.await!([Group], checkpoint: checkpoint)
++  end
++
+   defp group_membership_count(group_id, membership_id) do
+     Repo.aggregate(
+       from(group_membership in GroupMembershipProjection,
+diff --git a/web/test/memba/membership/system_groups_replay_parity_test.exs b/web/test/memba/membership/system_groups_replay_parity_test.exs
+index a10bddc..995b965 100644
+--- a/web/test/memba/membership/system_groups_replay_parity_test.exs
++++ b/web/test/memba/membership/system_groups_replay_parity_test.exs
+@@ -9,6 +9,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+@@ -86,6 +87,14 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
+ 
+     assert_zero_backfill_dispatches!()
+     before_replay = public_query_snapshot(fixture)
++
++    assert %{
++             historic_everyone: %{email_slug: "everyone"},
++             historic_admin: %{email_slug: "admin"},
++             modern_everyone: %{email_slug: "everyone"},
++             modern_admin: %{email_slug: "admin"}
++           } = before_replay.groups_by_email_slug
++
+     event_counts_before_replay = replay_parity_event_counts(fixture)
+     projection_positions = event_sourced_projection_positions(@replay_projectors)
+ 
+@@ -249,6 +258,15 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
+         everyone_conversation_access:
+           Messaging.list_everyone_conversation_access_backfill_page(nil, 100)
+       },
++      groups_by_email_slug: %{
++        historic_everyone:
++          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "everyone"),
++        historic_admin:
++          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "admin"),
++        modern_everyone:
++          Membership.get_group_by_email_slug(fixture.modern_club.club_id, "everyone"),
++        modern_admin: Membership.get_group_by_email_slug(fixture.modern_club.club_id, "admin")
++      },
+       group_members: %{
+         historic_everyone: Membership.list_active_members_of_group(historic_everyone_group_id),
+         historic_admin: Membership.list_active_members_of_group(historic_admin_group_id),
+@@ -359,6 +377,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
+   defp group_fact_counts(club_id) do
+     %{
+       groups_created: event_count(MembershipApp, club_id, GroupCreated),
++      group_email_slugs_assigned: event_count(MembershipApp, club_id, GroupEmailSlugAssigned),
+       group_members_added: event_count(MembershipApp, club_id, GroupMemberAdded)
+     }
+   end
+diff --git a/web/test/memba/messaging/conversation_follow_projection_test.exs b/web/test/memba/messaging/conversation_follow_projection_test.exs
+index c447b1f..5af4281 100644
+--- a/web/test/memba/messaging/conversation_follow_projection_test.exs
++++ b/web/test/memba/messaging/conversation_follow_projection_test.exs
+@@ -8,9 +8,18 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.ConversationFollowed
+   alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
+   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+   alias Memba.Messaging.Recipient
+ 
++  @sender_follow_replay_projectors [
++    Memba.Messaging.Projectors.Message,
++    ConversationFollowProjector,
++    Memba.Messaging.Projectors.EmailDelivery,
++    Memba.Messaging.Projectors.MemberEmailDelivery,
++    Memba.Messaging.Projectors.MembaStaffEmailDelivery
++  ]
++
+   test "follow and unfollow commands are projected as the member's current conversation follow state" do
+     club_id = Memba.ID.generate(:club)
+     conversation_id = Memba.ID.generate(:message)
+@@ -166,4 +175,39 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
+ 
+     refute Messaging.following_conversation?(root_message_id, carol_id)
+   end
++
++  test "a root sender excluded from delivery remains unfollowed after projection replay" do
++    club_id = Memba.ID.generate(:club)
++    root_message_id = Memba.ID.generate(:message)
++    sender_id = Memba.ID.generate(:person)
++    recipient_id = Memba.ID.generate(:person)
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: root_message_id,
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 subject: "Private Admin topic",
++                 body: "Please discuss this with the Admin group.",
++                 recipients: [
++                   %Recipient{
++                     delivery_id: Memba.ID.generate(:delivery),
++                     person_id: recipient_id,
++                     name: "Admin Recipient",
++                     email: "admin@example.com"
++                   }
++                 ]
++               },
++               consistency: :strong
++             )
++
++    refute Messaging.following_conversation?(root_message_id, sender_id)
++
++    projection_positions = event_sourced_projection_positions(@sender_follow_replay_projectors)
++    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
++    await_event_sourced_projection_positions!(projection_positions)
++
++    refute Messaging.following_conversation?(root_message_id, sender_id)
++  end
+ end
+diff --git a/web/test/memba/messaging/conversation_followers_test.exs b/web/test/memba/messaging/conversation_followers_test.exs
+index 8304655..7e22013 100644
+--- a/web/test/memba/messaging/conversation_followers_test.exs
++++ b/web/test/memba/messaging/conversation_followers_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+   alias Memba.Messaging.ConversationFollowers
+   alias Memba.Messaging.Events.ConversationFollowed
+   alias Memba.Messaging.Events.ConversationUnfollowed
++  alias Memba.Messaging.Events.MessageSent
+ 
+   describe "execute/2 FollowConversation" do
+     test "emits a follow event for a member in a conversation" do
+@@ -137,6 +138,31 @@ defmodule Memba.Messaging.ConversationFollowersTest do
+     refute MapSet.member?(unfollowed.follower_ids, member_id)
+   end
+ 
++  test "a root sender excluded from delivery is not rehydrated as a follower" do
++    club_id = Memba.ID.generate(:club)
++    conversation_id = Memba.ID.generate(:message)
++    sender_id = Memba.ID.generate(:person)
++
++    conversation =
++      ConversationFollowers.apply(%ConversationFollowers{}, %MessageSent{
++        message_id: conversation_id,
++        club_id: club_id,
++        sender_id: sender_id,
++        subject: "Private Admin topic",
++        body: "Please discuss this with the Admin group.",
++        sender_follows_conversation: false
++      })
++
++    refute MapSet.member?(conversation.follower_ids, sender_id)
++
++    assert %ConversationFollowed{member_id: ^sender_id} =
++             ConversationFollowers.execute(conversation, %FollowConversation{
++               club_id: club_id,
++               conversation_id: conversation_id,
++               member_id: sender_id
++             })
++  end
++
+   defp followed_conversation do
+     club_id = Memba.ID.generate(:club)
+     conversation_id = Memba.ID.generate(:message)
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 0135686..2650e04 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -228,6 +228,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
++
++    assert [%{recipient_id: alice_id}] = Messaging.list_recipient_deliveries(message_id)
++    assert alice_id == alice.person_id
++    assert Messaging.following_conversation?(message_id, alice.person_id)
+   end
+ 
+   test "an active Admin member can reply to an inbound Admin conversation" do
+@@ -480,6 +484,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+     refute Messaging.following_conversation?(message_id, alice.person_id)
++
++    assert [%{message_id: ^message_id}] =
++             Messaging.list_conversation_messages_for_group(message_id, admin_group_id)
++
++    assert [] =
++             Messaging.list_conversation_messages_for_group(message_id, everyone_group_id)
++
+     assert 1 == count_events(ConversationAccessGrantedToGroup)
+     assert 2 == count_events(EmailDeliveryCreated)
+   end
+@@ -1008,6 +1019,56 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     assert 1 == count_events(InboundClubEmailAccepted)
+   end
+ 
++  test "duplicate Admin provider message ids do not duplicate its private conversation or delivery" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Member", email: "alice@example.com")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
++    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
++
++    inbound_attrs = %{
++      provider: "resend",
++      provider_message_id: "task-057-duplicate-admin-email",
++      provider_event_id: "task-057-duplicate-admin-event-first",
++      from_address: "alice@example.com",
++      recipient_addresses: ["admin@kmc.clubs.memba.io"],
++      subject: "Private Admin topic",
++      text_body: "Please discuss this with the Admin group."
++    }
++
++    assert {:ok, %{message_id: message_id}} =
++             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
++
++    assert [%{recipient_id: bob_id, status: "pending"}] =
++             Messaging.list_recipient_deliveries(message_id)
++
++    assert bob_id == bob.person_id
++
++    event_counts = %{
++      messages: count_events(MessageSent),
++      deliveries: count_events(EmailDeliveryCreated),
++      grants: count_events(ConversationAccessGrantedToGroup),
++      accepted: count_events(InboundClubEmailAccepted)
++    }
++
++    assert {:ok, %{duplicate?: true, status: :accepted, message_id: ^message_id}} =
++             inbound_attrs
++             |> Map.put(:provider_event_id, "task-057-duplicate-admin-event-retry")
++             |> Messaging.receive_inbound_club_email(consistency: :strong)
++
++    assert ^event_counts = %{
++             messages: count_events(MessageSent),
++             deliveries: count_events(EmailDeliveryCreated),
++             grants: count_events(ConversationAccessGrantedToGroup),
++             accepted: count_events(InboundClubEmailAccepted)
++           }
++
++    assert [%{message_id: ^message_id, recipient_id: ^bob_id}] =
++             Messaging.list_recipient_deliveries(message_id)
++  end
++
+   test "accepted inbound email uses normalized plain text and ignores HTML" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     alice = create_person!(name: "Alice Example", email: "alice@example.com")
+@@ -1675,6 +1736,57 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     )
+   end
+ 
++  test "the Admin route rejects inactive and other-club senders before private delivery" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++    dana = create_person!(name: "Dana Inactive", email: "dana@example.com")
++    pat = create_person!(name: "Pat Other Club", email: "pat@example.com")
++
++    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
++    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
++    insert_inactive_membership!(kmc.club_id, dana.person_id)
++    add_member!(npc.club_id, pat.person_id)
++
++    for {provider_message_id, from_address} <- [
++          {"task-057-inactive-admin-sender", "dana@example.com"},
++          {"task-057-other-club-admin-sender", "pat@example.com"}
++        ] do
++      assert {:ok,
++              %{
++                status: :rejected,
++                rejection_reason: "sender_not_active_member",
++                from_address: ^from_address,
++                to_address: "admin@kmc.clubs.memba.io"
++              }} =
++               Messaging.receive_inbound_club_email(
++                 %{
++                   provider: "resend",
++                   provider_message_id: provider_message_id,
++                   from_address: from_address,
++                   recipient_addresses: ["admin@kmc.clubs.memba.io"],
++                   subject: "Private Admin topic",
++                   text_body: "This must not reach the Admin group."
++                 },
++                 consistency: :strong
++               )
++
++      assert %InboundEmailSourceProjection{
++               status: "rejected",
++               message_id: nil,
++               rejection_reason: "sender_not_active_member"
++             } = Messaging.get_inbound_email_source("resend", provider_message_id)
++    end
++
++    assert [] = Messaging.list_messages_for_club(kmc.club_id)
++    assert [] = Fake.deliveries()
++    assert 0 == count_events(MessageSent)
++    assert 0 == count_events(EmailDeliveryCreated)
++    assert 0 == count_events(ConversationAccessGrantedToGroup)
++    assert 0 == count_events(InboundClubEmailAccepted)
++    assert 2 == count_events(InboundClubEmailRejected)
++  end
++
+   test "unknown club subdomain is rejected without creating a club message" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     alice = create_person!(name: "Alice Example", email: "alice@example.com")
+diff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs
+index 8c83882..f9fd362 100644
+--- a/web/test/memba/messaging/post_message_reply_test.exs
++++ b/web/test/memba/messaging/post_message_reply_test.exs
+@@ -449,10 +449,16 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+   defp create_group(club_id, name) do
+     ensure_club(club_id)
+     group_id = Memba.ID.generate(:group)
++    email_slug = name |> String.downcase() |> String.replace(" ", "-")
+ 
+     assert :ok =
+              MembershipApp.dispatch(
+-               %CreateGroup{club_id: club_id, group_id: group_id, name: name},
++               %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 email_slug: email_slug,
++                 name: name
++               },
+                consistency: :strong
+              )
+ 
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 379837e..d37e060 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+@@ -172,13 +173,22 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     alice = create_person(name: "Alice Admin", email: "alice@example.com")
+     bob = create_person(name: "Bob Admin", email: "bob@example.com")
+     carol = create_person(name: "Carol Member", email: "carol@example.com")
++    dana = create_person(name: "Dana Former Admin", email: "dana@example.com")
+ 
+     alice_membership_id = add_member(club_id, alice.person_id)
+     bob_membership_id = add_member(club_id, bob.person_id)
+     add_member(club_id, carol.person_id)
++    dana_membership_id = add_member(club_id, dana.person_id)
+ 
+     assign_admin_role(club_id, alice_membership_id, alice.person_id)
+     assign_admin_role(club_id, bob_membership_id, bob.person_id)
++    assign_admin_role(club_id, dana_membership_id, dana.person_id)
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %RemoveMember{membership_id: dana_membership_id},
++               consistency: :strong
++             )
+ 
+     message_id = Memba.ID.generate(:message)
+ 
+@@ -217,6 +227,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+     assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
+     refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
++    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
++    assert is_nil(Messaging.get_member_email_delivery(message_id, dana.person_id))
+     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+   end
+ 

@@ -1526,7 +1526,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-05T00:00:30.210178868Z",
-  "last_event_at": "2026-09-05T04:47:49.764375973Z",
+  "last_event_at": "2026-09-05T04:47:54.166037562Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -35257,9 +35257,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 13069,
       "checkpoint": {
-        "timestamp": "2026-09-05T04:47:49.794596124Z",
+        "timestamp": "2026-09-05T04:47:54.156447080Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -35372,6 +35372,394 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "failure_class": "",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.run_id": "01M1QDT82FG7AJ9YQ93QMFE5KN",
+          "task_retry_available": false,
+          "thread.read_plan.current_node": "wip_gate",
+          "preferred_label": "valid",
+          "internal.retry_count.read_plan": 0,
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Commit `c2305c0` changes exactly one todo line: task 014 from unchecked to checked. Its parent shows task 014 was the first unchecked task; tasks 015–018 remain unchanged and pending.\n- The dashboard now queries `Messaging.list_conversations_for_group/1` using the deterministic Everyone group. Message-detail loading similarly requires Everyone-group access through `list_conversation_messages_for_group/2`.\n- Admin-only conversations are excluded from the dashboard and return `{:error, :not_found}` from detail loading, preventing direct-route disclosure. Existing Everyone behavior is retained.\n- Tests add explicit coverage for Admin exclusion from lists and detail routes, including assertions that private subject/body content is not exposed. Shared fixtures now create the group-access grants required by the production query boundary.\n- Independent validation of all eight affected web test files passed: **109 tests, 0 failures**. `git diff --check` passes, and the working tree remains clean.\n- The implementation summary records a full `dev check` passing on the completed task state.\n- No acceptance feature files were changed.\n- ADR 0007 is respected by using public Membership/Messaging boundaries; ADR 0009’s projection-backed reads remain intact; ADR 0015’s existing LiveView member surfaces are preserved. The work is a coherent, independently useful plan slice.\n\n{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling.",
+          "internal.thread_id": "all_tasks_done",
+          "task_valid": true,
+          "current_node": "implement_next_task",
+          "failure_signature": "",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "internal.node_visit_count": 15,
+          "internal.retry_count.validate_task": 0,
+          "graph.max_node_visits": "80",
+          "internal.work_dir": "/workspace/memba",
+          "thread.validate_task.current_node": "task_gate",
+          "last_stage": "implement_next_task",
+          "internal.retry_count.task_gate": 0,
+          "outcome": "succeeded",
+          "thread.task_gate.current_node": "sync_task_list",
+          "graph.default_fidelity": "summary:high",
+          "last_response": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, reci",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.all_tasks_done": 0,
+          "command.output": "blob://sha256/17bbec253711b022b3595c6e93e423b844230a8704c0dd47a54e6bbee2332d7f",
+          "internal.retry_count.wip_gate": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.rankdir": "LR",
+          "internal.retry_count.todo_readable": 0,
+          "thread.sync_task_list.current_node": "todo_readable"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/175cc4e0a597e8c48759a6e461fce0a5462e1a2e7f3c1a0dc12f6a41419c6bd1"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93636,
+              "active_time_ms": 93636
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4ee7246c2ce1c9760dc36844823aec1fd28acfa00d100a686c4c034e945a6a75"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/66d80ef58f3568bfeebce0608dd8e4bec49d7646378722b1cb0af4d01113ac15"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7d46fff2714c88cea5ab534e7133386d2d178da1ae202dbad347e585e9f6d463"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1929,
+              "active_time_ms": 1929
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e675ac68e5d832f06c8ceba23f8551e5c82d38fd6815971a85d182bc081bf196"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8329f4e5799f8cf7b2396ac1a2cea83c3ec7d73618c9ff35371051ae6056ddd3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d769455198a07ba31f5fc4e8b38ae720d8089cb92fac9eb359904ef1fed927f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "valid",
+            "context_updates": {
+              "task_valid": true,
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Commit `c2305c0` changes exactly one todo line: task 014 from unchecked to checked. Its parent shows task 014 was the first unchecked task; tasks 015–018 remain unchanged and pending.\n- The dashboard now queries `Messaging.list_conversations_for_group/1` using the deterministic Everyone group. Message-detail loading similarly requires Everyone-group access through `list_conversation_messages_for_group/2`.\n- Admin-only conversations are excluded from the dashboard and return `{:error, :not_found}` from detail loading, preventing direct-route disclosure. Existing Everyone behavior is retained.\n- Tests add explicit coverage for Admin exclusion from lists and detail routes, including assertions that private subject/body content is not exposed. Shared fixtures now create the group-access grants required by the production query boundary.\n- Independent validation of all eight affected web test files passed: **109 tests, 0 failures**. `git diff --check` passes, and the working tree remains clean.\n- The implementation summary records a full `dev check` passing on the completed task state.\n- No acceptance feature files were changed.\n- ADR 0007 is respected by using public Membership/Messaging boundaries; ADR 0009’s projection-backed reads remain intact; ADR 0015’s existing LiveView member surfaces are preserved. The work is a coherent, independently useful plan slice.\n\n{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Commit `c2305c0` changes exactly one todo line: task 014 from unchecked to checked. Its parent shows task 014 was the first unchecked task; tasks 015–018 rem"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 581639,
+                    "output_tokens": 2643,
+                    "reasoning_tokens": 862,
+                    "cache_read_tokens": 128512,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3077601
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 91207,
+              "tool_time_ms": 21010,
+              "active_time_ms": 112217
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/17bbec253711b022b3595c6e93e423b844230a8704c0dd47a54e6bbee2332d7f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, reci",
+              "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 5412024,
+                    "output_tokens": 17686,
+                    "reasoning_tokens": 8038,
+                    "cache_read_tokens": 4041088,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 29852384
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 699926,
+              "tool_time_ms": 902029,
+              "active_time_ms": 1601955
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "33aa865dcb5dab3b0f09cafb0bfffa3dc25dbb20",
+        "node_visits": {
+          "todo_readable": 15,
+          "sync_task_list": 15,
+          "start": 1,
+          "pre_validate_snapshot": 14,
+          "implement_next_task": 15,
+          "resume_gate": 1,
+          "all_tasks_done": 15,
+          "task_gate": 14,
+          "read_plan": 1,
+          "validate_task": 14,
+          "preflight_sandbox": 1,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md\nindex 38ec74f..1842cbc 100644\n--- a/docs/iterations/057-admin-group-email-conversations/todo.md\n+++ b/docs/iterations/057-admin-group-email-conversations/todo.md\n@@ -14,7 +14,7 @@\n - [x] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.\n - [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.\n - [x] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.\n-- [ ] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n+- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n - [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.\n - [ ] 017 Keep existing Everyone acceptance regressions passing.\n - [ ] 018 Implement the accepted scenarios' domain and browser support, removing or narrowing `@todo-domain` / `@todo-ui` only when each runner can execute the relevant scenario. Run `dev check`.\ndiff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex\nindex bf8b111..2b5be69 100644\n--- a/web/lib/memba/membership/club.ex\n+++ b/web/lib/memba/membership/club.ex\n@@ -464,6 +464,7 @@ defmodule Memba.Membership.Club do\n \n       :error ->\n         with :ok <- ensure_group_key_available(club, group_key),\n+             :ok <- require_new_group_email_slug(email_slug),\n              :ok <- ensure_optional_group_email_slug_available(club, email_slug) do\n           group_created_event = %GroupCreated{\n             club_id: command.club_id,\n@@ -480,6 +481,9 @@ defmodule Memba.Membership.Club do\n   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}\n   defp normalize_optional_group_email_slug(email_slug), do: Slug.normalize_for_lookup(email_slug)\n \n+  defp require_new_group_email_slug(nil), do: {:error, :invalid_format}\n+  defp require_new_group_email_slug(_email_slug), do: :ok\n+\n   defp ensure_optional_group_email_slug_available(_club, nil), do: :ok\n \n   defp ensure_optional_group_email_slug_available(%__MODULE__{} = club, email_slug) do\ndiff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs\nindex 04dc71e..6bb47b1 100644\n--- a/web/test/memba/membership/club_test.exs\n+++ b/web/test/memba/membership/club_test.exs\n@@ -313,15 +313,23 @@ defmodule Memba.Membership.ClubTest do\n       person_id = Memba.ID.generate(:person)\n       club = created_club(club_id)\n \n-      assert %GroupCreated{\n-               club_id: ^club_id,\n-               group_id: ^group_id,\n-               group_key: \"everyone\",\n-               name: \"Everyone\"\n-             } =\n+      assert [\n+               %GroupCreated{\n+                 club_id: ^club_id,\n+                 group_id: ^group_id,\n+                 group_key: \"everyone\",\n+                 name: \"Everyone\"\n+               },\n+               %GroupEmailSlugAssigned{\n+                 club_id: ^club_id,\n+                 group_id: ^group_id,\n+                 email_slug: \"everyone\"\n+               }\n+             ] =\n                Club.execute(club, %CreateGroup{\n                  club_id: club_id,\n                  group_id: group_id,\n+                 email_slug: \"everyone\",\n                  group_key: \"everyone\",\n                  name: \" Everyone \"\n                })\n@@ -384,6 +392,19 @@ defmodule Memba.Membership.ClubTest do\n                })\n     end\n \n+    test \"new group creation requires an email slug\" do\n+      club_id = Memba.ID.generate(:club)\n+      club = created_club(club_id)\n+\n+      assert {:error, :invalid_format} =\n+               Club.execute(club, %CreateGroup{\n+                 club_id: club_id,\n+                 group_id: Memba.ID.generate(:group),\n+                 group_key: \"trip_planners\",\n+                 name: \"Trip Planners\"\n+               })\n+    end\n+\n     test \"matching historic Everyone and Admin definitions append their missing slug fact once\" do\n       club_id = Memba.ID.generate(:club)\n \ndiff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs\nindex b011371..fd9826f 100644\n--- a/web/test/memba/membership/group_projection_test.exs\n+++ b/web/test/memba/membership/group_projection_test.exs\n@@ -1,11 +1,16 @@\n defmodule Memba.Membership.GroupProjectionTest do\n   use Memba.EventSourcedCase, async: false\n \n+  alias Commanded.Commands.ExecutionResult\n+  alias Commanded.Event.Mapper\n   alias Memba.Membership.App\n   alias Memba.Membership.Commands.AddGroupMember\n   alias Memba.Membership.Commands.AssignGroupEmailSlug\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.RemoveGroupMember\n+  alias Memba.Membership.Events.ClubCreated\n+  alias Memba.Membership.Events.GroupCreated\n+  alias Memba.Membership.Events.GroupEmailSlugAssigned\n   alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.Events.GroupMemberRemoved\n   alias Memba.Membership.Projectors.Group\n@@ -58,24 +63,40 @@ defmodule Memba.Membership.GroupProjectionTest do\n \n   test \"AssignGroupEmailSlug projects the normalized routing key\" do\n     club_id = Memba.ID.generate(:club)\n-    group_id = SystemGroups.everyone_group_id(club_id)\n+    group_id = Memba.ID.generate(:group)\n \n-    create_club!(club_id)\n+    append_historic_group!(club_id, group_id)\n \n-    assert :ok =\n+    assert %GroupProjection{\n+             group_id: ^group_id,\n+             club_id: ^club_id,\n+             email_slug: nil\n+           } = Repo.get(GroupProjection, group_id)\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              events: [\n+                %GroupEmailSlugAssigned{\n+                  club_id: ^club_id,\n+                  group_id: ^group_id,\n+                  email_slug: \"trip-planners\"\n+                }\n+              ]\n+            }} =\n              App.dispatch(\n                %AssignGroupEmailSlug{\n                  club_id: club_id,\n                  group_id: group_id,\n-                 email_slug: \" Everyone \"\n+                 email_slug: \" Trip-Planners \"\n                },\n+               returning: :execution_result,\n                consistency: :strong\n              )\n \n     assert %GroupProjection{\n              group_id: ^group_id,\n              club_id: ^club_id,\n-             email_slug: \"everyone\"\n+             email_slug: \"trip-planners\"\n            } = Repo.get(GroupProjection, group_id)\n   end\n \n@@ -210,6 +231,29 @@ defmodule Memba.Membership.GroupProjectionTest do\n              )\n   end\n \n+  defp append_historic_group!(club_id, group_id) do\n+    events =\n+      [\n+        %ClubCreated{\n+          club_id: club_id,\n+          name: \"Kootenay Mountaineering Club\",\n+          slug: \"kmc\"\n+        },\n+        %GroupCreated{\n+          club_id: club_id,\n+          group_id: group_id,\n+          group_key: \"trip_planners\",\n+          name: \"Trip Planners\"\n+        }\n+      ]\n+      |> Enum.map(&Mapper.map_to_event_data/1)\n+\n+    assert :ok = Commanded.EventStore.append_to_stream(App, club_id, 0, events)\n+\n+    checkpoint = Memba.ProjectionBarrier.current_checkpoint()\n+    Memba.ProjectionBarrier.await!([Group], checkpoint: checkpoint)\n+  end\n+\n   defp group_membership_count(group_id, membership_id) do\n     Repo.aggregate(\n       from(group_membership in GroupMembershipProjection,\ndiff --git a/web/test/memba/membership/system_groups_replay_parity_test.exs b/web/test/memba/membership/system_groups_replay_parity_test.exs\nindex a10bddc..995b965 100644\n--- a/web/test/memba/membership/system_groups_replay_parity_test.exs\n+++ b/web/test/memba/membership/system_groups_replay_parity_test.exs\n@@ -9,6 +9,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do\n   alias Memba.Membership.Events.ClubRoleDefined\n   alias Memba.Membership.Events.ClubRolePermissionGranted\n   alias Memba.Membership.Events.GroupCreated\n+  alias Memba.Membership.Events.GroupEmailSlugAssigned\n   alias Memba.Membership.Events.GroupMemberAdded\n   alias Memba.Membership.Permissions\n   alias Memba.Membership.Projectors.Club, as: ClubProjector\n@@ -86,6 +87,14 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do\n \n     assert_zero_backfill_dispatches!()\n     before_replay = public_query_snapshot(fixture)\n+\n+    assert %{\n+             historic_everyone: %{email_slug: \"everyone\"},\n+             historic_admin: %{email_slug: \"admin\"},\n+             modern_everyone: %{email_slug: \"everyone\"},\n+             modern_admin: %{email_slug: \"admin\"}\n+           } = before_replay.groups_by_email_slug\n+\n     event_counts_before_replay = replay_parity_event_counts(fixture)\n     projection_positions = event_sourced_projection_positions(@replay_projectors)\n \n@@ -249,6 +258,15 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do\n         everyone_conversation_access:\n           Messaging.list_everyone_conversation_access_backfill_page(nil, 100)\n       },\n+      groups_by_email_slug: %{\n+        historic_everyone:\n+          Membership.get_group_by_email_slug(fixture.historic_club.club_id, \"everyone\"),\n+        historic_admin:\n+          Membership.get_group_by_email_slug(fixture.historic_club.club_id, \"admin\"),\n+        modern_everyone:\n+          Membership.get_group_by_email_slug(fixture.modern_club.club_id, \"everyone\"),\n+        modern_admin: Membership.get_group_by_email_slug(fixture.modern_club.club_id, \"admin\")\n+      },\n       group_members: %{\n         historic_everyone: Membership.list_active_members_of_group(historic_everyone_group_id),\n         historic_admin: Membership.list_active_members_of_group(historic_admin_group_id),\n@@ -359,6 +377,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do\n   defp group_fact_counts(club_id) do\n     %{\n       groups_created: event_count(MembershipApp, club_id, GroupCreated),\n+      group_email_slugs_assigned: event_count(MembershipApp, club_id, GroupEmailSlugAssigned),\n       group_members_added: event_count(MembershipApp, club_id, GroupMemberAdded)\n     }\n   end\ndiff --git a/web/test/memba/messaging/conversation_follow_projection_test.exs b/web/test/memba/messaging/conversation_follow_projection_test.exs\nindex c447b1f..5af4281 100644\n--- a/web/test/memba/messaging/conversation_follow_projection_test.exs\n+++ b/web/test/memba/messaging/conversation_follow_projection_test.exs\n@@ -8,9 +8,18 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Events.ConversationFollowed\n   alias Memba.Messaging.Events.ConversationUnfollowed\n+  alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector\n   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection\n   alias Memba.Messaging.Recipient\n \n+  @sender_follow_replay_projectors [\n+    Memba.Messaging.Projectors.Message,\n+    ConversationFollowProjector,\n+    Memba.Messaging.Projectors.EmailDelivery,\n+    Memba.Messaging.Projectors.MemberEmailDelivery,\n+    Memba.Messaging.Projectors.MembaStaffEmailDelivery\n+  ]\n+\n   test \"follow and unfollow commands are projected as the member's current conversation follow state\" do\n     club_id = Memba.ID.generate(:club)\n     conversation_id = Memba.ID.generate(:message)\n@@ -166,4 +175,39 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do\n \n     refute Messaging.following_conversation?(root_message_id, carol_id)\n   end\n+\n+  test \"a root sender excluded from delivery remains unfollowed after projection replay\" do\n+    club_id = Memba.ID.generate(:club)\n+    root_message_id = Memba.ID.generate(:message)\n+    sender_id = Memba.ID.generate(:person)\n+    recipient_id = Memba.ID.generate(:person)\n+\n+    assert :ok =\n+             App.dispatch(\n+               %SendMessage{\n+                 message_id: root_message_id,\n+                 club_id: club_id,\n+                 sender_id: sender_id,\n+                 subject: \"Private Admin topic\",\n+                 body: \"Please discuss this with the Admin group.\",\n+                 recipients: [\n+                   %Recipient{\n+                     delivery_id: Memba.ID.generate(:delivery),\n+                     person_id: recipient_id,\n+                     name: \"Admin Recipient\",\n+                     email: \"admin@example.com\"\n+                   }\n+                 ]\n+               },\n+               consistency: :strong\n+             )\n+\n+    refute Messaging.following_conversation?(root_message_id, sender_id)\n+\n+    projection_positions = event_sourced_projection_positions(@sender_follow_replay_projectors)\n+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()\n+    await_event_sourced_projection_positions!(projection_positions)\n+\n+    refute Messaging.following_conversation?(root_message_id, sender_id)\n+  end\n end\ndiff --git a/web/test/memba/messaging/conversation_followers_test.exs b/web/test/memba/messaging/conversation_followers_test.exs\nindex 8304655..7e22013 100644\n--- a/web/test/memba/messaging/conversation_followers_test.exs\n+++ b/web/test/memba/messaging/conversation_followers_test.exs\n@@ -6,6 +6,7 @@ defmodule Memba.Messaging.ConversationFollowersTest do\n   alias Memba.Messaging.ConversationFollowers\n   alias Memba.Messaging.Events.ConversationFollowed\n   alias Memba.Messaging.Events.ConversationUnfollowed\n+  alias Memba.Messaging.Events.MessageSent\n \n   describe \"execute/2 FollowConversation\" do\n     test \"emits a follow event for a member in a conversation\" do\n@@ -137,6 +138,31 @@ defmodule Memba.Messaging.ConversationFollowersTest do\n     refute MapSet.member?(unfollowed.follower_ids, member_id)\n   end\n \n+  test \"a root sender excluded from delivery is not rehydrated as a follower\" do\n+    club_id = Memba.ID.generate(:club)\n+    conversation_id = Memba.ID.generate(:message)\n+    sender_id = Memba.ID.generate(:person)\n+\n+    conversation =\n+      ConversationFollowers.apply(%ConversationFollowers{}, %MessageSent{\n+        message_id: conversation_id,\n+        club_id: club_id,\n+        sender_id: sender_id,\n+        subject: \"Private Admin topic\",\n+        body: \"Please discuss this with the Admin group.\",\n+        sender_follows_conversation: false\n+      })\n+\n+    refute MapSet.member?(conversation.follower_ids, sender_id)\n+\n+    assert %ConversationFollowed{member_id: ^sender_id} =\n+             ConversationFollowers.execute(conversation, %FollowConversation{\n+               club_id: club_id,\n+               conversation_id: conversation_id,\n+               member_id: sender_id\n+             })\n+  end\n+\n   defp followed_conversation do\n     club_id = Memba.ID.generate(:club)\n     conversation_id = Memba.ID.generate(:message)\ndiff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex 0135686..2650e04 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -228,6 +228,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n \n     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)\n     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)\n+\n+    assert [%{recipient_id: alice_id}] = Messaging.list_recipient_deliveries(message_id)\n+    assert alice_id == alice.person_id\n+    assert Messaging.following_conversation?(message_id, alice.person_id)\n   end\n \n   test \"an active Admin member can reply to an inbound Admin conversation\" do\n@@ -480,6 +484,13 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)\n     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)\n     refute Messaging.following_conversation?(message_id, alice.person_id)\n+\n+    assert [%{message_id: ^message_id}] =\n+             Messaging.list_conversation_messages_for_group(message_id, admin_group_id)\n+\n+    assert [] =\n+             Messaging.list_conversation_messages_for_group(message_id, everyone_group_id)\n+\n     assert 1 == count_events(ConversationAccessGrantedToGroup)\n     assert 2 == count_events(EmailDeliveryCreated)\n   end\n@@ -1008,6 +1019,56 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     assert 1 == count_events(InboundClubEmailAccepted)\n   end\n \n+  test \"duplicate Admin provider message ids do not duplicate its private conversation or delivery\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Member\", email: \"alice@example.com\")\n+    bob = create_person!(name: \"Bob Admin\", email: \"bob@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)\n+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)\n+\n+    inbound_attrs = %{\n+      provider: \"resend\",\n+      provider_message_id: \"task-057-duplicate-admin-email\",\n+      provider_event_id: \"task-057-duplicate-admin-event-first\",\n+      from_address: \"alice@example.com\",\n+      recipient_addresses: [\"admin@kmc.clubs.memba.io\"],\n+      subject: \"Private Admin topic\",\n+      text_body: \"Please discuss this with the Admin group.\"\n+    }\n+\n+    assert {:ok, %{message_id: message_id}} =\n+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)\n+\n+    assert [%{recipient_id: bob_id, status: \"pending\"}] =\n+             Messaging.list_recipient_deliveries(message_id)\n+\n+    assert bob_id == bob.person_id\n+\n+    event_counts = %{\n+      messages: count_events(MessageSent),\n+      deliveries: count_events(EmailDeliveryCreated),\n+      grants: count_events(ConversationAccessGrantedToGroup),\n+      accepted: count_events(InboundClubEmailAccepted)\n+    }\n+\n+    assert {:ok, %{duplicate?: true, status: :accepted, message_id: ^message_id}} =\n+             inbound_attrs\n+             |> Map.put(:provider_event_id, \"task-057-duplicate-admin-event-retry\")\n+             |> Messaging.receive_inbound_club_email(consistency: :strong)\n+\n+    assert ^event_counts = %{\n+             messages: count_events(MessageSent),\n+             deliveries: count_events(EmailDeliveryCreated),\n+             grants: count_events(ConversationAccessGrantedToGroup),\n+             accepted: count_events(InboundClubEmailAccepted)\n+           }\n+\n+    assert [%{message_id: ^message_id, recipient_id: ^bob_id}] =\n+             Messaging.list_recipient_deliveries(message_id)\n+  end\n+\n   test \"accepted inbound email uses normalized plain text and ignores HTML\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n@@ -1675,6 +1736,57 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     )\n   end\n \n+  test \"the Admin route rejects inactive and other-club senders before private delivery\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    npc = create_club!(name: \"Nelson Paddling Club\", slug: \"npc\")\n+    bob = create_person!(name: \"Bob Admin\", email: \"bob@example.com\")\n+    dana = create_person!(name: \"Dana Inactive\", email: \"dana@example.com\")\n+    pat = create_person!(name: \"Pat Other Club\", email: \"pat@example.com\")\n+\n+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)\n+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)\n+    insert_inactive_membership!(kmc.club_id, dana.person_id)\n+    add_member!(npc.club_id, pat.person_id)\n+\n+    for {provider_message_id, from_address} <- [\n+          {\"task-057-inactive-admin-sender\", \"dana@example.com\"},\n+          {\"task-057-other-club-admin-sender\", \"pat@example.com\"}\n+        ] do\n+      assert {:ok,\n+              %{\n+                status: :rejected,\n+                rejection_reason: \"sender_not_active_member\",\n+                from_address: ^from_address,\n+                to_address: \"admin@kmc.clubs.memba.io\"\n+              }} =\n+               Messaging.receive_inbound_club_email(\n+                 %{\n+                   provider: \"resend\",\n+                   provider_message_id: provider_message_id,\n+                   from_address: from_address,\n+                   recipient_addresses: [\"admin@kmc.clubs.memba.io\"],\n+                   subject: \"Private Admin topic\",\n+                   text_body: \"This must not reach the Admin group.\"\n+                 },\n+                 consistency: :strong\n+               )\n+\n+      assert %InboundEmailSourceProjection{\n+               status: \"rejected\",\n+               message_id: nil,\n+               rejection_reason: \"sender_not_active_member\"\n+             } = Messaging.get_inbound_email_source(\"resend\", provider_message_id)\n+    end\n+\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n+    assert 0 == count_events(MessageSent)\n+    assert 0 == count_events(EmailDeliveryCreated)\n+    assert 0 == count_events(ConversationAccessGrantedToGroup)\n+    assert 0 == count_events(InboundClubEmailAccepted)\n+    assert 2 == count_events(InboundClubEmailRejected)\n+  end\n+\n   test \"unknown club subdomain is rejected without creating a club message\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\ndiff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs\nindex 8c83882..f9fd362 100644\n--- a/web/test/memba/messaging/post_message_reply_test.exs\n+++ b/web/test/memba/messaging/post_message_reply_test.exs\n@@ -449,10 +449,16 @@ defmodule Memba.Messaging.PostMessageReplyTest do\n   defp create_group(club_id, name) do\n     ensure_club(club_id)\n     group_id = Memba.ID.generate(:group)\n+    email_slug = name |> String.downcase() |> String.replace(\" \", \"-\")\n \n     assert :ok =\n              MembershipApp.dispatch(\n-               %CreateGroup{club_id: club_id, group_id: group_id, name: name},\n+               %CreateGroup{\n+                 club_id: club_id,\n+                 group_id: group_id,\n+                 email_slug: email_slug,\n+                 name: name\n+               },\n                consistency: :strong\n              )\n \ndiff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs\nindex 379837e..d37e060 100644\n--- a/web/test/memba/messaging/send_club_message_test.exs\n+++ b/web/test/memba/messaging/send_club_message_test.exs\n@@ -7,6 +7,7 @@ defmodule Memba.Messaging.SendClubMessageTest do\n   alias Memba.Membership.Commands.AssignMemberRole\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.Commands.RemoveMember\n   alias Memba.Membership.Projections.Membership, as: MembershipProjection\n   alias Memba.Membership.Roles\n   alias Memba.Membership.SystemGroups\n@@ -172,13 +173,22 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     alice = create_person(name: \"Alice Admin\", email: \"alice@example.com\")\n     bob = create_person(name: \"Bob Admin\", email: \"bob@example.com\")\n     carol = create_person(name: \"Carol Member\", email: \"carol@example.com\")\n+    dana = create_person(name: \"Dana Former Admin\", email: \"dana@example.com\")\n \n     alice_membership_id = add_member(club_id, alice.person_id)\n     bob_membership_id = add_member(club_id, bob.person_id)\n     add_member(club_id, carol.person_id)\n+    dana_membership_id = add_member(club_id, dana.person_id)\n \n     assign_admin_role(club_id, alice_membership_id, alice.person_id)\n     assign_admin_role(club_id, bob_membership_id, bob.person_id)\n+    assign_admin_role(club_id, dana_membership_id, dana.person_id)\n+\n+    assert :ok =\n+             MembershipApp.dispatch(\n+               %RemoveMember{membership_id: dana_membership_id},\n+               consistency: :strong\n+             )\n \n     message_id = Memba.ID.generate(:message)\n \n@@ -217,6 +227,8 @@ defmodule Memba.Messaging.SendClubMessageTest do\n \n     assert [alice_id, bob_id] == [alice.person_id, bob.person_id]\n     refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)\n+    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)\n+    assert is_nil(Messaging.get_member_email_delivery(message_id, dana.person_id))\n     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)\n   end\n \n",
+        "summary": {
+          "files_changed": 53,
+          "additions": 2331,
+          "deletions": 347
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-05T04:47:54.342278756Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.node_visit_count": 15,
           "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling.",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
@@ -35387,7 +35775,7 @@
           "internal.retry_count.validate_task": 0,
           "preferred_label": "valid",
           "internal.retry_count.preflight_sandbox": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.sync_task_list": 0,
           "thread.todo_readable.current_node": "all_tasks_done",
           "graph.max_node_visits": "80",
@@ -35396,7 +35784,7 @@
           "thread.all_tasks_done.current_node": "implement_next_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "thread.validate_task.current_node": "task_gate",
-          "command.output": "blob://sha256/17bbec253711b022b3595c6e93e423b844230a8704c0dd47a54e6bbee2332d7f",
+          "command.output": "blob://sha256/e0477ab90a6f540265334250e3faf94cc051ff4788a4251802ab027c2d7347fa",
           "failure_signature": "",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.implement_next_task": 0,
@@ -35412,7 +35800,7 @@
           "internal.retry_count.todo_readable": 0,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "thread.read_plan.current_node": "wip_gate",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "last_stage": "implement_next_task",
           "failure_class": "",
           "internal.retry_count.resume_gate": 0,
@@ -35533,15 +35921,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/66d80ef58f3568bfeebce0608dd8e4bec49d7646378722b1cb0af4d01113ac15"
+              "command.output": "blob://sha256/e0477ab90a6f540265334250e3faf94cc051ff4788a4251802ab027c2d7347fa"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 155,
-              "active_time_ms": 155
+              "tool_time_ms": 166,
+              "active_time_ms": 166
             }
           },
           "validate_task": {
@@ -35617,9 +36005,9 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
-          "pre_validate_snapshot": 14,
+          "pre_validate_snapshot": 15,
           "task_gate": 14,
           "sync_task_list": 15,
           "validate_task": 14,
@@ -41666,7 +42054,12 @@
       "first_event_seq": 11946,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-05T04:47:49.788746114Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -41681,16 +42074,20 @@
       "started_at": "2026-09-05T04:21:07.266342497Z",
       "handler": "agent",
       "graph_visit": 15,
-      "live_inference_ms": 699835,
-      "live_tool_ms": 902024,
+      "timing": {
+        "wall_time_ms": 1602511,
+        "inference_time_ms": 699926,
+        "tool_time_ms": 902029,
+        "active_time_ms": 1601955
+      },
       "usage": {
-        "input_tokens": 8792691,
-        "output_tokens": 35730,
-        "total_tokens": 13887806,
-        "reasoning_tokens": 23737,
-        "cache_read_tokens": 5035648,
+        "input_tokens": 5412024,
+        "output_tokens": 17686,
+        "total_tokens": 9478836,
+        "reasoning_tokens": 8038,
+        "cache_read_tokens": 4041088,
         "cache_write_tokens": 0,
-        "total_usd_micros": 48265289
+        "total_usd_micros": 29852384
       },
       "model": {
         "provider": "openai",
@@ -41865,7 +42262,7 @@
         "warnings": []
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "pre_validate_snapshot@9": {
       "first_event_seq": 7089,
@@ -43702,6 +44099,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@15": {
+      "first_event_seq": 13072,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-05T04:47:54.165214952Z",
+      "handler": "command",
+      "graph_visit": 15,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "validate_task@9": {
       "first_event_seq": 7099,
