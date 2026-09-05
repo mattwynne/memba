@@ -347,6 +347,88 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
+    test "creates a group with a separate normalized email-slug fact" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      club = created_club(club_id)
+
+      assert [
+               %GroupCreated{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 group_key: "trail_crew",
+                 name: "Trail Crew"
+               },
+               %GroupEmailSlugAssigned{
+                 club_id: ^club_id,
+                 group_id: ^group_id,
+                 email_slug: "trail-crew"
+               }
+             ] =
+               events =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: "trail_crew",
+                 email_slug: " Trail-Crew ",
+                 name: " Trail Crew "
+               })
+
+      club = Enum.reduce(events, club, &Club.apply(&2, &1))
+
+      assert %{email_slug: "trail-crew"} = club.groups[group_id]
+      assert %{"trail-crew" => ^group_id} = club.group_email_slugs
+    end
+
+    test "appends idempotent email-slug facts to existing system groups" do
+      club_id = Memba.ID.generate(:club)
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+      admin_group_id = SystemGroups.admin_group_id(club_id)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(
+          everyone_group_id,
+          SystemGroups.everyone_key(),
+          SystemGroups.everyone_name()
+        )
+        |> create_group(admin_group_id, SystemGroups.admin_key(), SystemGroups.admin_name())
+
+      commands = [
+        %CreateGroup{
+          club_id: club_id,
+          group_id: everyone_group_id,
+          group_key: SystemGroups.everyone_key(),
+          email_slug: "everyone",
+          name: SystemGroups.everyone_name()
+        },
+        %CreateGroup{
+          club_id: club_id,
+          group_id: admin_group_id,
+          group_key: SystemGroups.admin_key(),
+          email_slug: "admin",
+          name: SystemGroups.admin_name()
+        }
+      ]
+
+      club =
+        Enum.reduce(commands, club, fn command, club ->
+          assert %GroupEmailSlugAssigned{
+                   club_id: ^club_id,
+                   group_id: group_id,
+                   email_slug: email_slug
+                 } = event = Club.execute(club, command)
+
+          assert group_id == command.group_id
+          assert email_slug == command.email_slug
+          Club.apply(club, event)
+        end)
+
+      assert [] = Club.execute(club, Enum.at(commands, 0))
+      assert [] = Club.execute(club, Enum.at(commands, 1))
+    end
+
     test "creates each group once and rejects conflicting group IDs or keys" do
       club_id = Memba.ID.generate(:club)
       group_id = Memba.ID.generate(:group)

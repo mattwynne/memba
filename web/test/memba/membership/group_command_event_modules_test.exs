@@ -37,12 +37,14 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
              club_id: ids.club_id,
              group_id: ids.group_id,
              group_key: "everyone",
+             email_slug: "everyone",
              name: "Everyone"
            } ==
              struct!(CreateGroup, %{
                club_id: ids.club_id,
                group_id: ids.group_id,
                group_key: "everyone",
+               email_slug: "everyone",
                name: "Everyone"
              })
 

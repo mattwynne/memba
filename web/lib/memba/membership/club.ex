@@ -124,8 +124,9 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
          {:ok, name} <- normalize_name(command.name),
-         {:ok, group_key} <- normalize_group_key(command.group_key) do
-      create_group_decision(club, command, group_key, name)
+         {:ok, group_key} <- normalize_group_key(command.group_key),
+         {:ok, email_slug} <- normalize_optional_group_email_slug(command.email_slug) do
+      create_group_decision(club, command, group_key, email_slug, name)
     end
   end
 
@@ -375,6 +376,12 @@ defmodule Memba.Membership.Club do
 
   defp normalize_group_key(_group_key), do: {:error, :invalid_group_key}
 
+  defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
+
+  defp normalize_optional_group_email_slug(email_slug) do
+    Slug.normalize_for_lookup(email_slug)
+  end
+
   defp ensure_role_id_available(%__MODULE__{} = club, role_id) do
     if Map.has_key?(club.roles, role_id) do
       {:error, :role_already_defined}
@@ -437,22 +444,34 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp create_group_decision(%__MODULE__{} = club, %CreateGroup{} = command, group_key, name) do
+  defp create_group_decision(
+         %__MODULE__{} = club,
+         %CreateGroup{} = command,
+         group_key,
+         email_slug,
+         name
+       ) do
     case Map.fetch(club.groups, command.group_id) do
       {:ok, %{group_key: ^group_key, name: ^name}} ->
-        []
+        maybe_assign_group_email_slug_decision(club, command, email_slug)
 
       {:ok, %{}} ->
         {:error, :group_already_defined}
 
       :error ->
-        with :ok <- ensure_group_key_available(club, group_key) do
-          %GroupCreated{
+        with :ok <- ensure_group_key_available(club, group_key),
+             :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
+          group_created = %GroupCreated{
             club_id: command.club_id,
             group_id: command.group_id,
             group_key: group_key,
             name: name
           }
+
+          case email_slug do
+            nil -> group_created
+            email_slug -> [group_created, group_email_slug_assigned_event(command, email_slug)]
+          end
         end
     end
   end
@@ -469,7 +488,7 @@ defmodule Memba.Membership.Club do
 
   defp assign_group_email_slug_decision(
          %__MODULE__{} = club,
-         %AssignGroupEmailSlug{} = command,
+         command,
          email_slug
        ) do
     case Map.fetch!(club.groups, command.group_id) do
@@ -481,13 +500,33 @@ defmodule Memba.Membership.Club do
 
       %{} ->
         with :ok <- ensure_group_email_slug_available(club, email_slug) do
-          %GroupEmailSlugAssigned{
-            club_id: command.club_id,
-            group_id: command.group_id,
-            email_slug: email_slug
-          }
+          group_email_slug_assigned_event(command, email_slug)
         end
     end
+  end
+
+  defp maybe_assign_group_email_slug_decision(_club, _command, nil), do: []
+
+  defp maybe_assign_group_email_slug_decision(
+         %__MODULE__{} = club,
+         %CreateGroup{} = command,
+         email_slug
+       ) do
+    assign_group_email_slug_decision(club, command, email_slug)
+  end
+
+  defp group_email_slug_assigned_event(command, email_slug) do
+    %GroupEmailSlugAssigned{
+      club_id: command.club_id,
+      group_id: command.group_id,
+      email_slug: email_slug
+    }
+  end
+
+  defp ensure_optional_group_email_slug_available(_club, nil), do: :ok
+
+  defp ensure_optional_group_email_slug_available(%__MODULE__{} = club, email_slug) do
+    ensure_group_email_slug_available(club, email_slug)
   end
 
   defp ensure_group_email_slug_available(%__MODULE__{} = club, email_slug) do

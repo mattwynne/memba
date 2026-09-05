@@ -20,6 +20,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
@@ -126,6 +127,69 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                returning: :execution_result,
                timeout: 1_000
              )
+  end
+
+  test "CreateGroup appends missing email-slug facts to existing system groups only once" do
+    club_id = Memba.ID.generate(:club)
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    commands = [
+      %CreateGroup{
+        club_id: club_id,
+        group_id: everyone_group_id,
+        group_key: SystemGroups.everyone_key(),
+        email_slug: "everyone",
+        name: SystemGroups.everyone_name()
+      },
+      %CreateGroup{
+        club_id: club_id,
+        group_id: admin_group_id,
+        group_key: SystemGroups.admin_key(),
+        email_slug: "admin",
+        name: SystemGroups.admin_name()
+      }
+    ]
+
+    Enum.with_index(commands, 6)
+    |> Enum.each(fn {command, expected_version} ->
+      assert {:ok,
+              %ExecutionResult{
+                aggregate_uuid: ^club_id,
+                aggregate_version: ^expected_version,
+                events: [
+                  %GroupEmailSlugAssigned{
+                    club_id: ^club_id,
+                    group_id: group_id,
+                    email_slug: email_slug
+                  }
+                ]
+              }} =
+               App.dispatch(command, returning: :execution_result, consistency: :strong)
+
+      assert group_id == command.group_id
+      assert email_slug == command.email_slug
+    end)
+
+    Enum.each(commands, fn command ->
+      assert {:ok, %ExecutionResult{aggregate_version: 7, events: []}} =
+               App.dispatch(command, returning: :execution_result, consistency: :strong)
+    end)
+
+    events = EventStore.stream_forward(App, club_id) |> Enum.map(& &1.data)
+
+    assert 2 == Enum.count(events, &match?(%GroupCreated{}, &1))
+    assert 2 == Enum.count(events, &match?(%GroupEmailSlugAssigned{}, &1))
   end
 
   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do
