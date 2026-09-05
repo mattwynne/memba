@@ -6,7 +6,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
-  alias Memba.Messaging.Projections.Message
   alias Memba.Messaging
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -1024,19 +1023,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   end
 
   defp create_message(attrs) do
-    message_id = Memba.ID.generate(:message)
-
-    Repo.insert!(%Message{
-      message_id: message_id,
-      club_id: Keyword.fetch!(attrs, :club_id),
-      sender_id: Keyword.fetch!(attrs, :sender_id),
-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
-      subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body"),
-      inserted_at: Keyword.get(attrs, :inserted_at),
-      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
-    })
+    insert_group_accessible_message!(attrs)
   end
 
   defp create_member_email_delivery(attrs) do

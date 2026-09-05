@@ -13,7 +13,7 @@
 - [x] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
 - [x] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
 - [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
-- [ ] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+- [x] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
 - [ ] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
 - [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
 - [ ] 017 Keep existing Everyone acceptance regressions passing.

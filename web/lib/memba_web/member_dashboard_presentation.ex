@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.ID
   alias Memba.Membership
   alias Memba.Membership.Authorization
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
 
   @participant_avatar_limit 3
@@ -95,7 +96,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp can_manage_members?(_club_id, _current_member), do: false
 
   defp load_messages(club_id) do
-    Messaging.list_conversations_for_club(club_id)
+    club_id
+    |> SystemGroups.everyone_group_id()
+    |> Messaging.list_conversations_for_group()
   end
 
   @doc """

@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageDetail do
   alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias MembaWeb.MemberEmailDeliveryPresentation
 
@@ -30,8 +31,9 @@ defmodule MembaWeb.MemberMessageDetail do
     with {:ok, club_id} <- cast_selected_club_id(params),
          {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
          {:ok, message} <- fetch_message(params),
-         :ok <- require_message_in_club(message, club_id) do
-      {:ok, detail_assigns(selected_club, message, current_identity)}
+         :ok <- require_message_in_club(message, club_id),
+         {:ok, conversation_messages} <- fetch_everyone_conversation(message) do
+      {:ok, detail_assigns(selected_club, message, conversation_messages, current_identity)}
     end
   end
 
@@ -66,7 +68,20 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
-  defp detail_assigns(selected_club, message, current_identity) do
+  defp fetch_everyone_conversation(message) do
+    conversation_messages =
+      Messaging.list_conversation_messages_for_group(
+        message.message_id,
+        SystemGroups.everyone_group_id(message.club_id)
+      )
+
+    case conversation_messages do
+      [] -> {:error, :not_found}
+      conversation_messages -> {:ok, conversation_messages}
+    end
+  end
+
+  defp detail_assigns(selected_club, message, conversation_messages, current_identity) do
     receipt_model =
       message.message_id
       |> Messaging.list_member_email_deliverys()
@@ -75,7 +90,6 @@ defmodule MembaWeb.MemberMessageDetail do
     sender = Membership.get_person(message.sender_id)
     active_members = Membership.list_active_members_of_club(selected_club.club_id)
     current_member = current_member_for_identity(active_members, current_identity)
-    conversation_messages = Messaging.list_conversation_messages(message.message_id)
 
     %{
       page_title: message.subject,
