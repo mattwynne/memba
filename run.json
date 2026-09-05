@@ -1255,7 +1255,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-05T08:47:21.276378049Z",
-  "last_event_at": "2026-09-05T10:11:51.558374506Z",
+  "last_event_at": "2026-09-05T10:12:47.302120387Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5173,9 +5173,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 760,
       "checkpoint": {
-        "timestamp": "2026-09-05T10:12:43.583930111Z",
+        "timestamp": "2026-09-05T10:12:47.277615510Z",
         "current_node": "review_fork",
         "completed_nodes": [
           "start",
@@ -5195,6 +5195,430 @@
           "dev_check",
           "collect_implementation_evidence",
           "review_fork"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "review_fixes_available": true,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.start": 0,
+          "outcome": "succeeded",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "internal.work_dir": "/workspace/memba",
+          "internal.run_id": "01M1RBYHQRP1MNP5PXSAS6S2XP",
+          "command.output": "blob://sha256/a17304e188d1ad3ae6e65c1aec79529ce36bf606fd8658699c4124a5e08293b9",
+          "response.fix_dev_check": "Implemented a scoped test-runtime fix for the consistency timeout.\n\n### Failure-to-fix mapping\n\n| Dev check failure | Cause | Fix |\n|---|---|---|\n| `MembaWeb.DevTestSupportControllerTest` timed out creating a club with strong consistency | The sandbox exposes only one online BEAM scheduler, so the test Repo pool was calculated as two connections. The reset request and Club projector retained those connections under SQL Sandbox ownership, leaving the Group and Role projectors unable to acknowledge club events before Commanded’s five-second timeout. | [web/config/test.exs](/workspace/memba/web/config/test.exs:17) now retains scheduler-based sizing but enforces a 16-connection minimum for the test Repo pool. |\n\nNo product code or acceptance feature files were changed.\n\n### Validation\n\n- Exact failing test: 6 tests, 0 failures, 5 excluded.\n- Complete `dev_test_support_controller_test.exs`: 6 tests, 0 failures.\n- `dev check --quick`: passed with 1,129 tests, 0 failures, including formatting and static checks.\n- `dev acceptance`: exited successfully with all browser scenarios passing.\n- Combined `dev check`: reached the final acceptance cleanup, but the terminal wrapper exceeded its hard 600-second limit before returning an exit status. Its precommit and acceptance portions were subsequently run independently and both returned exit code 0.\n- `git diff --check`: passed.\n\nOne tracked file is modified: [web/config/test.exs](/workspace/memba/web/config/test.exs:17). The pre-existing `.fabro/tmp/review-start-sha.txt` remains untracked and untouched.\n\nThere are no remaining test failures or human questions. The quality-gate output still includes non-failing dependency advisory notices and occasional background-projector SQL Sandbox ownership logs during ExUnit teardown; those pre-existing health signals are outside this iteration-scoped fix.",
+          "internal.fidelity": "summary:high",
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"document-test-infrastructure-contracts\",\"title\":\"Document the projection fixture contract and test Repo pool rationale\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"},{\"id\":\"align-groups-vision-policy\",\"title\":\"Verify and align the Groups vision with the accepted club-members-only email policy\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}",
+          "thread.review_fork.current_node": "review_merge",
+          "failure_signature": "",
+          "thread.review_merge.current_node": "synthesize_review",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review pa",
+                "last_stage": "claude_review",
+                "response.claude_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review passes, the implementation evidence is consistent with Memba's event-sourcing/CQRS boundaries:\n\n- Email slug identity is modeled as an aggregate-owned, immutable routing key, distinct from group display name and system-group identity — matching DDD/event-sourcing guidance on identity ownership.\n- Messaging authorization is represented as projected conversation-to-group access (`ConversationGroupAccess`) rather than inferred at query time from recipients — matching the read-model/query-side separation CQRS requires.\n- The `club_members_only` new-conversation policy is implemented as a fixed named policy boundary rather than an ad hoc persisted setting, matching the plan's explicit deferral.\n- Existing provider/message-keyed inbound-email idempotency is preserved unchanged, and the group lookup does not introduce a second, conflicting notion of message identity.\n- Existing Everyone-only web surfaces remain unchanged while the underlying group-ID query API becomes general — preparation without premature UI exposure, as the plan required.\n\nNo evidence surfaced of an ADR-mandated component (Commanded aggregate, projector, idempotency guard) being bypassed or replaced with a simpler local substitute in *product* code.\n\n## Blocking issues\nNone in the reviewed product code. One process item needs resolution before this iteration is considered fully closed (see below), but it does not indicate a defect in the shipped behaviour.\n\n1. **Unconfirmed persistence of the two review-repair edits.** `apply_review_fixes` reported editing `web/test/support/messaging_fixtures.ex`, `web/config/test.exs`, and `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`, and stated the changes were \"staged but not committed.\" The subsequent `verify_review_repair` step found **zero working-tree diff** between the pre- and post-repair snapshots. The most likely explanation is a verification-script gap (it compared unstaged `git diff` output, which will show nothing if the agent's edits were `git add`-staged), rather than the edits having been silently discarded — but this cannot be confirmed from the evidence provided. Before closing the iteration, a human (or a corrected verification step using `git diff --cached` or `git diff HEAD`) should confirm whether:\n   - the Groups vision doc at `docs/specs/2026-09-02-groups-and-conversation-access-vision.md` actually reflects the accepted `club_members_only` new-conversation policy (the plan explicitly calls this out as required \"before delivery\"), and\n   - the test-infrastructure documentation clarifications actually landed.\n   This is flagged as blocking-for-closure rather than blocking-for-merge because it is documentation, not code, and does not affect ADR conformance, test coverage, or shipped behaviour.\n\n## Bounded-safe fixes\n1. `web/test/support/messaging_fixtures.ex`: `insert_group_accessible_message!/1` creates a `ConversationGroupAccess` grant only when `message_id == conversation_id` (i.e., only for roots); replies assume the root/grant already exist. This precondition should be stated explicitly in the function doc (not just inferable from the code), or split into two clearly named entry points (e.g., `insert_group_accessible_root_message!/1` and `insert_reply_message!/1`) so future callers can't misuse it for a reply without an existing root.\n2. Same file: the `\"write\"` access-level literal is duplicated as a raw string default rather than referencing whatever canonical access-level vocabulary the `ConversationGroupAccess` schema/projector uses, if one exists. Point the fixture at that shared constant to avoid silent drift.\n3. `web/config/test.exs`: the new 16-connection pool floor should carry an inline comment naming the single-scheduler-sandbox / Commanded 5-second consistency-timeout scenario it protects against, so it isn't later mistaken for arbitrary tuning and accidentally lowered.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Fixture bypasses the command/aggregate path** (`web/test/support/messaging_fixtures.ex`) — Directly `Repo.insert!`-ing `Message` and `ConversationGroupAccess` rows is a standard, fast pattern for read-model/query-focused tests, but it means these tests can never catch a future invariant added at the command/aggregate layer (e.g., a new authorization rule enforced in the domain but not mirrored in the fixture). Worth confirming, per the plan's Validation Plan, that the *other* focused tests for group destination resolution, sender policy, and reply authorisation actually exercise real commands/events rather than only this fixture.\n2. **Test-pool floor is a fixed magic number tied to current concurrency** (`web/config/test.exs`) — The 16-connection minimum solves today's single-scheduler sandbox starvation but is coupled to the current number of concurrently-acknowledging projectors. It may go stale (too low) if projector count grows, or mask a genuine responsiveness problem in the consistency-wait path rather than fixing it. Not a merge blocker; worth a future look at making the consistency wait itself more robust rather than only widening the pool.\n3. **Known redundant root-message delivery to an Admin sender** — Explicitly and correctly deferred by the plan; flagged here only so it isn't inadvertently \"cleaned up\" later without a product decision on whether sender copies are delivery records, mailbox copies, or both.\n\n## Suggested fixes\n- Re-run (or manually confirm) the Groups vision doc update and test-infrastructure documentation edits using `git diff --cached`/`git diff HEAD` rather than plain `git diff`, since the repair agent reported staging rather than committing its changes.\n- Apply bounded-safe fixes 1–3 above as low-risk follow-up polish; none are required to keep this merged, but 1–2 reduce real drift risk in the Messaging test suite.\n\n## Validation notes\n- `dev check` (`dev ci`) passed on the committed state both before and after the test-infra fix, with the full Cucumber acceptance suite green (122 scenarios / 877 steps) and 1,129 unit/integration tests passing, including static/formatting checks.\n- The only tracked change surfaced by `fix_dev_check` was `web/config/test.exs` (pool-size floor), scoped to test infrastructure; no product code, migration, or feature file was touched by that fix.\n- All three independent review passes (Claude, Codex, Gemini) reached ACCEPT with PASS on ADR conformance and no blocking findings, converging on the same two non-blocking documentation/maintainability items now tracked as bounded-safe fixes above.\n- No `*.feature` files were modified at any point in this review cycle, preserving acceptance criteria as originally authored.\n- The `verify_review_repair` failure (no working-tree diff detected after the claimed doc/test edits) is a validation gap in the *review process*, not in the underlying implementation's dev-check evidence; it should be resolved by re-verifying against the index/HEAD rather than re-running the full implementation."
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted ar",
+                "last_stage": "codex_review",
+                "response.codex_review": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted architecture and the project’s domain/CQRS/event-sourcing guidance:\n\n- Group email slugs remain distinct from display names and deterministic system-group IDs.\n- Commands and events remain the production write path; direct Ecto inserts are confined to read-model test fixtures.\n- Conversation authorization is represented explicitly through projected conversation-to-group access grants.\n- Provider/message identity remains the inbound-email idempotency boundary.\n- `club_members_only` remains a named policy boundary rather than becoming an unplanned persisted setting.\n- Existing member-facing surfaces remain scoped to Everyone while the read API becomes group-aware.\n\nNo evidence shows production code bypassing an ADR-mandated aggregate, event stream, projection, or messaging boundary.\n\n## Blocking issues\n\nNone.\n\nThe two issues raised during synthesis have been addressed:\n\n1. The projection fixture now documents that root insertion creates the access grant and that reply insertion requires an existing root and grant.\n2. The Groups vision now distinguishes the new-conversation policy from reply authorization and reflects the accepted `club_members_only` behavior.\n\nThe failed `verify_review_repair` stage does not indicate a failed repair. The repair agent staged its changes, while the verifier compared only unstaged output from `git diff`; consequently it observed an empty working-tree diff. Subsequent evidence contains the repaired fixture documentation, and the final full check passed on the staged state.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\nThe potential fixture refactors suggested by earlier reviewers—separate root/reply helpers or schema-owned access-level constants—would be reasonable future cleanup, but are not necessary to make the current implementation safe or understandable.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Direct read-model construction in tests**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** `insert_group_accessible_message!/1` directly inserts `Message` and `ConversationGroupAccess` projection rows rather than exercising commands, events, and projectors.\n   - **Why it may need human judgement:** This is appropriate for fast query/web tests, and the fixture contract is now documented. However, such fixtures can drift from production projector behavior. Domain and projector behavior should continue to be covered separately through the real command/event path.\n\n2. **Implicit root-message convention in the fixture**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** Root detection depends on `message_id == conversation_id`; replies do not independently verify that their root and access grant exist.\n   - **Why it may need human judgement:** The convention matches the existing model and is now explicit in documentation. Separate root and reply helpers could enforce stronger setup invariants, but would add test-support API surface and may not justify the churn yet.\n\n3. **Fixed test Repo pool-size floor**\n   - **File:** `web/config/test.exs`\n   - **Smell:** Test database capacity has a fixed minimum of 16 connections to prevent SQL Sandbox starvation among concurrent Commanded projectors on single-scheduler environments.\n   - **Why it may need human judgement:** The rationale is now documented and the change resolves a demonstrated failure. Nevertheless, the number is coupled to current projector concurrency and test lifecycle behavior. Future infrastructure changes may warrant deriving the requirement or improving sandbox ownership coordination.\n\n4. **Redundant delivery to an Admin sender**\n   - **Area:** Admin-group root-message recipient selection\n   - **Smell:** An Admin who starts an Admin conversation receives a redundant root-message copy.\n   - **Why it may need human judgement:** This is explicitly accepted and deferred by the iteration plan. Any later change should follow a product decision about sender-copy semantics rather than being treated as incidental deduplication.\n\n## Suggested fixes\n\nNo pre-merge code changes are recommended.\n\nAs future maintenance:\n\n- Consider separate fixture entry points for conversation roots and replies if invalid projection setups become a recurring testing problem.\n- Revisit the test Repo pool floor if projector count, SQL Sandbox ownership, or CI topology changes.\n- Preserve the explicitly deferred Admin-sender delivery behavior until product semantics are decided.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- Final `dev ci`/`dev check` succeeded.\n- The quick suite reported **1,129 tests and 0 failures**.\n- Browser acceptance reported **122 scenarios and 877 steps passing**.\n- Focused `MembaWeb.DevTestSupportControllerTest` validation passed after the Repo pool adjustment.\n- The final full check ran after the review repairs.\n- No acceptance feature files were changed by the repairs.\n- The repaired changes are staged rather than committed; they should be included in the final commit.\n- Confidence is **Medium**, rather than High, because the supplied implementation-evidence transcript is heavily truncated, limiting an independent line-by-line audit of every aggregate, projector, and authorization path. The green automated checks and convergent parallel reviews provide strong behavioral evidence despite that limitation."
+              }
+            },
+            {
+              "id": "gemini_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's eve",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's event-sourcing and CQRS boundaries. Identity and email slug routing are kept appropriately decoupled from internal deterministic system-groups, and inbound-email idempotency boundaries were preserved without introducing unplanned synchronous shortcuts.\n\n- Blocking issues:\n  1. **Missing Plan-Mandated Documentation Update**: The iteration plan's *Risks / Follow-ups* section explicitly requires updating the Groups vision doc (`docs/specs/2026-09-02-groups-and-conversation-access-vision.md`) to reflect the confirmed `club_members_only` new-conversation rule before delivery. The automated repair agent attempted this but failed to materialize the change in the working tree (likely staging it instead, causing `verify_review_repair` to fail). This doc update must be committed before finalizing the merge to satisfy the plan.\n\n- Bounded-safe fixes:\n  1. **Test Infrastructure Documentation (`web/config/test.exs`)**: Add a brief inline comment explaining that the minimum 16-connection test DB pool prevents SQL Sandbox single-scheduler starvation during Commanded projector execution. \n  2. **Fixture Contract Documentation (`web/test/support/messaging_fixtures.ex`)**: Clarify in the `@doc` for `insert_group_accessible_message!/1` that it automatically provisions a `ConversationGroupAccess` grant for root messages, but implicitly requires the caller to have already provisioned the root message and its grant when inserting a reply.\n\n- Judgement-worthy non-blocking code-health findings:\n  1. **File:** `web/test/support/messaging_fixtures.ex`\n     **Smell:** Bypassing the aggregate/command boundary. \n     **Why it may need human judgement:** Direct Ecto inserts into the read-model (`Message` and `ConversationGroupAccess`) are fast and practical for query/UI tests, but they risk drift from actual projector behavior (e.g., hardcoding `\"write\"` access levels). The team should be aware of this potential drift if domain invariants around group access change in the future.\n  2. **File:** Messaging Recipient Resolution (Domain)\n     **Smell:** Redundant message delivery to sender.\n     **Why it may need human judgement:** An active Admin who emails the Admin group receives a redundant root-message copy in their mailbox. The iteration plan explicitly accepts and defers this behavior, so it is safe to merge now. However, it will require a future product-level decision on whether sender copies should act as delivery records or be suppressed from the inbox.\n\n- Suggested fixes:\n  - Check the git index (`git diff --cached`). If the repair agent successfully staged the updates to `groups-and-conversation-access-vision.md`, `messaging_fixtures.ex`, and `test.exs`, simply commit them.\n  - If they are missing, manually apply the doc update to `groups-and-conversation-access-vision.md` and add the explanatory comments to the test files.\n\n- Validation notes:\n  - The core behavioral implementation is solid. `dev ci` and `dev check` both passed flawlessly after the `test.exs` pool size fix was applied.\n  - The test suite reported **1,129 unit/integration tests passing** with 0 failures.\n  - The Phoenix browser acceptance lifecycle executed successfully, with all **122 scenarios and 877 steps passing** in ~7 minutes, proving that the step definitions correctly implement the new `@todo-domain` and `@todo-ui` scenarios.\n  - The final review repair failure (`verify_review_repair`) was a tooling artifact due to Git working-tree vs. index states, not a regression in the product code's behavioral integrity."
+              }
+            }
+          ],
+          "thread.verify_review_repair.current_node": "dev_check",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "graph.default_fidelity": "summary:high",
+          "internal.thread_id": "collect_implementation_evidence",
+          "implementation_accepted": false,
+          "internal.retry_count.review_gate": 0,
+          "thread.synthesize_review.current_node": "review_gate",
+          "graph.max_node_visits": "160",
+          "last_response": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Doc",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "internal.retry_count.fix_dev_check": 0,
+          "internal.node_visit_count": 2,
+          "review_blockers": [
+            {
+              "id": "document-test-infrastructure-contracts",
+              "title": "Document the projection fixture contract and test Repo pool rationale",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "align-groups-vision-policy",
+              "title": "Verify and align the Groups vision with the accepted club-members-only email policy",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "graph.rankdir": "LR",
+          "last_stage": "apply_review_fixes",
+          "thread.fix_dev_check.current_node": "dev_check",
+          "failure_class": "",
+          "response.apply_review_fixes": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Document projection fixture contract and test Repo pool rationale | Clarified that the fixture directly creates read-model rows, roots create access grants, and replies require an existing root/grant. Expanded the test-pool comment to explain single-scheduler starvation and why 16 is the tested minimum. | [messaging_fixtures.ex](/workspace/memba/web/test/support/messaging_fixtures.ex:2), [test.exs](/workspace/memba/web/config/test.exs:17) |\n| Verify and align the Groups vision with `club_members_only` | Updated the vision to distinguish new-conversation posting policy from reply authorization: any active destination-club member may start a group email conversation, while replies still require group write access. It also records deferred policy configuration. | [groups-and-conversation-access-vision.md](/workspace/memba/docs/specs/2026-09-02-groups-and-conversation-access-vision.md:77) |\n\nFiles changed by issue:\n\n- Test infrastructure contracts:\n  - `web/test/support/messaging_fixtures.ex`\n  - `web/config/test.exs`\n- Groups policy alignment:\n  - `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`\n\nNo automated tests were added because both findings concerned documentation of already-tested contracts; no executable behaviour changed.\n\nValidation:\n\n- `dev check --quick`: passed — 1,129 tests, 0 failures.\n- `dev acceptance`: passed — exit code 0; 122 scenarios and 877 steps.\n- Combined `dev check`: reached successful final acceptance cleanup, but the terminal wrapper hit its 600-second limit before returning an exit status. I therefore do not label that combined invocation itself as passing; its quick and acceptance components passed independently on the exact staged diff.\n- `git diff --cached --check`: passed.\n- No `*.feature` files were changed.\n\nThere are no remaining gaps or human questions for the two selected review issues. Existing dependency-security advisories and occasional SQL Sandbox ownership logs during test teardown remain outside this bounded repair. The pre-existing untracked `.fabro/tmp/` directory was untouched.",
+          "internal.retry_count.review_fork": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.review_merge": 0,
+          "internal.retry_count.verify_review_repair": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.apply_review_fixes": 0,
+          "parallel.branch_count": 3,
+          "internal.retry_count.synthesize_review": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #apply_review_fixes { reasoning_effort: high; }\n            #record_code_health { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "current_node": "review_fork"
+        },
+        "node_outcomes": {
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "apply_review_fixes",
+              "last_response": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Doc",
+              "response.apply_review_fixes": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Document projection fixture contract and test Repo pool rationale | Clarified that the fixture directly creates read-model rows, roots create access grants, and replies require an existing root/grant. Expanded the test-pool comment to explain single-scheduler starvation and why 16 is the tested minimum. | [messaging_fixtures.ex](/workspace/memba/web/test/support/messaging_fixtures.ex:2), [test.exs](/workspace/memba/web/config/test.exs:17) |\n| Verify and align the Groups vision with `club_members_only` | Updated the vision to distinguish new-conversation posting policy from reply authorization: any active destination-club member may start a group email conversation, while replies still require group write access. It also records deferred policy configuration. | [groups-and-conversation-access-vision.md](/workspace/memba/docs/specs/2026-09-02-groups-and-conversation-access-vision.md:77) |\n\nFiles changed by issue:\n\n- Test infrastructure contracts:\n  - `web/test/support/messaging_fixtures.ex`\n  - `web/config/test.exs`\n- Groups policy alignment:\n  - `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`\n\nNo automated tests were added because both findings concerned documentation of already-tested contracts; no executable behaviour changed.\n\nValidation:\n\n- `dev check --quick`: passed — 1,129 tests, 0 failures.\n- `dev acceptance`: passed — exit code 0; 122 scenarios and 877 steps.\n- Combined `dev check`: reached successful final acceptance cleanup, but the terminal wrapper hit its 600-second limit before returning an exit status. I therefore do not label that combined invocation itself as passing; its quick and acceptance components passed independently on the exact staged diff.\n- `git diff --cached --check`: passed.\n- No `*.feature` files were changed.\n\nThere are no remaining gaps or human questions for the two selected review issues. Existing dependency-security advisories and occasional SQL Sandbox ownership logs during test teardown remain outside this bounded repair. The pre-existing untracked `.fabro/tmp/` directory was untouched."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 467566,
+                    "output_tokens": 3335,
+                    "reasoning_tokens": 3001,
+                    "cache_read_tokens": 46976,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2551398
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 147510,
+              "tool_time_ms": 1219944,
+              "active_time_ms": 1367454
+            }
+          },
+          "fix_dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented a scoped test-runtime fix for the consistency timeout.\n\n### Failure-to-fix mapping\n\n| Dev check failure | Cause | Fix |\n|---|---|---|\n| `MembaWeb.DevTestSupportControllerTest` timed out cr",
+              "response.fix_dev_check": "Implemented a scoped test-runtime fix for the consistency timeout.\n\n### Failure-to-fix mapping\n\n| Dev check failure | Cause | Fix |\n|---|---|---|\n| `MembaWeb.DevTestSupportControllerTest` timed out creating a club with strong consistency | The sandbox exposes only one online BEAM scheduler, so the test Repo pool was calculated as two connections. The reset request and Club projector retained those connections under SQL Sandbox ownership, leaving the Group and Role projectors unable to acknowledge club events before Commanded’s five-second timeout. | [web/config/test.exs](/workspace/memba/web/config/test.exs:17) now retains scheduler-based sizing but enforces a 16-connection minimum for the test Repo pool. |\n\nNo product code or acceptance feature files were changed.\n\n### Validation\n\n- Exact failing test: 6 tests, 0 failures, 5 excluded.\n- Complete `dev_test_support_controller_test.exs`: 6 tests, 0 failures.\n- `dev check --quick`: passed with 1,129 tests, 0 failures, including formatting and static checks.\n- `dev acceptance`: exited successfully with all browser scenarios passing.\n- Combined `dev check`: reached the final acceptance cleanup, but the terminal wrapper exceeded its hard 600-second limit before returning an exit status. Its precommit and acceptance portions were subsequently run independently and both returned exit code 0.\n- `git diff --check`: passed.\n\nOne tracked file is modified: [web/config/test.exs](/workspace/memba/web/config/test.exs:17). The pre-existing `.fabro/tmp/review-start-sha.txt` remains untracked and untouched.\n\nThere are no remaining test failures or human questions. The quality-gate output still includes non-failing dependency advisory notices and occasional background-projector SQL Sandbox ownership logs during ExUnit teardown; those pre-existing health signals are outside this iteration-scoped fix.",
+              "last_stage": "fix_dev_check"
+            },
+            "notes": "Stage completed: fix_dev_check",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 2709044,
+                    "output_tokens": 10375,
+                    "reasoning_tokens": 11779,
+                    "cache_read_tokens": 2002176,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 15210928
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 582202,
+              "tool_time_ms": 1382479,
+              "active_time_ms": 1964681
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "verify_review_repair": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/9a72352ff3543cfdb0c52c35f260400d0b7db4ca3cc3f8fc2eea7f3e2a345910"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nRepair baseline (review) captured in .fabro/tmp/review-repair-before.patch\nRepair after    (review) captured in .fabro/tmp/review-repair-after.patch\nChanged files after repair:\nreview repair produced no working-tree diff change since repair started.\nIf no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1e07c5167707c842cf17306ceb3f4f2b5474eee277582cfb953d6352752c379f"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 220,
+              "active_time_ms": 220
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"document-test-infrastructure-contracts\",\"title\":\"Document the projection fixture contract and test Repo pool rationale\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"},{\"id\":\"align-groups-vision-policy\",\"title\":\"Verify and align the Groups vision with the accepted club-members-only email policy\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}",
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"document-test-infrastructure-contracts\",\"title\":\"Document the projection fixture contract an",
+              "review_blockers": [
+                {
+                  "id": "document-test-infrastructure-contracts",
+                  "title": "Document the projection fixture contract and test Repo pool rationale",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "align-groups-vision-policy",
+                  "title": "Verify and align the Groups vision with the accepted club-members-only email policy",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_stage": "synthesize_review",
+              "review_fixes_available": true,
+              "implementation_accepted": false
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 9501,
+                    "output_tokens": 117,
+                    "reasoning_tokens": 1543,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 97305
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 44535,
+              "tool_time_ms": 0,
+              "active_time_ms": 44535
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b194cb603a1fb5a48d424c5015747ec7ddfd1fc1050e960e6ea32e79d0408e2d"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/preflight_sandbox.sh",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137265,
+              "active_time_ms": 137265
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/84bc16b926b8e0ee246404bae2f564a89d5e28ceb27948bf9bca95afd13f7006"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 607736,
+              "active_time_ms": 607736
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a17304e188d1ad3ae6e65c1aec79529ce36bf606fd8658699c4124a5e08293b9"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh '19a51a338fa1e414391d184d264ab4a5cce73b7c'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 355,
+              "active_time_ms": 355
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "claude_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review pa",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review passes, the implementation evidence is consistent with Memba's event-sourcing/CQRS boundaries:\n\n- Email slug identity is modeled as an aggregate-owned, immutable routing key, distinct from group display name and system-group identity — matching DDD/event-sourcing guidance on identity ownership.\n- Messaging authorization is represented as projected conversation-to-group access (`ConversationGroupAccess`) rather than inferred at query time from recipients — matching the read-model/query-side separation CQRS requires.\n- The `club_members_only` new-conversation policy is implemented as a fixed named policy boundary rather than an ad hoc persisted setting, matching the plan's explicit deferral.\n- Existing provider/message-keyed inbound-email idempotency is preserved unchanged, and the group lookup does not introduce a second, conflicting notion of message identity.\n- Existing Everyone-only web surfaces remain unchanged while the underlying group-ID query API becomes general — preparation without premature UI exposure, as the plan required.\n\nNo evidence surfaced of an ADR-mandated component (Commanded aggregate, projector, idempotency guard) being bypassed or replaced with a simpler local substitute in *product* code.\n\n## Blocking issues\nNone in the reviewed product code. One process item needs resolution before this iteration is considered fully closed (see below), but it does not indicate a defect in the shipped behaviour.\n\n1. **Unconfirmed persistence of the two review-repair edits.** `apply_review_fixes` reported editing `web/test/support/messaging_fixtures.ex`, `web/config/test.exs`, and `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`, and stated the changes were \"staged but not committed.\" The subsequent `verify_review_repair` step found **zero working-tree diff** between the pre- and post-repair snapshots. The most likely explanation is a verification-script gap (it compared unstaged `git diff` output, which will show nothing if the agent's edits were `git add`-staged), rather than the edits having been silently discarded — but this cannot be confirmed from the evidence provided. Before closing the iteration, a human (or a corrected verification step using `git diff --cached` or `git diff HEAD`) should confirm whether:\n   - the Groups vision doc at `docs/specs/2026-09-02-groups-and-conversation-access-vision.md` actually reflects the accepted `club_members_only` new-conversation policy (the plan explicitly calls this out as required \"before delivery\"), and\n   - the test-infrastructure documentation clarifications actually landed.\n   This is flagged as blocking-for-closure rather than blocking-for-merge because it is documentation, not code, and does not affect ADR conformance, test coverage, or shipped behaviour.\n\n## Bounded-safe fixes\n1. `web/test/support/messaging_fixtures.ex`: `insert_group_accessible_message!/1` creates a `ConversationGroupAccess` grant only when `message_id == conversation_id` (i.e., only for roots); replies assume the root/grant already exist. This precondition should be stated explicitly in the function doc (not just inferable from the code), or split into two clearly named entry points (e.g., `insert_group_accessible_root_message!/1` and `insert_reply_message!/1`) so future callers can't misuse it for a reply without an existing root.\n2. Same file: the `\"write\"` access-level literal is duplicated as a raw string default rather than referencing whatever canonical access-level vocabulary the `ConversationGroupAccess` schema/projector uses, if one exists. Point the fixture at that shared constant to avoid silent drift.\n3. `web/config/test.exs`: the new 16-connection pool floor should carry an inline comment naming the single-scheduler-sandbox / Commanded 5-second consistency-timeout scenario it protects against, so it isn't later mistaken for arbitrary tuning and accidentally lowered.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Fixture bypasses the command/aggregate path** (`web/test/support/messaging_fixtures.ex`) — Directly `Repo.insert!`-ing `Message` and `ConversationGroupAccess` rows is a standard, fast pattern for read-model/query-focused tests, but it means these tests can never catch a future invariant added at the command/aggregate layer (e.g., a new authorization rule enforced in the domain but not mirrored in the fixture). Worth confirming, per the plan's Validation Plan, that the *other* focused tests for group destination resolution, sender policy, and reply authorisation actually exercise real commands/events rather than only this fixture.\n2. **Test-pool floor is a fixed magic number tied to current concurrency** (`web/config/test.exs`) — The 16-connection minimum solves today's single-scheduler sandbox starvation but is coupled to the current number of concurrently-acknowledging projectors. It may go stale (too low) if projector count grows, or mask a genuine responsiveness problem in the consistency-wait path rather than fixing it. Not a merge blocker; worth a future look at making the consistency wait itself more robust rather than only widening the pool.\n3. **Known redundant root-message delivery to an Admin sender** — Explicitly and correctly deferred by the plan; flagged here only so it isn't inadvertently \"cleaned up\" later without a product decision on whether sender copies are delivery records, mailbox copies, or both.\n\n## Suggested fixes\n- Re-run (or manually confirm) the Groups vision doc update and test-infrastructure documentation edits using `git diff --cached`/`git diff HEAD` rather than plain `git diff`, since the repair agent reported staging rather than committing its changes.\n- Apply bounded-safe fixes 1–3 above as low-risk follow-up polish; none are required to keep this merged, but 1–2 reduce real drift risk in the Messaging test suite.\n\n## Validation notes\n- `dev check` (`dev ci`) passed on the committed state both before and after the test-infra fix, with the full Cucumber acceptance suite green (122 scenarios / 877 steps) and 1,129 unit/integration tests passing, including static/formatting checks.\n- The only tracked change surfaced by `fix_dev_check` was `web/config/test.exs` (pool-size floor), scoped to test infrastructure; no product code, migration, or feature file was touched by that fix.\n- All three independent review passes (Claude, Codex, Gemini) reached ACCEPT with PASS on ADR conformance and no blocking findings, converging on the same two non-blocking documentation/maintainability items now tracked as bounded-safe fixes above.\n- No `*.feature` files were modified at any point in this review cycle, preserving acceptance criteria as originally authored.\n- The `verify_review_repair` failure (no working-tree diff detected after the claimed doc/test edits) is a validation gap in the *review process*, not in the underlying implementation's dev-check evidence; it should be resolved by re-verifying against the index/HEAD rather than re-running the full implementation."
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted ar",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted architecture and the project’s domain/CQRS/event-sourcing guidance:\n\n- Group email slugs remain distinct from display names and deterministic system-group IDs.\n- Commands and events remain the production write path; direct Ecto inserts are confined to read-model test fixtures.\n- Conversation authorization is represented explicitly through projected conversation-to-group access grants.\n- Provider/message identity remains the inbound-email idempotency boundary.\n- `club_members_only` remains a named policy boundary rather than becoming an unplanned persisted setting.\n- Existing member-facing surfaces remain scoped to Everyone while the read API becomes group-aware.\n\nNo evidence shows production code bypassing an ADR-mandated aggregate, event stream, projection, or messaging boundary.\n\n## Blocking issues\n\nNone.\n\nThe two issues raised during synthesis have been addressed:\n\n1. The projection fixture now documents that root insertion creates the access grant and that reply insertion requires an existing root and grant.\n2. The Groups vision now distinguishes the new-conversation policy from reply authorization and reflects the accepted `club_members_only` behavior.\n\nThe failed `verify_review_repair` stage does not indicate a failed repair. The repair agent staged its changes, while the verifier compared only unstaged output from `git diff`; consequently it observed an empty working-tree diff. Subsequent evidence contains the repaired fixture documentation, and the final full check passed on the staged state.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\nThe potential fixture refactors suggested by earlier reviewers—separate root/reply helpers or schema-owned access-level constants—would be reasonable future cleanup, but are not necessary to make the current implementation safe or understandable.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Direct read-model construction in tests**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** `insert_group_accessible_message!/1` directly inserts `Message` and `ConversationGroupAccess` projection rows rather than exercising commands, events, and projectors.\n   - **Why it may need human judgement:** This is appropriate for fast query/web tests, and the fixture contract is now documented. However, such fixtures can drift from production projector behavior. Domain and projector behavior should continue to be covered separately through the real command/event path.\n\n2. **Implicit root-message convention in the fixture**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** Root detection depends on `message_id == conversation_id`; replies do not independently verify that their root and access grant exist.\n   - **Why it may need human judgement:** The convention matches the existing model and is now explicit in documentation. Separate root and reply helpers could enforce stronger setup invariants, but would add test-support API surface and may not justify the churn yet.\n\n3. **Fixed test Repo pool-size floor**\n   - **File:** `web/config/test.exs`\n   - **Smell:** Test database capacity has a fixed minimum of 16 connections to prevent SQL Sandbox starvation among concurrent Commanded projectors on single-scheduler environments.\n   - **Why it may need human judgement:** The rationale is now documented and the change resolves a demonstrated failure. Nevertheless, the number is coupled to current projector concurrency and test lifecycle behavior. Future infrastructure changes may warrant deriving the requirement or improving sandbox ownership coordination.\n\n4. **Redundant delivery to an Admin sender**\n   - **Area:** Admin-group root-message recipient selection\n   - **Smell:** An Admin who starts an Admin conversation receives a redundant root-message copy.\n   - **Why it may need human judgement:** This is explicitly accepted and deferred by the iteration plan. Any later change should follow a product decision about sender-copy semantics rather than being treated as incidental deduplication.\n\n## Suggested fixes\n\nNo pre-merge code changes are recommended.\n\nAs future maintenance:\n\n- Consider separate fixture entry points for conversation roots and replies if invalid projection setups become a recurring testing problem.\n- Revisit the test Repo pool floor if projector count, SQL Sandbox ownership, or CI topology changes.\n- Preserve the explicitly deferred Admin-sender delivery behavior until product semantics are decided.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- Final `dev ci`/`dev check` succeeded.\n- The quick suite reported **1,129 tests and 0 failures**.\n- Browser acceptance reported **122 scenarios and 877 steps passing**.\n- Focused `MembaWeb.DevTestSupportControllerTest` validation passed after the Repo pool adjustment.\n- The final full check ran after the review repairs.\n- No acceptance feature files were changed by the repairs.\n- The repaired changes are staged rather than committed; they should be included in the final commit.\n- Confidence is **Medium**, rather than High, because the supplied implementation-evidence transcript is heavily truncated, limiting an independent line-by-line audit of every aggregate, projector, and authorization path. The green automated checks and convergent parallel reviews provide strong behavioral evidence despite that limitation."
+                  }
+                },
+                {
+                  "id": "gemini_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's eve",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's event-sourcing and CQRS boundaries. Identity and email slug routing are kept appropriately decoupled from internal deterministic system-groups, and inbound-email idempotency boundaries were preserved without introducing unplanned synchronous shortcuts.\n\n- Blocking issues:\n  1. **Missing Plan-Mandated Documentation Update**: The iteration plan's *Risks / Follow-ups* section explicitly requires updating the Groups vision doc (`docs/specs/2026-09-02-groups-and-conversation-access-vision.md`) to reflect the confirmed `club_members_only` new-conversation rule before delivery. The automated repair agent attempted this but failed to materialize the change in the working tree (likely staging it instead, causing `verify_review_repair` to fail). This doc update must be committed before finalizing the merge to satisfy the plan.\n\n- Bounded-safe fixes:\n  1. **Test Infrastructure Documentation (`web/config/test.exs`)**: Add a brief inline comment explaining that the minimum 16-connection test DB pool prevents SQL Sandbox single-scheduler starvation during Commanded projector execution. \n  2. **Fixture Contract Documentation (`web/test/support/messaging_fixtures.ex`)**: Clarify in the `@doc` for `insert_group_accessible_message!/1` that it automatically provisions a `ConversationGroupAccess` grant for root messages, but implicitly requires the caller to have already provisioned the root message and its grant when inserting a reply.\n\n- Judgement-worthy non-blocking code-health findings:\n  1. **File:** `web/test/support/messaging_fixtures.ex`\n     **Smell:** Bypassing the aggregate/command boundary. \n     **Why it may need human judgement:** Direct Ecto inserts into the read-model (`Message` and `ConversationGroupAccess`) are fast and practical for query/UI tests, but they risk drift from actual projector behavior (e.g., hardcoding `\"write\"` access levels). The team should be aware of this potential drift if domain invariants around group access change in the future.\n  2. **File:** Messaging Recipient Resolution (Domain)\n     **Smell:** Redundant message delivery to sender.\n     **Why it may need human judgement:** An active Admin who emails the Admin group receives a redundant root-message copy in their mailbox. The iteration plan explicitly accepts and defers this behavior, so it is safe to merge now. However, it will require a future product-level decision on whether sender copies should act as delivery records or be suppressed from the inbox.\n\n- Suggested fixes:\n  - Check the git index (`git diff --cached`). If the repair agent successfully staged the updates to `groups-and-conversation-access-vision.md`, `messaging_fixtures.ex`, and `test.exs`, simply commit them.\n  - If they are missing, manually apply the doc update to `groups-and-conversation-access-vision.md` and add the explanatory comments to the test files.\n\n- Validation notes:\n  - The core behavioral implementation is solid. `dev ci` and `dev check` both passed flawlessly after the `test.exs` pool size fix was applied.\n  - The test suite reported **1,129 unit/integration tests passing** with 0 failures.\n  - The Phoenix browser acceptance lifecycle executed successfully, with all **122 scenarios and 877 steps passing** in ~7 minutes, proving that the step definitions correctly implement the new `@todo-domain` and `@todo-ui` scenarios.\n  - The final review repair failure (`verify_review_repair`) was a tooling artifact due to Git working-tree vs. index states, not a regression in the product code's behavioral integrity."
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          }
+        },
+        "next_node_id": "review_merge",
+        "git_commit_sha": "68c45c00f30fed15559f1586973886b22701757b",
+        "loop_failure_signatures": {
+          "verify_review_repair|deterministic|script failed with exit code: <n> ## output repair baseline (review) captured in .fabro/tmp/review-repair-before.patch repair after (review) captured in .fabro/tmp/review-repair-after.patch changed files after repair: review repair produced": 1
+        },
+        "node_visits": {
+          "review_fork": 2,
+          "verify_review_repair": 1,
+          "fix_dev_check": 1,
+          "start": 1,
+          "read_plan": 1,
+          "review_gate": 1,
+          "preflight_sandbox": 1,
+          "review_merge": 1,
+          "synthesize_review": 1,
+          "snapshot_before_review_repair": 1,
+          "apply_review_fixes": 1,
+          "dev_check": 3,
+          "collect_implementation_evidence": 2
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 3,
+          "additions": 39,
+          "deletions": 13
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-05T10:12:47.309925720Z",
+        "current_node": "review_merge",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "fix_dev_check",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge"
         ],
         "node_retries": {},
         "context_values": {
@@ -5228,7 +5652,7 @@
           "thread.synthesize_review.current_node": "review_gate",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "internal.retry_count.review_merge": 0,
-          "current_node": "review_fork",
+          "current_node": "review_merge",
           "outcome": "succeeded",
           "internal.retry_count.preflight_sandbox": 0,
           "thread.verify_review_repair.current_node": "dev_check",
@@ -5287,7 +5711,7 @@
           "response.apply_review_fixes": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Document projection fixture contract and test Repo pool rationale | Clarified that the fixture directly creates read-model rows, roots create access grants, and replies require an existing root/grant. Expanded the test-pool comment to explain single-scheduler starvation and why 16 is the tested minimum. | [messaging_fixtures.ex](/workspace/memba/web/test/support/messaging_fixtures.ex:2), [test.exs](/workspace/memba/web/config/test.exs:17) |\n| Verify and align the Groups vision with `club_members_only` | Updated the vision to distinguish new-conversation posting policy from reply authorization: any active destination-club member may start a group email conversation, while replies still require group write access. It also records deferred policy configuration. | [groups-and-conversation-access-vision.md](/workspace/memba/docs/specs/2026-09-02-groups-and-conversation-access-vision.md:77) |\n\nFiles changed by issue:\n\n- Test infrastructure contracts:\n  - `web/test/support/messaging_fixtures.ex`\n  - `web/config/test.exs`\n- Groups policy alignment:\n  - `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`\n\nNo automated tests were added because both findings concerned documentation of already-tested contracts; no executable behaviour changed.\n\nValidation:\n\n- `dev check --quick`: passed — 1,129 tests, 0 failures.\n- `dev acceptance`: passed — exit code 0; 122 scenarios and 877 steps.\n- Combined `dev check`: reached successful final acceptance cleanup, but the terminal wrapper hit its 600-second limit before returning an exit status. I therefore do not label that combined invocation itself as passing; its quick and acceptance components passed independently on the exact staged diff.\n- `git diff --cached --check`: passed.\n- No `*.feature` files were changed.\n\nThere are no remaining gaps or human questions for the two selected review issues. Existing dependency-security advisories and occasional SQL Sandbox ownership logs during test teardown remain outside this bounded repair. The pre-existing untracked `.fabro/tmp/` directory was untouched.",
           "thread.start.current_node": "read_plan",
           "last_response": "Completed both selected review repairs without changing product behaviour or acceptance features. The three changes are staged but not committed.\n\n| Review issue | Fix | Evidence |\n|---|---|---|\n| Doc",
-          "internal.thread_id": "collect_implementation_evidence",
+          "internal.thread_id": "review_fork",
           "thread.review_merge.current_node": "synthesize_review",
           "response.fix_dev_check": "Implemented a scoped test-runtime fix for the consistency timeout.\n\n### Failure-to-fix mapping\n\n| Dev check failure | Cause | Fix |\n|---|---|---|\n| `MembaWeb.DevTestSupportControllerTest` timed out creating a club with strong consistency | The sandbox exposes only one online BEAM scheduler, so the test Repo pool was calculated as two connections. The reset request and Club projector retained those connections under SQL Sandbox ownership, leaving the Group and Role projectors unable to acknowledge club events before Commanded’s five-second timeout. | [web/config/test.exs](/workspace/memba/web/config/test.exs:17) now retains scheduler-based sizing but enforces a 16-connection minimum for the test Repo pool. |\n\nNo product code or acceptance feature files were changed.\n\n### Validation\n\n- Exact failing test: 6 tests, 0 failures, 5 excluded.\n- Complete `dev_test_support_controller_test.exs`: 6 tests, 0 failures.\n- `dev check --quick`: passed with 1,129 tests, 0 failures, including formatting and static checks.\n- `dev acceptance`: exited successfully with all browser scenarios passing.\n- Combined `dev check`: reached the final acceptance cleanup, but the terminal wrapper exceeded its hard 600-second limit before returning an exit status. Its precommit and acceptance portions were subsequently run independently and both returned exit code 0.\n- `git diff --check`: passed.\n\nOne tracked file is modified: [web/config/test.exs](/workspace/memba/web/config/test.exs:17). The pre-existing `.fabro/tmp/review-start-sha.txt` remains untracked and untouched.\n\nThere are no remaining test failures or human questions. The quality-gate output still includes non-failing dependency advisory notices and occasional background-projector SQL Sandbox ownership logs during ExUnit teardown; those pre-existing health signals are outside this iteration-scoped fix.",
           "thread.collect_implementation_evidence.current_node": "review_fork",
@@ -5566,7 +5990,7 @@
             }
           }
         },
-        "next_node_id": "review_merge",
+        "next_node_id": "synthesize_review",
         "node_visits": {
           "read_plan": 1,
           "preflight_sandbox": 1,
@@ -5578,7 +6002,7 @@
           "apply_review_fixes": 1,
           "fix_dev_check": 1,
           "verify_review_repair": 1,
-          "review_merge": 1,
+          "review_merge": 2,
           "review_gate": 1,
           "collect_implementation_evidence": 2
         }
@@ -5910,6 +6334,31 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "review_merge@2": {
+      "first_event_seq": 763,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-05T10:12:47.302120387Z",
+      "handler": "parallel.fan_in",
+      "graph_visit": 2,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "dev_check@2": {
       "first_event_seq": 495,
@@ -6604,16 +7053,58 @@
       "first_event_seq": 741,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+        "failure_reason": null,
+        "timestamp": "2026-09-05T10:12:43.583794598Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
-      "parallel_results": null,
+      "parallel_results": [
+        {
+          "id": "claude_review",
+          "index": 0,
+          "status": "succeeded",
+          "context_updates": {
+            "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review pa",
+            "last_stage": "claude_review",
+            "response.claude_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\n## ADR violations\nNone identified. Across all three independent review passes, the implementation evidence is consistent with Memba's event-sourcing/CQRS boundaries:\n\n- Email slug identity is modeled as an aggregate-owned, immutable routing key, distinct from group display name and system-group identity — matching DDD/event-sourcing guidance on identity ownership.\n- Messaging authorization is represented as projected conversation-to-group access (`ConversationGroupAccess`) rather than inferred at query time from recipients — matching the read-model/query-side separation CQRS requires.\n- The `club_members_only` new-conversation policy is implemented as a fixed named policy boundary rather than an ad hoc persisted setting, matching the plan's explicit deferral.\n- Existing provider/message-keyed inbound-email idempotency is preserved unchanged, and the group lookup does not introduce a second, conflicting notion of message identity.\n- Existing Everyone-only web surfaces remain unchanged while the underlying group-ID query API becomes general — preparation without premature UI exposure, as the plan required.\n\nNo evidence surfaced of an ADR-mandated component (Commanded aggregate, projector, idempotency guard) being bypassed or replaced with a simpler local substitute in *product* code.\n\n## Blocking issues\nNone in the reviewed product code. One process item needs resolution before this iteration is considered fully closed (see below), but it does not indicate a defect in the shipped behaviour.\n\n1. **Unconfirmed persistence of the two review-repair edits.** `apply_review_fixes` reported editing `web/test/support/messaging_fixtures.ex`, `web/config/test.exs`, and `docs/specs/2026-09-02-groups-and-conversation-access-vision.md`, and stated the changes were \"staged but not committed.\" The subsequent `verify_review_repair` step found **zero working-tree diff** between the pre- and post-repair snapshots. The most likely explanation is a verification-script gap (it compared unstaged `git diff` output, which will show nothing if the agent's edits were `git add`-staged), rather than the edits having been silently discarded — but this cannot be confirmed from the evidence provided. Before closing the iteration, a human (or a corrected verification step using `git diff --cached` or `git diff HEAD`) should confirm whether:\n   - the Groups vision doc at `docs/specs/2026-09-02-groups-and-conversation-access-vision.md` actually reflects the accepted `club_members_only` new-conversation policy (the plan explicitly calls this out as required \"before delivery\"), and\n   - the test-infrastructure documentation clarifications actually landed.\n   This is flagged as blocking-for-closure rather than blocking-for-merge because it is documentation, not code, and does not affect ADR conformance, test coverage, or shipped behaviour.\n\n## Bounded-safe fixes\n1. `web/test/support/messaging_fixtures.ex`: `insert_group_accessible_message!/1` creates a `ConversationGroupAccess` grant only when `message_id == conversation_id` (i.e., only for roots); replies assume the root/grant already exist. This precondition should be stated explicitly in the function doc (not just inferable from the code), or split into two clearly named entry points (e.g., `insert_group_accessible_root_message!/1` and `insert_reply_message!/1`) so future callers can't misuse it for a reply without an existing root.\n2. Same file: the `\"write\"` access-level literal is duplicated as a raw string default rather than referencing whatever canonical access-level vocabulary the `ConversationGroupAccess` schema/projector uses, if one exists. Point the fixture at that shared constant to avoid silent drift.\n3. `web/config/test.exs`: the new 16-connection pool floor should carry an inline comment naming the single-scheduler-sandbox / Commanded 5-second consistency-timeout scenario it protects against, so it isn't later mistaken for arbitrary tuning and accidentally lowered.\n\n## Judgement-worthy non-blocking code-health findings\n1. **Fixture bypasses the command/aggregate path** (`web/test/support/messaging_fixtures.ex`) — Directly `Repo.insert!`-ing `Message` and `ConversationGroupAccess` rows is a standard, fast pattern for read-model/query-focused tests, but it means these tests can never catch a future invariant added at the command/aggregate layer (e.g., a new authorization rule enforced in the domain but not mirrored in the fixture). Worth confirming, per the plan's Validation Plan, that the *other* focused tests for group destination resolution, sender policy, and reply authorisation actually exercise real commands/events rather than only this fixture.\n2. **Test-pool floor is a fixed magic number tied to current concurrency** (`web/config/test.exs`) — The 16-connection minimum solves today's single-scheduler sandbox starvation but is coupled to the current number of concurrently-acknowledging projectors. It may go stale (too low) if projector count grows, or mask a genuine responsiveness problem in the consistency-wait path rather than fixing it. Not a merge blocker; worth a future look at making the consistency wait itself more robust rather than only widening the pool.\n3. **Known redundant root-message delivery to an Admin sender** — Explicitly and correctly deferred by the plan; flagged here only so it isn't inadvertently \"cleaned up\" later without a product decision on whether sender copies are delivery records, mailbox copies, or both.\n\n## Suggested fixes\n- Re-run (or manually confirm) the Groups vision doc update and test-infrastructure documentation edits using `git diff --cached`/`git diff HEAD` rather than plain `git diff`, since the repair agent reported staging rather than committing its changes.\n- Apply bounded-safe fixes 1–3 above as low-risk follow-up polish; none are required to keep this merged, but 1–2 reduce real drift risk in the Messaging test suite.\n\n## Validation notes\n- `dev check` (`dev ci`) passed on the committed state both before and after the test-infra fix, with the full Cucumber acceptance suite green (122 scenarios / 877 steps) and 1,129 unit/integration tests passing, including static/formatting checks.\n- The only tracked change surfaced by `fix_dev_check` was `web/config/test.exs` (pool-size floor), scoped to test infrastructure; no product code, migration, or feature file was touched by that fix.\n- All three independent review passes (Claude, Codex, Gemini) reached ACCEPT with PASS on ADR conformance and no blocking findings, converging on the same two non-blocking documentation/maintainability items now tracked as bounded-safe fixes above.\n- No `*.feature` files were modified at any point in this review cycle, preserving acceptance criteria as originally authored.\n- The `verify_review_repair` failure (no working-tree diff detected after the claimed doc/test edits) is a validation gap in the *review process*, not in the underlying implementation's dev-check evidence; it should be resolved by re-verifying against the index/HEAD rather than re-running the full implementation."
+          }
+        },
+        {
+          "id": "codex_review",
+          "index": 1,
+          "status": "succeeded",
+          "context_updates": {
+            "last_response": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted ar",
+            "last_stage": "codex_review",
+            "response.codex_review": "# Iteration 057 Review\n\n- **Decision:** ACCEPT\n- **Confidence:** Medium\n- **ADR conformance:** PASS\n\n## ADR violations\n\nNone identified.\n\nThe implementation evidence is consistent with the accepted architecture and the project’s domain/CQRS/event-sourcing guidance:\n\n- Group email slugs remain distinct from display names and deterministic system-group IDs.\n- Commands and events remain the production write path; direct Ecto inserts are confined to read-model test fixtures.\n- Conversation authorization is represented explicitly through projected conversation-to-group access grants.\n- Provider/message identity remains the inbound-email idempotency boundary.\n- `club_members_only` remains a named policy boundary rather than becoming an unplanned persisted setting.\n- Existing member-facing surfaces remain scoped to Everyone while the read API becomes group-aware.\n\nNo evidence shows production code bypassing an ADR-mandated aggregate, event stream, projection, or messaging boundary.\n\n## Blocking issues\n\nNone.\n\nThe two issues raised during synthesis have been addressed:\n\n1. The projection fixture now documents that root insertion creates the access grant and that reply insertion requires an existing root and grant.\n2. The Groups vision now distinguishes the new-conversation policy from reply authorization and reflects the accepted `club_members_only` behavior.\n\nThe failed `verify_review_repair` stage does not indicate a failed repair. The repair agent staged its changes, while the verifier compared only unstaged output from `git diff`; consequently it observed an empty working-tree diff. Subsequent evidence contains the repaired fixture documentation, and the final full check passed on the staged state.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\nThe potential fixture refactors suggested by earlier reviewers—separate root/reply helpers or schema-owned access-level constants—would be reasonable future cleanup, but are not necessary to make the current implementation safe or understandable.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Direct read-model construction in tests**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** `insert_group_accessible_message!/1` directly inserts `Message` and `ConversationGroupAccess` projection rows rather than exercising commands, events, and projectors.\n   - **Why it may need human judgement:** This is appropriate for fast query/web tests, and the fixture contract is now documented. However, such fixtures can drift from production projector behavior. Domain and projector behavior should continue to be covered separately through the real command/event path.\n\n2. **Implicit root-message convention in the fixture**\n   - **File:** `web/test/support/messaging_fixtures.ex`\n   - **Smell:** Root detection depends on `message_id == conversation_id`; replies do not independently verify that their root and access grant exist.\n   - **Why it may need human judgement:** The convention matches the existing model and is now explicit in documentation. Separate root and reply helpers could enforce stronger setup invariants, but would add test-support API surface and may not justify the churn yet.\n\n3. **Fixed test Repo pool-size floor**\n   - **File:** `web/config/test.exs`\n   - **Smell:** Test database capacity has a fixed minimum of 16 connections to prevent SQL Sandbox starvation among concurrent Commanded projectors on single-scheduler environments.\n   - **Why it may need human judgement:** The rationale is now documented and the change resolves a demonstrated failure. Nevertheless, the number is coupled to current projector concurrency and test lifecycle behavior. Future infrastructure changes may warrant deriving the requirement or improving sandbox ownership coordination.\n\n4. **Redundant delivery to an Admin sender**\n   - **Area:** Admin-group root-message recipient selection\n   - **Smell:** An Admin who starts an Admin conversation receives a redundant root-message copy.\n   - **Why it may need human judgement:** This is explicitly accepted and deferred by the iteration plan. Any later change should follow a product decision about sender-copy semantics rather than being treated as incidental deduplication.\n\n## Suggested fixes\n\nNo pre-merge code changes are recommended.\n\nAs future maintenance:\n\n- Consider separate fixture entry points for conversation roots and replies if invalid projection setups become a recurring testing problem.\n- Revisit the test Repo pool floor if projector count, SQL Sandbox ownership, or CI topology changes.\n- Preserve the explicitly deferred Admin-sender delivery behavior until product semantics are decided.\n\n## Validation notes\n\n- Sandbox runtime preflight passed.\n- Final `dev ci`/`dev check` succeeded.\n- The quick suite reported **1,129 tests and 0 failures**.\n- Browser acceptance reported **122 scenarios and 877 steps passing**.\n- Focused `MembaWeb.DevTestSupportControllerTest` validation passed after the Repo pool adjustment.\n- The final full check ran after the review repairs.\n- No acceptance feature files were changed by the repairs.\n- The repaired changes are staged rather than committed; they should be included in the final commit.\n- Confidence is **Medium**, rather than High, because the supplied implementation-evidence transcript is heavily truncated, limiting an independent line-by-line audit of every aggregate, projector, and authorization path. The green automated checks and convergent parallel reviews provide strong behavioral evidence despite that limitation."
+          }
+        },
+        {
+          "id": "gemini_review",
+          "index": 2,
+          "status": "succeeded",
+          "context_updates": {
+            "last_response": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's eve",
+            "last_stage": "gemini_review",
+            "response.gemini_review": "# Iteration 057 Review: Admin Group Email Conversations\n\n- Decision: ACCEPT\n- Confidence: High\n- ADR conformance: PASS\n- ADR violations: None identified. The implementation preserves the project's event-sourcing and CQRS boundaries. Identity and email slug routing are kept appropriately decoupled from internal deterministic system-groups, and inbound-email idempotency boundaries were preserved without introducing unplanned synchronous shortcuts.\n\n- Blocking issues:\n  1. **Missing Plan-Mandated Documentation Update**: The iteration plan's *Risks / Follow-ups* section explicitly requires updating the Groups vision doc (`docs/specs/2026-09-02-groups-and-conversation-access-vision.md`) to reflect the confirmed `club_members_only` new-conversation rule before delivery. The automated repair agent attempted this but failed to materialize the change in the working tree (likely staging it instead, causing `verify_review_repair` to fail). This doc update must be committed before finalizing the merge to satisfy the plan.\n\n- Bounded-safe fixes:\n  1. **Test Infrastructure Documentation (`web/config/test.exs`)**: Add a brief inline comment explaining that the minimum 16-connection test DB pool prevents SQL Sandbox single-scheduler starvation during Commanded projector execution. \n  2. **Fixture Contract Documentation (`web/test/support/messaging_fixtures.ex`)**: Clarify in the `@doc` for `insert_group_accessible_message!/1` that it automatically provisions a `ConversationGroupAccess` grant for root messages, but implicitly requires the caller to have already provisioned the root message and its grant when inserting a reply.\n\n- Judgement-worthy non-blocking code-health findings:\n  1. **File:** `web/test/support/messaging_fixtures.ex`\n     **Smell:** Bypassing the aggregate/command boundary. \n     **Why it may need human judgement:** Direct Ecto inserts into the read-model (`Message` and `ConversationGroupAccess`) are fast and practical for query/UI tests, but they risk drift from actual projector behavior (e.g., hardcoding `\"write\"` access levels). The team should be aware of this potential drift if domain invariants around group access change in the future.\n  2. **File:** Messaging Recipient Resolution (Domain)\n     **Smell:** Redundant message delivery to sender.\n     **Why it may need human judgement:** An active Admin who emails the Admin group receives a redundant root-message copy in their mailbox. The iteration plan explicitly accepts and defers this behavior, so it is safe to merge now. However, it will require a future product-level decision on whether sender copies should act as delivery records or be suppressed from the inbox.\n\n- Suggested fixes:\n  - Check the git index (`git diff --cached`). If the repair agent successfully staged the updates to `groups-and-conversation-access-vision.md`, `messaging_fixtures.ex`, and `test.exs`, simply commit them.\n  - If they are missing, manually apply the doc update to `groups-and-conversation-access-vision.md` and add the explanatory comments to the test files.\n\n- Validation notes:\n  - The core behavioral implementation is solid. `dev ci` and `dev check` both passed flawlessly after the `test.exs` pool size fix was applied.\n  - The test suite reported **1,129 unit/integration tests passing** with 0 failures.\n  - The Phoenix browser acceptance lifecycle executed successfully, with all **122 scenarios and 877 steps passing** in ~7 minutes, proving that the step definitions correctly implement the new `@todo-domain` and `@todo-ui` scenarios.\n  - The final review repair failure (`verify_review_repair`) was a tooling artifact due to Git working-tree vs. index states, not a regression in the product code's behavioral integrity."
+          }
+        }
+      ],
       "output": null,
       "started_at": "2026-09-05T10:11:13.783120725Z",
       "handler": "parallel",
       "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 89799,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -6623,13 +7114,18 @@
         "cache_write_tokens": 0
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "claude_review@2": {
       "first_event_seq": 744,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-09-05T10:12:43.580715853Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openrouter",
@@ -6645,16 +7141,27 @@
       "started_at": "2026-09-05T10:11:13.789402423Z",
       "handler": "prompt",
       "graph_visit": 2,
+      "timing": {
+        "wall_time_ms": 89791,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
+        "input_tokens": 18739,
+        "output_tokens": 2459,
+        "total_tokens": 27962,
+        "reasoning_tokens": 5526,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 1238,
+        "total_usd_micros": 120423
+      },
+      "model": {
+        "provider": "openrouter",
+        "model_id": "claude-sonnet-5"
       },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 35,
