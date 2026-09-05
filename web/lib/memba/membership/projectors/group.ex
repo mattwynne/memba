@@ -10,6 +10,7 @@ defmodule Memba.Membership.Projectors.Group do
     consistency: :strong
 
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Projections.Group, as: GroupProjection
 
   project(%GroupCreated{} = event, fn multi ->
@@ -37,6 +38,24 @@ defmodule Memba.Membership.Projectors.Group do
       conflict_target: :group_id
     )
   end)
+
+  project(%GroupEmailSlugAssigned{} = event, fn multi ->
+    Ecto.Multi.update_all(
+      multi,
+      :membership_group_email_slug,
+      group_without_different_email_slug_query(event),
+      set: [email_slug: event.email_slug, updated_at: DateTime.utc_now(:microsecond)]
+    )
+  end)
+
+  defp group_without_different_email_slug_query(%GroupEmailSlugAssigned{} = event) do
+    Ecto.Query.from(
+      group in GroupProjection,
+      where: group.group_id == ^event.group_id,
+      where: group.club_id == ^event.club_id,
+      where: is_nil(group.email_slug) or group.email_slug == ^event.email_slug
+    )
+  end
 
   @impl Commanded.Projections.Ecto
   def after_update(event, metadata, changes) do

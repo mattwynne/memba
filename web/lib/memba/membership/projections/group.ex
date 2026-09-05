@@ -9,6 +9,7 @@ defmodule Memba.Membership.Projections.Group do
   schema "membership_groups" do
     field :club_id, :string
     field :group_key, :string
+    field :email_slug, :string
     field :name, :string
 
     timestamps(type: :utc_datetime_usec)

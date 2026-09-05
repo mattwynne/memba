@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
+- [x] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
 - [ ] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
 - [ ] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
 - [ ] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.

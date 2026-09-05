@@ -3,6 +3,7 @@ defmodule Memba.Membership.GroupProjectionTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupMemberAdded
@@ -51,6 +52,48 @@ defmodule Memba.Membership.GroupProjectionTest do
              group_key: "admin",
              name: "Admin"
            } = Repo.get(GroupProjection, admin_group_id)
+  end
+
+  test "AssignGroupEmailSlug projects the normalized group email slug" do
+    club_id = Memba.ID.generate(:club)
+    group_id = SystemGroups.admin_group_id(club_id)
+    other_club_id = Memba.ID.generate(:club)
+    other_group_id = SystemGroups.admin_group_id(other_club_id)
+
+    create_club!(club_id)
+    create_club!(other_club_id, "other-club")
+
+    assert :ok =
+             App.dispatch(
+               %AssignGroupEmailSlug{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: " Admin "
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %AssignGroupEmailSlug{
+                 club_id: other_club_id,
+                 group_id: other_group_id,
+                 email_slug: "admin"
+               },
+               consistency: :strong
+             )
+
+    assert %GroupProjection{
+             group_id: ^group_id,
+             club_id: ^club_id,
+             email_slug: "admin"
+           } = Repo.get(GroupProjection, group_id)
+
+    assert %GroupProjection{
+             group_id: ^other_group_id,
+             club_id: ^other_club_id,
+             email_slug: "admin"
+           } = Repo.get(GroupProjection, other_group_id)
   end
 
   test "AddGroupMember projects an active group membership row" do
@@ -143,13 +186,13 @@ defmodule Memba.Membership.GroupProjectionTest do
              |> Enum.map(& &1.__struct__)
   end
 
-  defp create_club!(club_id) do
+  defp create_club!(club_id, slug \\ "kmc") do
     assert :ok =
              App.dispatch(
                %CreateClub{
                  club_id: club_id,
                  name: "Kootenay Mountaineering Club",
-                 slug: "kmc"
+                 slug: slug
                },
                consistency: :strong
              )

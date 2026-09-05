@@ -3,6 +3,7 @@ defmodule Memba.Membership.ClubTest do
 
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
@@ -16,6 +17,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
@@ -376,6 +378,72 @@ defmodule Memba.Membership.ClubTest do
                  group_id: Memba.ID.generate(:group),
                  group_key: "everyone",
                  name: "Everyone"
+               })
+    end
+
+    test "assigns a normalized immutable email slug to a group" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(group_id, "admin", "Admin")
+
+      command = %AssignGroupEmailSlug{
+        club_id: club_id,
+        group_id: group_id,
+        email_slug: " Admin "
+      }
+
+      assert %GroupEmailSlugAssigned{
+               club_id: ^club_id,
+               group_id: ^group_id,
+               email_slug: "admin"
+             } = event = Club.execute(club, command)
+
+      club = Club.apply(club, event)
+
+      assert %{email_slug: "admin"} = club.groups[group_id]
+      assert %{email_slug: "admin"} = Club.apply(club, event).groups[group_id]
+      assert %{group_email_slugs: %{"admin" => ^group_id}} = club
+      assert [] = Club.execute(club, command)
+
+      assert {:error, :group_email_slug_already_assigned} =
+               Club.execute(club, %{command | email_slug: "administrators"})
+    end
+
+    test "requires a valid club-unique email slug for an existing group" do
+      club_id = Memba.ID.generate(:club)
+      first_group_id = Memba.ID.generate(:group)
+      second_group_id = Memba.ID.generate(:group)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(first_group_id, nil, "First")
+        |> create_group(second_group_id, nil, "Second")
+        |> assign_group_email_slug(first_group_id, "admin")
+
+      assert {:error, :group_email_slug_already_defined} =
+               Club.execute(club, %AssignGroupEmailSlug{
+                 club_id: club_id,
+                 group_id: second_group_id,
+                 email_slug: " ADMIN "
+               })
+
+      assert {:error, :group_not_defined} =
+               Club.execute(club, %AssignGroupEmailSlug{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 email_slug: "moderators"
+               })
+
+      assert {:error, :invalid_format} =
+               Club.execute(club, %AssignGroupEmailSlug{
+                 club_id: club_id,
+                 group_id: second_group_id,
+                 email_slug: "not addressable"
                })
     end
 
@@ -753,6 +821,14 @@ defmodule Memba.Membership.ClubTest do
       group_id: group_id,
       group_key: group_key,
       name: name
+    })
+  end
+
+  defp assign_group_email_slug(%Club{} = club, group_id, email_slug) do
+    Club.apply(club, %GroupEmailSlugAssigned{
+      club_id: club.club_id,
+      group_id: group_id,
+      email_slug: email_slug
     })
   end
 
