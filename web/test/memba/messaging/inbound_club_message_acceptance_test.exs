@@ -1474,7 +1474,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
-  test "unsupported recipient routes are rejected through the inbound rejection pathway" do
+  test "unsupported routes and unknown group or club slugs use the rejection pathway" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
 
@@ -1482,23 +1482,27 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     cases = [
       %{
-        provider_message_id: "task-042-unsupported-local-part",
-        recipient_address: "committee@kmc.clubs.memba.io",
+        provider_message_id: "task-057-unknown-group-slug",
+        recipient_addresses: ["friend@example.org", "committee@kmc.clubs.memba.io"],
+        rejected_to_address: "committee@kmc.clubs.memba.io",
         rejection_reason: "unsupported_recipient_address"
       },
       %{
         provider_message_id: "task-042-unsupported-domain",
-        recipient_address: "everyone@example.org",
+        recipient_addresses: ["everyone@example.org"],
+        rejected_to_address: "everyone@example.org",
         rejection_reason: "unsupported_recipient_address"
       },
       %{
         provider_message_id: "task-042-old-flat-address",
-        recipient_address: "kmc@clubs.memba.io",
+        recipient_addresses: ["kmc@clubs.memba.io"],
+        rejected_to_address: "kmc@clubs.memba.io",
         rejection_reason: "unsupported_recipient_address"
       },
       %{
         provider_message_id: "task-042-unknown-club-subdomain",
-        recipient_address: "everyone@unknown.clubs.memba.io",
+        recipient_addresses: ["everyone@unknown.clubs.memba.io"],
+        rejected_to_address: "everyone@unknown.clubs.memba.io",
         rejection_reason: "unknown_club_slug"
       }
     ]
@@ -1518,14 +1522,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                    provider: "resend",
                    provider_message_id: provider_message_id,
                    from_address: "alice@example.com",
-                   recipient_addresses: [rejection_case.recipient_address],
+                   recipient_addresses: rejection_case.recipient_addresses,
                    subject: "Unsupported recipient #{provider_message_id}",
                    text_body: "This should not post."
                  },
                  consistency: :strong
                )
 
-      assert recipient_address == rejection_case.recipient_address
+      assert recipient_address == rejection_case.rejected_to_address
       assert rejection_reason == rejection_case.rejection_reason
       assert is_binary(rejection_email_delivery_reference)
 

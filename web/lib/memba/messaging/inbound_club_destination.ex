@@ -54,9 +54,11 @@ defmodule Memba.Messaging.InboundClubDestination do
   ignored once a supported group destination is found.
 
   Returns `{:error, :unknown_club_slug, to_address}` when a supported subdomain
-  address is present but no matching club exists, or
-  `{:error, :unsupported_recipient_address, address_or_nil}` when no supported
-  group address shape is present.
+  address is present but no matching club exists. A valid but unknown group slug
+  in a known club retains the existing
+  `{:error, :unsupported_recipient_address, to_address}` outcome. Other
+  unsupported inputs return the same reason with the first relevant address, or
+  with `nil` when no usable address is present.
   """
   @spec resolve(InboundEmail.t() | [String.t()] | term()) :: {:ok, t()} | rejection()
   def resolve(%InboundEmail{recipient_addresses: recipient_addresses}),
@@ -142,7 +144,10 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   defp resolve_candidates(candidates) do
     candidates
-    |> Enum.reduce(%{destination: nil, unknown: nil, unsupported: nil}, &accumulate_candidate/2)
+    |> Enum.reduce(
+      %{destination: nil, unknown_club: nil, unknown_group: nil, unsupported: nil},
+      &accumulate_candidate/2
+    )
     |> resolve_accumulator()
   end
 
@@ -154,7 +159,7 @@ defmodule Memba.Messaging.InboundClubDestination do
          accumulator
        ) do
     case Membership.get_club_by_slug(club_slug) do
-      nil -> record_first(accumulator, :unknown, to_address)
+      nil -> record_first(accumulator, :unknown_club, to_address)
       club -> resolve_group_candidate(accumulator, club, group_email_slug, to_address)
     end
   end
@@ -173,15 +178,19 @@ defmodule Memba.Messaging.InboundClubDestination do
 
   defp resolve_group_candidate(accumulator, club, group_email_slug, to_address) do
     case Membership.get_group_by_email_slug(club.club_id, group_email_slug) do
-      nil -> record_first(accumulator, :unsupported, to_address)
+      nil -> record_first(accumulator, :unknown_group, to_address)
       group -> %{accumulator | destination: destination(club, group, to_address)}
     end
   end
 
   defp resolve_accumulator(%{destination: %__MODULE__{} = destination}), do: {:ok, destination}
 
-  defp resolve_accumulator(%{unknown: to_address}) when is_binary(to_address) do
+  defp resolve_accumulator(%{unknown_club: to_address}) when is_binary(to_address) do
     {:error, :unknown_club_slug, to_address}
+  end
+
+  defp resolve_accumulator(%{unknown_group: to_address}) when is_binary(to_address) do
+    {:error, :unsupported_recipient_address, to_address}
   end
 
   defp resolve_accumulator(%{unsupported: address}) do

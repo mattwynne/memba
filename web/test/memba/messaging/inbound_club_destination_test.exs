@@ -124,11 +124,14 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
       end)
     end
 
-    test "rejects unsupported local parts at a known club subdomain" do
-      insert_membership_club!(slug: "kmc")
+    test "rejects an unknown group slug through the unsupported-recipient outcome" do
+      club = insert_membership_club!(slug: "kmc")
+      insert_addressable_system_group!(club, :everyone)
+      insert_addressable_system_group!(club, :admin)
 
       assert {:error, :unsupported_recipient_address, "committee@kmc.clubs.memba.io"} ==
                Messaging.resolve_inbound_club_email_destination([
+                 "friend@example.org",
                  "committee@kmc.clubs.memba.io"
                ])
     end
@@ -140,10 +143,10 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                Messaging.resolve_inbound_club_email_destination(["everyone@example.org"])
     end
 
-    test "rejects unknown club subdomains at the inbound club domain" do
-      assert {:error, :unknown_club_slug, "everyone@unknown.clubs.memba.io"} ==
+    test "rejects a known group slug on an unknown club subdomain" do
+      assert {:error, :unknown_club_slug, "admin@unknown.clubs.memba.io"} ==
                Messaging.resolve_inbound_club_email_destination([
-                 "everyone@unknown.clubs.memba.io"
+                 "admin@unknown.clubs.memba.io"
                ])
     end
 

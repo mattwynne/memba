@@ -239,7 +239,8 @@ defmodule Memba.Messaging do
   Supports `<group-email-slug>@<club-slug>.<configured inbound domain>`, returning
   a resolved destination with club and group identity plus the normalized
   to-address, or a typed rejection reason for unsupported recipient addresses
-  and unknown club slugs.
+  and unknown club slugs. Unknown group slugs retain the existing unsupported
+  recipient outcome and inbound rejection path.
   """
   def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
