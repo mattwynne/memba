@@ -14,11 +14,18 @@ repo_connection_config =
     [hostname: pg_host]
   end
 
+# Strong-consistency requests can run several independently supervised projectors
+# while the request/reset process also owns sandbox connections. On a one-scheduler
+# runtime, the scheduler-based pool would contain only two connections and starve
+# projector acknowledgements. Sixteen is the tested floor for that concurrent process
+# set; higher-scheduler environments retain scheduler-based sizing.
+repo_pool_size = max(System.schedulers_online() * 2, 16)
+
 repo_pool_config =
   if System.get_env("PHX_SERVER") == "true" do
-    [pool_size: System.schedulers_online() * 2]
+    [pool_size: repo_pool_size]
   else
-    [pool: Ecto.Adapters.SQL.Sandbox, pool_size: System.schedulers_online() * 2]
+    [pool: Ecto.Adapters.SQL.Sandbox, pool_size: repo_pool_size]
   end
 
 config :memba,
