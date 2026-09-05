@@ -22,6 +22,19 @@ digraph IterationImplementation {
     start [shape=Mdiamond, label="Start"]
     exit  [shape=Msquare, label="Exit"]
 
+    verify_source_head [
+        label="Verify Source Checkout",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '{{ inputs.expected_source_head }}'",
+        timeout="120s"
+    ]
+
+    source_head_failed [
+        label="Fail: Wrong Source Checkout",
+        shape=parallelogram,
+        script="echo 'Iteration implementation failed before coding: the sandbox source HEAD did not match expected_source_head. Launch from the intended clean checkout and pass its exact commit SHA.' >&2\nexit 1"
+    ]
+
     read_plan [
         label="Read Iteration Plan",
         shape=parallelogram,
@@ -232,7 +245,11 @@ digraph IterationImplementation {
         prompt="@prompts/final_summary.md"
     ]
 
-    start -> read_plan
+    start -> verify_source_head
+    verify_source_head -> read_plan [condition="outcome=succeeded"]
+    verify_source_head -> source_head_failed
+    source_head_failed -> exit
+
     read_plan -> wip_gate [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit

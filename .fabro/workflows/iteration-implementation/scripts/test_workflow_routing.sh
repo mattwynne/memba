@@ -134,6 +134,7 @@ def run_path(outcomes: dict[str, str], context: dict[str, str]) -> tuple[list[st
     return path, gates_satisfied
 
 base_success_outcomes = {
+    "verify_source_head": "succeeded",
     "read_plan": "succeeded",
     "wip_gate": "succeeded",
     "preflight_sandbox": "succeeded",
@@ -171,9 +172,18 @@ if ok or path[-4:] != ["publish_to_main", "publish_conflict_recovery_gate", "pub
         f"got ok={ok}, path={path}"
     )
 
-read_failure_outcomes = {"read_plan": "failed", "read_failed": "failed"}
+source_failure_outcomes = {"verify_source_head": "failed", "source_head_failed": "failed"}
+path, ok = run_path(source_failure_outcomes, {})
+if ok or path != ["start", "verify_source_head", "source_head_failed", "exit"]:
+    raise SystemExit(f"expected wrong source HEAD to fail before reading the plan, got ok={ok}, path={path}")
+
+read_failure_outcomes = {
+    "verify_source_head": "succeeded",
+    "read_plan": "failed",
+    "read_failed": "failed",
+}
 path, ok = run_path(read_failure_outcomes, {})
-if ok or path != ["start", "read_plan", "read_failed", "exit"]:
+if ok or path != ["start", "verify_source_head", "read_plan", "read_failed", "exit"]:
     raise SystemExit(f"expected early terminal failure to fail via skipped publish gate, got ok={ok}, path={path}")
 
 print("iteration-implementation workflow routing tests passed")
