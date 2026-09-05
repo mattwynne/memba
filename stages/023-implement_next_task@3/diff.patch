@@ -1,0 +1,615 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index a03cb14..2ed0e7f 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
+ - [x] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
+-- [ ] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
++- [x] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
+ - [ ] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
+ - [ ] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
+ - [ ] 006 Introduce a named fixed group-email posting policy in Messaging.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index b8fa226..0b757e1 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -523,6 +523,34 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Fetch a public conversation-group summary by club ID and email routing slug.
++
++  The email slug is normalized by trimming surrounding whitespace and folding
++  casing before validation. Invalid club IDs, invalid slugs, and unknown groups
++  return `nil`. The plain-map result keeps callers outside Membership independent
++  of Membership's projection schema.
++  """
++  def get_group_by_email_slug(club_id, email_slug) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         {:ok, email_slug} <- Slug.normalize_for_lookup(email_slug) do
++      GroupProjection
++      |> where([group], group.club_id == ^club_id)
++      |> where([group], group.email_slug == ^email_slug)
++      |> select([group], %{
++        club_id: group.club_id,
++        group_id: group.group_id,
++        email_slug: group.email_slug,
++        group_key: group.group_key,
++        name: group.name
++      })
++      |> Repo.one()
++    else
++      :error -> nil
++      {:error, _reason} -> nil
++    end
++  end
++
+   @doc """
+   Fetch a projected person read model by typed person ID.
+ 
+@@ -913,12 +941,13 @@ defmodule Memba.Membership do
+   end
+ 
+   @doc """
+-  Return one keyset page of missing system-group definitions for release backfill.
++  Return one keyset page of incomplete system-group definitions for release backfill.
+ 
+   The page scans projected clubs in ascending `club_id` order and returns plain
+   maps for deterministic Everyone/Admin group definitions whose projected row is
+-  absent. `cursor` is the last scanned `club_id` from a previous page; callers
+-  keep it in process only and may safely restart from `nil`.
++  absent or whose email slug is not yet assigned. `cursor` is the last scanned
++  `club_id` from a previous page; callers keep it in process only and may safely
++  restart from `nil`.
+   """
+   def list_system_group_definition_backfill_page(cursor \\ nil, limit \\ 1_000) do
+     clubs =
+@@ -930,12 +959,14 @@ defmodule Memba.Membership do
+       |> Repo.all()
+ 
+     group_definitions = Enum.flat_map(clubs, &system_group_definitions(&1.club_id))
+-    existing_group_ids = existing_group_ids(Enum.map(group_definitions, & &1.group_id))
++
++    existing_email_slugs =
++      existing_group_email_slugs(Enum.map(group_definitions, & &1.group_id))
+ 
+     %{
+       entries:
+         Enum.reject(group_definitions, fn definition ->
+-          MapSet.member?(existing_group_ids, definition.group_id)
++          Map.get(existing_email_slugs, definition.group_id) == definition.email_slug
+         end),
+       next_cursor: backfill_next_cursor(clubs, :club_id),
+       source_count: length(clubs)
+@@ -1208,26 +1239,28 @@ defmodule Memba.Membership do
+       %{
+         club_id: club_id,
+         group_id: SystemGroups.everyone_group_id(club_id),
++        email_slug: SystemGroups.everyone_email_slug(),
+         group_key: SystemGroups.everyone_key(),
+         name: SystemGroups.everyone_name()
+       },
+       %{
+         club_id: club_id,
+         group_id: SystemGroups.admin_group_id(club_id),
++        email_slug: SystemGroups.admin_email_slug(),
+         group_key: SystemGroups.admin_key(),
+         name: SystemGroups.admin_name()
+       }
+     ]
+   end
+ 
+-  defp existing_group_ids([]), do: MapSet.new()
++  defp existing_group_email_slugs([]), do: %{}
+ 
+-  defp existing_group_ids(group_ids) do
++  defp existing_group_email_slugs(group_ids) do
+     GroupProjection
+     |> where([group], group.group_id in ^group_ids)
+-    |> select([group], group.group_id)
++    |> select([group], {group.group_id, group.email_slug})
+     |> Repo.all()
+-    |> MapSet.new()
++    |> Map.new()
+   end
+ 
+   defp reject_active_group_memberships([]), do: []
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 8ef2f85..bf8b111 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -72,11 +72,21 @@ defmodule Memba.Membership.Club do
+           group_key: SystemGroups.everyone_key(),
+           name: SystemGroups.everyone_name()
+         },
++        %GroupEmailSlugAssigned{
++          club_id: command.club_id,
++          group_id: SystemGroups.everyone_group_id(command.club_id),
++          email_slug: SystemGroups.everyone_email_slug()
++        },
+         %GroupCreated{
+           club_id: command.club_id,
+           group_id: SystemGroups.admin_group_id(command.club_id),
+           group_key: SystemGroups.admin_key(),
+           name: SystemGroups.admin_name()
++        },
++        %GroupEmailSlugAssigned{
++          club_id: command.club_id,
++          group_id: SystemGroups.admin_group_id(command.club_id),
++          email_slug: SystemGroups.admin_email_slug()
+         }
+       ]
+     end
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index 58c3b07..4260dea 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Membership.Projectors.Club do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+@@ -46,6 +47,8 @@ defmodule Memba.Membership.Projectors.Club do
+ 
+   project(%GroupCreated{}, fn multi -> multi end)
+ 
++  project(%GroupEmailSlugAssigned{}, fn multi -> multi end)
++
+   project(%MemberRoleAssigned{}, fn multi -> multi end)
+ 
+   project(%MemberRoleRemoved{}, fn multi -> multi end)
+diff --git a/web/lib/memba/membership/system_groups.ex b/web/lib/memba/membership/system_groups.ex
+index 3ea9c19..ce70812 100644
+--- a/web/lib/memba/membership/system_groups.ex
++++ b/web/lib/memba/membership/system_groups.ex
+@@ -7,13 +7,18 @@ defmodule Memba.Membership.SystemGroups do
+ 
+   @system_group_id_seed "system-group"
+   @everyone_key "everyone"
++  @everyone_email_slug "everyone"
+   @everyone_name "Everyone"
+   @admin_key "admin"
++  @admin_email_slug "admin"
+   @admin_name "Admin"
+ 
+   @doc "Stable group key for the built-in Everyone conversation group."
+   def everyone_key, do: @everyone_key
+ 
++  @doc "Stable email routing slug for the built-in Everyone conversation group."
++  def everyone_email_slug, do: @everyone_email_slug
++
+   @doc "Display name for the built-in Everyone conversation group."
+   def everyone_name, do: @everyone_name
+ 
+@@ -25,6 +30,9 @@ defmodule Memba.Membership.SystemGroups do
+   @doc "Stable group key for the built-in Admin conversation group."
+   def admin_key, do: @admin_key
+ 
++  @doc "Stable email routing slug for the built-in Admin conversation group."
++  def admin_email_slug, do: @admin_email_slug
++
+   @doc "Display name for the built-in Admin conversation group."
+   def admin_name, do: @admin_name
+ 
+diff --git a/web/lib/memba/membership/system_groups/backfill.ex b/web/lib/memba/membership/system_groups/backfill.ex
+index e5be1d9..8844007 100644
+--- a/web/lib/memba/membership/system_groups/backfill.ex
++++ b/web/lib/memba/membership/system_groups/backfill.ex
+@@ -124,6 +124,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
+     command = %CreateGroup{
+       club_id: entry.club_id,
+       group_id: entry.group_id,
++      email_slug: entry.email_slug,
+       group_key: entry.group_key,
+       name: entry.name
+     }
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 7d1bedb..04dc71e 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -62,11 +62,21 @@ defmodule Memba.Membership.ClubTest do
+                  group_key: "everyone",
+                  name: "Everyone"
+                },
++               %GroupEmailSlugAssigned{
++                 club_id: ^club_id,
++                 group_id: ^everyone_group_id,
++                 email_slug: "everyone"
++               },
+                %GroupCreated{
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  group_key: "admin",
+                  name: "Admin"
++               },
++               %GroupEmailSlugAssigned{
++                 club_id: ^club_id,
++                 group_id: ^admin_group_id,
++                 email_slug: "admin"
+                }
+              ] = Club.execute(%Club{}, command)
+     end
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index cb06c3e..ae9d70b 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -46,7 +46,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 5,
++              aggregate_version: 7,
+               events: [
+                 %ClubCreated{
+                   club_id: ^club_id,
+@@ -70,11 +70,21 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                   group_key: "everyone",
+                   name: "Everyone"
+                 },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  email_slug: "everyone"
++                },
+                 %GroupCreated{
+                   club_id: ^club_id,
+                   group_id: ^admin_group_id,
+                   group_key: "admin",
+                   name: "Admin"
++                },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  email_slug: "admin"
+                 }
+               ],
+               aggregate_state: %Club{
+@@ -85,6 +95,10 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                   ^everyone_group_id => %{group_key: "everyone"},
+                   ^admin_group_id => %{group_key: "admin"}
+                 },
++                group_email_slugs: %{
++                  "everyone" => ^everyone_group_id,
++                  "admin" => ^admin_group_id
++                },
+                 roles: %{^role_id => %{role_key: "admin"}},
+                 role_permissions: %{^role_id => default_role_permissions}
+               }
+@@ -100,6 +114,10 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                ^everyone_group_id => %{group_key: "everyone"},
+                ^admin_group_id => %{group_key: "admin"}
+              },
++             group_email_slugs: %{
++               "everyone" => ^everyone_group_id,
++               "admin" => ^admin_group_id
++             },
+              roles: %{^role_id => %{role_key: "admin"}},
+              role_permissions: %{^role_id => persisted_role_permissions}
+            } =
+@@ -199,7 +217,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 5
++              aggregate_version: 7
+             }} =
+              Membership.create_club(
+                %{
+@@ -246,7 +264,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 6,
++              aggregate_version: 8,
+               events: [
+                 %ClubUpdated{
+                   club_id: ^club_id,
+@@ -281,7 +299,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 6,
++              aggregate_version: 8,
+               events: [
+                 %ClubRoleDefined{
+                   club_id: ^club_id,
+@@ -305,7 +323,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 7,
++              aggregate_version: 9,
+               events: [
+                 %ClubRolePermissionGranted{
+                   club_id: ^club_id,
+@@ -327,7 +345,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 8,
++              aggregate_version: 10,
+               events: [
+                 %MemberRoleAssigned{
+                   club_id: ^club_id,
+@@ -351,7 +369,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 9,
++              aggregate_version: 11,
+               events: [
+                 %MemberRoleRemoved{
+                   club_id: ^club_id,
+@@ -397,7 +415,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 7,
++              aggregate_version: 9,
+               events: [
+                 %GroupCreated{
+                   club_id: ^club_id,
+@@ -440,7 +458,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 8,
++              aggregate_version: 10,
+               events: [
+                 %GroupMemberAdded{
+                   club_id: ^club_id,
+@@ -476,7 +494,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 9,
++              aggregate_version: 11,
+               events: [
+                 %GroupMemberRemoved{
+                   club_id: ^club_id,
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index 015f6ad..b011371 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -42,6 +42,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+     assert %GroupProjection{
+              group_id: ^everyone_group_id,
+              club_id: ^club_id,
++             email_slug: "everyone",
+              group_key: "everyone",
+              name: "Everyone"
+            } = Repo.get(GroupProjection, everyone_group_id)
+@@ -49,6 +50,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+     assert %GroupProjection{
+              group_id: ^admin_group_id,
+              club_id: ^club_id,
++             email_slug: "admin",
+              group_key: "admin",
+              name: "Admin"
+            } = Repo.get(GroupProjection, admin_group_id)
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index d460192..636a7da 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -14,6 +14,7 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.MemberRemoved
+   alias Memba.Membership.Events.PersonEmailAddressAdded
+@@ -83,11 +84,21 @@ defmodule Memba.Membership.PublicApiTest do
+                   group_key: "everyone",
+                   name: "Everyone"
+                 },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  email_slug: "everyone"
++                },
+                 %GroupCreated{
+                   club_id: ^club_id,
+                   group_id: ^admin_group_id,
+                   group_key: "admin",
+                   name: "Admin"
++                },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  email_slug: "admin"
+                 }
+               ]
+             }} =
+@@ -133,11 +144,21 @@ defmodule Memba.Membership.PublicApiTest do
+                   group_key: "everyone",
+                   name: "Everyone"
+                 },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^everyone_group_id,
++                  email_slug: "everyone"
++                },
+                 %GroupCreated{
+                   club_id: ^club_id,
+                   group_id: ^admin_group_id,
+                   group_key: "admin",
+                   name: "Admin"
++                },
++                %GroupEmailSlugAssigned{
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  email_slug: "admin"
+                 }
+               ]
+             }} =
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index c889965..ff4913a 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.Group, as: GroupProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+   alias Memba.Membership.Roles
+@@ -50,6 +51,41 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "get_group_by_email_slug/2" do
++    test "returns a public group summary scoped to the selected club" do
++      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
++      other_club = create_club("Nelson Cycling Club", slug: "ncc")
++
++      assert %{
++               club_id: club_id,
++               group_id: group_id,
++               email_slug: "admin",
++               group_key: "admin",
++               name: "Admin"
++             } = Membership.get_group_by_email_slug(club.club_id, " ADMIN ")
++
++      assert club_id == club.club_id
++      assert group_id == SystemGroups.admin_group_id(club.club_id)
++      refute match?(%GroupProjection{}, Membership.get_group_by_email_slug(club.club_id, "admin"))
++
++      assert %{club_id: other_club_id, group_id: other_group_id, email_slug: "admin"} =
++               Membership.get_group_by_email_slug(other_club.club_id, "admin")
++
++      assert other_club_id == other_club.club_id
++      assert other_group_id == SystemGroups.admin_group_id(other_club.club_id)
++    end
++
++    test "returns nil for invalid IDs and invalid, unknown, or non-string email slugs" do
++      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
++
++      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "unknown"))
++      assert is_nil(Membership.get_group_by_email_slug(club.club_id, "admin group"))
++      assert is_nil(Membership.get_group_by_email_slug(club.club_id, nil))
++      assert is_nil(Membership.get_group_by_email_slug("not-a-uuid", "admin"))
++      assert is_nil(Membership.get_group_by_email_slug(nil, "admin"))
++    end
++  end
++
+   describe "list_active_members_of_club/1" do
+     test "returns active members of the given club and excludes members of other clubs" do
+       kootenay_club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/membership/system_groups_backfill_test.exs b/web/test/memba/membership/system_groups_backfill_test.exs
+index e93386f..0b41f80 100644
+--- a/web/test/memba/membership/system_groups_backfill_test.exs
++++ b/web/test/memba/membership/system_groups_backfill_test.exs
+@@ -10,10 +10,12 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
++  alias Memba.Membership.Projectors.Group, as: GroupProjector
+   alias Memba.Membership.Projectors.Role, as: RoleProjector
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
+@@ -44,10 +46,14 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+     admin_group_id = SystemGroups.admin_group_id(club.club_id)
+ 
+-    assert %GroupProjection{group_key: "everyone", name: "Everyone"} =
++    assert %GroupProjection{
++             email_slug: "everyone",
++             group_key: "everyone",
++             name: "Everyone"
++           } =
+              Repo.get(GroupProjection, everyone_group_id)
+ 
+-    assert %GroupProjection{group_key: "admin", name: "Admin"} =
++    assert %GroupProjection{email_slug: "admin", group_key: "admin", name: "Admin"} =
+              Repo.get(GroupProjection, admin_group_id)
+ 
+     assert active_group_membership?(everyone_group_id, alice.membership_id)
+@@ -82,6 +88,26 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     assert event_counts.conversation_access_granted == 1
+   end
+ 
++  test "appends email-slug facts when historic system groups already exist" do
++    club = seed_historic_club!()
++    append_historic_system_groups!(club.club_id)
++
++    assert membership_event_count(club.club_id, GroupCreated) == 2
++    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 0
++
++    assert %{system_group_definitions: %{dispatched_count: 2}} =
++             Backfill.run!(page_size: 2)
++
++    assert membership_event_count(club.club_id, GroupCreated) == 2
++    assert membership_event_count(club.club_id, GroupEmailSlugAssigned) == 2
++
++    assert %{email_slug: "everyone"} =
++             Membership.get_group_by_email_slug(club.club_id, "everyone")
++
++    assert %{email_slug: "admin"} =
++             Membership.get_group_by_email_slug(club.club_id, "admin")
++  end
++
+   test "backfill-seeded memberships follow later role and member lifecycle events" do
+     club = seed_historic_club!()
+     alice = add_active_member!(club.club_id)
+@@ -339,6 +365,30 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     %{membership_id: membership_id, person_id: person_id}
+   end
+ 
++  defp append_historic_system_groups!(club_id) do
++    events =
++      [
++        %GroupCreated{
++          club_id: club_id,
++          group_id: SystemGroups.everyone_group_id(club_id),
++          group_key: SystemGroups.everyone_key(),
++          name: SystemGroups.everyone_name()
++        },
++        %GroupCreated{
++          club_id: club_id,
++          group_id: SystemGroups.admin_group_id(club_id),
++          group_key: SystemGroups.admin_key(),
++          name: SystemGroups.admin_name()
++        }
++      ]
++      |> Enum.map(&Mapper.map_to_event_data/1)
++
++    assert :ok = Commanded.EventStore.append_to_stream(MembershipApp, club_id, 3, events)
++
++    checkpoint = Memba.ProjectionBarrier.current_checkpoint()
++    Memba.ProjectionBarrier.await!([GroupProjector], checkpoint: checkpoint)
++  end
++
+   defp assign_admin_role!(club_id, member) do
+     assert :ok =
+              MembershipApp.dispatch(
+diff --git a/web/test/memba/membership/system_groups_test.exs b/web/test/memba/membership/system_groups_test.exs
+index 55f8e84..028a67f 100644
+--- a/web/test/memba/membership/system_groups_test.exs
++++ b/web/test/memba/membership/system_groups_test.exs
+@@ -4,10 +4,12 @@ defmodule Memba.Membership.SystemGroupsTest do
+   alias Memba.ID
+   alias Memba.Membership.SystemGroups
+ 
+-  test "defines stable keys and display names for built-in conversation groups" do
++  test "defines stable keys, email slugs, and display names for built-in conversation groups" do
+     assert SystemGroups.everyone_key() == "everyone"
++    assert SystemGroups.everyone_email_slug() == "everyone"
+     assert SystemGroups.everyone_name() == "Everyone"
+     assert SystemGroups.admin_key() == "admin"
++    assert SystemGroups.admin_email_slug() == "admin"
+     assert SystemGroups.admin_name() == "Admin"
+   end
+ 
