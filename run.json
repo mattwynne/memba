@@ -1526,7 +1526,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-05T00:00:30.210178868Z",
-  "last_event_at": "2026-09-05T04:50:20.905857137Z",
+  "last_event_at": "2026-09-05T04:50:24.884444885Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -36419,9 +36419,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 13249,
       "checkpoint": {
-        "timestamp": "2026-09-05T04:50:20.921913446Z",
+        "timestamp": "2026-09-05T04:50:24.873732416Z",
         "current_node": "task_gate",
         "completed_nodes": [
           "start",
@@ -36537,7 +36537,397 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.work_dir": "/workspace/memba",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.todo_readable": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "last_stage": "validate_task",
+          "graph.rankdir": "LR",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.run_id": "01M1QDT82FG7AJ9YQ93QMFE5KN",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "failure_signature": "",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.start": 0,
+          "graph.max_node_visits": "80",
+          "failure_class": "",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Checkpoint `33aa865` changes exactly task 015 from unchecked to checked. Its parent shows task 015 was the first unchecked task; tasks 016–018 remain pending with no split, reorder, deletion, or weakening.\n- Concrete implementation evidence includes:\n  - Enforcing email slugs for newly created groups while preserving historical slugless replay/idempotency compatibility.\n  - Aggregate and projection coverage for slug facts.\n  - Replay-parity coverage for Everyone/Admin slug lookup and event counts.\n  - Admin recipient filtering, sender non-following, duplicate-provider idempotency, inactive/other-club rejection, group-scoped access, and reply authorization coverage.\n- No acceptance feature files were changed.\n- Independently reran the eight affected test files: **98 tests, 0 failures**. `git diff --check` also passes, and the working tree remains clean.\n- The implementation evidence records a full `dev check` passing on the completed task state.\n- ADRs 0002, 0007, 0009, 0021, and 0022 remain respected: behavior stays event-sourced, context boundaries are preserved, read models use established Ecto projectors, and replay synchronization uses projection barriers without sleeps or polling.\n\n{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "preferred_label": "valid",
+          "task_retry_available": false,
+          "internal.retry_count.task_gate": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.fidelity": "summary:high",
+          "thread.todo_readable.current_node": "all_tasks_done",
           "internal.node_visit_count": 15,
+          "internal.retry_count.preflight_sandbox": 0,
+          "task_valid": true,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.validate_task.current_node": "task_gate",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.task_gate.current_node": "sync_task_list",
+          "graph.default_fidelity": "summary:high",
+          "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling.",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "current_node": "task_gate",
+          "internal.thread_id": "validate_task",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.read_plan": 0,
+          "outcome": "succeeded",
+          "command.output": "blob://sha256/e0477ab90a6f540265334250e3faf94cc051ff4788a4251802ab027c2d7347fa",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Checkpoint `33aa865` changes exactly task 015 from unchecked to checked. Its parent shows task 015 was the first unchecked task; tasks 016–018 remain pending",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/175cc4e0a597e8c48759a6e461fce0a5462e1a2e7f3c1a0dc12f6a41419c6bd1"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93636,
+              "active_time_ms": 93636
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4ee7246c2ce1c9760dc36844823aec1fd28acfa00d100a686c4c034e945a6a75"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, reci",
+              "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 5412024,
+                    "output_tokens": 17686,
+                    "reasoning_tokens": 8038,
+                    "cache_read_tokens": 4041088,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 29852384
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 699926,
+              "tool_time_ms": 902029,
+              "active_time_ms": 1601955
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7d46fff2714c88cea5ab534e7133386d2d178da1ae202dbad347e585e9f6d463"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1929,
+              "active_time_ms": 1929
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/17bbec253711b022b3595c6e93e423b844230a8704c0dd47a54e6bbee2332d7f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "valid",
+            "context_updates": {
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Checkpoint `33aa865` changes exactly task 015 from unchecked to checked. Its parent shows task 015 was the first unchecked task; tasks 016–018 remain pending with no split, reorder, deletion, or weakening.\n- Concrete implementation evidence includes:\n  - Enforcing email slugs for newly created groups while preserving historical slugless replay/idempotency compatibility.\n  - Aggregate and projection coverage for slug facts.\n  - Replay-parity coverage for Everyone/Admin slug lookup and event counts.\n  - Admin recipient filtering, sender non-following, duplicate-provider idempotency, inactive/other-club rejection, group-scoped access, and reply authorization coverage.\n- No acceptance feature files were changed.\n- Independently reran the eight affected test files: **98 tests, 0 failures**. `git diff --check` also passes, and the working tree remains clean.\n- The implementation evidence records a full `dev check` passing on the completed task state.\n- ADRs 0002, 0007, 0009, 0021, and 0022 remain respected: behavior stays event-sourced, context boundaries are preserved, read models use established Ecto projectors, and replay synchronization uses projection barriers without sleeps or polling.\n\n{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Checkpoint `33aa865` changes exactly task 015 from unchecked to checked. Its parent shows task 015 was the first unchecked task; tasks 016–018 remain pending",
+              "task_retry_available": false,
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 518825,
+                    "output_tokens": 3222,
+                    "reasoning_tokens": 1647,
+                    "cache_read_tokens": 209024,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2844707
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 116235,
+              "tool_time_ms": 21509,
+              "active_time_ms": 137744
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e0477ab90a6f540265334250e3faf94cc051ff4788a4251802ab027c2d7347fa"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8329f4e5799f8cf7b2396ac1a2cea83c3ec7d73618c9ff35371051ae6056ddd3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d769455198a07ba31f5fc4e8b38ae720d8089cb92fac9eb359904ef1fed927f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e675ac68e5d832f06c8ceba23f8551e5c82d38fd6815971a85d182bc081bf196"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          }
+        },
+        "next_node_id": "sync_task_list",
+        "git_commit_sha": "e812737f143afd5e470bab46a835f6f365657c44",
+        "node_visits": {
+          "validate_task": 15,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "resume_gate": 1,
+          "all_tasks_done": 15,
+          "read_plan": 1,
+          "pre_validate_snapshot": 15,
+          "sync_task_list": 15,
+          "implement_next_task": 15,
+          "task_gate": 15,
+          "todo_readable": 15
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 53,
+          "additions": 2331,
+          "deletions": 347
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-05T04:50:25.060699134Z",
+        "current_node": "sync_task_list",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.node_visit_count": 16,
           "response.implement_next_task": "Implemented and checked off task 015. The codebase passes the full `dev check`.\n\n1. Selected task\n\n> `015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.`\n\n2. Changes made\n\n- Closed an aggregate invariant exposed by the new tests: genuinely new groups must now provide an email slug, while idempotent commands for historical slugless groups remain compatible in [club.ex](/workspace/memba/web/lib/memba/membership/club.ex:467).\n- Added aggregate coverage for required group slugs in [club_test.exs](/workspace/memba/web/test/memba/membership/club_test.exs:395).\n- Reworked the slug projection test so it exercises a real `GroupEmailSlugAssigned` event against a historical slugless group rather than an idempotent no-op in [group_projection_test.exs](/workspace/memba/web/test/memba/membership/group_projection_test.exs:64).\n- Extended projection replay parity to verify public Everyone/Admin slug lookups and retained `GroupEmailSlugAssigned` event counts for historical and modern clubs in [system_groups_replay_parity_test.exs](/workspace/memba/web/test/memba/membership/system_groups_replay_parity_test.exs:87).\n- Added aggregate and projection-replay coverage proving a non-recipient sender is not restored as a follower:\n  - [conversation_followers_test.exs](/workspace/memba/web/test/memba/messaging/conversation_followers_test.exs:141)\n  - [conversation_follow_projection_test.exs](/workspace/memba/web/test/memba/messaging/conversation_follow_projection_test.exs:179)\n- Strengthened Admin recipient resolution to exclude a removed former Admin in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:168).\n- Added realistic inbound Admin coverage for:\n  - Active Admin sender delivery and following.\n  - Non-Admin sender’s lack of Everyone-group read access.\n  - Duplicate provider-message idempotency.\n  - Inactive and other-club sender rejection before message, delivery, access, or acceptance events.\n  - See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:207).\n- Updated the custom-group reply test fixture to provide the now-required email slug in [post_message_reply_test.exs](/workspace/memba/web/test/memba/messaging/post_message_reply_test.exs:449).\n- Existing direct policy, inbound-route, release-backfill, direct/forged reply-authorisation, and sender-non-following tests were audited and retained. No acceptance feature files were changed.\n\n3. Validation\n\n- Test-first focused run: `98 tests, 2 failures`\n  - Exposed the missing new-group slug invariant.\n  - Exposed an incorrect replay checkpoint wait in the new test.\n- After implementation:\n  - Replay-focused test: `4 tests, 0 failures`.\n  - Complete affected focused suite: `98 tests, 0 failures`.\n  - Formatting check: passed.\n  - `git diff --check`: passed.\n- Full `PATH=\"$PWD/bin:$PATH\" dev check`: passed on the exact final diff, including the todo check-off and browser acceptance suite.\n\n4. Todo check-off\n\nUpdated [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:17) exactly to:\n\n```markdown\n- [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.\n```\n\nTasks 016–018 remain unchecked.\n\n5. Todo structure\n\nNo tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n- ADR 0002: aggregate decisions, immutable events, historical compatibility, and replay remain explicit.\n- ADR 0007: Messaging continues resolving group membership through Membership’s public API rather than Membership projection schemas.\n- ADR 0009: read-model and replay coverage uses the established Commanded Ecto projectors.\n- ADR 0021: existing committed read-model publication behavior remains unchanged.\n- ADR 0022: replay tests synchronize using captured per-projector positions and projection barriers, without sleeps or polling.",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "thread.pre_validate_snapshot.current_node": "validate_task",
@@ -36552,7 +36942,7 @@
           "internal.retry_count.validate_task": 0,
           "preferred_label": "valid",
           "internal.retry_count.preflight_sandbox": 0,
-          "internal.thread_id": "validate_task",
+          "internal.thread_id": "task_gate",
           "internal.retry_count.sync_task_list": 0,
           "thread.todo_readable.current_node": "all_tasks_done",
           "graph.max_node_visits": "80",
@@ -36561,7 +36951,7 @@
           "thread.all_tasks_done.current_node": "implement_next_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "thread.validate_task.current_node": "task_gate",
-          "command.output": "blob://sha256/e0477ab90a6f540265334250e3faf94cc051ff4788a4251802ab027c2d7347fa",
+          "command.output": "blob://sha256/8951bc812c094a7c9930702fc5add06de557b03c09c368021b4aef9c8e0efc4d",
           "failure_signature": "",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.implement_next_task": 0,
@@ -36577,7 +36967,7 @@
           "internal.retry_count.todo_readable": 0,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "thread.read_plan.current_node": "wip_gate",
-          "current_node": "task_gate",
+          "current_node": "sync_task_list",
           "last_stage": "validate_task",
           "failure_class": "",
           "internal.retry_count.resume_gate": 0,
@@ -36588,15 +36978,15 @@
           "sync_task_list": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/4ee7246c2ce1c9760dc36844823aec1fd28acfa00d100a686c4c034e945a6a75"
+              "command.output": "blob://sha256/8951bc812c094a7c9930702fc5add06de557b03c09c368021b4aef9c8e0efc4d"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 152,
-              "active_time_ms": 152
+              "tool_time_ms": 167,
+              "active_time_ms": 167
             }
           },
           "start": {
@@ -36782,11 +37172,11 @@
             }
           }
         },
-        "next_node_id": "sync_task_list",
+        "next_node_id": "todo_readable",
         "node_visits": {
           "pre_validate_snapshot": 15,
           "task_gate": 15,
-          "sync_task_list": 15,
+          "sync_task_list": 16,
           "validate_task": 15,
           "preflight_sandbox": 1,
           "read_plan": 1,
@@ -39002,6 +39392,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "sync_task_list@16": {
+      "first_event_seq": 13252,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-05T04:50:24.883943780Z",
+      "handler": "command",
+      "graph_visit": 16,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "implement_next_task@14": {
       "first_event_seq": 10755,
@@ -45076,6 +45496,42 @@
         "inference_time_ms": 0,
         "tool_time_ms": 166,
         "active_time_ms": 166
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
+    "task_gate@15": {
+      "first_event_seq": 13244,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-09-05T04:50:20.919583570Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-05T04:50:20.915748930Z",
+      "handler": "conditional",
+      "graph_visit": 15,
+      "timing": {
+        "wall_time_ms": 2,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
         "input_tokens": 0,
