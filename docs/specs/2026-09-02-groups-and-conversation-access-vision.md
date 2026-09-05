@@ -1,6 +1,8 @@
 # Vision — groups and conversation access
 
 **Date:** 2026-09-02
+**Updated:** 2026-09-05 to incorporate the posting-policy decision delivered in
+iteration 057
 **Status:** Product vision for iterative delivery — not an implementation plan
 
 ## Purpose
@@ -78,19 +80,25 @@ Each group should eventually have a stable inbound email address—for example,
 `board@nclt.groups.memba.io`. The final address format is a delivery-design decision;
 the important rule is that the address identifies a club and a group.
 
-Inbound email follows the same access rule as in-app posting:
+Starting a conversation and participating in an existing conversation are separate
+policy decisions:
 
-- Memba accepts a new group-addressed message only when the sender is an active
-  member of the addressed group. The new conversation grants that group write access.
+- The initial fixed `club_members_only` email policy accepts a new group-addressed
+  message when the sender is an active member of the destination club, even if they
+  are not a member of the addressed group.
 - A message sent to a group address begins a conversation using that group’s default
-  visibility and access.
+  visibility and grants that group write access. The sender gains no conversation
+  access merely by starting it.
 - A reply is accepted only when its sender belongs to a group with write access to
   the existing conversation; replies retain that conversation’s access and visibility.
-- Non-members of the addressed group cannot post, even if they are members of the
-  club or hold a club-management role.
+- Inactive members and people outside the destination club cannot start a conversation
+  under this policy.
 
 Public readers cannot post by email or in the application merely because a
 conversation is public.
+
+Future group-email policies may include `public` or `group_members_only`, but policy
+configuration and in-app group posting remain later decisions.
 
 ## Initial behaviour and future shape
 
@@ -114,8 +122,9 @@ This is a proposed sequence, not a committed plan.
 2. **Private named group conversations.** Let an authorised club member define a
    named group, assign active members, and start a private conversation for that
    group. Start with one writable group per conversation.
-3. **Group email posting.** Route group-addressed email into group conversations and
-   require the sender to belong to the addressed group.
+3. **Group email posting.** Route group-addressed email into group conversations,
+   starting with the fixed `club_members_only` policy while keeping replies governed
+   by group write access.
 4. **Public-read defaults.** Add club and group defaults and render public
    conversations on the public club page.
 5. **Shared conversations.** Allow a new or existing conversation to grant read or

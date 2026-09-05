@@ -2,9 +2,12 @@ defmodule Memba.MessagingFixtures do
   @moduledoc """
   Shared fixtures for member-facing Messaging projection tests.
 
-  Member web surfaces read conversations through group access grants, so these
-  fixtures create the message projection and its root-conversation grant
-  together.
+  These fixtures intentionally insert read-model rows directly; domain and projector
+  behaviour is covered separately by Messaging tests.
+
+  Inserting a root message (where `message_id == conversation_id`) also creates its
+  conversation-to-group access grant. Inserting a reply creates only the message row,
+  so the root message and its grant must already exist.
   """
 
   alias Memba.Membership.SystemGroups
@@ -12,6 +15,13 @@ defmodule Memba.MessagingFixtures do
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
 
+  @doc """
+  Insert a projected message for a group-accessible conversation.
+
+  Root messages receive a grant for `:audience_group_id` (Everyone by default) at
+  the requested `:access_level` (`"write"` by default). Replies are identified by a
+  different `:conversation_id` and assume the root and grant were inserted first.
+  """
   def insert_group_accessible_message!(attrs) when is_list(attrs) do
     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
     club_id = Keyword.fetch!(attrs, :club_id)

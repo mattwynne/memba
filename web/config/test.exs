@@ -14,8 +14,11 @@ repo_connection_config =
     [hostname: pg_host]
   end
 
-# Strongly consistent projectors can hold independent SQL sandbox ownership
-# connections, even when the BEAM is constrained to one online scheduler.
+# Strong-consistency requests can run several independently supervised projectors
+# while the request/reset process also owns sandbox connections. On a one-scheduler
+# runtime, the scheduler-based pool would contain only two connections and starve
+# projector acknowledgements. Sixteen is the tested floor for that concurrent process
+# set; higher-scheduler environments retain scheduler-based sizing.
 repo_pool_size = max(System.schedulers_online() * 2, 16)
 
 repo_pool_config =
