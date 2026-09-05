@@ -421,8 +421,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     message_count_before = count_events(MessageSent)
     delivery_count_before = count_events(EmailDeliveryCreated)
     accepted_count_before = count_events(InboundClubEmailAccepted)
+    rejected_count_before = count_events(InboundClubEmailRejected)
 
-    assert {:error, :not_current_member} =
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "not_current_member",
+              to_address: "admin@kmc.clubs.memba.io"
+            }} =
              Messaging.receive_inbound_club_email(
                %{
                  provider: "resend",
@@ -443,6 +449,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert message_count_before == count_events(MessageSent)
     assert delivery_count_before == count_events(EmailDeliveryCreated)
     assert accepted_count_before == count_events(InboundClubEmailAccepted)
+    assert rejected_count_before + 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "not_current_member",
+             to_address: "admin@kmc.clubs.memba.io"
+           } =
+             Messaging.get_inbound_email_source("resend", "task-057-forged-admin-reply")
+
     refute Messaging.following_conversation?(root_message_id, alice.person_id)
   end
 

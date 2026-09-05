@@ -24,6 +24,7 @@ const {
   assertReceiptStatus,
   createClub,
   createPeople,
+  clubSlugFor,
   cssString,
   deliveryForRecipient,
   emailFor,
@@ -468,6 +469,8 @@ test("member-message route URL and generated emails match the browser app surfac
   );
   assert.equal(emailFor("Alice"), "alice@example.test");
   assert.equal(emailFor("Kootenay Mountaineering Club"), "kootenay.mountaineering.club@example.test");
+  assert.equal(clubSlugFor(kootenayClubName), "kmc");
+  assert.equal(clubSlugFor("Nelson Paddling Club"), "nelson-paddling-club");
   assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
 });
 

@@ -52,6 +52,14 @@ function emailFor(name) {
   return `${normalizedName}@example.test`;
 }
 
+function clubSlugFor(clubName) {
+  if (clubName === kootenayClubName) {
+    return "kmc";
+  }
+
+  return defaultClubSlug(clubName);
+}
+
 function defaultClubSlug(clubName) {
   return String(clubName || "")
     .trim()
@@ -4109,6 +4117,7 @@ module.exports = {
   addMembers,
   appUrl,
   clubSiteUrl,
+  clubSlugFor,
   assertAdminConversationShowsReply,
   assertAdminMessageDeliveredToMembers,
   assertAdminMessageNotDeliveredToMember,

@@ -5,6 +5,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+
   alias Memba.Messaging.Projections.ConversationGroupAccess,
     as: ConversationGroupAccessProjection
 

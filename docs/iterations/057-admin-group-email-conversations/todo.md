@@ -17,4 +17,4 @@
 - [x] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
 - [x] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
 - [x] 017 Keep existing Everyone acceptance regressions passing.
-- [ ] 018 Implement the accepted scenarios' domain and browser support, removing or narrowing `@todo-domain` / `@todo-ui` only when each runner can execute the relevant scenario. Run `dev check`.
+- [x] 018 Implement the accepted scenarios' domain and browser support, removing or narrowing `@todo-domain` / `@todo-ui` only when each runner can execute the relevant scenario. Run `dev check`.

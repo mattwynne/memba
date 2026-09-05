@@ -51,6 +51,7 @@ const {
   assertReplyEmailNotDeliveredToMembers,
   assertReplyEmailNotDeliveredToAuthor,
   assertStopFollowLinkNotValid,
+  clubSlugFor,
   emailFor,
   ensureClubSlugMatchesInboundAddress,
   ensureState,
@@ -424,7 +425,7 @@ Then(/^(.+) should not receive (\w+)'s reply by email$/, async function (recipie
 
 Then(
   /^(.+) should not receive (\w+)'s reply by email from (.+) via Memba$/,
-  async function (recipientNamesText, senderName) {
+  async function (recipientNamesText, senderName, _clubName) {
     await assertReplyEmailNotDeliveredToMembers(
       this,
       senderName,
@@ -928,18 +929,6 @@ function personStateFromCommand(result) {
     personId: result.personId,
     primaryEmail: result.email
   };
-}
-
-function clubSlugFor(clubName) {
-  if (clubName === kootenayClubName) {
-    return "kmc";
-  }
-
-  return clubName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32);
 }
 
 async function ensureKootenayMember(world, personName) {

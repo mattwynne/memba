@@ -843,7 +843,7 @@ defmodule Memba.Messaging do
       MessageProjection
       |> where([reply], reply.message_id != reply.conversation_id)
       |> scope_conversation_entries_query(scope)
-      |> distinct([reply, ...], [asc: reply.club_id, asc: reply.conversation_id])
+      |> distinct([reply, ...], asc: reply.club_id, asc: reply.conversation_id)
       |> order_by([reply, ...],
         asc: reply.club_id,
         asc: reply.conversation_id,
@@ -1291,32 +1291,45 @@ defmodule Memba.Messaging do
        ) do
     message_id = Memba.ID.generate(:message)
 
-    with :ok <-
-           post_inbound_club_message_reply(
-             conversation_id,
-             sender,
-             message_id,
-             body,
-             dispatch_opts
-           ),
-         :ok <-
-           record_inbound_club_email_accepted(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         message_id: message_id,
-         conversation_id: conversation_id,
-         club_id: destination.club_id,
-         sender_id: sender.person_id,
-         from_address: sender.from_address,
-         to_address: destination.to_address
-       }}
+    case post_inbound_club_message_reply(
+           conversation_id,
+           sender,
+           message_id,
+           body,
+           dispatch_opts
+         ) do
+      :ok ->
+        with :ok <-
+               record_inbound_club_email_accepted(
+                 receive_command.inbound_email,
+                 destination,
+                 sender,
+                 message_id,
+                 dispatch_opts
+               ) do
+          {:ok,
+           %{
+             inbound_email_id: receive_command.inbound_email_id,
+             message_id: message_id,
+             conversation_id: conversation_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             from_address: sender.from_address,
+             to_address: destination.to_address
+           }}
+        end
+
+      {:error, :not_current_member} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          "not_current_member",
+          dispatch_opts,
+          club_name: destination.club_name
+        )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
