@@ -258,6 +258,22 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert Membership.active_member_of_group?(admin_group_id, bob.person_id)
     assert Messaging.group_has_conversation_access?(root_message_id, admin_group_id, :write)
 
+    non_admin_reply_message_id = Memba.ID.generate(:message)
+
+    assert {:error, :not_current_member} =
+             Messaging.post_message_reply(
+               %{
+                 message_id: non_admin_reply_message_id,
+                 conversation_id: root_message_id,
+                 sender_id: alice.person_id,
+                 body: "I should not be able to post this reply."
+               },
+               consistency: :strong
+             )
+
+    assert is_nil(Messaging.get_message(non_admin_reply_message_id))
+    assert [] == Messaging.list_recipient_deliveries(non_admin_reply_message_id)
+
     reply_message_id = Memba.ID.generate(:message)
 
     assert :ok =
@@ -283,6 +299,147 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert kmc_id == kmc.club_id
     assert bob_id == bob.person_id
+  end
+
+  test "an Admin reply header preserves threading and follower-only delivery" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Member", email: "alice@example.com")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    carol = create_person!(name: "Carol Admin", email: "carol@example.com")
+    dana = create_person!(name: "Dana Admin", email: "dana@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    carol_membership_id = add_member!(kmc.club_id, carol.person_id)
+    dana_membership_id = add_member!(kmc.club_id, dana.person_id)
+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
+    assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)
+    assign_admin_role!(kmc.club_id, dana_membership_id, dana.person_id)
+
+    assert {:ok, %{message_id: root_message_id}} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-057-admin-header-root",
+                 provider_event_id: "task-057-admin-header-root-event",
+                 from_address: "bob@example.com",
+                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                 subject: "Committee meeting",
+                 text_body: "Can everyone attend?"
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.following_conversation?(root_message_id, bob.person_id)
+    refute Messaging.following_conversation?(root_message_id, carol.person_id)
+    refute Messaging.following_conversation?(root_message_id, dana.person_id)
+
+    carol_outbound_message_id =
+      outbound_message_id_for_recipient!(root_message_id, carol.person_id)
+
+    assert {:ok,
+            %{
+              message_id: reply_message_id,
+              conversation_id: ^root_message_id,
+              club_id: kmc_id,
+              sender_id: carol_id,
+              to_address: "admin@kmc.clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-057-admin-header-reply",
+                 provider_event_id: "task-057-admin-header-reply-event",
+                 from_address: "carol@example.com",
+                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                 subject: "Re: Committee meeting",
+                 text_body: "I can attend.",
+                 in_reply_to_message_ids: [carol_outbound_message_id]
+               },
+               consistency: :strong
+             )
+
+    assert kmc_id == kmc.club_id
+    assert carol_id == carol.person_id
+
+    assert %{
+             message_id: ^reply_message_id,
+             conversation_id: ^root_message_id,
+             reply_to_message_id: ^root_message_id,
+             subject: "Committee meeting",
+             body: "I can attend."
+           } = Messaging.get_message(reply_message_id)
+
+    assert [%{recipient_id: bob_id, status: "pending"}] =
+             Messaging.list_recipient_deliveries(reply_message_id)
+
+    assert bob_id == bob.person_id
+    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, alice.person_id))
+    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, carol.person_id))
+    assert is_nil(Messaging.get_member_email_delivery(reply_message_id, dana.person_id))
+    assert Messaging.following_conversation?(root_message_id, carol.person_id)
+  end
+
+  test "an active non-Admin cannot forge an Admin reply with another recipient's header" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Member", email: "alice@example.com")
+    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
+    carol = create_person!(name: "Carol Admin", email: "carol@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    carol_membership_id = add_member!(kmc.club_id, carol.person_id)
+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
+    assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)
+
+    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
+
+    assert {:ok, %{message_id: root_message_id}} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-057-forged-admin-root",
+                 provider_event_id: "task-057-forged-admin-root-event",
+                 from_address: "bob@example.com",
+                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                 subject: "Committee meeting",
+                 text_body: "Can everyone attend?"
+               },
+               consistency: :strong
+             )
+
+    assert Membership.active_member_of_club?(kmc.club_id, alice.person_id)
+    refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
+
+    carol_outbound_message_id =
+      outbound_message_id_for_recipient!(root_message_id, carol.person_id)
+
+    message_count_before = count_events(MessageSent)
+    delivery_count_before = count_events(EmailDeliveryCreated)
+    accepted_count_before = count_events(InboundClubEmailAccepted)
+
+    assert {:error, :not_current_member} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-057-forged-admin-reply",
+                 provider_event_id: "task-057-forged-admin-reply-event",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
+                 subject: "Re: Committee meeting",
+                 text_body: "I should not be able to post this reply.",
+                 in_reply_to_message_ids: [carol_outbound_message_id]
+               },
+               consistency: :strong
+             )
+
+    assert [%{message_id: ^root_message_id}] =
+             Messaging.list_conversation_messages(root_message_id)
+
+    assert message_count_before == count_events(MessageSent)
+    assert delivery_count_before == count_events(EmailDeliveryCreated)
+    assert accepted_count_before == count_events(InboundClubEmailAccepted)
+    refute Messaging.following_conversation?(root_message_id, alice.person_id)
   end
 
   test "an active non-Admin sender receives no Admin delivery, receipt, access, or follow" do
