@@ -155,3 +155,38 @@ Note: the final review synthesis omitted the independent reviewers' code-health 
    - Evidence: `web/lib/memba/release.ex` starts the application, waits on an explicit source-projector list, and runs `Memba.Membership.SystemGroups.Backfill.run!/0` before release migration can finish. The backfill pages current projections, dispatches commands phase by phase, keeps cursors only in process memory, and restarts from the first phase after a failure while relying on idempotency. It logs phase/page counts, and tests cover ordering, failure propagation, retry, and duplicate safety.
    - Risk: deployment completion now depends on projector catch-up and the duration of a synchronous application-level backfill. As data volume grows, or if future backfills use independently shaped barriers and retry behaviour, release failures and operational diagnosis can become harder.
    - Suggested next action: before introducing another event-sourced release backfill, define a reusable release-backfill runner or operational convention covering projector barriers, phase progress/telemetry, retry semantics, and timeout expectations, while continuing to create domain facts through aggregate commands.
+
+## 2026-09-05 — Iteration 057: Admin group email conversations
+
+Plan: `docs/iterations/057-admin-group-email-conversations/plan.md`
+
+Note: no durable substantive reviewer-report or review-synthesis bodies were visible in
+this checkout; the review checkpoint commits are metadata-only. The findings below
+consolidate supported independent inspection of the final merged state. They exclude
+the vision-policy alignment, test-pool rationale, and direct-projection fixture
+documentation issues fixed during this review run.
+
+1. **Email dispatch reconstructs an immutable originating audience from mutable access grants.**
+   - Evidence: `web/lib/memba/messaging/message.ex` emits `MessageSent`, a separate `ConversationAccessGrantedToGroup`, and delivery events for a root message, but neither `web/lib/memba/messaging/events/message_sent.ex` nor `web/lib/memba/messaging/projections/message.ex` retains `audience_group_id`. `web/lib/memba/messaging/email_delivery_dispatcher.ex` later queries the conversation's access rows, sorts by opaque group ID, and takes the first grant. `web/lib/memba/messaging/member_message_email.ex` uses that inferred value to decide whether a root email's From identity is the member sender or the club group.
+   - Risk: separate projectors can make a delivery visible before its access grant is visible, and future shared conversations can have several grants. In either case, presentation identity can depend on projection timing or UUID order rather than the audience that originated the conversation, potentially exposing a private-group sender's identity or producing inconsistent email branding.
+   - Suggested next action: decide where the immutable originating audience belongs, preferably as an event fact projected with the message or delivery, and build provider requests from that fact. Include an explicit compatibility rule for historic `MessageSent` events.
+
+2. **Sender-follow policy is coupled to root-email recipient selection.**
+   - Evidence: `web/lib/memba/messaging/events/message_sent.ex` now carries `sender_follows_conversation`, but `web/lib/memba/messaging/message.ex` derives it solely by checking whether the sender appears in the resolved delivery recipients. `docs/problems/2026-09-03-sender-receives-own-group-email.md` already proposes suppressing a group-member sender's redundant root delivery.
+   - Risk: delivery eligibility and follow intent coincide in iteration 057 but are separate decisions. Implementing the deferred own-copy suppression by removing the sender from recipients would also silently stop an Admin sender following the conversation and receiving later follower-only replies.
+   - Suggested next action: before suppressing sender copies, make the follow decision explicit at the posting-policy/application-service boundary, or emit an explicit follow fact, so recipient filtering can evolve independently.
+
+3. **The generalized send boundary does not enforce the club-scoped group invariant.**
+   - Evidence: `send_club_message/2` in `web/lib/memba/messaging.ex` accepts `club_id` and `audience_group_id` independently and resolves recipients through `Membership.list_active_members_of_group/1`, which receives only the group ID. `web/lib/memba/messaging/message.ex` validates the two IDs' shapes but can emit a conversation-access grant combining the supplied club with an unrelated club's group. Current inbound routing is safe because `InboundClubDestination` resolves the group under the destination club, but that relationship is not part of the public send contract.
+   - Risk: a future caller can accidentally create club-A-branded content delivered to club B's group members, with an incoherent cross-club access grant that reply authorization subsequently trusts.
+   - Suggested next action: add a Membership public query that resolves recipients by both club and group, or expose a plain group summary whose `club_id` Messaging verifies. Fail closed on a mismatch before constructing `SendMessage`, and add a cross-club regression test.
+
+4. **Admin reply emails advertise a web destination that is intentionally inaccessible.**
+   - Evidence: `web/lib/memba/messaging/email_delivery_dispatcher.ex` adds a `/messages/:conversation_id` URL to every reply delivery, and `web/lib/memba/messaging/member_message_email.ex` renders it as a "View the conversation" action. `web/lib/memba_web/member_message_detail.ex` authorizes message detail only through Everyone, and `web/test/memba_web/controllers/member_message_detail_test.exs` explicitly proves that an Admin-only conversation URL returns 404.
+   - Risk: Admin recipients receive a prominent dead link in otherwise valid reply notifications throughout the email-only phase. Removing it, adding a private-group web view, or replacing it with different guidance crosses the iteration's deliberate no-Admin-web-UI boundary.
+   - Suggested next action: make an explicit product/presentation decision for email-only groups. The smallest follow-up is to omit the conversation URL for replies whose originating audience is not Everyone until a group-authorized web detail view exists.
+
+5. **`CreateGroup` also serves as an implicit historical slug-repair command.**
+   - Evidence: `web/lib/memba/membership/commands/create_group.ex` describes `email_slug` as optional and does not enforce it, while `web/lib/memba/membership/club.ex` rejects every genuinely new group without a slug. For an existing matching group, the same `CreateGroup` command can emit only `GroupEmailSlugAssigned`; `web/lib/memba/membership/system_groups/backfill.ex` relies on that dual behavior despite the dedicated `AssignGroupEmailSlug` command. The source query in `web/lib/memba/membership.ex` groups missing rows, unassigned slugs, and conflicting non-null slugs under one inequality check.
+   - Risk: the command name and shape do not communicate all of its behavior, and future authorization, telemetry, custom-group, or idempotency changes must preserve the non-obvious fact that a creation command may instead repair an existing aggregate.
+   - Suggested next action: classify backfill entries as missing group, unassigned slug, or conflicting immutable slug; dispatch `CreateGroup` only for missing groups and `AssignGroupEmailSlug` only for existing groups without the fact, while failing explicitly on conflicts. Then make `email_slug` required by `CreateGroup`. If convergence is intentionally one operation, model it as an explicitly named private command such as `EnsureSystemGroupDefinition`.
