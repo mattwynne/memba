@@ -210,14 +210,19 @@ defmodule Memba.Messaging.MessageTest do
                })
     end
 
-    test "rejects commands whose resolved recipients omit the sender" do
+    test "allows root recipients to omit the sender without making them a follower" do
       valid_command = valid_send_message()
       [recipient] = valid_command.recipients
+      recipient_id = Memba.ID.generate(:person)
 
-      assert {:error, :sender_not_in_recipients} =
+      assert [
+               %MessageSent{sender_follows_conversation: false},
+               %ConversationAccessGrantedToGroup{},
+               %EmailDeliveryCreated{recipient_id: ^recipient_id}
+             ] =
                Message.execute(%Message{}, %SendMessage{
                  valid_command
-                 | recipients: [%Recipient{recipient | person_id: Memba.ID.generate(:person)}]
+                 | recipients: [%Recipient{recipient | person_id: recipient_id}]
                })
     end
 
