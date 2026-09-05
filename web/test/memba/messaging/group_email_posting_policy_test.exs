@@ -1,6 +1,7 @@
 defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
   use Memba.DataCase, async: true
 
+  alias Memba.Membership
   alias Memba.Membership.Projections.GroupMembership, as: GroupMembershipProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.SystemGroups
@@ -47,21 +48,20 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
                )
     end
 
-    test "rejects a resolved sender with an active destination-club membership but no Everyone membership" do
+    test "authorizes an active destination-club member without membership of the addressed Admin group" do
       club = insert_membership_club!(slug: "kmc")
       alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
       insert_membership!(club, alice, active: true)
 
-      assert {:error, :sender_not_active_member,
-              %{
-                sender_id: alice.person_id,
-                club_id: club.club_id,
-                from_address: "alice@example.com",
-                to_address: "kmc@clubs.memba.io"
-              }} ==
+      refute Membership.active_member_of_group?(
+               SystemGroups.admin_group_id(club.club_id),
+               alice.person_id
+             )
+
+      assert :ok ==
                Messaging.authorize_inbound_club_email_sender(
                  sender(alice, "alice@example.com"),
-                 destination(club, "kmc@clubs.memba.io")
+                 admin_destination(club, "admin@kmc.clubs.memba.io")
                )
     end
 
@@ -101,6 +101,18 @@ defmodule Memba.Messaging.GroupEmailPostingPolicyTest do
       group_id: SystemGroups.everyone_group_id(club.club_id),
       group_email_slug: SystemGroups.everyone_email_slug(),
       group_name: SystemGroups.everyone_name(),
+      to_address: to_address
+    }
+  end
+
+  defp admin_destination(club, to_address) do
+    %InboundClubDestination{
+      club_id: club.club_id,
+      club_slug: club.slug,
+      club_name: club.name,
+      group_id: SystemGroups.admin_group_id(club.club_id),
+      group_email_slug: SystemGroups.admin_email_slug(),
+      group_name: SystemGroups.admin_name(),
       to_address: to_address
     }
   end

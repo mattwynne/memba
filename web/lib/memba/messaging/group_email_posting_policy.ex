@@ -7,13 +7,10 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   in code rather than persisted or configurable.
 
   Authorization uses Membership's public query API so Messaging can enforce the
-  policy without coupling to Membership projection storage. Active club
-  membership is currently represented by membership of the club's deterministic
-  Everyone group.
+  policy without coupling to Membership projection storage.
   """
 
   alias Memba.Membership
-  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
 
@@ -36,11 +33,11 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
   @doc """
   Authorize a resolved sender under the fixed group-email posting policy.
 
-  Returns `:ok` only when the sender person currently has an active membership in
-  the destination club's deterministic Everyone group. Known people who are
-  active only in other clubs, destination-club members absent from Everyone,
-  inactive destination-club members, and invalid inputs are rejected without
-  relying on Messaging-owned membership state.
+  Returns `:ok` only when the sender person currently has an active membership
+  in the destination club. Membership of the addressed group is deliberately
+  irrelevant when starting a conversation. Known people who are active only in
+  other clubs, inactive destination-club members, and invalid inputs are
+  rejected without relying on Messaging-owned membership state.
   """
   @spec authorize(InboundClubSender.t() | term(), InboundClubDestination.t() | term()) ::
           :ok | rejection()
@@ -48,9 +45,7 @@ defmodule Memba.Messaging.GroupEmailPostingPolicy do
         %InboundClubSender{} = sender,
         %InboundClubDestination{} = destination
       ) do
-    everyone_group_id = SystemGroups.everyone_group_id(destination.club_id)
-
-    if Membership.active_member_of_group?(everyone_group_id, sender.person_id) do
+    if Membership.active_member_of_club?(destination.club_id, sender.person_id) do
       :ok
     else
       {:error, :sender_not_active_member, rejection_details(sender, destination)}

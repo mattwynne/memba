@@ -6,7 +6,7 @@
 - [x] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
 - [x] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
 - [x] 006 Introduce a named fixed group-email posting policy in Messaging.
-- [ ] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+- [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
 - [ ] 008 Carry the resolved audience group through the existing inbound root-message command.
 - [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.
 - [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.

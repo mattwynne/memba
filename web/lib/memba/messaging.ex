@@ -261,9 +261,9 @@ defmodule Memba.Messaging do
   Authorize a resolved inbound sender to post to a resolved club destination.
 
   Applies the fixed, named `:club_members_only` group-email posting policy. Known
-  people who belong only to another club, whose destination-club membership is
-  absent from Everyone, or whose destination-club membership is inactive receive
-  a typed rejection reason for later rejection-email handling.
+  people who belong only to another club or whose destination-club membership is
+  inactive receive a typed rejection reason for later rejection-email handling.
+  Membership of the addressed group is not required to start a conversation.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
     GroupEmailPostingPolicy.authorize(sender, destination)
