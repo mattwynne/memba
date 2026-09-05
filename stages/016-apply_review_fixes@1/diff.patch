@@ -1,0 +1,110 @@
+diff --git a/docs/specs/2026-09-02-groups-and-conversation-access-vision.md b/docs/specs/2026-09-02-groups-and-conversation-access-vision.md
+index db8a372..1933984 100644
+--- a/docs/specs/2026-09-02-groups-and-conversation-access-vision.md
++++ b/docs/specs/2026-09-02-groups-and-conversation-access-vision.md
+@@ -1,6 +1,8 @@
+ # Vision — groups and conversation access
+ 
+ **Date:** 2026-09-02
++**Updated:** 2026-09-05 to incorporate the posting-policy decision delivered in
++iteration 057
+ **Status:** Product vision for iterative delivery — not an implementation plan
+ 
+ ## Purpose
+@@ -78,20 +80,26 @@ Each group should eventually have a stable inbound email address—for example,
+ `board@nclt.groups.memba.io`. The final address format is a delivery-design decision;
+ the important rule is that the address identifies a club and a group.
+ 
+-Inbound email follows the same access rule as in-app posting:
++Starting a conversation and participating in an existing conversation are separate
++policy decisions:
+ 
+-- Memba accepts a new group-addressed message only when the sender is an active
+-  member of the addressed group. The new conversation grants that group write access.
++- The initial fixed `club_members_only` email policy accepts a new group-addressed
++  message when the sender is an active member of the destination club, even if they
++  are not a member of the addressed group.
+ - A message sent to a group address begins a conversation using that group’s default
+-  visibility and access.
++  visibility and grants that group write access. The sender gains no conversation
++  access merely by starting it.
+ - A reply is accepted only when its sender belongs to a group with write access to
+   the existing conversation; replies retain that conversation’s access and visibility.
+-- Non-members of the addressed group cannot post, even if they are members of the
+-  club or hold a club-management role.
++- Inactive members and people outside the destination club cannot start a conversation
++  under this policy.
+ 
+ Public readers cannot post by email or in the application merely because a
+ conversation is public.
+ 
++Future group-email policies may include `public` or `group_members_only`, but policy
++configuration and in-app group posting remain later decisions.
++
+ ## Initial behaviour and future shape
+ 
+ The initial group-conversation experience can remain deliberately narrow:
+@@ -114,8 +122,9 @@ This is a proposed sequence, not a committed plan.
+ 2. **Private named group conversations.** Let an authorised club member define a
+    named group, assign active members, and start a private conversation for that
+    group. Start with one writable group per conversation.
+-3. **Group email posting.** Route group-addressed email into group conversations and
+-   require the sender to belong to the addressed group.
++3. **Group email posting.** Route group-addressed email into group conversations,
++   starting with the fixed `club_members_only` policy while keeping replies governed
++   by group write access.
+ 4. **Public-read defaults.** Add club and group defaults and render public
+    conversations on the public club page.
+ 5. **Shared conversations.** Allow a new or existing conversation to grant read or
+diff --git a/web/config/test.exs b/web/config/test.exs
+index 550375a..1165d43 100644
+--- a/web/config/test.exs
++++ b/web/config/test.exs
+@@ -14,8 +14,11 @@ repo_connection_config =
+     [hostname: pg_host]
+   end
+ 
+-# Strongly consistent projectors can hold independent SQL sandbox ownership
+-# connections, even when the BEAM is constrained to one online scheduler.
++# Strong-consistency requests can run several independently supervised projectors
++# while the request/reset process also owns sandbox connections. On a one-scheduler
++# runtime, the scheduler-based pool would contain only two connections and starve
++# projector acknowledgements. Sixteen is the tested floor for that concurrent process
++# set; higher-scheduler environments retain scheduler-based sizing.
+ repo_pool_size = max(System.schedulers_online() * 2, 16)
+ 
+ repo_pool_config =
+diff --git a/web/test/support/messaging_fixtures.ex b/web/test/support/messaging_fixtures.ex
+index 23a3bf2..5ea3f42 100644
+--- a/web/test/support/messaging_fixtures.ex
++++ b/web/test/support/messaging_fixtures.ex
+@@ -2,9 +2,12 @@ defmodule Memba.MessagingFixtures do
+   @moduledoc """
+   Shared fixtures for member-facing Messaging projection tests.
+ 
+-  Member web surfaces read conversations through group access grants, so these
+-  fixtures create the message projection and its root-conversation grant
+-  together.
++  These fixtures intentionally insert read-model rows directly; domain and projector
++  behaviour is covered separately by Messaging tests.
++
++  Inserting a root message (where `message_id == conversation_id`) also creates its
++  conversation-to-group access grant. Inserting a reply creates only the message row,
++  so the root message and its grant must already exist.
+   """
+ 
+   alias Memba.Membership.SystemGroups
+@@ -12,6 +15,13 @@ defmodule Memba.MessagingFixtures do
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+ 
++  @doc """
++  Insert a projected message for a group-accessible conversation.
++
++  Root messages receive a grant for `:audience_group_id` (Everyone by default) at
++  the requested `:access_level` (`"write"` by default). Replies are identified by a
++  different `:conversation_id` and assume the root and grant were inserted first.
++  """
+   def insert_group_accessible_message!(attrs) when is_list(attrs) do
+     message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
+     club_id = Keyword.fetch!(attrs, :club_id)
