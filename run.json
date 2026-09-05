@@ -1526,7 +1526,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-05T00:00:30.210178868Z",
-  "last_event_at": "2026-09-05T02:30:54.970813539Z",
+  "last_event_at": "2026-09-05T02:30:58.801321889Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -22372,9 +22372,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 7813,
       "checkpoint": {
-        "timestamp": "2026-09-05T02:30:54.979284582Z",
+        "timestamp": "2026-09-05T02:30:58.791604761Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -22452,6 +22452,359 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.resume_gate": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "task_valid": true,
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.node_visit_count": 10,
+          "internal.retry_count.wip_gate": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.thread_id": "all_tasks_done",
+          "thread.start.current_node": "read_plan",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "graph.rankdir": "LR",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "last_stage": "implement_next_task",
+          "internal.work_dir": "/workspace/memba",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.read_plan": 0,
+          "preferred_label": "valid",
+          "failure_signature": "",
+          "task_retry_available": false,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.todo_readable": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.validate_task": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"decision\":\"VALID\",\"evidence\":[\"Checkpoint 7567db7 changes exactly task 009 from unchecked to checked. Its parent, 57e6620, shows tasks 001–008 checked and task 009 as the first unchecked task; tasks 010–018 remain unchanged.\",\"The implementation resolves recipients from the selected audience_group_id through Membership.list_active_members_of_group/1 instead of always using Everyone. The Message aggregate emits the selected group's write-access grant.\",\"The added test creates two active Admin members and one active non-Admin member, asserts deliveries only for the Admin members, excludes the non-Admin member, and verifies projected Admin write access.\",\"Live focused validation passed: 8 tests, 0 failures. Expanded validation reported 59 tests, 0 failures. git diff --check passes and the worktree is clean.\",\"No acceptance feature files changed in checkpoint 7567db7; the iteration scenarios retain their runner-debt tags for later task 018.\",\"The change conforms to ADR 0004 by retaining message and delivery events in the Message aggregate, ADR 0005 by resolving recipients before dispatch, ADR 0007 by using Membership's public query API, ADR 0011 by retaining caller-generated identities, and ADR 0022 by using strong consistency for projected-access assertions.\",\"The three-file checkpoint is independently useful and remains within task 009; sender exclusion and non-following behavior correctly remain assigned to task 010.\"],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.task_gate": 0,
+          "thread.validate_task.current_node": "task_gate",
+          "response.implement_next_task": "Implemented and checked off task 010: “If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.”\n\n1. Changes made\n\n- Removed the Message aggregate invariant requiring root-message senders to appear among resolved recipients in [message.ex](/workspace/memba/web/lib/memba/messaging/message.ex:258).\n- Added `sender_follows_conversation` to `MessageSent`, defaulting to `true` so historic events retain their existing replay behavior in [message_sent.ex](/workspace/memba/web/lib/memba/messaging/events/message_sent.ex:1).\n- Root senders now follow only when they are recipients. Reply authors continue to follow as before.\n- Updated the follower aggregate and projection to skip creating a sender follow when that event field is false:\n  - [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:54)\n  - [conversation_follow.ex](/workspace/memba/web/lib/memba/messaging/projectors/conversation_follow.ex:19)\n- Added focused aggregate coverage in [message_test.exs](/workspace/memba/web/test/memba/messaging/message_test.exs:213).\n- Added an inbound Admin-conversation test proving an active non-Admin sender:\n  - receives no delivery;\n  - receives no member-facing receipt/acknowledgement;\n  - has no Admin-derived access;\n  - is not made a follower;\n  - while the two active Admin members receive deliveries and Admin retains the sole write grant.\n  \n  See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:233).\n\n2. Validation\n\n- TDD red:\n  - `dev test test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 26 tests, 1 expected failure: `{:error, :sender_not_in_recipients}`.\n- Focused green:\n  - `dev test test/memba/messaging/message_test.exs test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 63 tests, 0 failures.\n- `dev check --quick` exited successfully and formatting/compilation passed. Its broad ExUnit output reported 1,107 tests with one pre-existing `DevTestSupportControllerTest` database consistency timeout, the same unrelated sandbox failure documented by earlier checkpoints.\n- A focused rerun of that unrelated test reproduced the consistency timeout: 6 tests, 1 failure.\n- `git diff --check` passed.\n\n3. Todo check-off\n\nExactly one line was changed in [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:12):\n\n```markdown\n- [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.\n```\n\nNo tasks were split, added, reordered, or otherwise checked off.\n\n4. ADR conformance\n\n- ADR 0002/0004: the Message aggregate still decides and emits message, access-grant, and delivery facts.\n- ADR 0005: recipients remain resolved before dispatch and embedded in `SendMessage`; the aggregate now correctly permits that resolved audience to omit the sender.\n- ADR 0007: recipient and group membership remain behind Membership’s public API.\n- ADR 0011: caller-generated message and delivery identities are unchanged.\n- ADR 0022: strong consistency was used before asserting projected delivery, receipt, access, and follower absence.\n- Historic `MessageSent` events preserve their previous auto-follow interpretation through the event field’s replay-safe default.",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "current_node": "implement_next_task",
+          "graph.max_node_visits": "80",
+          "outcome": "succeeded",
+          "last_response": "Implemented and checked off task 010: “If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.”\n\n1. Changes made\n\n- Removed the Mess",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.validate_task": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.run_id": "01M1QDT82FG7AJ9YQ93QMFE5KN",
+          "failure_class": "",
+          "command.output": "blob://sha256/a89a928467a5ffbf7792033ec24e6441988d7ca1615e8bbb8cf11416b21a376e",
+          "internal.retry_count.start": 0,
+          "thread.todo_readable.current_node": "all_tasks_done"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8329f4e5799f8cf7b2396ac1a2cea83c3ec7d73618c9ff35371051ae6056ddd3"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "valid",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "response.validate_task": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"decision\":\"VALID\",\"evidence\":[\"Checkpoint 7567db7 changes exactly task 009 from unchecked to checked. Its parent, 57e6620, shows tasks 001–008 checked and task 009 as the first unchecked task; tasks 010–018 remain unchanged.\",\"The implementation resolves recipients from the selected audience_group_id through Membership.list_active_members_of_group/1 instead of always using Everyone. The Message aggregate emits the selected group's write-access grant.\",\"The added test creates two active Admin members and one active non-Admin member, asserts deliveries only for the Admin members, excludes the non-Admin member, and verifies projected Admin write access.\",\"Live focused validation passed: 8 tests, 0 failures. Expanded validation reported 59 tests, 0 failures. git diff --check passes and the worktree is clean.\",\"No acceptance feature files changed in checkpoint 7567db7; the iteration scenarios retain their runner-debt tags for later task 018.\",\"The change conforms to ADR 0004 by retaining message and delivery events in the Message aggregate, ADR 0005 by resolving recipients before dispatch, ADR 0007 by using Membership's public query API, ADR 0011 by retaining caller-generated identities, and ADR 0022 by using strong consistency for projected-access assertions.\",\"The three-file checkpoint is independently useful and remains within task 009; sender exclusion and non-following behavior correctly remain assigned to task 010.\"],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false,
+              "last_response": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"decision\":\"VALID\",\"evidence\":[\"Checkpoint 7567db7 changes exactly task 009 from unchecked to checked.",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 438910,
+                    "output_tokens": 2298,
+                    "reasoning_tokens": 730,
+                    "cache_read_tokens": 188416,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2379598
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 91344,
+              "tool_time_ms": 179588,
+              "active_time_ms": 270932
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2114c6735589427af1e60932473d68c1723807570e56202b317cbbf16f606e2e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/175cc4e0a597e8c48759a6e461fce0a5462e1a2e7f3c1a0dc12f6a41419c6bd1"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93636,
+              "active_time_ms": 93636
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a89a928467a5ffbf7792033ec24e6441988d7ca1615e8bbb8cf11416b21a376e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 148,
+              "active_time_ms": 148
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/57588b755c92ceb162b2c7faee12693a473aff6cb385de7a7edc1d4b5f350aee"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented and checked off task 010: “If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.”\n\n1. Changes made\n\n- Removed the Message aggregate invariant requiring root-message senders to appear among resolved recipients in [message.ex](/workspace/memba/web/lib/memba/messaging/message.ex:258).\n- Added `sender_follows_conversation` to `MessageSent`, defaulting to `true` so historic events retain their existing replay behavior in [message_sent.ex](/workspace/memba/web/lib/memba/messaging/events/message_sent.ex:1).\n- Root senders now follow only when they are recipients. Reply authors continue to follow as before.\n- Updated the follower aggregate and projection to skip creating a sender follow when that event field is false:\n  - [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:54)\n  - [conversation_follow.ex](/workspace/memba/web/lib/memba/messaging/projectors/conversation_follow.ex:19)\n- Added focused aggregate coverage in [message_test.exs](/workspace/memba/web/test/memba/messaging/message_test.exs:213).\n- Added an inbound Admin-conversation test proving an active non-Admin sender:\n  - receives no delivery;\n  - receives no member-facing receipt/acknowledgement;\n  - has no Admin-derived access;\n  - is not made a follower;\n  - while the two active Admin members receive deliveries and Admin retains the sole write grant.\n  \n  See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:233).\n\n2. Validation\n\n- TDD red:\n  - `dev test test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 26 tests, 1 expected failure: `{:error, :sender_not_in_recipients}`.\n- Focused green:\n  - `dev test test/memba/messaging/message_test.exs test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 63 tests, 0 failures.\n- `dev check --quick` exited successfully and formatting/compilation passed. Its broad ExUnit output reported 1,107 tests with one pre-existing `DevTestSupportControllerTest` database consistency timeout, the same unrelated sandbox failure documented by earlier checkpoints.\n- A focused rerun of that unrelated test reproduced the consistency timeout: 6 tests, 1 failure.\n- `git diff --check` passed.\n\n3. Todo check-off\n\nExactly one line was changed in [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:12):\n\n```markdown\n- [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.\n```\n\nNo tasks were split, added, reordered, or otherwise checked off.\n\n4. ADR conformance\n\n- ADR 0002/0004: the Message aggregate still decides and emits message, access-grant, and delivery facts.\n- ADR 0005: recipients remain resolved before dispatch and embedded in `SendMessage`; the aggregate now correctly permits that resolved audience to omit the sender.\n- ADR 0007: recipient and group membership remain behind Membership’s public API.\n- ADR 0011: caller-generated message and delivery identities are unchanged.\n- ADR 0022: strong consistency was used before asserting projected delivery, receipt, access, and follower absence.\n- Historic `MessageSent` events preserve their previous auto-follow interpretation through the event field’s replay-safe default.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented and checked off task 010: “If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.”\n\n1. Changes made\n\n- Removed the Mess"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 1854078,
+                    "output_tokens": 7694,
+                    "reasoning_tokens": 6014,
+                    "cache_read_tokens": 910848,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 10137054
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 352795,
+              "tool_time_ms": 145676,
+              "active_time_ms": 498471
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e675ac68e5d832f06c8ceba23f8551e5c82d38fd6815971a85d182bc081bf196"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d769455198a07ba31f5fc4e8b38ae720d8089cb92fac9eb359904ef1fed927f8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7d46fff2714c88cea5ab534e7133386d2d178da1ae202dbad347e585e9f6d463"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1929,
+              "active_time_ms": 1929
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "2926d21e90afcf07094b8fa5cd4bdd93cdac87e3",
+        "node_visits": {
+          "validate_task": 9,
+          "task_gate": 9,
+          "sync_task_list": 10,
+          "all_tasks_done": 10,
+          "preflight_sandbox": 1,
+          "wip_gate": 1,
+          "implement_next_task": 10,
+          "resume_gate": 1,
+          "todo_readable": 10,
+          "pre_validate_snapshot": 9,
+          "start": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md\nindex 0138716..9c67b92 100644\n--- a/docs/iterations/057-admin-group-email-conversations/todo.md\n+++ b/docs/iterations/057-admin-group-email-conversations/todo.md\n@@ -9,7 +9,7 @@\n - [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.\n - [x] 008 Carry the resolved audience group through the existing inbound root-message command.\n - [x] 009 Resolve deliveries through active group members and emit the group write-access grant.\n-- [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.\n+- [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.\n - [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.\n - [ ] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.\n - [ ] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.\ndiff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex\nindex 87daa3f..3d5b515 100644\n--- a/web/lib/memba/messaging/conversation_followers.ex\n+++ b/web/lib/memba/messaging/conversation_followers.ex\n@@ -52,11 +52,18 @@ defmodule Memba.Messaging.ConversationFollowers do\n \n   @impl Aggregate\n   def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do\n+    follower_ids =\n+      if MessageSent.sender_follows_conversation?(event) do\n+        MapSet.put(conversation.follower_ids, event.sender_id)\n+      else\n+        conversation.follower_ids\n+      end\n+\n     %__MODULE__{\n       conversation\n       | conversation_id: event.conversation_id || event.message_id,\n         club_id: event.club_id,\n-        follower_ids: MapSet.put(conversation.follower_ids, event.sender_id)\n+        follower_ids: follower_ids\n     }\n   end\n \ndiff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex\nindex 702570b..961599e 100644\n--- a/web/lib/memba/messaging/events/message_sent.ex\n+++ b/web/lib/memba/messaging/events/message_sent.ex\n@@ -1,6 +1,10 @@\n defmodule Memba.Messaging.Events.MessageSent do\n   @moduledoc \"\"\"\n   Event raised when a club message has been accepted for sending.\n+\n+  `sender_follows_conversation` records whether this send establishes a follower\n+  relationship for the sender. Historic events predate the field and are\n+  interpreted as following so replay preserves their original projection.\n   \"\"\"\n \n   @derive Jason.Encoder\n@@ -12,6 +16,10 @@ defmodule Memba.Messaging.Events.MessageSent do\n     :conversation_id,\n     :reply_to_message_id,\n     :subject,\n-    :body\n+    :body,\n+    sender_follows_conversation: true\n   ]\n+\n+  def sender_follows_conversation?(%__MODULE__{sender_follows_conversation: false}), do: false\n+  def sender_follows_conversation?(%__MODULE__{}), do: true\n end\ndiff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex\nindex a133627..5cb1e00 100644\n--- a/web/lib/memba/messaging/message.ex\n+++ b/web/lib/memba/messaging/message.ex\n@@ -266,7 +266,8 @@ defmodule Memba.Messaging.Message do\n         conversation_id: conversation_id,\n         reply_to_message_id: reply_to_message_id,\n         subject: subject,\n-        body: body\n+        body: body,\n+        sender_follows_conversation: sender_follows_conversation?(command, recipients)\n       }\n \n       [message_sent] ++\n@@ -448,10 +449,7 @@ defmodule Memba.Messaging.Message do\n   defp normalize_text(_text, error), do: {:error, error}\n \n   defp normalize_command_recipients(%SendMessage{} = command) do\n-    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: false),\n-         :ok <- validate_sender_recipient(command.sender_id, recipients) do\n-      {:ok, recipients}\n-    end\n+    normalize_recipients(command.recipients, allow_empty?: false)\n   end\n \n   defp normalize_command_recipients(%PostMessageReply{} = command) do\n@@ -542,13 +540,10 @@ defmodule Memba.Messaging.Message do\n     end\n   end\n \n-  defp validate_sender_recipient(sender_id, recipients) do\n-    if Enum.any?(recipients, &(&1.person_id == sender_id)) do\n-      :ok\n-    else\n-      {:error, :sender_not_in_recipients}\n-    end\n-  end\n+  defp sender_follows_conversation?(%SendMessage{sender_id: sender_id}, recipients),\n+    do: Enum.any?(recipients, &(&1.person_id == sender_id))\n+\n+  defp sender_follows_conversation?(%PostMessageReply{}, _recipients), do: true\n \n   defp validate_reply_author_excluded(sender_id, recipients) do\n     if Enum.any?(recipients, &(&1.person_id == sender_id)) do\ndiff --git a/web/lib/memba/messaging/projectors/conversation_follow.ex b/web/lib/memba/messaging/projectors/conversation_follow.ex\nindex 95c1b4d..1b42d28 100644\n--- a/web/lib/memba/messaging/projectors/conversation_follow.ex\n+++ b/web/lib/memba/messaging/projectors/conversation_follow.ex\n@@ -17,10 +17,14 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do\n   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection\n \n   project(%MessageSent{} = event, fn multi ->\n-    conversation_id =\n-      event.conversation_id || ConversationReference.root_conversation_id(event.message_id)\n+    if MessageSent.sender_follows_conversation?(event) do\n+      conversation_id =\n+        event.conversation_id || ConversationReference.root_conversation_id(event.message_id)\n \n-    upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)\n+      upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)\n+    else\n+      multi\n+    end\n   end)\n \n   project(%ConversationFollowed{} = event, fn multi ->\ndiff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex ba62949..33f2f16 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -230,6 +230,48 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)\n   end\n \n+  test \"an active non-Admin sender receives no Admin delivery, receipt, access, or follow\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Member\", email: \"alice@example.com\")\n+    bob = create_person!(name: \"Bob Admin\", email: \"bob@example.com\")\n+    carol = create_person!(name: \"Carol Admin\", email: \"carol@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+    bob_membership_id = add_member!(kmc.club_id, bob.person_id)\n+    carol_membership_id = add_member!(kmc.club_id, carol.person_id)\n+    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)\n+    assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)\n+\n+    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)\n+    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)\n+\n+    assert {:ok, %{message_id: message_id}} =\n+             Messaging.receive_inbound_club_email(\n+               %{\n+                 provider: \"resend\",\n+                 provider_message_id: \"task-057-non-admin-sender\",\n+                 provider_event_id: \"task-057-non-admin-sender-event\",\n+                 from_address: \"alice@example.com\",\n+                 recipient_addresses: [\"admin@kmc.clubs.memba.io\"],\n+                 subject: \"Private Admin topic\",\n+                 text_body: \"Please discuss this with the Admin group.\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    deliveries = Messaging.list_recipient_deliveries(message_id)\n+\n+    assert Enum.map(deliveries, & &1.recipient_id) == [bob.person_id, carol.person_id]\n+    refute Enum.any?(deliveries, &(&1.recipient_id == alice.person_id))\n+    assert is_nil(Messaging.get_member_email_delivery(message_id, alice.person_id))\n+    refute Membership.active_member_of_group?(admin_group_id, alice.person_id)\n+    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)\n+    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)\n+    refute Messaging.following_conversation?(message_id, alice.person_id)\n+    assert 1 == count_events(ConversationAccessGrantedToGroup)\n+    assert 2 == count_events(EmailDeliveryCreated)\n+  end\n+\n   test \"recognized same-club reply headers post inbound email into the existing conversation\" do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n \ndiff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs\nindex 590eb6d..b1f9d18 100644\n--- a/web/test/memba/messaging/message_test.exs\n+++ b/web/test/memba/messaging/message_test.exs\n@@ -210,14 +210,19 @@ defmodule Memba.Messaging.MessageTest do\n                })\n     end\n \n-    test \"rejects commands whose resolved recipients omit the sender\" do\n+    test \"allows root recipients to omit the sender without making them a follower\" do\n       valid_command = valid_send_message()\n       [recipient] = valid_command.recipients\n+      recipient_id = Memba.ID.generate(:person)\n \n-      assert {:error, :sender_not_in_recipients} =\n+      assert [\n+               %MessageSent{sender_follows_conversation: false},\n+               %ConversationAccessGrantedToGroup{},\n+               %EmailDeliveryCreated{recipient_id: ^recipient_id}\n+             ] =\n                Message.execute(%Message{}, %SendMessage{\n                  valid_command\n-                 | recipients: [%Recipient{recipient | person_id: Memba.ID.generate(:person)}]\n+                 | recipients: [%Recipient{recipient | person_id: recipient_id}]\n                })\n     end\n \n",
+        "summary": {
+          "files_changed": 34,
+          "additions": 1237,
+          "deletions": 169
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-05T02:30:58.962741225Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.node_visit_count": 10,
           "response.implement_next_task": "Implemented and checked off task 010: “If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.”\n\n1. Changes made\n\n- Removed the Message aggregate invariant requiring root-message senders to appear among resolved recipients in [message.ex](/workspace/memba/web/lib/memba/messaging/message.ex:258).\n- Added `sender_follows_conversation` to `MessageSent`, defaulting to `true` so historic events retain their existing replay behavior in [message_sent.ex](/workspace/memba/web/lib/memba/messaging/events/message_sent.ex:1).\n- Root senders now follow only when they are recipients. Reply authors continue to follow as before.\n- Updated the follower aggregate and projection to skip creating a sender follow when that event field is false:\n  - [conversation_followers.ex](/workspace/memba/web/lib/memba/messaging/conversation_followers.ex:54)\n  - [conversation_follow.ex](/workspace/memba/web/lib/memba/messaging/projectors/conversation_follow.ex:19)\n- Added focused aggregate coverage in [message_test.exs](/workspace/memba/web/test/memba/messaging/message_test.exs:213).\n- Added an inbound Admin-conversation test proving an active non-Admin sender:\n  - receives no delivery;\n  - receives no member-facing receipt/acknowledgement;\n  - has no Admin-derived access;\n  - is not made a follower;\n  - while the two active Admin members receive deliveries and Admin retains the sole write grant.\n  \n  See [inbound_club_message_acceptance_test.exs](/workspace/memba/web/test/memba/messaging/inbound_club_message_acceptance_test.exs:233).\n\n2. Validation\n\n- TDD red:\n  - `dev test test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 26 tests, 1 expected failure: `{:error, :sender_not_in_recipients}`.\n- Focused green:\n  - `dev test test/memba/messaging/message_test.exs test/memba/messaging/conversation_followers_test.exs test/memba/messaging/conversation_follow_projection_test.exs test/memba/messaging/inbound_club_message_acceptance_test.exs`\n  - 63 tests, 0 failures.\n- `dev check --quick` exited successfully and formatting/compilation passed. Its broad ExUnit output reported 1,107 tests with one pre-existing `DevTestSupportControllerTest` database consistency timeout, the same unrelated sandbox failure documented by earlier checkpoints.\n- A focused rerun of that unrelated test reproduced the consistency timeout: 6 tests, 1 failure.\n- `git diff --check` passed.\n\n3. Todo check-off\n\nExactly one line was changed in [todo.md](/workspace/memba/docs/iterations/057-admin-group-email-conversations/todo.md:12):\n\n```markdown\n- [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.\n```\n\nNo tasks were split, added, reordered, or otherwise checked off.\n\n4. ADR conformance\n\n- ADR 0002/0004: the Message aggregate still decides and emits message, access-grant, and delivery facts.\n- ADR 0005: recipients remain resolved before dispatch and embedded in `SendMessage`; the aggregate now correctly permits that resolved audience to omit the sender.\n- ADR 0007: recipient and group membership remain behind Membership’s public API.\n- ADR 0011: caller-generated message and delivery identities are unchanged.\n- ADR 0022: strong consistency was used before asserting projected delivery, receipt, access, and follower absence.\n- Historic `MessageSent` events preserve their previous auto-follow interpretation through the event field’s replay-safe default.",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
@@ -22467,7 +22820,7 @@
           "internal.retry_count.validate_task": 0,
           "preferred_label": "valid",
           "internal.retry_count.preflight_sandbox": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.sync_task_list": 0,
           "thread.todo_readable.current_node": "all_tasks_done",
           "graph.max_node_visits": "80",
@@ -22476,7 +22829,7 @@
           "thread.all_tasks_done.current_node": "implement_next_task",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "thread.validate_task.current_node": "task_gate",
-          "command.output": "blob://sha256/a89a928467a5ffbf7792033ec24e6441988d7ca1615e8bbb8cf11416b21a376e",
+          "command.output": "blob://sha256/2cd7b49fba9539a09b5f52adece5c2b76e28507eff06a6dfe3c4e99aff327ee2",
           "failure_signature": "",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.retry_count.implement_next_task": 0,
@@ -22492,7 +22845,7 @@
           "internal.retry_count.todo_readable": 0,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "thread.read_plan.current_node": "wip_gate",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "last_stage": "implement_next_task",
           "failure_class": "",
           "internal.retry_count.resume_gate": 0,
@@ -22613,15 +22966,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/2114c6735589427af1e60932473d68c1723807570e56202b317cbbf16f606e2e"
+              "command.output": "blob://sha256/2cd7b49fba9539a09b5f52adece5c2b76e28507eff06a6dfe3c4e99aff327ee2"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 159,
-              "active_time_ms": 159
+              "tool_time_ms": 154,
+              "active_time_ms": 154
             }
           },
           "validate_task": {
@@ -22697,9 +23050,9 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
-          "pre_validate_snapshot": 9,
+          "pre_validate_snapshot": 10,
           "task_gate": 9,
           "sync_task_list": 10,
           "validate_task": 9,
@@ -25363,6 +25716,36 @@
       "agent_control": "running",
       "state": "succeeded"
     },
+    "pre_validate_snapshot@10": {
+      "first_event_seq": 7816,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/057-admin-group-email-conversations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-05T02:30:58.800750315Z",
+      "handler": "command",
+      "graph_visit": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
+    },
     "todo_readable@3": {
       "first_event_seq": 2172,
       "prompt": null,
@@ -27364,7 +27747,12 @@
       "first_event_seq": 7558,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-05T02:30:54.977343136Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -27379,16 +27767,20 @@
       "started_at": "2026-09-05T02:22:36.104210Z",
       "handler": "agent",
       "graph_visit": 10,
-      "live_inference_ms": 328400,
-      "live_tool_ms": 145666,
+      "timing": {
+        "wall_time_ms": 498872,
+        "inference_time_ms": 352795,
+        "tool_time_ms": 145676,
+        "active_time_ms": 498471
+      },
       "usage": {
-        "input_tokens": 1818138,
-        "output_tokens": 6904,
-        "total_tokens": 2635024,
-        "reasoning_tokens": 5630,
-        "cache_read_tokens": 804352,
+        "input_tokens": 1854078,
+        "output_tokens": 7694,
+        "total_tokens": 2778634,
+        "reasoning_tokens": 6014,
+        "cache_read_tokens": 910848,
         "cache_write_tokens": 0,
-        "total_usd_micros": 9868886
+        "total_usd_micros": 10137054
       },
       "model": {
         "provider": "openai",
@@ -27503,54 +27895,43 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 142202,
-        "usage_percent": 52.28014705882353,
+        "input_tokens": 142436,
+        "usage_percent": 52.366176470588236,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-05T02:30:30.601273794Z",
-        "event_seq": 7799,
+        "generated_at": "2026-09-05T02:30:54.970750872Z",
+        "event_seq": 7806,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2995,
-            "usage_percent": 1.1011029411764706
+            "tokens": 2982,
+            "usage_percent": 1.0963235294117648
           },
           {
             "category": "tools",
-            "tokens": 918,
-            "usage_percent": 0.3375
+            "tokens": 914,
+            "usage_percent": 0.3360294117647059
           },
           {
             "category": "memory",
-            "tokens": 415,
-            "usage_percent": 0.15257352941176472
+            "tokens": 413,
+            "usage_percent": 0.15183823529411763
           },
           {
             "category": "conversation",
-            "tokens": 137868,
-            "usage_percent": 50.686764705882354
+            "tokens": 138119,
+            "usage_percent": 50.77904411764706
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 8,
+            "usage_percent": 0.0029411764705882353
           }
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "6a2c07db-3760-4533-9ebf-70e76bb842f6",
-        "started_at": "2026-09-05T02:30:30.605656880Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-05T02:30:40.158562316Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "pre_validate_snapshot@5": {
       "first_event_seq": 4262,

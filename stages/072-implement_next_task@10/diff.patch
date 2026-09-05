@@ -1,0 +1,210 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 0138716..9c67b92 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+ - [x] 008 Carry the resolved audience group through the existing inbound root-message command.
+ - [x] 009 Resolve deliveries through active group members and emit the group write-access grant.
+-- [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
++- [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
+ - [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+ - [ ] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+ - [ ] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+diff --git a/web/lib/memba/messaging/conversation_followers.ex b/web/lib/memba/messaging/conversation_followers.ex
+index 87daa3f..3d5b515 100644
+--- a/web/lib/memba/messaging/conversation_followers.ex
++++ b/web/lib/memba/messaging/conversation_followers.ex
+@@ -52,11 +52,18 @@ defmodule Memba.Messaging.ConversationFollowers do
+ 
+   @impl Aggregate
+   def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do
++    follower_ids =
++      if MessageSent.sender_follows_conversation?(event) do
++        MapSet.put(conversation.follower_ids, event.sender_id)
++      else
++        conversation.follower_ids
++      end
++
+     %__MODULE__{
+       conversation
+       | conversation_id: event.conversation_id || event.message_id,
+         club_id: event.club_id,
+-        follower_ids: MapSet.put(conversation.follower_ids, event.sender_id)
++        follower_ids: follower_ids
+     }
+   end
+ 
+diff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex
+index 702570b..961599e 100644
+--- a/web/lib/memba/messaging/events/message_sent.ex
++++ b/web/lib/memba/messaging/events/message_sent.ex
+@@ -1,6 +1,10 @@
+ defmodule Memba.Messaging.Events.MessageSent do
+   @moduledoc """
+   Event raised when a club message has been accepted for sending.
++
++  `sender_follows_conversation` records whether this send establishes a follower
++  relationship for the sender. Historic events predate the field and are
++  interpreted as following so replay preserves their original projection.
+   """
+ 
+   @derive Jason.Encoder
+@@ -12,6 +16,10 @@ defmodule Memba.Messaging.Events.MessageSent do
+     :conversation_id,
+     :reply_to_message_id,
+     :subject,
+-    :body
++    :body,
++    sender_follows_conversation: true
+   ]
++
++  def sender_follows_conversation?(%__MODULE__{sender_follows_conversation: false}), do: false
++  def sender_follows_conversation?(%__MODULE__{}), do: true
+ end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index a133627..5cb1e00 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -266,7 +266,8 @@ defmodule Memba.Messaging.Message do
+         conversation_id: conversation_id,
+         reply_to_message_id: reply_to_message_id,
+         subject: subject,
+-        body: body
++        body: body,
++        sender_follows_conversation: sender_follows_conversation?(command, recipients)
+       }
+ 
+       [message_sent] ++
+@@ -448,10 +449,7 @@ defmodule Memba.Messaging.Message do
+   defp normalize_text(_text, error), do: {:error, error}
+ 
+   defp normalize_command_recipients(%SendMessage{} = command) do
+-    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: false),
+-         :ok <- validate_sender_recipient(command.sender_id, recipients) do
+-      {:ok, recipients}
+-    end
++    normalize_recipients(command.recipients, allow_empty?: false)
+   end
+ 
+   defp normalize_command_recipients(%PostMessageReply{} = command) do
+@@ -542,13 +540,10 @@ defmodule Memba.Messaging.Message do
+     end
+   end
+ 
+-  defp validate_sender_recipient(sender_id, recipients) do
+-    if Enum.any?(recipients, &(&1.person_id == sender_id)) do
+-      :ok
+-    else
+-      {:error, :sender_not_in_recipients}
+-    end
+-  end
++  defp sender_follows_conversation?(%SendMessage{sender_id: sender_id}, recipients),
++    do: Enum.any?(recipients, &(&1.person_id == sender_id))
++
++  defp sender_follows_conversation?(%PostMessageReply{}, _recipients), do: true
+ 
+   defp validate_reply_author_excluded(sender_id, recipients) do
+     if Enum.any?(recipients, &(&1.person_id == sender_id)) do
+diff --git a/web/lib/memba/messaging/projectors/conversation_follow.ex b/web/lib/memba/messaging/projectors/conversation_follow.ex
+index 95c1b4d..1b42d28 100644
+--- a/web/lib/memba/messaging/projectors/conversation_follow.ex
++++ b/web/lib/memba/messaging/projectors/conversation_follow.ex
+@@ -17,10 +17,14 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
+   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
+ 
+   project(%MessageSent{} = event, fn multi ->
+-    conversation_id =
+-      event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
++    if MessageSent.sender_follows_conversation?(event) do
++      conversation_id =
++        event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
+ 
+-    upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)
++      upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)
++    else
++      multi
++    end
+   end)
+ 
+   project(%ConversationFollowed{} = event, fn multi ->
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index ba62949..33f2f16 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -230,6 +230,48 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
+   end
+ 
++  test "an active non-Admin sender receives no Admin delivery, receipt, access, or follow" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Member", email: "alice@example.com")
++    bob = create_person!(name: "Bob Admin", email: "bob@example.com")
++    carol = create_person!(name: "Carol Admin", email: "carol@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    bob_membership_id = add_member!(kmc.club_id, bob.person_id)
++    carol_membership_id = add_member!(kmc.club_id, carol.person_id)
++    assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
++    assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)
++
++    admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
++    everyone_group_id = SystemGroups.everyone_group_id(kmc.club_id)
++
++    assert {:ok, %{message_id: message_id}} =
++             Messaging.receive_inbound_club_email(
++               %{
++                 provider: "resend",
++                 provider_message_id: "task-057-non-admin-sender",
++                 provider_event_id: "task-057-non-admin-sender-event",
++                 from_address: "alice@example.com",
++                 recipient_addresses: ["admin@kmc.clubs.memba.io"],
++                 subject: "Private Admin topic",
++                 text_body: "Please discuss this with the Admin group."
++               },
++               consistency: :strong
++             )
++
++    deliveries = Messaging.list_recipient_deliveries(message_id)
++
++    assert Enum.map(deliveries, & &1.recipient_id) == [bob.person_id, carol.person_id]
++    refute Enum.any?(deliveries, &(&1.recipient_id == alice.person_id))
++    assert is_nil(Messaging.get_member_email_delivery(message_id, alice.person_id))
++    refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
++    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
++    refute Messaging.group_has_conversation_access?(message_id, everyone_group_id, :read)
++    refute Messaging.following_conversation?(message_id, alice.person_id)
++    assert 1 == count_events(ConversationAccessGrantedToGroup)
++    assert 2 == count_events(EmailDeliveryCreated)
++  end
++
+   test "recognized same-club reply headers post inbound email into the existing conversation" do
+     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+ 
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index 590eb6d..b1f9d18 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -210,14 +210,19 @@ defmodule Memba.Messaging.MessageTest do
+                })
+     end
+ 
+-    test "rejects commands whose resolved recipients omit the sender" do
++    test "allows root recipients to omit the sender without making them a follower" do
+       valid_command = valid_send_message()
+       [recipient] = valid_command.recipients
++      recipient_id = Memba.ID.generate(:person)
+ 
+-      assert {:error, :sender_not_in_recipients} =
++      assert [
++               %MessageSent{sender_follows_conversation: false},
++               %ConversationAccessGrantedToGroup{},
++               %EmailDeliveryCreated{recipient_id: ^recipient_id}
++             ] =
+                Message.execute(%Message{}, %SendMessage{
+                  valid_command
+-                 | recipients: [%Recipient{recipient | person_id: Memba.ID.generate(:person)}]
++                 | recipients: [%Recipient{recipient | person_id: recipient_id}]
+                })
+     end
+ 
