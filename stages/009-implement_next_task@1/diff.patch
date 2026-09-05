@@ -1,0 +1,500 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 198bdb3..6196db1 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
++- [x] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
+ - [ ] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
+ - [ ] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
+ - [ ] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 9e5ede3..05a7245 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.Club do
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.ID
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+@@ -19,6 +20,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+@@ -35,6 +37,7 @@ defmodule Memba.Membership.Club do
+     :name,
+     :slug,
+     groups: %{},
++    group_email_slugs: %{},
+     group_keys: %{},
+     group_memberships: %{},
+     roles: %{},
+@@ -126,6 +129,18 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  def execute(%__MODULE__{club_id: nil}, %AssignGroupEmailSlug{}),
++    do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %AssignGroupEmailSlug{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         {:ok, email_slug} <- Slug.normalize_for_lookup(command.email_slug),
++         :ok <- ensure_group_exists(club, command.group_id) do
++      assign_group_email_slug_decision(club, command, email_slug)
++    end
++  end
++
+   def execute(%__MODULE__{club_id: nil}, %AddGroupMember{}), do: {:error, :not_created}
+ 
+   def execute(%__MODULE__{} = club, %AddGroupMember{} = command) do
+@@ -240,7 +255,12 @@ defmodule Memba.Membership.Club do
+   end
+ 
+   def apply(%__MODULE__{} = club, %GroupCreated{} = event) do
+-    group = %{group_id: event.group_id, group_key: event.group_key, name: event.name}
++    group = %{
++      group_id: event.group_id,
++      group_key: event.group_key,
++      email_slug: nil,
++      name: event.name
++    }
+ 
+     %__MODULE__{
+       club
+@@ -249,6 +269,19 @@ defmodule Memba.Membership.Club do
+     }
+   end
+ 
++  def apply(%__MODULE__{} = club, %GroupEmailSlugAssigned{} = event) do
++    group =
++      club.groups
++      |> Map.fetch!(event.group_id)
++      |> Map.put(:email_slug, event.email_slug)
++
++    %__MODULE__{
++      club
++      | groups: Map.put(club.groups, event.group_id, group),
++        group_email_slugs: Map.put(club.group_email_slugs, event.email_slug, event.group_id)
++    }
++  end
++
+   def apply(%__MODULE__{} = club, %GroupMemberAdded{} = event) do
+     group_membership = %{person_id: event.person_id, active: true}
+     group_membership_key = group_membership_key(event.group_id, event.membership_id)
+@@ -434,6 +467,37 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp assign_group_email_slug_decision(
++         %__MODULE__{} = club,
++         %AssignGroupEmailSlug{} = command,
++         email_slug
++       ) do
++    case Map.fetch!(club.groups, command.group_id) do
++      %{email_slug: ^email_slug} ->
++        []
++
++      %{email_slug: assigned_email_slug} when not is_nil(assigned_email_slug) ->
++        {:error, :group_email_slug_already_assigned}
++
++      %{} ->
++        with :ok <- ensure_group_email_slug_available(club, email_slug) do
++          %GroupEmailSlugAssigned{
++            club_id: command.club_id,
++            group_id: command.group_id,
++            email_slug: email_slug
++          }
++        end
++    end
++  end
++
++  defp ensure_group_email_slug_available(%__MODULE__{} = club, email_slug) do
++    if Map.has_key?(club.group_email_slugs, email_slug) do
++      {:error, :group_email_slug_already_defined}
++    else
++      :ok
++    end
++  end
++
+   defp ensure_group_exists(%__MODULE__{} = club, group_id) do
+     if Map.has_key?(club.groups, group_id) do
+       :ok
+diff --git a/web/lib/memba/membership/commands/assign_group_email_slug.ex b/web/lib/memba/membership/commands/assign_group_email_slug.ex
+new file mode 100644
+index 0000000..1ada3b3
+--- /dev/null
++++ b/web/lib/memba/membership/commands/assign_group_email_slug.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.AssignGroupEmailSlug do
++  @moduledoc """
++  Internal command to assign an immutable email routing slug to a group.
++  """
++
++  @enforce_keys [:club_id, :group_id, :email_slug]
++  defstruct [:club_id, :group_id, :email_slug]
++end
+diff --git a/web/lib/memba/membership/events/group_email_slug_assigned.ex b/web/lib/memba/membership/events/group_email_slug_assigned.ex
+new file mode 100644
+index 0000000..6a9d7b3
+--- /dev/null
++++ b/web/lib/memba/membership/events/group_email_slug_assigned.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.GroupEmailSlugAssigned do
++  @moduledoc """
++  Event raised when an immutable email routing slug has been assigned to a group.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:club_id, :group_id, :email_slug]
++  defstruct [:club_id, :group_id, :email_slug]
++end
+diff --git a/web/lib/memba/membership/projections/group.ex b/web/lib/memba/membership/projections/group.ex
+index af1e56d..fe3f35b 100644
+--- a/web/lib/memba/membership/projections/group.ex
++++ b/web/lib/memba/membership/projections/group.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Membership.Projections.Group do
+   schema "membership_groups" do
+     field :club_id, :string
+     field :group_key, :string
++    field :email_slug, :string
+     field :name, :string
+ 
+     timestamps(type: :utc_datetime_usec)
+diff --git a/web/lib/memba/membership/projectors/group.ex b/web/lib/memba/membership/projectors/group.ex
+index 6b46d4f..d83ba20 100644
+--- a/web/lib/memba/membership/projectors/group.ex
++++ b/web/lib/memba/membership/projectors/group.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.Projectors.Group do
+     consistency: :strong
+ 
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+ 
+   project(%GroupCreated{} = event, fn multi ->
+@@ -38,6 +39,24 @@ defmodule Memba.Membership.Projectors.Group do
+     )
+   end)
+ 
++  project(%GroupEmailSlugAssigned{} = event, fn multi ->
++    Ecto.Multi.update_all(
++      multi,
++      :membership_group_email_slug,
++      group_without_different_email_slug_query(event),
++      set: [email_slug: event.email_slug, updated_at: DateTime.utc_now(:microsecond)]
++    )
++  end)
++
++  defp group_without_different_email_slug_query(%GroupEmailSlugAssigned{} = event) do
++    Ecto.Query.from(
++      group in GroupProjection,
++      where: group.group_id == ^event.group_id,
++      where: group.club_id == ^event.club_id,
++      where: is_nil(group.email_slug) or group.email_slug == ^event.email_slug
++    )
++  end
++
+   @impl Commanded.Projections.Ecto
+   def after_update(event, metadata, changes) do
+     Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index c679882..631e784 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -13,6 +13,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AddPersonEmailAddress
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+@@ -39,6 +40,7 @@ defmodule Memba.Membership.Router do
+   dispatch(AddGroupMember, to: Club)
+   dispatch(AddMember, to: Membership)
+   dispatch(AddPersonEmailAddress, to: Person)
++  dispatch(AssignGroupEmailSlug, to: Club)
+   dispatch(AssignMemberRole, to: Club)
+   dispatch(CreateClub, to: Club)
+   dispatch(CreateGroup, to: Club)
+diff --git a/web/priv/repo/migrations/20260905070851_add_email_slug_to_membership_groups.exs b/web/priv/repo/migrations/20260905070851_add_email_slug_to_membership_groups.exs
+new file mode 100644
+index 0000000..ef84c9a
+--- /dev/null
++++ b/web/priv/repo/migrations/20260905070851_add_email_slug_to_membership_groups.exs
+@@ -0,0 +1,13 @@
++defmodule Memba.Repo.Migrations.AddEmailSlugToMembershipGroups do
++  use Ecto.Migration
++
++  def change do
++    alter table(:membership_groups) do
++      add :email_slug, :text
++    end
++
++    create unique_index(:membership_groups, [:club_id, :email_slug],
++             where: "email_slug IS NOT NULL"
++           )
++  end
++end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 0d6068a..ae9a51c 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AddPersonEmailAddress
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+@@ -97,6 +98,7 @@ defmodule Memba.Membership.AppTest do
+         AddGroupMember,
+         AddMember,
+         AddPersonEmailAddress,
++        AssignGroupEmailSlug,
+         AssignMemberRole,
+         CreateClub,
+         CreateGroup,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index a0fa0f4..ef0492e 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Membership.ClubTest do
+ 
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+@@ -16,6 +17,7 @@ defmodule Memba.Membership.ClubTest do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+@@ -379,6 +381,72 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "assigns a normalized immutable email slug to a group" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(group_id, "admin", "Admin")
++
++      command = %AssignGroupEmailSlug{
++        club_id: club_id,
++        group_id: group_id,
++        email_slug: " Admin "
++      }
++
++      assert %GroupEmailSlugAssigned{
++               club_id: ^club_id,
++               group_id: ^group_id,
++               email_slug: "admin"
++             } = event = Club.execute(club, command)
++
++      club = Club.apply(club, event)
++
++      assert %{email_slug: "admin"} = club.groups[group_id]
++      assert %{email_slug: "admin"} = Club.apply(club, event).groups[group_id]
++      assert %{group_email_slugs: %{"admin" => ^group_id}} = club
++      assert [] = Club.execute(club, command)
++
++      assert {:error, :group_email_slug_already_assigned} =
++               Club.execute(club, %{command | email_slug: "administrators"})
++    end
++
++    test "requires a valid club-unique email slug for an existing group" do
++      club_id = Memba.ID.generate(:club)
++      first_group_id = Memba.ID.generate(:group)
++      second_group_id = Memba.ID.generate(:group)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(first_group_id, nil, "First")
++        |> create_group(second_group_id, nil, "Second")
++        |> assign_group_email_slug(first_group_id, "admin")
++
++      assert {:error, :group_email_slug_already_defined} =
++               Club.execute(club, %AssignGroupEmailSlug{
++                 club_id: club_id,
++                 group_id: second_group_id,
++                 email_slug: " ADMIN "
++               })
++
++      assert {:error, :group_not_defined} =
++               Club.execute(club, %AssignGroupEmailSlug{
++                 club_id: club_id,
++                 group_id: Memba.ID.generate(:group),
++                 email_slug: "moderators"
++               })
++
++      assert {:error, :invalid_format} =
++               Club.execute(club, %AssignGroupEmailSlug{
++                 club_id: club_id,
++                 group_id: second_group_id,
++                 email_slug: "not addressable"
++               })
++    end
++
+     test "requires group memberships to belong to a group in the command club" do
+       club_id = Memba.ID.generate(:club)
+       other_club_id = Memba.ID.generate(:club)
+@@ -756,6 +824,14 @@ defmodule Memba.Membership.ClubTest do
+     })
+   end
+ 
++  defp assign_group_email_slug(%Club{} = club, group_id, email_slug) do
++    Club.apply(club, %GroupEmailSlugAssigned{
++      club_id: club.club_id,
++      group_id: group_id,
++      email_slug: email_slug
++    })
++  end
++
+   defp add_group_member(%Club{} = club, group_id, membership_id, person_id) do
+     Club.apply(club, %GroupMemberAdded{
+       club_id: club.club_id,
+diff --git a/web/test/memba/membership/group_command_event_modules_test.exs b/web/test/memba/membership/group_command_event_modules_test.exs
+index fca4ef1..6b57221 100644
+--- a/web/test/memba/membership/group_command_event_modules_test.exs
++++ b/web/test/memba/membership/group_command_event_modules_test.exs
+@@ -3,9 +3,11 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+ 
+   alias Memba.ID
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+ 
+@@ -51,6 +53,17 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+              person_id: ids.person_id
+            } == struct!(AddGroupMember, ids)
+ 
++    assert %AssignGroupEmailSlug{
++             club_id: ids.club_id,
++             group_id: ids.group_id,
++             email_slug: "admin"
++           } ==
++             struct!(AssignGroupEmailSlug, %{
++               club_id: ids.club_id,
++               group_id: ids.group_id,
++               email_slug: "admin"
++             })
++
+     assert %RemoveGroupMember{
+              club_id: ids.club_id,
+              group_id: ids.group_id,
+@@ -69,6 +82,12 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+       name: "Admin"
+     })
+ 
++    assert_json_encodable(%GroupEmailSlugAssigned{
++      club_id: ids.club_id,
++      group_id: ids.group_id,
++      email_slug: "admin"
++    })
++
+     assert_json_encodable(struct!(GroupMemberAdded, ids))
+     assert_json_encodable(struct!(GroupMemberRemoved, ids))
+   end
+diff --git a/web/test/memba/membership/group_projection_test.exs b/web/test/memba/membership/group_projection_test.exs
+index 4f4998f..716fc20 100644
+--- a/web/test/memba/membership/group_projection_test.exs
++++ b/web/test/memba/membership/group_projection_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Membership.GroupProjectionTest do
+ 
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Events.GroupMemberAdded
+@@ -53,6 +54,48 @@ defmodule Memba.Membership.GroupProjectionTest do
+            } = Repo.get(GroupProjection, admin_group_id)
+   end
+ 
++  test "AssignGroupEmailSlug projects the normalized group email slug" do
++    club_id = Memba.ID.generate(:club)
++    group_id = SystemGroups.admin_group_id(club_id)
++    other_club_id = Memba.ID.generate(:club)
++    other_group_id = SystemGroups.admin_group_id(other_club_id)
++
++    create_club!(club_id)
++    create_club!(other_club_id, "other-club")
++
++    assert :ok =
++             App.dispatch(
++               %AssignGroupEmailSlug{
++                 club_id: club_id,
++                 group_id: group_id,
++                 email_slug: " Admin "
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %AssignGroupEmailSlug{
++                 club_id: other_club_id,
++                 group_id: other_group_id,
++                 email_slug: "admin"
++               },
++               consistency: :strong
++             )
++
++    assert %GroupProjection{
++             group_id: ^group_id,
++             club_id: ^club_id,
++             email_slug: "admin"
++           } = Repo.get(GroupProjection, group_id)
++
++    assert %GroupProjection{
++             group_id: ^other_group_id,
++             club_id: ^other_club_id,
++             email_slug: "admin"
++           } = Repo.get(GroupProjection, other_group_id)
++  end
++
+   test "AddGroupMember projects an active group membership row" do
+     club_id = Memba.ID.generate(:club)
+     group_id = SystemGroups.everyone_group_id(club_id)
+@@ -143,13 +186,13 @@ defmodule Memba.Membership.GroupProjectionTest do
+              |> Enum.map(& &1.__struct__)
+   end
+ 
+-  defp create_club!(club_id) do
++  defp create_club!(club_id, slug \\ "kmc") do
+     assert :ok =
+              App.dispatch(
+                %CreateClub{
+                  club_id: club_id,
+                  name: "Kootenay Mountaineering Club",
+-                 slug: "kmc"
++                 slug: slug
+                },
+                consistency: :strong
+              )
