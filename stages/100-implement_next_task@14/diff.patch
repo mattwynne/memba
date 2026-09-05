@@ -1,0 +1,581 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 4e1dbed..38ec74f 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+ - [x] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+ - [x] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
+-- [ ] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
++- [x] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
+ - [ ] 015 Add aggregate, policy, projection/replay, release-backfill, inbound-route, authorisation, recipient-delivery, sender-non-following, and reply-authorisation tests.
+ - [ ] 016 Cover slug uniqueness and safe re-runs of the slug backfill.
+ - [ ] 017 Keep existing Everyone acceptance regressions passing.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index c2f0ff4..0251936 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   alias Memba.ID
+   alias Memba.Membership
+   alias Memba.Membership.Authorization
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+ 
+   @participant_avatar_limit 3
+@@ -95,7 +96,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp can_manage_members?(_club_id, _current_member), do: false
+ 
+   defp load_messages(club_id) do
+-    Messaging.list_conversations_for_club(club_id)
++    club_id
++    |> SystemGroups.everyone_group_id()
++    |> Messaging.list_conversations_for_group()
+   end
+ 
+   @doc """
+diff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex
+index b7db664..f72005a 100644
+--- a/web/lib/memba_web/member_message_detail.ex
++++ b/web/lib/memba_web/member_message_detail.ex
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageDetail do
+   alias Memba.Accounts
+   alias Memba.ID
+   alias Memba.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias MembaWeb.MemberEmailDeliveryPresentation
+ 
+@@ -30,8 +31,9 @@ defmodule MembaWeb.MemberMessageDetail do
+     with {:ok, club_id} <- cast_selected_club_id(params),
+          {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+          {:ok, message} <- fetch_message(params),
+-         :ok <- require_message_in_club(message, club_id) do
+-      {:ok, detail_assigns(selected_club, message, current_identity)}
++         :ok <- require_message_in_club(message, club_id),
++         {:ok, conversation_messages} <- fetch_everyone_conversation(message) do
++      {:ok, detail_assigns(selected_club, message, conversation_messages, current_identity)}
+     end
+   end
+ 
+@@ -66,7 +68,20 @@ defmodule MembaWeb.MemberMessageDetail do
+     end
+   end
+ 
+-  defp detail_assigns(selected_club, message, current_identity) do
++  defp fetch_everyone_conversation(message) do
++    conversation_messages =
++      Messaging.list_conversation_messages_for_group(
++        message.message_id,
++        SystemGroups.everyone_group_id(message.club_id)
++      )
++
++    case conversation_messages do
++      [] -> {:error, :not_found}
++      conversation_messages -> {:ok, conversation_messages}
++    end
++  end
++
++  defp detail_assigns(selected_club, message, conversation_messages, current_identity) do
+     receipt_model =
+       message.message_id
+       |> Messaging.list_member_email_deliverys()
+@@ -75,7 +90,6 @@ defmodule MembaWeb.MemberMessageDetail do
+     sender = Membership.get_person(message.sender_id)
+     active_members = Membership.list_active_members_of_club(selected_club.club_id)
+     current_member = current_member_for_identity(active_members, current_identity)
+-    conversation_messages = Messaging.list_conversation_messages(message.message_id)
+ 
+     %{
+       page_title: message.subject,
+diff --git a/web/test/memba_web/club_site_shell_surfaces_test.exs b/web/test/memba_web/club_site_shell_surfaces_test.exs
+index ec894ec..d521544 100644
+--- a/web/test/memba_web/club_site_shell_surfaces_test.exs
++++ b/web/test/memba_web/club_site_shell_surfaces_test.exs
+@@ -9,7 +9,6 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.SystemGroups
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -256,16 +255,6 @@ defmodule MembaWeb.ClubSiteShellSurfacesTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ end
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index e1a33a5..d57e0cb 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -3,8 +3,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -83,6 +83,35 @@ defmodule MembaWeb.MemberMessageDetailTest do
+       refute response =~ "Alpine-only route notes"
+       refute response =~ "These details must not appear through another club."
+     end
++
++    test "returns not found for an Admin-only conversation in the selected club", %{conn: conn} do
++      alice =
++        create_member(
++          email: "alice@example.com",
++          name: "Alice Adams",
++          club_name: "Alpine Club"
++        )
++
++      message =
++        create_message(
++          club_id: alice.club_id,
++          sender_id: alice.person_id,
++          subject: "Private Admin route notes",
++          body: "These details must remain email-only.",
++          audience_group_id: SystemGroups.admin_group_id(alice.club_id)
++        )
++
++      conn =
++        conn
++        |> club_host(alice)
++        |> sign_in_as("alice@example.com")
++        |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++      response = html_response(conn, 404)
++
++      refute response =~ "Private Admin route notes"
++      refute response =~ "These details must remain email-only."
++    end
+   end
+ 
+   describe "member-facing delivery relocation on message detail" do
+@@ -279,17 +308,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 23eb156..f566303 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -17,7 +17,6 @@ defmodule MembaWeb.PageControllerTest do
+   alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+   alias Memba.Onboarding.Request
+   alias Memba.Repo
+@@ -1279,17 +1278,7 @@ defmodule MembaWeb.PageControllerTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 1982093..af24cd7 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -9,6 +9,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Role
+   alias Memba.Membership.Projections.RoleAssignment
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+@@ -400,6 +401,40 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#member-section-panel-conversations #member-message-list-empty")
+   end
+ 
++  test "dashboard keeps Admin-only conversations out of the existing conversation list", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    everyone_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Club-wide trip planning"
++      )
++
++    admin_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Private Admin planning",
++        audience_group_id: SystemGroups.admin_group_id(alice.club_id)
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/conversations")
++
++    assert has_element?(view, "#member-message-#{everyone_conversation.message_id}")
++    refute has_element?(view, "#member-message-#{admin_conversation.message_id}")
++  end
++
+   test "dashboard renders the empty conversation state inside the default panel", %{
+     conn: conn
+   } do
+@@ -1552,20 +1587,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   end
+ 
+   defp create_message(attrs) do
+-    inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body"),
+-      inserted_at: inserted_at,
+-      updated_at: inserted_at
+-    })
++    attrs
++    |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
++    |> insert_group_accessible_message!()
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index edbda3b..594db77 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -7,7 +7,6 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -446,17 +445,7 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 58a83e4..1c799bd 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -6,7 +6,6 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+@@ -1024,19 +1023,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body"),
+-      inserted_at: Keyword.get(attrs, :inserted_at),
+-      updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 1ff5e2c..e7494cb 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -5,6 +5,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Role
+   alias Memba.Membership.Projections.RoleAssignment
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias MembaWeb.MemberDashboardPresentation
+@@ -163,6 +164,40 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     end
+   end
+ 
++  test "loads only conversations granted to the selected club's Everyone group" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    everyone_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Club-wide trip planning"
++      )
++
++    admin_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Private Admin planning",
++        audience_group_id: SystemGroups.admin_group_id(alice.club_id)
++      )
++
++    assert {:ok, assigns} =
++             MemberDashboardPresentation.load(
++               alice.club_id,
++               %{email: "alice@example.com"},
++               [alice.club]
++             )
++
++    assert Enum.map(assigns.messages, & &1.message_id) == [everyone_conversation.message_id]
++    refute Enum.any?(assigns.messages, &(&1.message_id == admin_conversation.message_id))
++  end
++
+   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
+     root = %Message{
+       message_id: Memba.ID.generate(:message),
+@@ -431,20 +466,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+   end
+ 
+   defp create_message(attrs) do
+-    inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body"),
+-      inserted_at: inserted_at,
+-      updated_at: inserted_at
+-    })
++    attrs
++    |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
++    |> insert_group_accessible_message!()
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index 022c52e..872eed6 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -3,8 +3,8 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+ 
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+-  alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.MemberMessageDetail
+ 
+@@ -190,6 +190,33 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+              )
+   end
+ 
++  test "returns not found for a conversation granted only to the Admin group" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    admin_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Private Admin planning",
++        audience_group_id: SystemGroups.admin_group_id(alice.club_id)
++      )
++
++    assert {:error, :not_found} =
++             MemberMessageDetail.load(
++               %{
++                 "club_id" => alice.club_id,
++                 "message_id" => admin_conversation.message_id
++               },
++               [alice],
++               %{email: "alice@example.com"}
++             )
++  end
++
+   defp create_club(attrs) do
+     insert_membership_club!(attrs)
+   end
+@@ -226,17 +253,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+   end
+ 
+   defp create_message(attrs) do
+-    message_id = Memba.ID.generate(:message)
+-
+-    Repo.insert!(%Message{
+-      message_id: message_id,
+-      club_id: Keyword.fetch!(attrs, :club_id),
+-      sender_id: Keyword.fetch!(attrs, :sender_id),
+-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
+-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
+-      subject: Keyword.fetch!(attrs, :subject),
+-      body: Keyword.get(attrs, :body, "Message body")
+-    })
++    insert_group_accessible_message!(attrs)
+   end
+ 
+   defp create_member_email_delivery(attrs) do
+diff --git a/web/test/support/conn_case.ex b/web/test/support/conn_case.ex
+index 6c50177..7c1268f 100644
+--- a/web/test/support/conn_case.ex
++++ b/web/test/support/conn_case.ex
+@@ -30,6 +30,7 @@ defmodule MembaWeb.ConnCase do
+       import PhoenixTest
+       import MembaWeb.ConnCase
+       import Memba.MembershipFixtures
++      import Memba.MessagingFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/data_case.ex b/web/test/support/data_case.ex
+index 58dd8fe..b9c77ed 100644
+--- a/web/test/support/data_case.ex
++++ b/web/test/support/data_case.ex
+@@ -25,6 +25,7 @@ defmodule Memba.DataCase do
+       import Ecto.Query
+       import Memba.DataCase
+       import Memba.MembershipFixtures
++      import Memba.MessagingFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/messaging_fixtures.ex b/web/test/support/messaging_fixtures.ex
+new file mode 100644
+index 0000000..23a3bf2
+--- /dev/null
++++ b/web/test/support/messaging_fixtures.ex
+@@ -0,0 +1,46 @@
++defmodule Memba.MessagingFixtures do
++  @moduledoc """
++  Shared fixtures for member-facing Messaging projection tests.
++
++  Member web surfaces read conversations through group access grants, so these
++  fixtures create the message projection and its root-conversation grant
++  together.
++  """
++
++  alias Memba.Membership.SystemGroups
++  alias Memba.Messaging.Projections.ConversationGroupAccess
++  alias Memba.Messaging.Projections.Message
++  alias Memba.Repo
++
++  def insert_group_accessible_message!(attrs) when is_list(attrs) do
++    message_id = Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end)
++    club_id = Keyword.fetch!(attrs, :club_id)
++
++    message =
++      Repo.insert!(%Message{
++        message_id: message_id,
++        club_id: club_id,
++        sender_id: Keyword.fetch!(attrs, :sender_id),
++        conversation_id: Keyword.get(attrs, :conversation_id, message_id),
++        reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
++        subject: Keyword.fetch!(attrs, :subject),
++        body: Keyword.get(attrs, :body, "Message body"),
++        inserted_at: Keyword.get(attrs, :inserted_at),
++        updated_at: Keyword.get(attrs, :updated_at, Keyword.get(attrs, :inserted_at))
++      })
++
++    if message.message_id == message.conversation_id do
++      Repo.insert!(%ConversationGroupAccess{
++        conversation_id: message.message_id,
++        club_id: club_id,
++        group_id:
++          Keyword.get_lazy(attrs, :audience_group_id, fn ->
++            SystemGroups.everyone_group_id(club_id)
++          end),
++        access_level: Keyword.get(attrs, :access_level, "write")
++      })
++    end
++
++    message
++  end
++end
