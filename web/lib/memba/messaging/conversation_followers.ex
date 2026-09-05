@@ -52,11 +52,18 @@ defmodule Memba.Messaging.ConversationFollowers do
 
   @impl Aggregate
   def apply(%__MODULE__{} = conversation, %MessageSent{} = event) do
+    follower_ids =
+      if MessageSent.sender_follows_conversation?(event) do
+        MapSet.put(conversation.follower_ids, event.sender_id)
+      else
+        conversation.follower_ids
+      end
+
     %__MODULE__{
       conversation
       | conversation_id: event.conversation_id || event.message_id,
         club_id: event.club_id,
-        follower_ids: MapSet.put(conversation.follower_ids, event.sender_id)
+        follower_ids: follower_ids
     }
   end
 

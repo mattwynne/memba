@@ -8,8 +8,17 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
+  alias Memba.Messaging.Projectors.ConversationFollow, as: ConversationFollowProjector
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Recipient
+
+  @sender_follow_replay_projectors [
+    Memba.Messaging.Projectors.Message,
+    ConversationFollowProjector,
+    Memba.Messaging.Projectors.EmailDelivery,
+    Memba.Messaging.Projectors.MemberEmailDelivery,
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+  ]
 
   test "follow and unfollow commands are projected as the member's current conversation follow state" do
     club_id = Memba.ID.generate(:club)
@@ -165,5 +174,40 @@ defmodule Memba.Messaging.ConversationFollowProjectionTest do
     assert Enum.sort(follower_ids) == Enum.sort([alice_id, bob_id])
 
     refute Messaging.following_conversation?(root_message_id, carol_id)
+  end
+
+  test "a root sender excluded from delivery remains unfollowed after projection replay" do
+    club_id = Memba.ID.generate(:club)
+    root_message_id = Memba.ID.generate(:message)
+    sender_id = Memba.ID.generate(:person)
+    recipient_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %SendMessage{
+                 message_id: root_message_id,
+                 club_id: club_id,
+                 sender_id: sender_id,
+                 subject: "Private Admin topic",
+                 body: "Please discuss this with the Admin group.",
+                 recipients: [
+                   %Recipient{
+                     delivery_id: Memba.ID.generate(:delivery),
+                     person_id: recipient_id,
+                     name: "Admin Recipient",
+                     email: "admin@example.com"
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    refute Messaging.following_conversation?(root_message_id, sender_id)
+
+    projection_positions = event_sourced_projection_positions(@sender_follow_replay_projectors)
+    Memba.EventSourcedCase.rebuild_event_sourced_projections!()
+    await_event_sourced_projection_positions!(projection_positions)
+
+    refute Messaging.following_conversation?(root_message_id, sender_id)
   end
 end

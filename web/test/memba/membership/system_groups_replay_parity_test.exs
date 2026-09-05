@@ -9,6 +9,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projectors.Club, as: ClubProjector
@@ -86,6 +87,14 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
 
     assert_zero_backfill_dispatches!()
     before_replay = public_query_snapshot(fixture)
+
+    assert %{
+             historic_everyone: %{email_slug: "everyone"},
+             historic_admin: %{email_slug: "admin"},
+             modern_everyone: %{email_slug: "everyone"},
+             modern_admin: %{email_slug: "admin"}
+           } = before_replay.groups_by_email_slug
+
     event_counts_before_replay = replay_parity_event_counts(fixture)
     projection_positions = event_sourced_projection_positions(@replay_projectors)
 
@@ -249,6 +258,15 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
         everyone_conversation_access:
           Messaging.list_everyone_conversation_access_backfill_page(nil, 100)
       },
+      groups_by_email_slug: %{
+        historic_everyone:
+          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "everyone"),
+        historic_admin:
+          Membership.get_group_by_email_slug(fixture.historic_club.club_id, "admin"),
+        modern_everyone:
+          Membership.get_group_by_email_slug(fixture.modern_club.club_id, "everyone"),
+        modern_admin: Membership.get_group_by_email_slug(fixture.modern_club.club_id, "admin")
+      },
       group_members: %{
         historic_everyone: Membership.list_active_members_of_group(historic_everyone_group_id),
         historic_admin: Membership.list_active_members_of_group(historic_admin_group_id),
@@ -359,6 +377,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   defp group_fact_counts(club_id) do
     %{
       groups_created: event_count(MembershipApp, club_id, GroupCreated),
+      group_email_slugs_assigned: event_count(MembershipApp, club_id, GroupEmailSlugAssigned),
       group_members_added: event_count(MembershipApp, club_id, GroupMemberAdded)
     }
   end

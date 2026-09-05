@@ -449,10 +449,16 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   defp create_group(club_id, name) do
     ensure_club(club_id)
     group_id = Memba.ID.generate(:group)
+    email_slug = name |> String.downcase() |> String.replace(" ", "-")
 
     assert :ok =
              MembershipApp.dispatch(
-               %CreateGroup{club_id: club_id, group_id: group_id, name: name},
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: email_slug,
+                 name: name
+               },
                consistency: :strong
              )
 

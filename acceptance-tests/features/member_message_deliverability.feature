@@ -81,7 +81,7 @@ Rule: Active members can send new club messages by email
 
 Rule: Active club members can start a private Admin conversation by email
 
-    @iteration-057 @todo-domain @todo-ui
+    @iteration-057
     Scenario: Alice emails the KMC Admin address without belonging to Admin
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       When Alice emails "Committee meeting" to admin@kmc.clubs.memba.io
@@ -89,14 +89,14 @@ Rule: Active club members can start a private Admin conversation by email
       And Alice should not receive the Admin message "Committee meeting" by email
       And Alice and Bob should not see the Admin message "Committee meeting" in the Kootenay Mountaineering Club web app
 
-    @iteration-057 @todo-domain @todo-ui
+    @iteration-057
     Scenario: Bob emails the KMC Admin address as an Admin member
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       When Bob emails "Committee meeting" to admin@kmc.clubs.memba.io
       Then Bob and Carol should each receive the Admin message "Committee meeting" by email from Kootenay Mountaineering Club via Memba
       And Alice should not receive the Admin message "Committee meeting" by email
 
-    @iteration-057 @todo-domain @todo-ui
+    @iteration-057
     Scenario: A member of another club emails the KMC Admin address
       When Pat emails "Committee meeting" to admin@kmc.clubs.memba.io
       Then no Kootenay Mountaineering Club Admin message named "Committee meeting" should be created

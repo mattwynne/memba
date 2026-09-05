@@ -6,6 +6,7 @@ defmodule Memba.Messaging.ConversationFollowersTest do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
+  alias Memba.Messaging.Events.MessageSent
 
   describe "execute/2 FollowConversation" do
     test "emits a follow event for a member in a conversation" do
@@ -135,6 +136,31 @@ defmodule Memba.Messaging.ConversationFollowersTest do
       })
 
     refute MapSet.member?(unfollowed.follower_ids, member_id)
+  end
+
+  test "a root sender excluded from delivery is not rehydrated as a follower" do
+    club_id = Memba.ID.generate(:club)
+    conversation_id = Memba.ID.generate(:message)
+    sender_id = Memba.ID.generate(:person)
+
+    conversation =
+      ConversationFollowers.apply(%ConversationFollowers{}, %MessageSent{
+        message_id: conversation_id,
+        club_id: club_id,
+        sender_id: sender_id,
+        subject: "Private Admin topic",
+        body: "Please discuss this with the Admin group.",
+        sender_follows_conversation: false
+      })
+
+    refute MapSet.member?(conversation.follower_ids, sender_id)
+
+    assert %ConversationFollowed{member_id: ^sender_id} =
+             ConversationFollowers.execute(conversation, %FollowConversation{
+               club_id: club_id,
+               conversation_id: conversation_id,
+               member_id: sender_id
+             })
   end
 
   defp followed_conversation do

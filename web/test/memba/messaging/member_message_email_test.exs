@@ -4,6 +4,36 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.OutboundMessageID
+  alias Memba.Membership.SystemGroups
+
+  test "Admin root messages use the club as the From identity" do
+    club_id = Memba.ID.generate(:club)
+
+    request =
+      email_delivery_request(
+        club_id: club_id,
+        club_name: "Kootenay Mountaineering Club",
+        audience_group_id: SystemGroups.admin_group_id(club_id),
+        sender_name: "Alice Adams"
+      )
+
+    assert MemberMessageEmail.from_display_name(request) ==
+             "Kootenay Mountaineering Club via Memba"
+  end
+
+  test "Everyone root messages keep the member sender as the From identity" do
+    club_id = Memba.ID.generate(:club)
+
+    request =
+      email_delivery_request(
+        club_id: club_id,
+        club_name: "Kootenay Mountaineering Club",
+        audience_group_id: SystemGroups.everyone_group_id(club_id),
+        sender_name: "Alice Adams"
+      )
+
+    assert MemberMessageEmail.from_display_name(request) == "Alice Adams via Memba"
+  end
 
   test "reply notifications use the club email subdomain destination and preserve threading headers" do
     request =
@@ -53,6 +83,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
+      audience_group_id: Keyword.get(overrides, :audience_group_id),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),

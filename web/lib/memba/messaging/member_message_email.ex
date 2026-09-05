@@ -8,12 +8,13 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   alias Memba.ClubInboundEmailAddress
   alias Memba.EmailTemplates
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.OutboundMessageID
 
   @doc "Return the sanitized From display name for a member-message email."
   def from_display_name(%EmailDeliveryRequest{} = request) do
-    if reply?(request) do
+    if reply?(request) or private_group_root?(request) do
       "#{group_name(request)} via Memba"
     else
       "#{sender_name(request)} via Memba"
@@ -375,6 +376,16 @@ defmodule Memba.Messaging.MemberMessageEmail do
   defp reply?(%EmailDeliveryRequest{reply_to_message_id: reply_to_message_id}) do
     is_binary(reply_to_message_id) and String.trim(reply_to_message_id) != ""
   end
+
+  defp private_group_root?(%EmailDeliveryRequest{
+         audience_group_id: audience_group_id,
+         club_id: club_id
+       })
+       when is_binary(audience_group_id) and is_binary(club_id) do
+    audience_group_id != SystemGroups.everyone_group_id(club_id)
+  end
+
+  defp private_group_root?(%EmailDeliveryRequest{}), do: false
 
   defp maybe_header(headers, _name, nil), do: headers
 

@@ -14,6 +14,7 @@ defmodule Memba.Membership.Projectors.Club do
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -45,6 +46,8 @@ defmodule Memba.Membership.Projectors.Club do
   project(%ClubRolePermissionGranted{}, fn multi -> multi end)
 
   project(%GroupCreated{}, fn multi -> multi end)
+
+  project(%GroupEmailSlugAssigned{}, fn multi -> multi end)
 
   project(%MemberRoleAssigned{}, fn multi -> multi end)
 

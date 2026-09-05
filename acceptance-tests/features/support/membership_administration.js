@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { emailFor, ensureState } = require("./member_message");
+const { clubSlugFor, emailFor, ensureState } = require("./member_message");
 const serverCommands = require("./server_commands");
 
 function ensureMembershipAdministrator(world, personName, clubName) {
@@ -147,7 +147,7 @@ function ensureMember(world, personName, clubName) {
 
   const member = serverCommands.ensureMember({
     clubName,
-    clubSlug: clubSlug(clubName),
+    clubSlug: clubSlugFor(clubName),
     personName,
     email: emailFor(personName)
   });
@@ -331,16 +331,6 @@ function rememberMember(world, member) {
     membershipId: member.membershipId,
     personId: member.personId
   };
-}
-
-function clubSlug(clubName) {
-  return String(clubName || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32)
-    .replace(/^-+|-+$/g, "");
 }
 
 module.exports = {

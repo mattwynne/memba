@@ -266,7 +266,8 @@ defmodule Memba.Messaging.Message do
         conversation_id: conversation_id,
         reply_to_message_id: reply_to_message_id,
         subject: subject,
-        body: body
+        body: body,
+        sender_follows_conversation: sender_follows_conversation?(command, recipients)
       }
 
       [message_sent] ++
@@ -448,10 +449,7 @@ defmodule Memba.Messaging.Message do
   defp normalize_text(_text, error), do: {:error, error}
 
   defp normalize_command_recipients(%SendMessage{} = command) do
-    with {:ok, recipients} <- normalize_recipients(command.recipients, allow_empty?: false),
-         :ok <- validate_sender_recipient(command.sender_id, recipients) do
-      {:ok, recipients}
-    end
+    normalize_recipients(command.recipients, allow_empty?: false)
   end
 
   defp normalize_command_recipients(%PostMessageReply{} = command) do
@@ -542,13 +540,10 @@ defmodule Memba.Messaging.Message do
     end
   end
 
-  defp validate_sender_recipient(sender_id, recipients) do
-    if Enum.any?(recipients, &(&1.person_id == sender_id)) do
-      :ok
-    else
-      {:error, :sender_not_in_recipients}
-    end
-  end
+  defp sender_follows_conversation?(%SendMessage{sender_id: sender_id}, recipients),
+    do: Enum.any?(recipients, &(&1.person_id == sender_id))
+
+  defp sender_follows_conversation?(%PostMessageReply{}, _recipients), do: true
 
   defp validate_reply_author_excluded(sender_id, recipients) do
     if Enum.any?(recipients, &(&1.person_id == sender_id)) do

@@ -3,8 +3,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.MemberEmailDelivery
-  alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -82,6 +82,35 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       refute response =~ "Alpine-only route notes"
       refute response =~ "These details must not appear through another club."
+    end
+
+    test "returns not found for an Admin-only conversation in the selected club", %{conn: conn} do
+      alice =
+        create_member(
+          email: "alice@example.com",
+          name: "Alice Adams",
+          club_name: "Alpine Club"
+        )
+
+      message =
+        create_message(
+          club_id: alice.club_id,
+          sender_id: alice.person_id,
+          subject: "Private Admin route notes",
+          body: "These details must remain email-only.",
+          audience_group_id: SystemGroups.admin_group_id(alice.club_id)
+        )
+
+      conn =
+        conn
+        |> club_host(alice)
+        |> sign_in_as("alice@example.com")
+        |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+
+      response = html_response(conn, 404)
+
+      refute response =~ "Private Admin route notes"
+      refute response =~ "These details must remain email-only."
     end
   end
 
@@ -279,17 +308,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
   end
 
   defp create_message(attrs) do
-    message_id = Memba.ID.generate(:message)
-
-    Repo.insert!(%Message{
-      message_id: message_id,
-      club_id: Keyword.fetch!(attrs, :club_id),
-      sender_id: Keyword.fetch!(attrs, :sender_id),
-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
-      subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body")
-    })
+    insert_group_accessible_message!(attrs)
   end
 
   defp create_member_email_delivery(attrs) do

@@ -17,10 +17,14 @@ defmodule Memba.Messaging.Projectors.ConversationFollow do
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
 
   project(%MessageSent{} = event, fn multi ->
-    conversation_id =
-      event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
+    if MessageSent.sender_follows_conversation?(event) do
+      conversation_id =
+        event.conversation_id || ConversationReference.root_conversation_id(event.message_id)
 
-    upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)
+      upsert_follow(multi, event.club_id, conversation_id, event.sender_id, true)
+    else
+      multi
+    end
   end)
 
   project(%ConversationFollowed{} = event, fn multi ->

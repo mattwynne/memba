@@ -524,6 +524,34 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a public conversation-group summary by club ID and email routing slug.
+
+  The email slug is normalized by trimming surrounding whitespace and folding
+  casing before validation. Invalid club IDs, invalid slugs, and unknown groups
+  return `nil`. The plain-map result keeps callers outside Membership independent
+  of Membership's projection schema.
+  """
+  def get_group_by_email_slug(club_id, email_slug) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, email_slug} <- Slug.normalize_for_lookup(email_slug) do
+      GroupProjection
+      |> where([group], group.club_id == ^club_id)
+      |> where([group], group.email_slug == ^email_slug)
+      |> select([group], %{
+        club_id: group.club_id,
+        group_id: group.group_id,
+        email_slug: group.email_slug,
+        group_key: group.group_key,
+        name: group.name
+      })
+      |> Repo.one()
+    else
+      :error -> nil
+      {:error, _reason} -> nil
+    end
+  end
+
+  @doc """
   Fetch a projected person read model by typed person ID.
 
   Returns `nil` when the ID is absent or is not a valid person ID.
@@ -913,12 +941,13 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  Return one keyset page of missing system-group definitions for release backfill.
+  Return one keyset page of incomplete system-group definitions for release backfill.
 
   The page scans projected clubs in ascending `club_id` order and returns plain
   maps for deterministic Everyone/Admin group definitions whose projected row is
-  absent. `cursor` is the last scanned `club_id` from a previous page; callers
-  keep it in process only and may safely restart from `nil`.
+  absent or whose email slug is not yet assigned. `cursor` is the last scanned
+  `club_id` from a previous page; callers keep it in process only and may safely
+  restart from `nil`.
   """
   def list_system_group_definition_backfill_page(cursor \\ nil, limit \\ 1_000) do
     clubs =
@@ -930,12 +959,14 @@ defmodule Memba.Membership do
       |> Repo.all()
 
     group_definitions = Enum.flat_map(clubs, &system_group_definitions(&1.club_id))
-    existing_group_ids = existing_group_ids(Enum.map(group_definitions, & &1.group_id))
+
+    existing_email_slugs =
+      existing_group_email_slugs(Enum.map(group_definitions, & &1.group_id))
 
     %{
       entries:
         Enum.reject(group_definitions, fn definition ->
-          MapSet.member?(existing_group_ids, definition.group_id)
+          Map.get(existing_email_slugs, definition.group_id) == definition.email_slug
         end),
       next_cursor: backfill_next_cursor(clubs, :club_id),
       source_count: length(clubs)
@@ -1208,26 +1239,28 @@ defmodule Memba.Membership do
       %{
         club_id: club_id,
         group_id: SystemGroups.everyone_group_id(club_id),
+        email_slug: SystemGroups.everyone_email_slug(),
         group_key: SystemGroups.everyone_key(),
         name: SystemGroups.everyone_name()
       },
       %{
         club_id: club_id,
         group_id: SystemGroups.admin_group_id(club_id),
+        email_slug: SystemGroups.admin_email_slug(),
         group_key: SystemGroups.admin_key(),
         name: SystemGroups.admin_name()
       }
     ]
   end
 
-  defp existing_group_ids([]), do: MapSet.new()
+  defp existing_group_email_slugs([]), do: %{}
 
-  defp existing_group_ids(group_ids) do
+  defp existing_group_email_slugs(group_ids) do
     GroupProjection
     |> where([group], group.group_id in ^group_ids)
-    |> select([group], group.group_id)
+    |> select([group], {group.group_id, group.email_slug})
     |> Repo.all()
-    |> MapSet.new()
+    |> Map.new()
   end
 
   defp reject_active_group_memberships([]), do: []

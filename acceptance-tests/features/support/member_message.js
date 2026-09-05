@@ -52,6 +52,14 @@ function emailFor(name) {
   return `${normalizedName}@example.test`;
 }
 
+function clubSlugFor(clubName) {
+  if (clubName === kootenayClubName) {
+    return "kmc";
+  }
+
+  return defaultClubSlug(clubName);
+}
+
 function defaultClubSlug(clubName) {
   return String(clubName || "")
     .trim()
@@ -1237,6 +1245,40 @@ async function sendInboundClubEmail(
   return world;
 }
 
+async function recordAcceptedInboundRootMessage(world, subject) {
+  ensureState(world);
+
+  const inboundEmail = world.inboundEmails[subject];
+  assert.ok(inboundEmail, `Expected inbound email state for ${JSON.stringify(subject)}`);
+
+  const result = await waitForInboundEmailResult(world, inboundEmail.providerMessageId);
+
+  assert.equal(
+    result.source.status,
+    "accepted",
+    `Expected inbound email for ${JSON.stringify(subject)} to be accepted; saw ${JSON.stringify(result.source)}`
+  );
+  assert.ok(result.message, `Expected accepted inbound email ${JSON.stringify(subject)} to create a message`);
+  assert.equal(
+    result.message.replyToMessageId,
+    null,
+    `Expected ${JSON.stringify(subject)} to be a root message`
+  );
+
+  const club = clubById(world, result.message.clubId);
+
+  world.messages[subject] = {
+    body: result.message.body,
+    clubId: result.message.clubId,
+    clubSlug: club && club.slug,
+    messageId: result.message.messageId,
+    senderName: inboundEmail.senderName,
+    subject: result.message.subject
+  };
+
+  return world.messages[subject];
+}
+
 async function sendInboundClubEmailReply(
   world,
   senderName,
@@ -1255,8 +1297,13 @@ async function sendInboundClubEmailReply(
 
   const providerMessageId = `acceptance-reply-${randomUUID()}`;
   const replyDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+  const rootInboundEmail = world.inboundEmails[subject];
+  const replyAddress =
+    toAddress ||
+    (rootInboundEmail && rootInboundEmail.toAddress) ||
+    clubEveryoneAddress(club);
 
-  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, toAddress || clubEveryoneAddress(club), {
+  await sendInboundClubEmail(world, senderName, `Re: ${subject}`, replyAddress, {
     expect,
     headers: { "In-Reply-To": outboundMessageId },
     providerMessageId,
@@ -1556,6 +1603,138 @@ async function assertNoMemberMessageCreated(
   assertFinalBrowserState(`message ${JSON.stringify(subject)} should not be recorded in scenario state`, () =>
     assert.equal(world.messages[subject], undefined)
   );
+
+  return world;
+}
+
+async function assertNoAdminMessageCreated(world, clubName, subject) {
+  ensureState(world);
+
+  const inboundEmail = world.inboundEmails[subject];
+  assert.ok(inboundEmail, `Expected inbound email state for ${JSON.stringify(subject)}`);
+
+  const result = await waitForInboundEmailResult(world, inboundEmail.providerMessageId);
+
+  assert.equal(
+    result.source.status,
+    "rejected",
+    `Expected inbound Admin email for ${JSON.stringify(subject)} to be rejected`
+  );
+  assert.equal(result.source.messageId, null);
+  assert.equal(result.message, null);
+
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to have been created`);
+
+  const matchingConversations = serverCommands.runCommand(
+    `
+club_id = Map.fetch!(payload, "clubId")
+subject = Map.fetch!(payload, "subject")
+
+case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
+  nil -> []
+  group ->
+    group.group_id
+    |> Memba.Messaging.list_conversations_for_group()
+    |> Enum.filter(&(&1.subject == subject))
+    |> Enum.map(&%{messageId: &1.message_id, subject: &1.subject})
+end
+`,
+    { clubId: club.clubId, subject }
+  );
+
+  assert.deepEqual(
+    matchingConversations,
+    [],
+    `Expected no Admin conversation named ${JSON.stringify(subject)}`
+  );
+
+  return world;
+}
+
+async function assertAdminMessageDeliveredToMembers(
+  world,
+  subject,
+  expectedRecipientNames,
+  clubName
+) {
+  const message = await recordAcceptedInboundRootMessage(world, subject);
+  serverCommands.dispatchPendingEmailDeliveries();
+
+  const baseline = world.localDeliveryFactsBeforeSend || [];
+  const facts = await waitForLocalDeliveryFacts(
+    world,
+    baseline.length + expectedRecipientNames.length,
+    `Admin message deliveries for ${JSON.stringify(subject)}`
+  );
+  const messageFacts = facts.filter((fact) => fact.message_id === message.messageId);
+  const expectedSubject = memberMessageEmailSubjectFor(world, subject);
+
+  assertFinalBrowserState(`Admin message recipients for ${JSON.stringify(subject)}`, () => {
+    assert.deepEqual(
+      messageFacts.map((fact) => fact.recipient_name).sort(),
+      [...expectedRecipientNames].sort()
+    );
+  });
+
+  for (const recipientName of expectedRecipientNames) {
+    const person = world.people[recipientName];
+    assert.ok(person, `Expected ${recipientName} to have been created`);
+
+    const matchingFact = messageFacts.find(
+      (fact) =>
+        fact.recipient_id === person.personId &&
+        fact.subject === expectedSubject &&
+        fact.from.startsWith(`${clubName} via Memba <`) &&
+        fact.text_body.includes(message.body)
+    );
+
+    assertFinalBrowserState(`Admin message email for ${recipientName}`, () =>
+      assert.ok(
+        matchingFact,
+        `Expected Admin message ${JSON.stringify(subject)} for ${recipientName}; ` +
+          `saw ${JSON.stringify(messageFacts.map(mailboxEmailSummary))}`
+      )
+    );
+  }
+
+  world.adminMessageDeliveryFacts = world.adminMessageDeliveryFacts || {};
+  world.adminMessageDeliveryFacts[subject] = messageFacts;
+
+  return world;
+}
+
+async function assertAdminMessageNotDeliveredToMember(world, subject, recipientName) {
+  const message = await recordAcceptedInboundRootMessage(world, subject);
+  const person = world.people[recipientName];
+  assert.ok(person, `Expected ${recipientName} to have been created`);
+
+  serverCommands.dispatchPendingEmailDeliveries();
+
+  const facts = world.adminMessageDeliveryFacts && world.adminMessageDeliveryFacts[subject]
+    ? world.adminMessageDeliveryFacts[subject]
+    : (await testLocalDeliveryFacts(world)).filter((fact) => fact.message_id === message.messageId);
+
+  assertFinalBrowserState(`no Admin message email for ${recipientName}`, () => {
+    assert.equal(
+      facts.find((fact) => fact.recipient_id === person.personId),
+      undefined,
+      `Expected no Admin message ${JSON.stringify(subject)} for ${recipientName}; ` +
+        `saw ${JSON.stringify(facts.map(mailboxEmailSummary))}`
+    );
+  });
+
+  return world;
+}
+
+async function assertMemberDoesNotSeeAdminMessage(
+  world,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  const rows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
+
+  await expect(rows).toHaveCount(0);
 
   return world;
 }
@@ -2058,6 +2237,48 @@ async function assertConversationShowsReply(
     conversationReplyRow(world, senderName, body),
     `${senderName}'s reply ${JSON.stringify(body)} in conversation ${JSON.stringify(subject)}`,
     { expect, timeoutMs }
+  );
+
+  return world;
+}
+
+async function assertAdminConversationShowsReply(world, subject, senderName, body) {
+  const rootMessage = world.messages[subject] || await recordAcceptedInboundRootMessage(world, subject);
+  const sender = world.people[senderName];
+  assert.ok(sender, `Expected ${senderName} to have been created`);
+
+  const result = serverCommands.runCommand(
+    `
+message_id = Map.fetch!(payload, "messageId")
+club_id = Map.fetch!(payload, "clubId")
+
+messages =
+case Memba.Membership.get_group_by_email_slug(club_id, "admin") do
+  nil -> []
+  group -> Memba.Messaging.list_conversation_messages_for_group(message_id, group.group_id)
+end
+
+Enum.map(messages, &%{
+  body: &1.body,
+  messageId: &1.message_id,
+  replyToMessageId: &1.reply_to_message_id,
+  senderId: &1.sender_id
+})
+`,
+    { clubId: rootMessage.clubId, messageId: rootMessage.messageId }
+  );
+
+  assertFinalBrowserState(`Admin conversation reply from ${senderName}`, () =>
+    assert.ok(
+      result.find(
+        (message) =>
+          message.senderId === sender.personId &&
+          message.replyToMessageId &&
+          message.body === body
+      ),
+      `Expected Admin conversation ${JSON.stringify(subject)} to include ${senderName}'s ` +
+        `reply ${JSON.stringify(body)}; saw ${JSON.stringify(result)}`
+    )
   );
 
   return world;
@@ -3447,14 +3668,9 @@ async function outboundMessageIdForSubject(world, subject, preferredRecipientNam
   return outboundMessageId;
 }
 
-async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
-  const timeoutMs = requireReply ? projectionTimeoutMs(world) : 0;
-  const deadline = Date.now() + timeoutMs;
-  let result;
-
-  do {
-    result = serverCommands.runCommand(
-      `
+function inboundEmailResult(providerMessageId) {
+  return serverCommands.runCommand(
+    `
 provider_message_id = Map.fetch!(payload, "providerMessageId")
 source = Memba.Messaging.get_inbound_email_source("resend", provider_message_id)
 
@@ -3482,27 +3698,51 @@ message =
   }, else: nil)
 }
 `,
-      { providerMessageId }
-    );
+    { providerMessageId }
+  );
+}
 
-    if (result.source && result.source.status === "rejected") {
-      if (requireReply) {
-        throw new Error(
-          `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
-        );
-      }
+async function waitForInboundEmailResult(world, providerMessageId) {
+  const timeoutMs = projectionTimeoutMs(world);
+  const deadline = Date.now() + timeoutMs;
+  let result;
 
-      return;
-    }
+  do {
+    result = inboundEmailResult(providerMessageId);
 
-    if (result.message && result.message.replyToMessageId) {
-      break;
+    if (
+      result.source &&
+      (result.source.status === "rejected" ||
+        (result.source.status === "accepted" && result.message))
+    ) {
+      return result;
     }
 
     if (Date.now() <= deadline) {
       await delay(projectionPollIntervalMs(world));
     }
   } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for inbound email ` +
+      `${providerMessageId}; saw ${JSON.stringify(result)}`
+  );
+}
+
+async function recordInboundReplyIfAccepted(world, providerMessageId, senderName, { requireReply = false } = {}) {
+  const result = requireReply
+    ? await waitForInboundEmailResult(world, providerMessageId)
+    : inboundEmailResult(providerMessageId);
+
+  if (result.source && result.source.status === "rejected") {
+    if (requireReply) {
+      throw new Error(
+        `Expected inbound reply ${providerMessageId} to be accepted; rejected with ${result.source.rejectionReason} for ${result.source.toAddress}`
+      );
+    }
+
+    return;
+  }
 
   const message = result && result.message;
 
@@ -3511,10 +3751,7 @@ message =
       return;
     }
 
-    assert.ok(
-      message && message.replyToMessageId,
-      `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`
-    );
+    assert.ok(message && message.replyToMessageId, `Expected inbound reply ${providerMessageId} to create a reply message; saw ${JSON.stringify(result)}`);
   }
 
   const reply = {
@@ -3880,6 +4117,10 @@ module.exports = {
   addMembers,
   appUrl,
   clubSiteUrl,
+  clubSlugFor,
+  assertAdminConversationShowsReply,
+  assertAdminMessageDeliveredToMembers,
+  assertAdminMessageNotDeliveredToMember,
   assertEveryAddressedMemberEmailDeliveryStatus,
   assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
@@ -3905,6 +4146,7 @@ module.exports = {
   assertInboundRejectionEmailUsesStandardMembaFooter,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertMemberDoesNotSeeAdminMessage,
   assertMemberMessageAddressedTo,
   assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
@@ -3920,6 +4162,7 @@ module.exports = {
   assertMemberWasToldToContactSupport,
   assertMessageDetailBackLink,
   assertNoAddressedMemberReceivedEmail,
+  assertNoAdminMessageCreated,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
@@ -3964,6 +4207,7 @@ module.exports = {
   openClub,
   openMessage,
   removeMemberFromClub,
+  recordAcceptedInboundRootMessage,
   recordMembershipProjectionCheckpoint,
   restoreClubMessageSending,
   sendInboundClubEmailReply,

@@ -4,8 +4,12 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
+
+  alias Memba.Messaging.Projections.ConversationGroupAccess,
+    as: ConversationGroupAccessProjection
+
+  alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.OutboundMessageID
   alias Memba.Messaging.Recipient
 
@@ -134,6 +138,18 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert Messaging.list_conversations_for_club(Memba.ID.generate(:club)) == []
     assert Messaging.list_conversations_for_club(nil) == []
     assert Messaging.list_conversations_for_club("not-a-uuid") == []
+
+    assert Messaging.list_conversations_for_group(Memba.ID.generate(:group)) == []
+    assert Messaging.list_conversations_for_group(nil) == []
+    assert Messaging.list_conversations_for_group("not-a-uuid") == []
+
+    assert Messaging.list_conversation_messages_for_group(
+             Memba.ID.generate(:message),
+             Memba.ID.generate(:group)
+           ) == []
+
+    assert Messaging.list_conversation_messages_for_group(nil, Memba.ID.generate(:group)) == []
+    assert Messaging.list_conversation_messages_for_group("not-a-uuid", "not-a-uuid") == []
 
     assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_email_delivery(nil))
@@ -348,6 +364,105 @@ defmodule Memba.Messaging.MessageProjectionTest do
     end
   end
 
+  describe "list_conversations_for_group/1" do
+    test "returns only conversations with a read-capable grant for the supplied group" do
+      club_id = Memba.ID.generate(:club)
+      everyone_group_id = Memba.ID.generate(:group)
+      admin_group_id = Memba.ID.generate(:group)
+      sender_id = Memba.ID.generate(:person)
+      replier_id = Memba.ID.generate(:person)
+
+      insert_membership_person!(
+        person_id: replier_id,
+        name: "Robin Replier",
+        email: "robin-replier@example.com"
+      )
+
+      everyone_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: "Everyone conversation",
+          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
+        )
+
+      _everyone_reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: replier_id,
+          conversation_id: everyone_root.message_id,
+          reply_to_message_id: everyone_root.message_id,
+          subject: "Everyone conversation",
+          inserted_at: ~U[2026-06-05 10:05:00.000000Z]
+        )
+
+      admin_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: "Admin conversation",
+          inserted_at: ~U[2026-06-05 11:00:00.000000Z]
+        )
+
+      shared_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: "Shared conversation",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      _ungranted_root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: "No group access",
+          inserted_at: ~U[2026-06-05 13:00:00.000000Z]
+        )
+
+      grant_group_access!(everyone_root, everyone_group_id, "write")
+      grant_group_access!(admin_root, admin_group_id, "write")
+      grant_group_access!(shared_root, everyone_group_id, "read")
+      grant_group_access!(shared_root, admin_group_id, "write")
+
+      assert [
+               %{message_id: shared_root_id, reply_count: 0, latest_replier_name: nil},
+               %{
+                 message_id: everyone_root_id,
+                 reply_count: 1,
+                 latest_replier_id: ^replier_id,
+                 latest_replier_name: "Robin Replier"
+               }
+             ] = Messaging.list_conversations_for_group(everyone_group_id)
+
+      assert shared_root_id == shared_root.message_id
+      assert everyone_root_id == everyone_root.message_id
+
+      assert [
+               %{message_id: shared_root_id},
+               %{message_id: admin_root_id}
+             ] = Messaging.list_conversations_for_group(admin_group_id)
+
+      assert shared_root_id == shared_root.message_id
+      assert admin_root_id == admin_root.message_id
+    end
+
+    test "does not expose a conversation through a cross-club access row" do
+      root =
+        insert_message_projection!(
+          club_id: Memba.ID.generate(:club),
+          sender_id: Memba.ID.generate(:person),
+          subject: "Private conversation",
+          inserted_at: ~U[2026-06-05 10:00:00.000000Z]
+        )
+
+      group_id = Memba.ID.generate(:group)
+      grant_group_access!(root, group_id, "read", club_id: Memba.ID.generate(:club))
+
+      assert Messaging.list_conversations_for_group(group_id) == []
+    end
+  end
+
   describe "list_conversation_messages/1" do
     test "returns the root message followed by replies in posted order" do
       club_id = Memba.ID.generate(:club)
@@ -463,6 +578,59 @@ defmodule Memba.Messaging.MessageProjectionTest do
     end
   end
 
+  describe "list_conversation_messages_for_group/2" do
+    test "returns a complete conversation through its root access grant" do
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      other_group_id = Memba.ID.generate(:group)
+
+      root =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: Memba.ID.generate(:person),
+          subject: "Private trip planning",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      reply =
+        insert_message_projection!(
+          club_id: club_id,
+          sender_id: Memba.ID.generate(:person),
+          conversation_id: root.message_id,
+          reply_to_message_id: root.message_id,
+          subject: "Private trip planning",
+          inserted_at: ~U[2026-06-05 12:01:00.000000Z]
+        )
+
+      grant_group_access!(root, group_id, "read")
+
+      assert [
+               %MessageProjection{message_id: root_id},
+               %MessageProjection{message_id: reply_id}
+             ] = Messaging.list_conversation_messages_for_group(reply.message_id, group_id)
+
+      assert root_id == root.message_id
+      assert reply_id == reply.message_id
+
+      assert Messaging.list_conversation_messages_for_group(root.message_id, other_group_id) == []
+    end
+
+    test "requires the access row to match the root conversation's club" do
+      root =
+        insert_message_projection!(
+          club_id: Memba.ID.generate(:club),
+          sender_id: Memba.ID.generate(:person),
+          subject: "Private conversation",
+          inserted_at: ~U[2026-06-05 12:00:00.000000Z]
+        )
+
+      group_id = Memba.ID.generate(:group)
+      grant_group_access!(root, group_id, "write", club_id: Memba.ID.generate(:club))
+
+      assert Messaging.list_conversation_messages_for_group(root.message_id, group_id) == []
+    end
+  end
+
   describe "list_operator_messages/0" do
     test "returns projected messages with club and sender context where available" do
       kootenay = insert_membership_club!(name: "Kootenay Mountaineering Club")
@@ -558,6 +726,15 @@ defmodule Memba.Messaging.MessageProjectionTest do
       reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
       inserted_at: inserted_at,
       updated_at: Keyword.get(attrs, :updated_at, inserted_at)
+    })
+  end
+
+  defp grant_group_access!(conversation, group_id, access_level, opts \\ []) do
+    Repo.insert!(%ConversationGroupAccessProjection{
+      conversation_id: conversation.message_id,
+      club_id: Keyword.get(opts, :club_id, conversation.club_id),
+      group_id: group_id,
+      access_level: access_level
     })
   end
 end

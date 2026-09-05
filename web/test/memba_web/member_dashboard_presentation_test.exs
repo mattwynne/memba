@@ -5,6 +5,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias MembaWeb.MemberDashboardPresentation
@@ -161,6 +162,40 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       refute Map.has_key?(row, :has_receipt_glance?)
       refute Map.has_key?(row, :receipt_groups)
     end
+  end
+
+  test "loads only conversations granted to the selected club's Everyone group" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    everyone_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Club-wide trip planning"
+      )
+
+    admin_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Private Admin planning",
+        audience_group_id: SystemGroups.admin_group_id(alice.club_id)
+      )
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               alice.club_id,
+               %{email: "alice@example.com"},
+               [alice.club]
+             )
+
+    assert Enum.map(assigns.messages, & &1.message_id) == [everyone_conversation.message_id]
+    refute Enum.any?(assigns.messages, &(&1.message_id == admin_conversation.message_id))
   end
 
   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
@@ -431,20 +466,9 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   end
 
   defp create_message(attrs) do
-    inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
-    message_id = Memba.ID.generate(:message)
-
-    Repo.insert!(%Message{
-      message_id: message_id,
-      club_id: Keyword.fetch!(attrs, :club_id),
-      sender_id: Keyword.fetch!(attrs, :sender_id),
-      conversation_id: Keyword.get(attrs, :conversation_id, message_id),
-      reply_to_message_id: Keyword.get(attrs, :reply_to_message_id),
-      subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body"),
-      inserted_at: inserted_at,
-      updated_at: inserted_at
-    })
+    attrs
+    |> Keyword.put_new_lazy(:inserted_at, &DateTime.utc_now/0)
+    |> insert_group_accessible_message!()
   end
 
   defp create_member_email_delivery(attrs) do

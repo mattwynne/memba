@@ -124,6 +124,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
     command = %CreateGroup{
       club_id: entry.club_id,
       group_id: entry.group_id,
+      email_slug: entry.email_slug,
       group_key: entry.group_key,
       name: entry.name
     }

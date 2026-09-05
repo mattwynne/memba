@@ -25,7 +25,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.ConversationFollowers
   alias Memba.Messaging.ConversationStopFollowToken
   alias Memba.Messaging.EmailDeliveryDispatcher
-  alias Memba.Messaging.InboundClubAuthorization
+  alias Memba.Messaging.GroupEmailPostingPolicy
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubRejectionEmail
   alias Memba.Messaging.InboundClubSender
@@ -46,11 +46,12 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @doc """
-  Send a message to the active members of a club's Everyone group.
+  Send a message to the active members of a club conversation group.
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
-  to the Messaging Commanded application. Provider delivery happens
+  to the Messaging Commanded application. The audience defaults to the club's
+  Everyone group when `:audience_group_id` is omitted. Provider delivery happens
   asynchronously from projected `EmailDelivery` records.
   """
   def send_club_message(attrs, dispatch_opts \\ [])
@@ -234,12 +235,13 @@ defmodule Memba.Messaging do
   def receive_inbound_club_email(_attrs, _dispatch_opts), do: {:error, :invalid_inbound_email}
 
   @doc """
-  Resolve an inbound club-message email's recipient addresses to a destination club.
+  Resolve an inbound club-message email's recipient addresses to a destination group.
 
-  Supports the current whole-club address shape
-  `everyone@<club-slug>.<configured inbound domain>`, returning a resolved
-  destination with club id and normalized to-address, or a typed rejection reason
-  for unsupported recipient addresses and unknown club slugs.
+  Supports `<group-email-slug>@<club-slug>.<configured inbound domain>`, returning
+  a resolved destination with club and group identity plus the normalized
+  to-address, or a typed rejection reason for unsupported recipient addresses
+  and unknown club slugs. Unknown group slugs retain the existing unsupported
+  recipient outcome and inbound rejection path.
   """
   def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
@@ -259,14 +261,13 @@ defmodule Memba.Messaging do
   @doc """
   Authorize a resolved inbound sender to post to a resolved club destination.
 
-  Only active members of the destination club's deterministic Everyone group may
-  post by email. Known people who belong only to another club, whose
-  destination-club membership is absent from Everyone, or whose destination-club
-  membership is inactive receive a typed rejection reason for later
-  rejection-email handling.
+  Applies the fixed, named `:club_members_only` group-email posting policy. Known
+  people who belong only to another club or whose destination-club membership is
+  inactive receive a typed rejection reason for later rejection-email handling.
+  Membership of the addressed group is not required to start a conversation.
   """
   def authorize_inbound_club_email_sender(sender, destination) do
-    InboundClubAuthorization.authorize(sender, destination)
+    GroupEmailPostingPolicy.authorize(sender, destination)
   end
 
   @doc """
@@ -364,6 +365,27 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List projected root conversations readable through a group's access grants.
+
+  Both read and write grants permit reading. Invalid or missing group IDs return
+  an empty list. Results have the same overview shape and stable ordering as
+  `list_conversations_for_club/1`.
+
+  This query establishes access through the supplied group. Callers remain
+  responsible for deciding whether a person may act through that group.
+  """
+  def list_conversations_for_group(group_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id) do
+      group_id
+      |> conversations_for_group_query()
+      |> Repo.all()
+      |> add_latest_replier_names()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List the projected conversation containing a message.
 
   The argument may be the root message ID or any reply message ID. Invalid,
@@ -374,22 +396,34 @@ defmodule Memba.Messaging do
     with {:ok, message_id} <- ID.cast(:message, message_id),
          %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
          {:ok, conversation_id} <- conversation_id_for_message(message),
-         %MessageProjection{} <- fetch_conversation_root_projection(conversation_id) do
-      MessageProjection
-      |> where([message], message.conversation_id == ^conversation_id)
-      |> order_by([message],
-        asc:
-          fragment(
-            "CASE WHEN ? = ? THEN 0 ELSE 1 END",
-            message.message_id,
-            ^conversation_id
-          ),
-        asc: message.inserted_at,
-        asc: message.message_id
-      )
-      |> Repo.all()
+         %MessageProjection{} = root <- fetch_conversation_root_projection(conversation_id) do
+      list_projected_conversation_messages(conversation_id, root.club_id)
     else
       _invalid_or_missing -> []
+    end
+  end
+
+  @doc """
+  List the projected conversation readable through a group's access grant.
+
+  The message argument may identify the root or any reply; access is always
+  checked against the root conversation. Both read and write grants permit
+  reading. Invalid IDs, missing or orphaned messages, and conversations without
+  a matching same-club grant return an empty list.
+
+  This query establishes access through the supplied group. Callers remain
+  responsible for deciding whether a person may act through that group.
+  """
+  def list_conversation_messages_for_group(message_id, group_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id),
+         {:ok, group_id} <- ID.cast(:group, group_id),
+         %MessageProjection{} = message <- Repo.get(MessageProjection, message_id),
+         {:ok, conversation_id} <- conversation_id_for_message(message),
+         %MessageProjection{} = root <- fetch_conversation_root_projection(conversation_id),
+         true <- conversation_readable_through_group?(root, group_id) do
+      list_projected_conversation_messages(conversation_id, root.club_id)
+    else
+      _invalid_missing_or_inaccessible -> []
     end
   end
 
@@ -784,47 +818,70 @@ defmodule Memba.Messaging do
   end
 
   defp conversations_for_club_query(club_id) do
+    {:club, club_id}
+    |> conversations_query()
+  end
+
+  defp conversations_for_group_query(group_id) do
+    {:group, group_id}
+    |> conversations_query()
+  end
+
+  defp conversations_query(scope) do
     reply_counts_query =
-      from reply in MessageProjection,
-        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
-        group_by: reply.conversation_id,
-        select: %{
-          conversation_id: reply.conversation_id,
-          reply_count: count(reply.message_id)
-        }
+      MessageProjection
+      |> where([reply], reply.message_id != reply.conversation_id)
+      |> scope_conversation_entries_query(scope)
+      |> group_by([reply, ...], [reply.club_id, reply.conversation_id])
+      |> select([reply, ...], %{
+        club_id: reply.club_id,
+        conversation_id: reply.conversation_id,
+        reply_count: count(reply.message_id)
+      })
 
     latest_replies_query =
-      from reply in MessageProjection,
-        where: reply.club_id == ^club_id and reply.message_id != reply.conversation_id,
-        distinct: [asc: reply.conversation_id],
-        order_by: [asc: reply.conversation_id, desc: reply.inserted_at, desc: reply.message_id],
-        select: %{
-          conversation_id: reply.conversation_id,
-          latest_replier_id: reply.sender_id
-        }
+      MessageProjection
+      |> where([reply], reply.message_id != reply.conversation_id)
+      |> scope_conversation_entries_query(scope)
+      |> distinct([reply, ...], asc: reply.club_id, asc: reply.conversation_id)
+      |> order_by([reply, ...],
+        asc: reply.club_id,
+        asc: reply.conversation_id,
+        desc: reply.inserted_at,
+        desc: reply.message_id
+      )
+      |> select([reply, ...], %{
+        club_id: reply.club_id,
+        conversation_id: reply.conversation_id,
+        latest_replier_id: reply.sender_id
+      })
 
     participant_first_replies_query =
-      from reply in MessageProjection,
-        join: root in MessageProjection,
+      MessageProjection
+      |> join(:inner, [reply], root in MessageProjection,
         on:
           root.club_id == reply.club_id and
             root.message_id == reply.conversation_id and
-            root.message_id == root.conversation_id,
-        where:
-          reply.club_id == ^club_id and
-            reply.message_id != reply.conversation_id and
-            reply.sender_id != root.sender_id,
-        group_by: [reply.conversation_id, reply.sender_id],
-        select: %{
-          conversation_id: reply.conversation_id,
-          sender_id: reply.sender_id,
-          first_replied_at: min(reply.inserted_at)
-        }
+            root.message_id == root.conversation_id
+      )
+      |> where(
+        [reply, root],
+        reply.message_id != reply.conversation_id and reply.sender_id != root.sender_id
+      )
+      |> scope_conversation_entries_query(scope)
+      |> group_by([reply, ...], [reply.club_id, reply.conversation_id, reply.sender_id])
+      |> select([reply, ...], %{
+        club_id: reply.club_id,
+        conversation_id: reply.conversation_id,
+        sender_id: reply.sender_id,
+        first_replied_at: min(reply.inserted_at)
+      })
 
     participants_query =
       from participant in subquery(participant_first_replies_query),
-        group_by: participant.conversation_id,
+        group_by: [participant.club_id, participant.conversation_id],
         select: %{
+          club_id: participant.club_id,
           conversation_id: participant.conversation_id,
           participant_ids:
             fragment(
@@ -835,29 +892,68 @@ defmodule Memba.Messaging do
             )
         }
 
-    from root in MessageProjection,
-      left_join: reply_counts in subquery(reply_counts_query),
-      on: reply_counts.conversation_id == root.message_id,
-      left_join: latest_reply in subquery(latest_replies_query),
-      on: latest_reply.conversation_id == root.message_id,
-      left_join: participants in subquery(participants_query),
-      on: participants.conversation_id == root.message_id,
-      where: root.club_id == ^club_id and root.message_id == root.conversation_id,
-      order_by: [desc: root.inserted_at, desc: root.message_id],
-      select: %{
-        message: root,
-        message_id: root.message_id,
-        conversation_id: root.conversation_id,
-        club_id: root.club_id,
-        sender_id: root.sender_id,
-        subject: root.subject,
-        body: root.body,
-        inserted_at: root.inserted_at,
-        updated_at: root.updated_at,
-        reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
-        latest_replier_id: latest_reply.latest_replier_id,
-        participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
-      }
+    query =
+      from root in MessageProjection,
+        left_join: reply_counts in subquery(reply_counts_query),
+        on:
+          reply_counts.club_id == root.club_id and
+            reply_counts.conversation_id == root.message_id,
+        left_join: latest_reply in subquery(latest_replies_query),
+        on:
+          latest_reply.club_id == root.club_id and
+            latest_reply.conversation_id == root.message_id,
+        left_join: participants in subquery(participants_query),
+        on:
+          participants.club_id == root.club_id and
+            participants.conversation_id == root.message_id,
+        where: root.message_id == root.conversation_id,
+        order_by: [desc: root.inserted_at, desc: root.message_id],
+        select: %{
+          message: root,
+          message_id: root.message_id,
+          conversation_id: root.conversation_id,
+          club_id: root.club_id,
+          sender_id: root.sender_id,
+          subject: root.subject,
+          body: root.body,
+          inserted_at: root.inserted_at,
+          updated_at: root.updated_at,
+          reply_count: fragment("COALESCE(?, 0)", reply_counts.reply_count),
+          latest_replier_id: latest_reply.latest_replier_id,
+          participant_ids: fragment("COALESCE(?, ARRAY[]::text[])", participants.participant_ids)
+        }
+
+    scope_conversation_roots_query(query, scope)
+  end
+
+  defp scope_conversation_entries_query(query, {:club, club_id}) do
+    where(query, [entry, ...], entry.club_id == ^club_id)
+  end
+
+  defp scope_conversation_entries_query(query, {:group, group_id}) do
+    read_grant_levels = ConversationAccess.grant_levels_including("read")
+
+    from [entry, ...] in query,
+      join: access in ConversationGroupAccessProjection,
+      on:
+        access.conversation_id == entry.conversation_id and
+          access.club_id == entry.club_id,
+      where: access.group_id == ^group_id and access.access_level in ^read_grant_levels
+  end
+
+  defp scope_conversation_roots_query(query, {:club, club_id}) do
+    where(query, [root, _reply_counts, _latest_reply, _participants], root.club_id == ^club_id)
+  end
+
+  defp scope_conversation_roots_query(query, {:group, group_id}) do
+    read_grant_levels = ConversationAccess.grant_levels_including("read")
+
+    from [root, _reply_counts, _latest_reply, _participants] in query,
+      join: access in ConversationGroupAccessProjection,
+      on:
+        access.conversation_id == root.message_id and
+          access.club_id == root.club_id,
+      where: access.group_id == ^group_id and access.access_level in ^read_grant_levels
   end
 
   defp add_latest_replier_names(conversation_rows) do
@@ -892,6 +988,44 @@ defmodule Memba.Messaging do
       _missing_or_not_root ->
         nil
     end
+  end
+
+  defp conversation_readable_through_group?(
+         %MessageProjection{
+           message_id: conversation_id,
+           conversation_id: conversation_id,
+           club_id: club_id
+         },
+         group_id
+       ) do
+    read_grant_levels = ConversationAccess.grant_levels_including("read")
+
+    ConversationGroupAccessProjection
+    |> where(
+      [access],
+      access.conversation_id == ^conversation_id and access.club_id == ^club_id and
+        access.group_id == ^group_id and access.access_level in ^read_grant_levels
+    )
+    |> Repo.exists?()
+  end
+
+  defp list_projected_conversation_messages(conversation_id, club_id) do
+    MessageProjection
+    |> where(
+      [message],
+      message.conversation_id == ^conversation_id and message.club_id == ^club_id
+    )
+    |> order_by([message],
+      asc:
+        fragment(
+          "CASE WHEN ? = ? THEN 0 ELSE 1 END",
+          message.message_id,
+          ^conversation_id
+        ),
+      asc: message.inserted_at,
+      asc: message.message_id
+    )
+    |> Repo.all()
   end
 
   defp operator_deliveries_query(opts) do
@@ -1157,32 +1291,45 @@ defmodule Memba.Messaging do
        ) do
     message_id = Memba.ID.generate(:message)
 
-    with :ok <-
-           post_inbound_club_message_reply(
-             conversation_id,
-             sender,
-             message_id,
-             body,
-             dispatch_opts
-           ),
-         :ok <-
-           record_inbound_club_email_accepted(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         message_id: message_id,
-         conversation_id: conversation_id,
-         club_id: destination.club_id,
-         sender_id: sender.person_id,
-         from_address: sender.from_address,
-         to_address: destination.to_address
-       }}
+    case post_inbound_club_message_reply(
+           conversation_id,
+           sender,
+           message_id,
+           body,
+           dispatch_opts
+         ) do
+      :ok ->
+        with :ok <-
+               record_inbound_club_email_accepted(
+                 receive_command.inbound_email,
+                 destination,
+                 sender,
+                 message_id,
+                 dispatch_opts
+               ) do
+          {:ok,
+           %{
+             inbound_email_id: receive_command.inbound_email_id,
+             message_id: message_id,
+             conversation_id: conversation_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             from_address: sender.from_address,
+             to_address: destination.to_address
+           }}
+        end
+
+      {:error, :not_current_member} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          "not_current_member",
+          dispatch_opts,
+          club_name: destination.club_name
+        )
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -1274,6 +1421,7 @@ defmodule Memba.Messaging do
              message_id: message_id,
              club_id: destination.club_id,
              sender_id: sender.person_id,
+             audience_group_id: destination.group_id,
              subject: inbound_email.subject,
              body: body
            },
@@ -1392,7 +1540,8 @@ defmodule Memba.Messaging do
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, body} <- fetch_required(attrs, :body) do
-      audience_group_id = SystemGroups.everyone_group_id(club_id)
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+      audience_group_id = optional_audience_group_id(attrs, everyone_group_id)
 
       {:ok,
        %SendMessage{
@@ -1404,6 +1553,13 @@ defmodule Memba.Messaging do
          body: body,
          recipients: resolve_group_recipients(audience_group_id)
        }}
+    end
+  end
+
+  defp optional_audience_group_id(attrs, default_group_id) do
+    case fetch_required(attrs, :audience_group_id) do
+      {:ok, audience_group_id} -> audience_group_id
+      {:error, {:missing_required_attribute, :audience_group_id}} -> default_group_id
     end
   end
 
