@@ -10,7 +10,7 @@
 - [x] 008 Carry the resolved audience group through the existing inbound root-message command.
 - [x] 009 Resolve deliveries through active group members and emit the group write-access grant.
 - [x] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
-- [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+- [x] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
 - [ ] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
 - [ ] 013 Add public Messaging queries that list conversations and read a conversation through a supplied group ID and its access grant.
 - [ ] 014 Refactor current web query callers to pass the Everyone group, preserving the existing visual UI and ensuring Admin conversations remain absent until the later group display iteration.
