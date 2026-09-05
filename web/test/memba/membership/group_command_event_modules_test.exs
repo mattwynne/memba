@@ -3,9 +3,11 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
 
   alias Memba.ID
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupCreated
+  alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
 
@@ -44,6 +46,17 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
                name: "Everyone"
              })
 
+    assert %AssignGroupEmailSlug{
+             club_id: ids.club_id,
+             group_id: ids.group_id,
+             email_slug: "everyone"
+           } ==
+             struct!(AssignGroupEmailSlug, %{
+               club_id: ids.club_id,
+               group_id: ids.group_id,
+               email_slug: "everyone"
+             })
+
     assert %AddGroupMember{
              club_id: ids.club_id,
              group_id: ids.group_id,
@@ -67,6 +80,12 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
       group_id: ids.group_id,
       group_key: "admin",
       name: "Admin"
+    })
+
+    assert_json_encodable(%GroupEmailSlugAssigned{
+      club_id: ids.club_id,
+      group_id: ids.group_id,
+      email_slug: "admin"
     })
 
     assert_json_encodable(struct!(GroupMemberAdded, ids))

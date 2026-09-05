@@ -8,6 +8,7 @@ defmodule Memba.Membership.Projections.Group do
   @primary_key {:group_id, :string, autogenerate: false}
   schema "membership_groups" do
     field :club_id, :string
+    field :email_slug, :string
     field :group_key, :string
     field :name, :string
 

@@ -8,6 +8,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AddPersonEmailAddress
+  alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
@@ -97,6 +98,7 @@ defmodule Memba.Membership.AppTest do
         AddGroupMember,
         AddMember,
         AddPersonEmailAddress,
+        AssignGroupEmailSlug,
         AssignMemberRole,
         CreateClub,
         CreateGroup,

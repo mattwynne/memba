@@ -3,6 +3,7 @@ defmodule Memba.Membership.GroupProjectionTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Events.GroupMemberAdded
@@ -51,6 +52,58 @@ defmodule Memba.Membership.GroupProjectionTest do
              group_key: "admin",
              name: "Admin"
            } = Repo.get(GroupProjection, admin_group_id)
+  end
+
+  test "AssignGroupEmailSlug projects the normalized routing key" do
+    club_id = Memba.ID.generate(:club)
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    create_club!(club_id)
+
+    assert :ok =
+             App.dispatch(
+               %AssignGroupEmailSlug{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: " Everyone "
+               },
+               consistency: :strong
+             )
+
+    assert %GroupProjection{
+             group_id: ^group_id,
+             club_id: ^club_id,
+             email_slug: "everyone"
+           } = Repo.get(GroupProjection, group_id)
+  end
+
+  test "the read model permits an email slug in different clubs but enforces club uniqueness" do
+    email_slug = "trip-planners"
+    first_club_id = Memba.ID.generate(:club)
+    second_club_id = Memba.ID.generate(:club)
+
+    Repo.insert!(%GroupProjection{
+      club_id: first_club_id,
+      group_id: Memba.ID.generate(:group),
+      email_slug: email_slug,
+      name: "First Trip Planners"
+    })
+
+    Repo.insert!(%GroupProjection{
+      club_id: second_club_id,
+      group_id: Memba.ID.generate(:group),
+      email_slug: email_slug,
+      name: "Second Trip Planners"
+    })
+
+    assert_raise Ecto.ConstraintError, fn ->
+      Repo.insert!(%GroupProjection{
+        club_id: first_club_id,
+        group_id: Memba.ID.generate(:group),
+        email_slug: email_slug,
+        name: "Duplicate Trip Planners"
+      })
+    end
   end
 
   test "AddGroupMember projects an active group membership row" do
