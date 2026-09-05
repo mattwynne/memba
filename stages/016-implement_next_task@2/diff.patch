@@ -1,0 +1,347 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 6196db1..a03cb14 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Extend the Membership group write model, events, state, and projections with an immutable normalised email slug, unique per club.
+-- [ ] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
++- [x] 002 Evolve new-group creation to carry it, and append idempotent email-slug facts for existing Everyone and Admin groups without rewriting historic group events.
+ - [ ] 003 Make new-club system-group creation and the release backfill assign `everyone` and `admin` consistently. Expose a public Membership lookup by club and group email slug; Messaging must not query Membership schemas directly.
+ - [ ] 004 Generalise inbound destination resolution from the hard-coded `everyone` local part to a group-slug lookup on the existing `<club-slug>.clubs.memba.io` host.
+ - [ ] 005 Keep unsupported routes and unknown club/group slugs on the existing rejection path.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 05a7245..3a2916c 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -124,8 +124,9 @@ defmodule Memba.Membership.Club do
+     with :ok <- validate_existing_club_id(club, command.club_id),
+          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
+          {:ok, name} <- normalize_name(command.name),
+-         {:ok, group_key} <- normalize_group_key(command.group_key) do
+-      create_group_decision(club, command, group_key, name)
++         {:ok, group_key} <- normalize_group_key(command.group_key),
++         {:ok, email_slug} <- normalize_optional_group_email_slug(command.email_slug) do
++      create_group_decision(club, command, group_key, email_slug, name)
+     end
+   end
+ 
+@@ -375,6 +376,12 @@ defmodule Memba.Membership.Club do
+ 
+   defp normalize_group_key(_group_key), do: {:error, :invalid_group_key}
+ 
++  defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
++
++  defp normalize_optional_group_email_slug(email_slug) do
++    Slug.normalize_for_lookup(email_slug)
++  end
++
+   defp ensure_role_id_available(%__MODULE__{} = club, role_id) do
+     if Map.has_key?(club.roles, role_id) do
+       {:error, :role_already_defined}
+@@ -437,22 +444,34 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
+-  defp create_group_decision(%__MODULE__{} = club, %CreateGroup{} = command, group_key, name) do
++  defp create_group_decision(
++         %__MODULE__{} = club,
++         %CreateGroup{} = command,
++         group_key,
++         email_slug,
++         name
++       ) do
+     case Map.fetch(club.groups, command.group_id) do
+       {:ok, %{group_key: ^group_key, name: ^name}} ->
+-        []
++        maybe_assign_group_email_slug_decision(club, command, email_slug)
+ 
+       {:ok, %{}} ->
+         {:error, :group_already_defined}
+ 
+       :error ->
+-        with :ok <- ensure_group_key_available(club, group_key) do
+-          %GroupCreated{
++        with :ok <- ensure_group_key_available(club, group_key),
++             :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
++          group_created = %GroupCreated{
+             club_id: command.club_id,
+             group_id: command.group_id,
+             group_key: group_key,
+             name: name
+           }
++
++          case email_slug do
++            nil -> group_created
++            email_slug -> [group_created, group_email_slug_assigned_event(command, email_slug)]
++          end
+         end
+     end
+   end
+@@ -469,7 +488,7 @@ defmodule Memba.Membership.Club do
+ 
+   defp assign_group_email_slug_decision(
+          %__MODULE__{} = club,
+-         %AssignGroupEmailSlug{} = command,
++         command,
+          email_slug
+        ) do
+     case Map.fetch!(club.groups, command.group_id) do
+@@ -481,15 +500,35 @@ defmodule Memba.Membership.Club do
+ 
+       %{} ->
+         with :ok <- ensure_group_email_slug_available(club, email_slug) do
+-          %GroupEmailSlugAssigned{
+-            club_id: command.club_id,
+-            group_id: command.group_id,
+-            email_slug: email_slug
+-          }
++          group_email_slug_assigned_event(command, email_slug)
+         end
+     end
+   end
+ 
++  defp maybe_assign_group_email_slug_decision(_club, _command, nil), do: []
++
++  defp maybe_assign_group_email_slug_decision(
++         %__MODULE__{} = club,
++         %CreateGroup{} = command,
++         email_slug
++       ) do
++    assign_group_email_slug_decision(club, command, email_slug)
++  end
++
++  defp group_email_slug_assigned_event(command, email_slug) do
++    %GroupEmailSlugAssigned{
++      club_id: command.club_id,
++      group_id: command.group_id,
++      email_slug: email_slug
++    }
++  end
++
++  defp ensure_optional_group_email_slug_available(_club, nil), do: :ok
++
++  defp ensure_optional_group_email_slug_available(%__MODULE__{} = club, email_slug) do
++    ensure_group_email_slug_available(club, email_slug)
++  end
++
+   defp ensure_group_email_slug_available(%__MODULE__{} = club, email_slug) do
+     if Map.has_key?(club.group_email_slugs, email_slug) do
+       {:error, :group_email_slug_already_defined}
+diff --git a/web/lib/memba/membership/commands/create_group.ex b/web/lib/memba/membership/commands/create_group.ex
+index f4483f6..bc834d4 100644
+--- a/web/lib/memba/membership/commands/create_group.ex
++++ b/web/lib/memba/membership/commands/create_group.ex
+@@ -3,7 +3,9 @@ defmodule Memba.Membership.Commands.CreateGroup do
+   Internal command to create a club-scoped conversation group.
+ 
+   The caller supplies the club aggregate identity as `club_id` and the group
+-  identity as `group_id`.
++  identity as `group_id`. When supplied, `email_slug` is recorded as a separate
++  immutable email-routing fact so historic `GroupCreated` events keep their
++  original shape.
+ 
+   This command is registered for system-group policy/backfill work and the
+   event-sourced group foundation. It is not a public custom-group API in this
+@@ -12,5 +14,5 @@ defmodule Memba.Membership.Commands.CreateGroup do
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :name]
+-  defstruct [:club_id, :group_id, :group_key, :name]
++  defstruct [:club_id, :group_id, :group_key, :email_slug, :name]
+ end
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index ef0492e..33cc746 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -347,6 +347,88 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "creates a group with a separate normalized email-slug fact" do
++      club_id = Memba.ID.generate(:club)
++      group_id = Memba.ID.generate(:group)
++      club = created_club(club_id)
++
++      assert [
++               %GroupCreated{
++                 club_id: ^club_id,
++                 group_id: ^group_id,
++                 group_key: "trail_crew",
++                 name: "Trail Crew"
++               },
++               %GroupEmailSlugAssigned{
++                 club_id: ^club_id,
++                 group_id: ^group_id,
++                 email_slug: "trail-crew"
++               }
++             ] =
++               events =
++               Club.execute(club, %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 group_key: "trail_crew",
++                 email_slug: " Trail-Crew ",
++                 name: " Trail Crew "
++               })
++
++      club = Enum.reduce(events, club, &Club.apply(&2, &1))
++
++      assert %{email_slug: "trail-crew"} = club.groups[group_id]
++      assert %{"trail-crew" => ^group_id} = club.group_email_slugs
++    end
++
++    test "appends idempotent email-slug facts to existing system groups" do
++      club_id = Memba.ID.generate(:club)
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++      admin_group_id = SystemGroups.admin_group_id(club_id)
++
++      club =
++        club_id
++        |> created_club()
++        |> create_group(
++          everyone_group_id,
++          SystemGroups.everyone_key(),
++          SystemGroups.everyone_name()
++        )
++        |> create_group(admin_group_id, SystemGroups.admin_key(), SystemGroups.admin_name())
++
++      commands = [
++        %CreateGroup{
++          club_id: club_id,
++          group_id: everyone_group_id,
++          group_key: SystemGroups.everyone_key(),
++          email_slug: "everyone",
++          name: SystemGroups.everyone_name()
++        },
++        %CreateGroup{
++          club_id: club_id,
++          group_id: admin_group_id,
++          group_key: SystemGroups.admin_key(),
++          email_slug: "admin",
++          name: SystemGroups.admin_name()
++        }
++      ]
++
++      club =
++        Enum.reduce(commands, club, fn command, club ->
++          assert %GroupEmailSlugAssigned{
++                   club_id: ^club_id,
++                   group_id: group_id,
++                   email_slug: email_slug
++                 } = event = Club.execute(club, command)
++
++          assert group_id == command.group_id
++          assert email_slug == command.email_slug
++          Club.apply(club, event)
++        end)
++
++      assert [] = Club.execute(club, Enum.at(commands, 0))
++      assert [] = Club.execute(club, Enum.at(commands, 1))
++    end
++
+     test "creates each group once and rejects conflicting group IDs or keys" do
+       club_id = Memba.ID.generate(:club)
+       group_id = Memba.ID.generate(:group)
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index 5512ef3..78d3b1f 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -20,6 +20,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.GroupCreated
++  alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+@@ -128,6 +129,69 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+              )
+   end
+ 
++  test "CreateGroup appends missing email-slug facts to existing system groups only once" do
++    club_id = Memba.ID.generate(:club)
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    commands = [
++      %CreateGroup{
++        club_id: club_id,
++        group_id: everyone_group_id,
++        group_key: SystemGroups.everyone_key(),
++        email_slug: "everyone",
++        name: SystemGroups.everyone_name()
++      },
++      %CreateGroup{
++        club_id: club_id,
++        group_id: admin_group_id,
++        group_key: SystemGroups.admin_key(),
++        email_slug: "admin",
++        name: SystemGroups.admin_name()
++      }
++    ]
++
++    Enum.with_index(commands, 6)
++    |> Enum.each(fn {command, expected_version} ->
++      assert {:ok,
++              %ExecutionResult{
++                aggregate_uuid: ^club_id,
++                aggregate_version: ^expected_version,
++                events: [
++                  %GroupEmailSlugAssigned{
++                    club_id: ^club_id,
++                    group_id: group_id,
++                    email_slug: email_slug
++                  }
++                ]
++              }} =
++               App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++      assert group_id == command.group_id
++      assert email_slug == command.email_slug
++    end)
++
++    Enum.each(commands, fn command ->
++      assert {:ok, %ExecutionResult{aggregate_version: 7, events: []}} =
++               App.dispatch(command, returning: :execution_result, consistency: :strong)
++    end)
++
++    events = EventStore.stream_forward(App, club_id) |> Enum.map(& &1.data)
++
++    assert 2 == Enum.count(events, &match?(%GroupCreated{}, &1))
++    assert 2 == Enum.count(events, &match?(%GroupEmailSlugAssigned{}, &1))
++  end
++
+   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do
+     command = %CreateClub{
+       club_id: Memba.ID.generate(:club),
+diff --git a/web/test/memba/membership/group_command_event_modules_test.exs b/web/test/memba/membership/group_command_event_modules_test.exs
+index 6b57221..bc6cb91 100644
+--- a/web/test/memba/membership/group_command_event_modules_test.exs
++++ b/web/test/memba/membership/group_command_event_modules_test.exs
+@@ -37,12 +37,14 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+              club_id: ids.club_id,
+              group_id: ids.group_id,
+              group_key: "everyone",
++             email_slug: "everyone",
+              name: "Everyone"
+            } ==
+              struct!(CreateGroup, %{
+                club_id: ids.club_id,
+                group_id: ids.group_id,
+                group_key: "everyone",
++               email_slug: "everyone",
+                name: "Everyone"
+              })
+ 
