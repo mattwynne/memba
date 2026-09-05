@@ -1,0 +1,154 @@
+diff --git a/docs/iterations/057-admin-group-email-conversations/todo.md b/docs/iterations/057-admin-group-email-conversations/todo.md
+index 2f77e4c..0138716 100644
+--- a/docs/iterations/057-admin-group-email-conversations/todo.md
++++ b/docs/iterations/057-admin-group-email-conversations/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Introduce a named fixed group-email posting policy in Messaging.
+ - [x] 007 For a new inbound conversation it authorises the resolved sender by active membership of the destination club, not membership of the addressed group.
+ - [x] 008 Carry the resolved audience group through the existing inbound root-message command.
+-- [ ] 009 Resolve deliveries through active group members and emit the group write-access grant.
++- [x] 009 Resolve deliveries through active group members and emit the group write-access grant.
+ - [ ] 010 If the sender is not a recipient, do not create a delivery, acknowledgement, access, or follower relationship for them.
+ - [ ] 011 Reuse the group-write reply authorisation delivered by 056 for Admin conversations.
+ - [ ] 012 Keep header routing and follower-only reply delivery unchanged; cover direct/forged non-member reply attempts with focused domain tests rather than a new stakeholder scenario.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index a79429f..3e7ae98 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -46,11 +46,12 @@ defmodule Memba.Messaging do
+   import Ecto.Query
+ 
+   @doc """
+-  Send a message to the active members of a club's Everyone group.
++  Send a message to the active members of a club conversation group.
+ 
+   The service resolves recipients through Membership's public query API, builds
+   a `SendMessage` command containing those resolved recipients, and dispatches it
+-  to the Messaging Commanded application. Provider delivery happens
++  to the Messaging Commanded application. The audience defaults to the club's
++  Everyone group when `:audience_group_id` is omitted. Provider delivery happens
+   asynchronously from projected `EmailDelivery` records.
+   """
+   def send_club_message(attrs, dispatch_opts \\ [])
+@@ -1404,7 +1405,7 @@ defmodule Memba.Messaging do
+          audience_group_id: audience_group_id,
+          subject: subject,
+          body: body,
+-         recipients: resolve_group_recipients(everyone_group_id)
++         recipients: resolve_group_recipients(audience_group_id)
+        }}
+     end
+   end
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index bae60b3..379837e 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -4,9 +4,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+@@ -162,6 +164,62 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
+   end
+ 
++  test "resolves recipients from the selected audience group and grants it write access" do
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++    admin_group_id = SystemGroups.admin_group_id(club_id)
++
++    alice = create_person(name: "Alice Admin", email: "alice@example.com")
++    bob = create_person(name: "Bob Admin", email: "bob@example.com")
++    carol = create_person(name: "Carol Member", email: "carol@example.com")
++
++    alice_membership_id = add_member(club_id, alice.person_id)
++    bob_membership_id = add_member(club_id, bob.person_id)
++    add_member(club_id, carol.person_id)
++
++    assign_admin_role(club_id, alice_membership_id, alice.person_id)
++    assign_admin_role(club_id, bob_membership_id, bob.person_id)
++
++    message_id = Memba.ID.generate(:message)
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 4,
++              events: [
++                %MessageSent{message_id: ^message_id},
++                %ConversationAccessGrantedToGroup{
++                  conversation_id: ^message_id,
++                  club_id: ^club_id,
++                  group_id: ^admin_group_id,
++                  access_level: "write"
++                }
++                | delivery_events
++              ]
++            }} =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 audience_group_id: admin_group_id,
++                 subject: "Private Admin topic",
++                 body: "Please discuss this with the Admin group."
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert [
++             %EmailDeliveryCreated{recipient_id: alice_id},
++             %EmailDeliveryCreated{recipient_id: bob_id}
++           ] = delivery_events
++
++    assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
++    refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
++    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
++  end
++
+   test "sends each active member once at the person's primary email address" do
+     club_id = Memba.ID.generate(:club)
+     create_club(club_id, "Kootenay Mountaineering Club")
+@@ -509,16 +567,32 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+   defp add_member(club_id, person_id) do
+     ensure_club(club_id)
++    membership_id = Memba.ID.generate(:membership)
+ 
+     assert :ok =
+              MembershipApp.dispatch(
+                %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id,
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
++
++    membership_id
++  end
++
++  defp assign_admin_role(club_id, membership_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
+   end
+ 
+   defp ensure_club(club_id) do
