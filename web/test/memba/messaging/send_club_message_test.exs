@@ -4,9 +4,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -160,6 +162,62 @@ defmodule Memba.Messaging.SendClubMessageTest do
              pending_deliveries_for_message(message_id)
 
     assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
+  end
+
+  test "resolves recipients from the selected audience group and grants it write access" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    admin_group_id = SystemGroups.admin_group_id(club_id)
+
+    alice = create_person(name: "Alice Admin", email: "alice@example.com")
+    bob = create_person(name: "Bob Admin", email: "bob@example.com")
+    carol = create_person(name: "Carol Member", email: "carol@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    add_member(club_id, carol.person_id)
+
+    assign_admin_role(club_id, alice_membership_id, alice.person_id)
+    assign_admin_role(club_id, bob_membership_id, bob.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 4,
+              events: [
+                %MessageSent{message_id: ^message_id},
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^admin_group_id,
+                  access_level: "write"
+                }
+                | delivery_events
+              ]
+            }} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: admin_group_id,
+                 subject: "Private Admin topic",
+                 body: "Please discuss this with the Admin group."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert [
+             %EmailDeliveryCreated{recipient_id: alice_id},
+             %EmailDeliveryCreated{recipient_id: bob_id}
+           ] = delivery_events
+
+    assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
+    refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
   end
 
   test "sends each active member once at the person's primary email address" do
@@ -509,13 +567,29 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   defp add_member(club_id, person_id) do
     ensure_club(club_id)
+    membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
              MembershipApp.dispatch(
                %AddMember{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    membership_id
+  end
+
+  defp assign_admin_role(club_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: Roles.membership_administrator_role_id(club_id)
                },
                consistency: :strong
              )

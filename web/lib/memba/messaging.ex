@@ -46,11 +46,12 @@ defmodule Memba.Messaging do
   import Ecto.Query
 
   @doc """
-  Send a message to the active members of a club's Everyone group.
+  Send a message to the active members of a club conversation group.
 
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
-  to the Messaging Commanded application. Provider delivery happens
+  to the Messaging Commanded application. The audience defaults to the club's
+  Everyone group when `:audience_group_id` is omitted. Provider delivery happens
   asynchronously from projected `EmailDelivery` records.
   """
   def send_club_message(attrs, dispatch_opts \\ [])
@@ -1404,7 +1405,7 @@ defmodule Memba.Messaging do
          audience_group_id: audience_group_id,
          subject: subject,
          body: body,
-         recipients: resolve_group_recipients(everyone_group_id)
+         recipients: resolve_group_recipients(audience_group_id)
        }}
     end
   end
