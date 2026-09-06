@@ -336,3 +336,25 @@ submitted as `:invalid_subject`. No release-repair code was changed in response.
 The exact full gate was rerun and passed with 1,131 ExUnit tests, 122 browser
 scenarios, and 877 browser steps. The actual release entry point also completed
 locally with `MIX_ENV=test mix run --no-start -e "Memba.Release.migrate()"`.
+
+### Second follow-up deployment evidence
+
+Continuous Delivery run `34020306290` confirmed that the corrected release
+barrier completed and the backfill successfully created 10 system-group
+records, 7 Everyone memberships, and 3 Admin memberships. The first missing
+Everyone conversation-access grant then appended its event but returned
+`:consistency_timeout` after five seconds.
+
+`Messaging.grant_conversation_access_to_group/2` forced
+`consistency: :strong`. In Commanded this waits for every strongly consistent
+Messaging handler, even though this system API promises only that the
+conversation-access projection is queryable on return. During release startup,
+unrelated handlers may still be catching up with the shared event stream, so a
+valid access grant could be projected while an unrelated handler caused the
+command to time out.
+
+The repair narrows the command's consistency target to
+`Memba.Messaging.Projectors.ConversationGroupAccess`, matching the existing
+backfill pattern of waiting only for the projection each phase immediately
+queries. The existing dispatch regression proves the public API returns with the
+conversation-access query already updated.
