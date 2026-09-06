@@ -79,7 +79,6 @@ defmodule Memba.Release do
     Memba.Membership.Projectors.GroupMembership,
     Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Role,
-    Memba.Membership.Projectors.RoleAssignment,
     Memba.Messaging.Projectors.ConversationGroupAccess,
     Memba.Messaging.Projectors.Message
   ]

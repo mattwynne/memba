@@ -46,6 +46,14 @@ defmodule Memba.ProjectionBarrierTest do
     assert result.projectors[projector] >= checkpoint
   end
 
+  test "a barrier rejects an unavailable projector module" do
+    assert_raise ArgumentError,
+                 ~r/projection barrier projector Memba\.Unknown\.Projector is not available/,
+                 fn ->
+                   ProjectionBarrier.await([Memba.Unknown.Projector])
+                 end
+  end
+
   test "a barrier times out with the current projector positions" do
     club_id = Memba.ID.generate(:club)
 

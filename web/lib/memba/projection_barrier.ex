@@ -116,7 +116,16 @@ defmodule Memba.ProjectionBarrier do
     %{checkpoint: checkpoint, projectors: positions}
   end
 
-  defp projector_name(projector) when is_atom(projector), do: inspect(projector)
+  defp projector_name(projector) when is_atom(projector) do
+    case Code.ensure_loaded(projector) do
+      {:module, ^projector} ->
+        inspect(projector)
+
+      {:error, reason} ->
+        raise ArgumentError,
+              "projection barrier projector #{inspect(projector)} is not available: #{inspect(reason)}"
+    end
+  end
 
   defp projector_name(projector) when is_binary(projector) do
     String.trim_leading(projector, "Elixir.")
