@@ -33,6 +33,10 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.OutboundMessageID
+
+  alias Memba.Messaging.Projectors.ConversationGroupAccess,
+    as: ConversationGroupAccessProjector
+
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
   alias Memba.Messaging.Projections.ConversationFollow, as: ConversationFollowProjection
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
@@ -82,13 +86,14 @@ defmodule Memba.Messaging do
   @doc """
   Grant a club-scoped group read or write access to an existing root conversation.
 
-  This API is intended for system/backfill use. It dispatches with strong
-  consistency for conversation-access projections so callers can query the grant
-  immediately after the function returns.
+  This API is intended for system/backfill use. It waits specifically for the
+  conversation-access projector so callers can query the grant immediately after
+  the function returns without waiting for unrelated strong handlers.
   """
   def grant_conversation_access_to_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    dispatch_opts = Keyword.put(dispatch_opts, :consistency, :strong)
+    dispatch_opts =
+      Keyword.put(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
 
     with {:ok, command} <- grant_conversation_access_to_group_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
