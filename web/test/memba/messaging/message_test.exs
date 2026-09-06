@@ -2,13 +2,16 @@ defmodule Memba.Messaging.MessageTest do
   use ExUnit.Case, async: true
 
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryBounced
   alias Memba.Messaging.Events.EmailDeliveryCreated
@@ -505,6 +508,72 @@ defmodule Memba.Messaging.MessageTest do
                Message.execute(reply, %GrantConversationAccessToGroup{
                  valid_conversation_access_grant(message)
                  | conversation_id: reply.message_id
+               })
+    end
+  end
+
+  describe "execute/2 GrantInitialConversationAccessToGroup" do
+    test "grants only when the aggregate has no existing audience" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      admin_group_id = Memba.ID.generate(:group)
+      everyone_group_id = Memba.ID.generate(:group)
+      message = root_message(conversation_id, club_id)
+
+      command = %GrantInitialConversationAccessToGroup{
+        conversation_id: conversation_id,
+        club_id: club_id,
+        group_id: everyone_group_id,
+        access_level: :write
+      }
+
+      assert %ConversationAccessGrantedToGroup{group_id: ^everyone_group_id} =
+               Message.execute(message, command)
+
+      admin_message =
+        Message.apply(message, %ConversationAccessGrantedToGroup{
+          conversation_id: conversation_id,
+          club_id: club_id,
+          group_id: admin_group_id,
+          access_level: "write"
+        })
+
+      assert [] = Message.execute(admin_message, command)
+    end
+  end
+
+  describe "execute/2 RevokeConversationAccessFromGroup" do
+    test "revokes an existing grant and is idempotent when access is absent" do
+      conversation_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      group_id = Memba.ID.generate(:group)
+      message = root_message(conversation_id, club_id)
+
+      assert [] =
+               Message.execute(message, %RevokeConversationAccessFromGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id
+               })
+
+      message =
+        Message.apply(message, %ConversationAccessGrantedToGroup{
+          conversation_id: conversation_id,
+          club_id: club_id,
+          group_id: group_id,
+          access_level: "write"
+        })
+
+      assert %ConversationAccessRevokedFromGroup{
+               conversation_id: ^conversation_id,
+               club_id: ^club_id,
+               group_id: ^group_id,
+               access_level: "write"
+             } =
+               Message.execute(message, %RevokeConversationAccessFromGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id
                })
     end
   end

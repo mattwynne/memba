@@ -16,8 +16,10 @@ defmodule Memba.Messaging.Message do
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
@@ -25,6 +27,7 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.ConversationReference
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Events.ConversationFollowed
   alias Memba.Messaging.Events.ConversationUnfollowed
   alias Memba.Messaging.Events.MessageSent
@@ -96,6 +99,39 @@ defmodule Memba.Messaging.Message do
           group_id: command.group_id,
           access_level: access_level
         }
+      end
+    end
+  end
+
+  def execute(%__MODULE__{} = message, %GrantInitialConversationAccessToGroup{} = command) do
+    with :ok <- validate_conversation_access_command(message, command),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(command.access_level) do
+      if map_size(message.group_access) == 0 do
+        %ConversationAccessGrantedToGroup{
+          conversation_id: command.conversation_id,
+          club_id: command.club_id,
+          group_id: command.group_id,
+          access_level: access_level
+        }
+      else
+        []
+      end
+    end
+  end
+
+  def execute(%__MODULE__{} = message, %RevokeConversationAccessFromGroup{} = command) do
+    with :ok <- validate_conversation_group_command(message, command) do
+      case Map.fetch(message.group_access, command.group_id) do
+        :error ->
+          []
+
+        {:ok, access_level} ->
+          %ConversationAccessRevokedFromGroup{
+            conversation_id: command.conversation_id,
+            club_id: command.club_id,
+            group_id: command.group_id,
+            access_level: access_level
+          }
       end
     end
   end
@@ -175,6 +211,10 @@ defmodule Memba.Messaging.Message do
     end
   end
 
+  def apply(%__MODULE__{} = message, %ConversationAccessRevokedFromGroup{} = event) do
+    %__MODULE__{message | group_access: Map.delete(message.group_access, event.group_id)}
+  end
+
   # Deprecated replay shim only: EmailDeliveryOpened is no longer a tracked
   # product status. Keep this no-op so historic events can rehydrate aggregates
   # without changing current delivery state. Do not extend.
@@ -211,10 +251,16 @@ defmodule Memba.Messaging.Message do
   end
 
   defp validate_conversation_access_command(%__MODULE__{} = message, command) do
+    with :ok <- validate_conversation_group_command(message, command),
+         {:ok, _access_level} <- ConversationAccess.normalize_access_level(command.access_level) do
+      :ok
+    end
+  end
+
+  defp validate_conversation_group_command(%__MODULE__{} = message, command) do
     with :ok <- validate_id(:message, command.conversation_id, :invalid_conversation_id),
          :ok <- validate_id(:club, command.club_id, :invalid_club_id),
          :ok <- validate_id(:group, command.group_id, :invalid_group_id),
-         {:ok, _access_level} <- ConversationAccess.normalize_access_level(command.access_level),
          :ok <- validate_conversation_root_exists(message),
          :ok <- validate_root_conversation_identity(message, command.conversation_id) do
       validate_message_club_identity(message, command.club_id)

@@ -5,9 +5,12 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
   alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Message
   alias Memba.Messaging.Recipient
 
@@ -112,6 +115,89 @@ defmodule Memba.Messaging.GrantConversationAccessDispatchTest do
 
     assert Messaging.group_has_conversation_access?(conversation_id, group_id, :write)
     assert Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+  end
+
+  test "initial-access API cannot widen a conversation that already has an audience" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    admin_group_id = Memba.ID.generate(:group)
+    everyone_group_id = Memba.ID.generate(:group)
+    send_root_conversation(conversation_id, club_id)
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: admin_group_id,
+               access_level: :write
+             })
+
+    assert :ok =
+             Messaging.grant_initial_conversation_access_to_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: everyone_group_id,
+               access_level: :write
+             })
+
+    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
+    refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
+
+    assert {:ok, %ExecutionResult{events: []}} =
+             App.dispatch(
+               %GrantInitialConversationAccessToGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: everyone_group_id,
+                 access_level: :write
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
+
+  test "public API revokes access, projects the removal, and is idempotent" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    group_id = Memba.ID.generate(:group)
+    send_root_conversation(conversation_id, club_id)
+
+    assert :ok =
+             Messaging.grant_conversation_access_to_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: group_id,
+               access_level: :write
+             })
+
+    assert :ok =
+             Messaging.revoke_conversation_access_from_group(%{
+               conversation_id: conversation_id,
+               club_id: club_id,
+               group_id: group_id
+             })
+
+    refute Messaging.group_has_conversation_access?(conversation_id, group_id, :read)
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [],
+              aggregate_state: %Message{group_access: %{}}
+            }} =
+             App.dispatch(
+               %RevokeConversationAccessFromGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: group_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert 1 ==
+             App
+             |> Commanded.EventStore.stream_forward(conversation_id)
+             |> Enum.count(&match?(%{data: %ConversationAccessRevokedFromGroup{}}, &1))
   end
 
   test "public API rejects attempts to grant access to a reply stream" do

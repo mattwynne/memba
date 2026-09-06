@@ -11,9 +11,11 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
@@ -93,9 +95,44 @@ defmodule Memba.Messaging do
   def grant_conversation_access_to_group(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     dispatch_opts =
-      Keyword.put(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
+      Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
 
     with {:ok, command} <- grant_conversation_access_to_group_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Grant the first group access to a legacy root conversation only when none exists.
+
+  Unlike the general grant API, the aggregate treats this as a no-op whenever
+  any group already has access. This makes legacy backfill safe even when its
+  read-model scan races projection of a newly created private conversation.
+  """
+  def grant_initial_conversation_access_to_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    dispatch_opts =
+      Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
+
+    with {:ok, command} <- grant_initial_conversation_access_to_group_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Revoke a club-scoped group's access to an existing root conversation.
+
+  The operation is idempotent and waits specifically for the conversation-access
+  projector unless the caller explicitly supplies another consistency option.
+  """
+  def revoke_conversation_access_from_group(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    dispatch_opts =
+      Keyword.put_new(dispatch_opts, :consistency, [ConversationGroupAccessProjector])
+
+    with {:ok, command} <- revoke_conversation_access_from_group_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -485,13 +522,15 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Return one keyset page of root conversations missing Everyone write access.
+  Return one keyset page of legacy root conversations with no group access.
 
   The page scans projected root messages in ascending `message_id` order and
-  returns plain maps for root conversations whose club's deterministic Everyone
-  group does not yet have a projected write grant. `cursor` is the last scanned
-  `message_id` from a previous page; callers keep it in process only and may
-  safely restart from `nil`.
+  returns plain maps only for conversations with no projected access grant. Such
+  conversations predate explicit audiences and therefore need an Everyone write
+  grant. A conversation that already has Admin or any other audience must never
+  be widened to Everyone. `cursor` is the last scanned `message_id` from a
+  previous page; callers keep it in process only and may safely restart from
+  `nil`.
   """
   def list_everyone_conversation_access_backfill_page(cursor \\ nil, limit \\ 1_000) do
     root_conversations =
@@ -511,7 +550,7 @@ defmodule Memba.Messaging do
       |> Enum.map(fn root ->
         Map.put(root, :group_id, SystemGroups.everyone_group_id(root.club_id))
       end)
-      |> reject_write_conversation_access()
+      |> reject_conversations_with_access()
 
     %{
       entries: entries,
@@ -1070,24 +1109,19 @@ defmodule Memba.Messaging do
     |> String.downcase()
   end
 
-  defp reject_write_conversation_access([]), do: []
+  defp reject_conversations_with_access([]), do: []
 
-  defp reject_write_conversation_access(entries) do
+  defp reject_conversations_with_access(entries) do
     conversation_ids = Enum.map(entries, & &1.conversation_id)
-    group_ids = Enum.map(entries, & &1.group_id)
 
-    existing_write_access =
+    conversations_with_access =
       ConversationGroupAccessProjection
       |> where([access], access.conversation_id in ^conversation_ids)
-      |> where([access], access.group_id in ^group_ids)
-      |> where([access], access.access_level == "write")
-      |> select([access], {access.conversation_id, access.group_id})
+      |> select([access], access.conversation_id)
       |> Repo.all()
       |> MapSet.new()
 
-    Enum.reject(entries, fn entry ->
-      MapSet.member?(existing_write_access, {entry.conversation_id, entry.group_id})
-    end)
+    Enum.reject(entries, &MapSet.member?(conversations_with_access, &1.conversation_id))
   end
 
   defp after_backfill_cursor(query, _field, nil), do: query
@@ -1535,6 +1569,35 @@ defmodule Memba.Messaging do
          club_id: club_id,
          group_id: group_id,
          access_level: access_level
+       }}
+    end
+  end
+
+  defp grant_initial_conversation_access_to_group_command(attrs) do
+    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group),
+         {:ok, access_level} <- fetch_required(attrs, :access_level),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level) do
+      {:ok,
+       %GrantInitialConversationAccessToGroup{
+         conversation_id: conversation_id,
+         club_id: club_id,
+         group_id: group_id,
+         access_level: access_level
+       }}
+    end
+  end
+
+  defp revoke_conversation_access_from_group_command(attrs) do
+    with {:ok, conversation_id} <- fetch_required_id(attrs, :conversation_id, :message),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+         {:ok, group_id} <- fetch_required_id(attrs, :group_id, :group) do
+      {:ok,
+       %RevokeConversationAccessFromGroup{
+         conversation_id: conversation_id,
+         club_id: club_id,
+         group_id: group_id
        }}
     end
   end

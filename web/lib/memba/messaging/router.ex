@@ -11,9 +11,11 @@ defmodule Memba.Messaging.Router do
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
@@ -41,7 +43,15 @@ defmodule Memba.Messaging.Router do
     identity: :message_id
   )
 
-  dispatch(GrantConversationAccessToGroup, to: Message, identity: :conversation_id)
+  dispatch(
+    [
+      GrantConversationAccessToGroup,
+      GrantInitialConversationAccessToGroup,
+      RevokeConversationAccessFromGroup
+    ],
+    to: Message,
+    identity: :conversation_id
+  )
 
   dispatch([FollowConversation, UnfollowConversation], to: ConversationFollowers)
 end

@@ -7,6 +7,7 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.FollowConversation
   alias Memba.Messaging.Commands.GrantConversationAccessToGroup
+  alias Memba.Messaging.Commands.GrantInitialConversationAccessToGroup
   alias Memba.Messaging.Commands.PostMessageReply
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
@@ -14,6 +15,7 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Commands.RevokeConversationAccessFromGroup
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Commands.UnfollowConversation
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
@@ -82,6 +84,8 @@ defmodule Memba.Messaging.AppTest do
         FollowConversation,
         UnfollowConversation,
         GrantConversationAccessToGroup,
+        GrantInitialConversationAccessToGroup,
+        RevokeConversationAccessFromGroup,
         ReceiveInboundEmail,
         AcceptInboundClubEmail,
         RejectInboundClubEmail,

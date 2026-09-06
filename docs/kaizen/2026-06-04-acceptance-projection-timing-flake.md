@@ -358,3 +358,42 @@ The repair narrows the command's consistency target to
 backfill pattern of waiting only for the projection each phase immediately
 queries. The existing dispatch regression proves the public API returns with the
 conversation-access query already updated.
+
+### Third follow-up deployment evidence
+
+Continuous Delivery run `34047959394` showed that targeted Commanded consistency
+was still the wrong release-process contract. The release was running alongside
+the live application, which owns the durable projector subscription. A newly
+appended event could be handled by the live process while the release process's
+local targeted-consistency wait timed out.
+
+This run also exposed a privacy defect in the backfill source query. After an
+Admin conversation had been created in production, the query treated it as an
+old conversation “missing Everyone access” merely because it did not have an
+Everyone grant. It attempted an Everyone grant even though the conversation
+already had its intended Admin grant. The command appended its event before the
+consistency timeout, so the repair must compensate through another domain event
+rather than deleting history.
+
+The durable repair:
+
+- selects only legacy root conversations with no projected group-access grant
+  for the Everyone backfill;
+- dispatches a dedicated initial-access command whose aggregate-level
+  precondition refuses to add Everyone when any audience event already exists,
+  closing the race between Message and ConversationGroupAccess projections;
+- dispatches release-backfill commands with eventual consistency, then awaits
+  the relevant durable projector subscription cursors once after all phases;
+- adds an idempotent `RevokeConversationAccessFromGroup` command and
+  `ConversationAccessRevokedFromGroup` event;
+- scopes the compensating Everyone revocation to the exact conversation, club,
+  and group IDs recorded by run `34047959394`, avoiding guesses about whether a
+  general multi-group conversation is intentionally shared;
+- projects revocations by deleting only the selected current access row, so a
+  replay reproduces the repaired state while retaining the audit trail.
+
+Regression coverage proves an Admin-only conversation is not selected for the
+Everyone backfill, the aggregate rejects a widening grant even when projections
+lag, the exact observed production state is repaired idempotently, the Admin
+grant remains, and the actual `Memba.Release.migrate/0` entry point completes
+with the eventual-dispatch/durable-barrier contract.

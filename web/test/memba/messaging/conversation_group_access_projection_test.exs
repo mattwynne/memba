@@ -3,6 +3,7 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
 
   alias Memba.Messaging
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
 
@@ -122,6 +123,40 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
                access_level: "write"
              }
            ] = Repo.all(ConversationGroupAccessProjection)
+  end
+
+  test "a revocation removes only the selected group's access" do
+    conversation_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    revoked_group_id = Memba.ID.generate(:group)
+    retained_group_id = Memba.ID.generate(:group)
+
+    for {event_number, group_id} <- [{1, revoked_group_id}, {2, retained_group_id}] do
+      assert :ok =
+               ConversationGroupAccessProjector.handle(
+                 %ConversationAccessGrantedToGroup{
+                   conversation_id: conversation_id,
+                   club_id: club_id,
+                   group_id: group_id,
+                   access_level: "write"
+                 },
+                 projector_metadata(event_number)
+               )
+    end
+
+    assert :ok =
+             ConversationGroupAccessProjector.handle(
+               %ConversationAccessRevokedFromGroup{
+                 conversation_id: conversation_id,
+                 club_id: club_id,
+                 group_id: revoked_group_id,
+                 access_level: "write"
+               },
+               projector_metadata(3)
+             )
+
+    refute Messaging.group_has_conversation_access?(conversation_id, revoked_group_id, :read)
+    assert Messaging.group_has_conversation_access?(conversation_id, retained_group_id, :write)
   end
 
   test "invalid access levels are rejected by the projector and query API" do

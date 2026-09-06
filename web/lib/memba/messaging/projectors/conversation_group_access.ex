@@ -9,8 +9,11 @@ defmodule Memba.Messaging.Projectors.ConversationGroupAccess do
     name: "Memba.Messaging.Projectors.ConversationGroupAccess",
     consistency: :strong
 
+  import Ecto.Query
+
   alias Memba.Messaging.ConversationAccess
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
+  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Projections.ConversationGroupAccess, as: ConversationGroupAccessProjection
 
   project(%ConversationAccessGrantedToGroup{} = event, fn multi ->
@@ -19,9 +22,23 @@ defmodule Memba.Messaging.Projectors.ConversationGroupAccess do
     end
   end)
 
+  project(%ConversationAccessRevokedFromGroup{} = event, fn multi ->
+    revoke_access(multi, event)
+  end)
+
   @impl Commanded.Projections.Ecto
   def after_update(event, metadata, changes) do
     Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
+
+  defp revoke_access(multi, event) do
+    query =
+      from access in ConversationGroupAccessProjection,
+        where:
+          access.conversation_id == ^event.conversation_id and
+            access.group_id == ^event.group_id
+
+    Ecto.Multi.delete_all(multi, :messaging_conversation_group_access, query)
   end
 
   defp upsert_access(multi, event, access_level) do
