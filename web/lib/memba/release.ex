@@ -3,10 +3,6 @@ defmodule Memba.Release do
   Used for executing DB release tasks when run in production without Mix
   installed.
   """
-  require Logger
-
-  alias Memba.Membership.SystemGroups.Backfill
-
   @app :memba
 
   def migrate do
@@ -213,19 +209,11 @@ defmodule Memba.Release do
   end
 
   defp await_system_group_backfill_source_projections! do
-    if Backfill.known_revocation_pending_projection_upgrade?() do
-      Logger.warning(
-        "release temporarily bypassing source projection barrier for the exact pending production revocation upgrade"
-      )
+    timeout =
+      Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
 
-      :ok
-    else
-      timeout =
-        Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
-
-      Memba.ProjectionBarrier.await!(@system_group_backfill_source_projectors, timeout: timeout)
-      :ok
-    end
+    Memba.ProjectionBarrier.await!(@system_group_backfill_source_projectors, timeout: timeout)
+    :ok
   end
 
   defp run_system_groups_backfill! do

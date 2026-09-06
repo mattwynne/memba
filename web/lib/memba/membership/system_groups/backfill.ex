@@ -18,8 +18,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
   alias Memba.Membership.Projectors.Group
   alias Memba.Membership.Projectors.GroupMembership
   alias Memba.Messaging
-  alias Memba.Messaging.App, as: MessagingApp
-  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Projectors.ConversationGroupAccess
 
   @default_page_size 500
@@ -47,25 +45,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
           source_count: non_neg_integer(),
           dispatched_count: non_neg_integer()
         }
-
-  @doc """
-  Return whether production is waiting for the new revocation event type to deploy.
-
-  The failed release appended the exact compensating event while the old live
-  application still owned the durable subscriptions. Old code cannot deserialize
-  that new event type, so its cursors cannot advance until the new application is
-  promoted. This predicate is deliberately evidence-scoped and becomes false as
-  soon as the new projector removes the erroneous access row.
-  """
-  def known_revocation_pending_projection_upgrade? do
-    Enum.any?(@known_erroneous_everyone_access, fn entry ->
-      Messaging.group_has_conversation_access?(
-        entry.conversation_id,
-        entry.group_id,
-        :read
-      ) and revocation_event_exists?(entry)
-    end)
-  end
 
   @doc """
   Run all system-group backfill phases in dependency order.
@@ -97,6 +76,7 @@ defmodule Memba.Membership.SystemGroups.Backfill do
       end)
 
     await_projectors!()
+    ensure_known_revocations_projected!()
     Logger.info("system_groups_backfill complete summary=#{inspect(summaries)}")
     summaries
   end
@@ -259,39 +239,28 @@ defmodule Memba.Membership.SystemGroups.Backfill do
   end
 
   defp await_projectors! do
-    if known_revocation_pending_projection_upgrade?() do
-      Logger.warning(
-        "system_groups_backfill temporarily bypassing projector barrier for the exact pending production revocation upgrade"
-      )
+    timeout =
+      Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
 
-      :ok
-    else
-      timeout =
-        Application.get_env(:memba, :system_groups_backfill_projection_barrier_timeout, 60_000)
-
-      Memba.ProjectionBarrier.await!([Group, GroupMembership, ConversationGroupAccess],
-        timeout: timeout
-      )
-    end
+    Memba.ProjectionBarrier.await!([Group, GroupMembership, ConversationGroupAccess],
+      timeout: timeout
+    )
   end
 
-  defp revocation_event_exists?(entry) do
-    MessagingApp
-    |> Commanded.EventStore.stream_forward(entry.conversation_id)
-    |> Enum.any?(fn recorded_event ->
-      match?(
-        %{
-          data: %ConversationAccessRevokedFromGroup{
-            conversation_id: conversation_id,
-            club_id: club_id,
-            group_id: group_id
-          }
-        }
-        when conversation_id == entry.conversation_id and club_id == entry.club_id and
-               group_id == entry.group_id,
-        recorded_event
-      )
-    end)
+  defp ensure_known_revocations_projected! do
+    case Enum.find(@known_erroneous_everyone_access, fn entry ->
+           Messaging.group_has_conversation_access?(
+             entry.conversation_id,
+             entry.group_id,
+             :read
+           )
+         end) do
+      nil ->
+        :ok
+
+      entry ->
+        raise "known erroneous Everyone conversation access remains projected after backfill: #{inspect(entry)}"
+    end
   end
 
   defp after_command!(opts, phase, entry, command) do

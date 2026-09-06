@@ -27,7 +27,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
   alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
-  alias Memba.Messaging.Projectors.ConversationGroupAccess, as: ConversationGroupAccessProjector
   alias Memba.Messaging.Recipient
   alias Memba.Release
 
@@ -131,56 +130,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
              Backfill.run!(page_size: 10)
 
     assert messaging_event_count(conversation_id, ConversationAccessRevokedFromGroup) == 1
-  end
-
-  test "recognizes the exact revocation event blocked behind the old live projector" do
-    club = seed_historic_club!(@repair_club_id)
-    member = add_active_member!(club.club_id)
-    append_historic_system_groups!(club.club_id)
-    admin_group_id = SystemGroups.admin_group_id(club.club_id)
-    everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
-
-    conversation_id =
-      send_group_root_conversation!(
-        club.club_id,
-        member.person_id,
-        admin_group_id,
-        @repair_conversation_id
-      )
-
-    assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club.club_id,
-               group_id: everyone_group_id,
-               access_level: :write
-             })
-
-    child_id = stop_projector!(ConversationGroupAccessProjector)
-
-    on_exit(fn ->
-      case Supervisor.restart_child(Memba.Supervisor, child_id) do
-        {:ok, _pid} -> :ok
-        {:ok, _pid, _info} -> :ok
-        {:error, :running} -> :ok
-      end
-    end)
-
-    assert :ok =
-             Messaging.revoke_conversation_access_from_group(
-               %{
-                 conversation_id: conversation_id,
-                 club_id: club.club_id,
-                 group_id: everyone_group_id
-               },
-               consistency: :eventual
-             )
-
-    assert Backfill.known_revocation_pending_projection_upgrade?()
-    assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
-
-    assert %{known_erroneous_everyone_access_cleanup: %{dispatched_count: 1}} =
-             Backfill.run!(page_size: 10)
   end
 
   test "second run is idempotent and appends no duplicate facts" do
@@ -585,19 +534,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
              )
 
     conversation_id
-  end
-
-  defp stop_projector!(projector) do
-    child_id =
-      Supervisor.which_children(Memba.Supervisor)
-      |> Enum.find_value(fn
-        {child_id, _pid, :worker, [module]} when module == projector -> child_id
-        _child -> nil
-      end)
-
-    assert child_id
-    assert :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
-    child_id
   end
 
   defp active_group_membership?(group_id, membership_id) do
