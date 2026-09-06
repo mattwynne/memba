@@ -1,10 +1,13 @@
 defmodule Memba.ProjectionBarrier do
   @moduledoc """
-  Waits for Commanded Ecto projections to catch up to an EventStore checkpoint.
+  Waits for Commanded Ecto projectors to catch up to an EventStore checkpoint.
 
-  A projection barrier is satisfied when every selected projector has processed
-  events up to the target event number. This is useful for read-your-writes
-  checks and for acceptance tests that need deterministic negative assertions.
+  A projection barrier is satisfied when every selected projector's durable
+  EventStore subscription has acknowledged events up to the target event
+  number. Subscription positions are used instead of Ecto `projection_versions`
+  because projectors acknowledge irrelevant events without projecting them.
+  This is useful for read-your-writes checks and for acceptance tests that need
+  deterministic negative assertions.
   """
 
   alias Memba.Repo
@@ -88,19 +91,20 @@ defmodule Memba.ProjectionBarrier do
 
   defp projector_positions(projector_names) do
     initial_positions = Map.new(projector_names, &{&1, 0})
+    schema = event_store_schema()
 
     %{rows: rows} =
       Repo.query!(
         """
-        SELECT projection_name, last_seen_event_number
-        FROM projection_versions
-        WHERE projection_name = ANY($1)
+        SELECT subscription_name, COALESCE(last_seen, 0)
+        FROM #{quote_identifier(schema)}.subscriptions
+        WHERE stream_uuid = '$all' AND subscription_name = ANY($1)
         """,
         [projector_names]
       )
 
-    Enum.reduce(rows, initial_positions, fn [projection_name, event_number], positions ->
-      Map.put(positions, projection_name, event_number)
+    Enum.reduce(rows, initial_positions, fn [subscription_name, event_number], positions ->
+      Map.put(positions, subscription_name, event_number)
     end)
   end
 

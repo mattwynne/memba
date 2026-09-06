@@ -19,6 +19,33 @@ defmodule Memba.ProjectionBarrierTest do
     assert result.projectors["Memba.Membership.Projectors.Club"] >= result.checkpoint
   end
 
+  test "a barrier advances when a projector acknowledges an irrelevant event" do
+    club_id = Memba.ID.generate(:club)
+    projector = "Memba.Membership.Projectors.Membership"
+
+    :ok =
+      Memba.Membership.create_club(
+        %{club_id: club_id, name: "Ignored Event Club", slug: "ignored-event-club"},
+        consistency: :strong
+      )
+
+    checkpoint = ProjectionBarrier.current_checkpoint()
+
+    assert %{rows: []} =
+             Memba.Repo.query!(
+               """
+               SELECT last_seen_event_number
+               FROM projection_versions
+               WHERE projection_name = $1
+               """,
+               [projector]
+             )
+
+    assert {:ok, result} = ProjectionBarrier.await([projector], timeout: 100)
+    assert result.checkpoint == checkpoint
+    assert result.projectors[projector] >= checkpoint
+  end
+
   test "a barrier times out with the current projector positions" do
     club_id = Memba.ID.generate(:club)
 
