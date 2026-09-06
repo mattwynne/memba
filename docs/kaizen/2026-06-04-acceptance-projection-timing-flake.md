@@ -262,3 +262,51 @@ The failure report still does not preserve the server-side reason for `Member me
 
 - Preserve the underlying exception/cause, the compose region HTML, and the current projection/read-model state with a projection-wait timeout.
 - Make the acceptance lifecycle own a process group and reap it on interruption, or provide a reliable trap-based cleanup path.
+
+## Additional observation: 2026-09-06
+
+### Context
+
+Continuous Delivery run `33961589402` attempted to deploy iteration 057 from
+`main` at `70274efd9591278d35f4f344c6f32f65ed58124f`. Fly.io ran
+`/app/bin/migrate`, which starts the Commanded projectors and waits for the
+system-group backfill source projections before changing data.
+
+### What happened
+
+The release timed out waiting for every selected projector to reach the global
+EventStore checkpoint `106`. Its diagnostic reported Ecto projection positions
+such as Club at `105`, Membership at `90`, Message at `92`, and several new
+projectors at `0`. CI had passed, but Fly safely aborted the release and the new
+version was not promoted.
+
+### What allowed it to happen
+
+`Memba.ProjectionBarrier` compared the global `$all` stream checkpoint with
+`projection_versions.last_seen_event_number`. Commanded projectors consume and
+acknowledge every event in their `$all` subscription, including events their
+default handler ignores. However, `projection_versions` advances only when a
+matching Ecto `project(...)` handler calls `update_projection/3`. It therefore
+records the last event that changed or deliberately touched that projection,
+not the durable subscription's processed position.
+
+The original barrier tests used events relevant to the selected projector, so
+the Ecto projection version and EventStore subscription cursor happened to be
+equal. They did not cover a projector acknowledging an irrelevant event.
+
+### Impact
+
+The invalid comparison made the release barrier impossible to satisfy on a
+normal heterogeneous production event stream. It blocked deployment for 60
+seconds and left the merged iteration unavailable in production.
+
+### Resolution
+
+- `web/lib/memba/projection_barrier.ex` now reads each selected projector's
+  durable `$all` cursor from the configured EventStore schema's
+  `subscriptions.last_seen` column.
+- `web/test/memba/projection_barrier_test.exs` proves a Membership projector can
+  have no Ecto `projection_versions` row for a club event while its subscription
+  cursor still satisfies the global barrier.
+- Focused tests and `dev check` passed; the full gate covered 1,130 ExUnit tests,
+  122 browser scenarios, and 877 browser steps.
