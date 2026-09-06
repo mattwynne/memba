@@ -354,6 +354,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          {:ok, channel} <- request_channel(delivery.channel),
          {:ok, sender_name, sender_address} <- sender_context(message.sender_id) do
       club = Membership.get_club(message.club_id)
+      audience_group_id = audience_group_id(message)
+      audience_group = Membership.get_group(audience_group_id)
       reply_context = reply_context(message, club, delivery)
 
       {:ok,
@@ -365,7 +367,8 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
          recipient_id: delivery.recipient_id,
          recipient_name: delivery.recipient_name,
          recipient_address: delivery.recipient_address,
-         audience_group_id: audience_group_id(message),
+         audience_group_id: audience_group_id,
+         audience_group_name: audience_group_name(audience_group),
          club_name: club_name(club),
          club_slug: club_slug(club),
          sender_name: sender_name,
@@ -432,6 +435,9 @@ defmodule Memba.Messaging.EmailDeliveryDispatcher do
 
   defp club_slug(%{slug: slug}), do: slug
   defp club_slug(_club), do: nil
+
+  defp audience_group_name(%{name: name}), do: name
+  defp audience_group_name(_group), do: nil
 
   defp audience_group_id(%MessageProjection{conversation_id: conversation_id}) do
     ConversationGroupAccess

@@ -509,6 +509,18 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(ConversationAccessGrantedToGroup)
     assert 2 == count_events(EmailDeliveryCreated)
+
+    assert [%{status: "sent"}, %{status: "sent"}] =
+             EmailDeliveryDispatcher.dispatch_pending_email_deliveries()
+
+    assert [bob_request, carol_request] = Fake.deliveries()
+
+    for request <- [bob_request, carol_request] do
+      assert %EmailDeliveryRequest{
+               audience_group_id: ^admin_group_id,
+               audience_group_name: "Admin"
+             } = request
+    end
   end
 
   test "recognized same-club reply headers post inbound email into the existing conversation" do

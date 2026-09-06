@@ -83,30 +83,31 @@ defmodule Memba.Messaging.MemberMessageEmail do
   end
 
   defp message_html_body(%EmailDeliveryRequest{} = request) do
-    group_name = group_name(request)
+    club_name = group_name(request)
     sender_name = sender_name(request)
+    audience_description = audience_description(request, club_name)
     title = subject(request)
 
     content = [
-      EmailTemplates.group_header(group_name,
-        label: "Members message",
+      EmailTemplates.group_header(club_name,
+        label: root_message_label(request),
         padding: "18px 28px",
         border_bottom: true
       ),
-      sender_row(sender_name, group_name),
+      sender_row(sender_name, audience_description),
       message_section(title, request.body),
-      reply_hint(request, sender_name, group_name)
+      reply_hint(request, sender_name, club_name)
     ]
 
     EmailTemplates.render_shell(
       title: title,
-      preheader: "A message from #{sender_name} to members of #{group_name}.",
+      preheader: "A message from #{sender_name} to #{audience_description}.",
       content: content,
       footer:
         EmailTemplates.memba_footer(
-          group_name: group_name,
+          group_name: club_name,
           recipient_email: request.recipient_address,
-          reason: membership_reason(request.club_name, group_name)
+          reason: membership_reason(request, club_name)
         )
     )
   end
@@ -170,14 +171,14 @@ defmodule Memba.Messaging.MemberMessageEmail do
     |> String.starts_with?("re:")
   end
 
-  defp sender_row(sender_name, group_name) do
+  defp sender_row(sender_name, audience_description) do
     """
         <tr>
           <td class="gutter" style="padding:22px 28px 4px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
               <td style="vertical-align:middle;">
                 <div style="font-size:15px; font-weight:600; color:#15201c; letter-spacing:-0.01em;">#{EmailTemplates.escaped_text(sender_name)}</div>
-                <div style="font-size:12.5px; color:#7d877f; margin-top:1px;">to all members of #{EmailTemplates.escaped_text(group_name)}</div>
+                <div style="font-size:12.5px; color:#7d877f; margin-top:1px;">to #{EmailTemplates.escaped_text(audience_description)}</div>
               </td>
             </tr></table>
           </td>
@@ -280,10 +281,10 @@ defmodule Memba.Messaging.MemberMessageEmail do
     end
   end
 
-  defp reply_hint(%EmailDeliveryRequest{} = request, sender_name, group_name) do
+  defp reply_hint(%EmailDeliveryRequest{} = request, sender_name, club_name) do
     case ClubInboundEmailAddress.address(request.club_slug) do
       nil -> sender_reply_hint(sender_name)
-      _address -> club_reply_hint(group_name)
+      _address -> club_reply_hint(reply_destination(request, club_name))
     end
   end
 
@@ -331,6 +332,46 @@ defmodule Memba.Messaging.MemberMessageEmail do
     request.club_name
     |> EmailTemplates.sanitize_header_text()
     |> default_text("Your group")
+  end
+
+  defp audience_group_name(%EmailDeliveryRequest{} = request) do
+    request.audience_group_name
+    |> EmailTemplates.sanitize_header_text()
+    |> default_text("")
+  end
+
+  defp audience_description(%EmailDeliveryRequest{} = request, club_name) do
+    if private_group_root?(request) do
+      private_audience_description(request, club_name)
+    else
+      "all members of #{club_name}"
+    end
+  end
+
+  defp private_audience_description(%EmailDeliveryRequest{} = request, club_name) do
+    case audience_group_name(request) do
+      "" -> "the conversation group at #{club_name}"
+      audience_group_name -> "the #{audience_group_name} group at #{club_name}"
+    end
+  end
+
+  defp root_message_label(%EmailDeliveryRequest{} = request) do
+    if private_group_root?(request) do
+      case audience_group_name(request) do
+        "" -> "Group message"
+        audience_group_name -> "#{audience_group_name} group message"
+      end
+    else
+      "Members message"
+    end
+  end
+
+  defp reply_destination(%EmailDeliveryRequest{} = request, club_name) do
+    if private_group_root?(request) do
+      private_audience_description(request, club_name)
+    else
+      club_name
+    end
   end
 
   defp club_slug(%EmailDeliveryRequest{} = request) do
@@ -413,10 +454,16 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   defp blank?(value), do: value in [nil, ""]
 
-  defp membership_reason(club_name, display_name) do
-    case EmailTemplates.sanitize_header_text(club_name) do
-      "" -> "You're getting this because you're an active member of this group."
-      _club_name -> "You're getting this because you're an active member of #{display_name}."
+  defp membership_reason(%EmailDeliveryRequest{} = request, club_name) do
+    cond do
+      private_group_root?(request) ->
+        "You're getting this because you're an active member of #{private_audience_description(request, club_name)}."
+
+      EmailTemplates.sanitize_header_text(request.club_name) == "" ->
+        "You're getting this because you're an active member of this group."
+
+      true ->
+        "You're getting this because you're an active member of #{club_name}."
     end
   end
 
@@ -435,7 +482,7 @@ defmodule Memba.Messaging.MemberMessageEmail do
     EmailTemplates.memba_footer(
       group_name: group_name,
       recipient_email: request.recipient_address,
-      reason: membership_reason(request.club_name, group_name),
+      reason: membership_reason(request, group_name),
       extra_detail_html: stop_follow_line
     )
   end

@@ -51,6 +51,30 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "get_group/1" do
+    test "returns a public group summary by typed group ID" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+      admin_group_id = SystemGroups.admin_group_id(club.club_id)
+
+      assert %{
+               club_id: club_id,
+               group_id: ^admin_group_id,
+               email_slug: "admin",
+               group_key: "admin",
+               name: "Admin"
+             } = Membership.get_group(admin_group_id)
+
+      assert club_id == club.club_id
+      refute match?(%GroupProjection{}, Membership.get_group(admin_group_id))
+    end
+
+    test "returns nil for invalid or unknown group IDs" do
+      assert is_nil(Membership.get_group(Memba.ID.generate(:group)))
+      assert is_nil(Membership.get_group("not-a-uuid"))
+      assert is_nil(Membership.get_group(nil))
+    end
+  end
+
   describe "get_group_by_email_slug/2" do
     test "returns a public group summary scoped to the selected club" do
       club = create_club("Kootenay Mountaineering Club", slug: "kmc")

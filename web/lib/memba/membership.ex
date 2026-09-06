@@ -524,6 +524,29 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a public conversation-group summary by typed group ID.
+
+  Returns `nil` when the ID is absent, invalid, or unknown. The plain-map result
+  keeps callers outside Membership independent of Membership's projection schema.
+  """
+  def get_group(group_id) do
+    with {:ok, group_id} <- ID.cast(:group, group_id) do
+      GroupProjection
+      |> where([group], group.group_id == ^group_id)
+      |> select([group], %{
+        club_id: group.club_id,
+        group_id: group.group_id,
+        email_slug: group.email_slug,
+        group_key: group.group_key,
+        name: group.name
+      })
+      |> Repo.one()
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
   Fetch a public conversation-group summary by club ID and email routing slug.
 
   The email slug is normalized by trimming surrounding whitespace and folding

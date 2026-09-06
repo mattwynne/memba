@@ -21,6 +21,27 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
              "Kootenay Mountaineering Club via Memba"
   end
 
+  test "Admin root messages identify the private audience throughout the email copy" do
+    club_id = Memba.ID.generate(:club)
+
+    request =
+      email_delivery_request(
+        club_id: club_id,
+        club_name: "Kootenay Mountaineering Club",
+        club_slug: "kmc",
+        audience_group_id: SystemGroups.admin_group_id(club_id),
+        audience_group_name: "Admin",
+        sender_name: "Alice Adams"
+      )
+
+    html = MemberMessageEmail.html_body(request)
+
+    assert html =~ "to the Admin group at Kootenay Mountaineering Club"
+    assert html =~ "Reply to this email to post back to"
+    assert html =~ "active member of the Admin group at Kootenay Mountaineering Club"
+    refute html =~ "to all members"
+  end
+
   test "Everyone root messages keep the member sender as the From identity" do
     club_id = Memba.ID.generate(:club)
 
@@ -84,6 +105,7 @@ defmodule Memba.Messaging.MemberMessageEmailTest do
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
       audience_group_id: Keyword.get(overrides, :audience_group_id),
+      audience_group_name: Keyword.get(overrides, :audience_group_name),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
