@@ -397,3 +397,27 @@ Everyone backfill, the aggregate rejects a widening grant even when projections
 lag, the exact observed production state is repaired idempotently, the Admin
 grant remains, and the actual `Memba.Release.migrate/0` entry point completes
 with the eventual-dispatch/durable-barrier contract.
+
+### Fourth follow-up deployment evidence
+
+Continuous Delivery run `34053461457` appended the exact compensating
+`ConversationAccessRevokedFromGroup` event, and the legacy Everyone backfill
+selected no conversations. Its final barrier then stopped at global checkpoint
+`153` while all selected subscription cursors remained at `152`.
+
+The old live release owns those durable subscriptions but does not contain the
+new revocation event module, so it cannot deserialize event `153`. The new
+release code can append and understand that event, but it cannot take ownership
+of the already-running subscriptions before Fly promotes it. This creates a
+one-version deployment deadlock: the new code must become live before the
+existing durable cursors can consume the event that authorizes promotion.
+
+The upgrade bridge recognizes only the evidence-scoped state where the exact
+production revocation event already exists while its erroneous Everyone
+projection row remains. In that state alone, the release bypasses the source and
+final projector barriers so Fly can promote the code that understands the new
+event. Once the new projector consumes the revocation and removes the row, the
+predicate becomes false and normal barriers automatically apply again. A
+regression stops the conversation-access projector, appends the exact event,
+proves the bridge recognizes that state, and verifies the release backfill can
+complete without broadening the exception to other conversations.
