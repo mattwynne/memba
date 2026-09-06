@@ -310,3 +310,29 @@ seconds and left the merged iteration unavailable in production.
   cursor still satisfies the global barrier.
 - Focused tests and `dev check` passed; the full gate covered 1,130 ExUnit tests,
   122 browser scenarios, and 877 browser steps.
+
+### Follow-up deployment evidence
+
+Continuous Delivery run `34018615586` proved the subscription-cursor repair was
+working: Club, Group, GroupMembership, Membership, Role,
+ConversationGroupAccess, and Message all reached checkpoint `106`. The release
+still timed out because its source-projector list also named
+`Memba.Membership.Projectors.RoleAssignment` at `0`.
+
+No `RoleAssignment` projector module exists. `Memba.Membership.Projectors.Role`
+owns both the role and role-assignment projections. The source list had confused
+the `Memba.Membership.Projections.RoleAssignment` Ecto schema with a separate
+projector. Because Elixir aliases can name unloaded modules, compilation and the
+release sequencing tests did not reject the invalid entry.
+
+The follow-up repair removes that nonexistent projector from the release barrier
+and makes `ProjectionBarrier` fail immediately when a caller supplies an
+unavailable module atom. A regression test proves this invalid configuration is
+rejected before polling. Focused release, backfill, and barrier tests passed.
+
+The first full `dev check` after that repair encountered the existing
+member-compose acceptance flake: the valid subject `"Trip planning night"` was
+submitted as `:invalid_subject`. No release-repair code was changed in response.
+The exact full gate was rerun and passed with 1,131 ExUnit tests, 122 browser
+scenarios, and 877 browser steps. The actual release entry point also completed
+locally with `MIX_ENV=test mix run --no-start -e "Memba.Release.migrate()"`.
