@@ -9,8 +9,11 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
   alias Memba.Membership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.ClubInvitation
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -222,10 +225,15 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
 
-    Repo.get(Memba.Membership.Projections.Club, club_id) ||
-      attrs
-      |> club_attrs(club_id)
-      |> insert_membership_club!()
+    unless Repo.get(Memba.Membership.Projections.Club, club_id) do
+      assert :ok =
+               Membership.create_club(
+                 attrs
+                 |> club_attrs(club_id)
+                 |> Map.new(),
+                 consistency: :strong
+               )
+    end
 
     person =
       insert_membership_person!(
@@ -242,11 +250,35 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
         active: true
       })
 
+    insert_everyone_group_membership!(club_id, membership.membership_id, person.person_id)
+
     %{
       club_id: club_id,
       membership_id: membership.membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp grant_manage_members!(member) do

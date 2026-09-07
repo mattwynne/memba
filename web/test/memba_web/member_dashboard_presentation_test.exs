@@ -2,6 +2,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   use Memba.DataCase, async: true
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Role
   alias Memba.Membership.Projections.RoleAssignment
@@ -196,6 +198,88 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
 
     assert Enum.map(assigns.messages, & &1.message_id) == [everyone_conversation.message_id]
     refute Enum.any?(assigns.messages, &(&1.message_id == admin_conversation.message_id))
+  end
+
+  test "authorizes and loads members and conversations for a selected group" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        email_slug: "trip-planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    everyone_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        subject: "Club-wide plans"
+      )
+
+    trip_planning_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private trip plans",
+        audience_group_id: trip_planning_group.group_id
+      )
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               alice.club_id,
+               %{email: "alice@example.com"},
+               [alice.club],
+               trip_planning_group.group_id
+             )
+
+    assert assigns.selected_group.group_id == trip_planning_group.group_id
+    assert assigns.selected_group.name == "Trip Planning"
+
+    assert MapSet.new(assigns.groups, & &1.group_id) ==
+             MapSet.new([
+               SystemGroups.everyone_group_id(alice.club_id),
+               trip_planning_group.group_id
+             ])
+
+    assert Enum.map(assigns.members, & &1.id) == [alice.person_id, bob.person_id]
+    assert assigns.active_member_count == 2
+    assert assigns.current_member.id == alice.person_id
+
+    assert Enum.map(assigns.messages, & &1.message_id) == [
+             trip_planning_conversation.message_id
+           ]
+
+    assert Enum.map(assigns.message_rows, & &1.message_id) == [
+             trip_planning_conversation.message_id
+           ]
+
+    refute Enum.any?(assigns.messages, &(&1.message_id == everyone_conversation.message_id))
   end
 
   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
@@ -438,12 +522,54 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       active: true
     })
 
+    add_group_member(ensure_everyone_group(club_id), %{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person.person_id
+    })
+
     %{
       club: club,
       club_id: club_id,
       membership_id: membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp ensure_everyone_group(club_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.get!(Group, group_id)
+  end
+
+  defp create_group(attrs) do
+    Repo.insert!(%Group{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      group_id: Memba.ID.generate(:group),
+      group_key: Keyword.fetch!(attrs, :group_key),
+      email_slug: Keyword.get(attrs, :email_slug),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      active: true
+    })
   end
 
   defp create_role(attrs) do

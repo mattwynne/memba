@@ -4,6 +4,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
@@ -1531,18 +1533,46 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     membership_id = Memba.ID.generate(:membership)
 
+    active? = Keyword.get(attrs, :active, true)
+
     Repo.insert!(%Membership{
       membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
-      active: Keyword.get(attrs, :active, true)
+      active: active?
     })
+
+    if active? do
+      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+    end
 
     %{
       club_id: club_id,
       membership_id: membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp grant_manage_members!(member) do
