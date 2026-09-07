@@ -1,0 +1,484 @@
+diff --git a/acceptance-tests/test/remember_group_selection_hook.test.js b/acceptance-tests/test/remember_group_selection_hook.test.js
+new file mode 100644
+index 0000000..0470075
+--- /dev/null
++++ b/acceptance-tests/test/remember_group_selection_hook.test.js
+@@ -0,0 +1,112 @@
++const assert = require("node:assert/strict");
++const path = require("node:path");
++const { pathToFileURL } = require("node:url");
++const test = require("node:test");
++
++const hookModule = import(
++  pathToFileURL(path.resolve(__dirname, "../../web/assets/js/remember_group_selection.mjs")).href
++);
++
++test("selection storage keys are scoped by club", async () => {
++  const { groupSelectionStorageKey } = await hookModule;
++
++  assert.equal(
++    groupSelectionStorageKey("club-123"),
++    "memba:lastGroup:club-123"
++  );
++});
++
++test("the hook asks the server to restore a remembered group and stores its authoritative reply", async () => {
++  const { createRememberGroupSelectionHook } = await hookModule;
++  const storage = fakeStorage([["memba:lastGroup:club-123", "group-remembered"]]);
++  const pushedEvents = [];
++  const hook = hookContext(createRememberGroupSelectionHook(() => storage), {
++    clubId: "club-123",
++    selectedGroupId: "group-everyone",
++    explicitGroupRoute: "false"
++  });
++
++  hook.pushEvent = (event, payload, callback) => {
++    pushedEvents.push([event, payload]);
++    callback({ selected_group_id: "group-remembered" });
++  };
++
++  hook.mounted();
++
++  assert.deepEqual(pushedEvents, [
++    ["restore_remembered_group", { group_id: "group-remembered" }]
++  ]);
++  assert.equal(storage.getItem("memba:lastGroup:club-123"), "group-remembered");
++});
++
++test("the hook replaces a stale remembered group with the server fallback", async () => {
++  const { createRememberGroupSelectionHook } = await hookModule;
++  const storage = fakeStorage([["memba:lastGroup:club-123", "group-stale"]]);
++  const hook = hookContext(createRememberGroupSelectionHook(() => storage), {
++    clubId: "club-123",
++    selectedGroupId: "group-everyone",
++    explicitGroupRoute: "false"
++  });
++
++  hook.pushEvent = (_event, _payload, callback) => {
++    callback({ selected_group_id: "group-everyone" });
++  };
++
++  hook.mounted();
++
++  assert.equal(storage.getItem("memba:lastGroup:club-123"), "group-everyone");
++});
++
++test("an explicit group route is remembered without consulting a previous selection", async () => {
++  const { createRememberGroupSelectionHook } = await hookModule;
++  const storage = fakeStorage([["memba:lastGroup:club-123", "group-previous"]]);
++  const hook = hookContext(createRememberGroupSelectionHook(() => storage), {
++    clubId: "club-123",
++    selectedGroupId: "group-explicit",
++    explicitGroupRoute: "true"
++  });
++
++  hook.pushEvent = () => {
++    assert.fail("an explicit group route must not request restoration");
++  };
++
++  hook.mounted();
++
++  assert.equal(storage.getItem("memba:lastGroup:club-123"), "group-explicit");
++});
++
++test("a successful LiveView rail update remembers the newly selected group", async () => {
++  const { createRememberGroupSelectionHook } = await hookModule;
++  const storage = fakeStorage();
++  const hook = hookContext(createRememberGroupSelectionHook(() => storage), {
++    clubId: "club-123",
++    selectedGroupId: "group-everyone",
++    explicitGroupRoute: "false"
++  });
++
++  hook.mounted();
++  hook.el.dataset.selectedGroupId = "group-trips";
++  hook.updated();
++
++  assert.equal(storage.getItem("memba:lastGroup:club-123"), "group-trips");
++});
++
++function hookContext(hook, dataset) {
++  return {
++    ...hook,
++    el: { dataset }
++  };
++}
++
++function fakeStorage(entries = []) {
++  const values = new Map(entries);
++
++  return {
++    getItem(key) {
++      return values.has(key) ? values.get(key) : null;
++    },
++    setItem(key, value) {
++      values.set(key, value);
++    }
++  };
++}
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 5404645..6ae47b5 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+ - [x] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+ - [x] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+-- [ ] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
++- [x] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+ - [ ] 012 The server remains the authority for every final selection.
+ - [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+ - [ ] 014 The compose confirmation and error paths must retain that group.
+diff --git a/web/assets/js/app.js b/web/assets/js/app.js
+index 54b194d..2126fd7 100644
+--- a/web/assets/js/app.js
++++ b/web/assets/js/app.js
+@@ -24,12 +24,13 @@ import {Socket} from "phoenix"
+ import {LiveSocket} from "phoenix_live_view"
+ import {hooks as colocatedHooks} from "phoenix-colocated/memba"
+ import topbar from "../vendor/topbar"
++import RememberGroupSelection from "./remember_group_selection.mjs"
+ 
+ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+ const liveSocket = new LiveSocket("/live", Socket, {
+   longPollFallbackMs: 2500,
+   params: {_csrf_token: csrfToken},
+-  hooks: {...colocatedHooks},
++  hooks: {RememberGroupSelection, ...colocatedHooks},
+ })
+ 
+ // Show progress bar on live navigation and form submits
+@@ -80,4 +81,3 @@ if (process.env.NODE_ENV === "development") {
+     window.liveReloader = reloader
+   })
+ }
+-
+diff --git a/web/assets/js/remember_group_selection.mjs b/web/assets/js/remember_group_selection.mjs
+new file mode 100644
+index 0000000..3f44226
+--- /dev/null
++++ b/web/assets/js/remember_group_selection.mjs
+@@ -0,0 +1,81 @@
++export function groupSelectionStorageKey(clubId) {
++  return `memba:lastGroup:${clubId}`
++}
++
++export function createRememberGroupSelectionHook(
++  getStorage = () => window.localStorage
++) {
++  return {
++    mounted() {
++      this.groupSelectionStorage = availableStorage(getStorage)
++      this.groupSelectionStorageKey = storageKeyFor(this.el)
++
++      const selectedGroupId = this.el.dataset.selectedGroupId
++
++      if (!this.groupSelectionStorageKey || !selectedGroupId) return
++
++      if (this.el.dataset.explicitGroupRoute === "true") {
++        rememberSelection(this, selectedGroupId)
++        return
++      }
++
++      const rememberedGroupId = readSelection(this)
++
++      if (!rememberedGroupId || rememberedGroupId === selectedGroupId) {
++        rememberSelection(this, selectedGroupId)
++        return
++      }
++
++      this.pushEvent(
++        "restore_remembered_group",
++        {group_id: rememberedGroupId},
++        reply => rememberSelection(this, reply && reply.selected_group_id)
++      )
++    },
++
++    updated() {
++      const currentStorageKey = storageKeyFor(this.el)
++
++      if (currentStorageKey !== this.groupSelectionStorageKey) {
++        this.groupSelectionStorageKey = currentStorageKey
++      }
++
++      rememberSelection(this, this.el.dataset.selectedGroupId)
++    }
++  }
++}
++
++function storageKeyFor(element) {
++  const clubId = element.dataset.clubId
++  return clubId ? groupSelectionStorageKey(clubId) : null
++}
++
++function availableStorage(getStorage) {
++  try {
++    return getStorage()
++  } catch (_error) {
++    return null
++  }
++}
++
++function readSelection(hook) {
++  if (!hook.groupSelectionStorage) return null
++
++  try {
++    return hook.groupSelectionStorage.getItem(hook.groupSelectionStorageKey)
++  } catch (_error) {
++    return null
++  }
++}
++
++function rememberSelection(hook, groupId) {
++  if (!hook.groupSelectionStorage || !hook.groupSelectionStorageKey || !groupId) return
++
++  try {
++    hook.groupSelectionStorage.setItem(hook.groupSelectionStorageKey, groupId)
++  } catch (_error) {
++    // Browser-local persistence is a convenience; blocked storage must not break navigation.
++  }
++}
++
++export default createRememberGroupSelectionHook()
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index dd34838..906be20 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -14,6 +14,8 @@
+     data-live-view="member-dashboard"
+     data-club-id={@selected_club.club_id}
+     data-selected-group-id={@selected_group.group_id}
++    data-explicit-group-route={to_string(not is_nil(selected_group_route_id))}
++    phx-hook="RememberGroupSelection"
+     class="club-groups"
+   >
+     <div class="app-split">
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index 63ffe71..2c6490b 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -61,6 +61,39 @@ defmodule MembaWeb.MemberDashboardLive do
+     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_event(
++        "restore_remembered_group",
++        %{"group_id" => remembered_group_id},
++        %{assigns: %{selected_group_route_id: nil}} = socket
++      )
++      when is_binary(remembered_group_id) and remembered_group_id != "" do
++    case MemberDashboardPresentation.load(
++           socket.assigns.selected_club.club_id,
++           socket.assigns.current_identity,
++           socket.assigns.current_identity_clubs,
++           remembered_group_id
++         ) do
++      {:ok, dashboard_assigns} ->
++        selected_group_id = dashboard_assigns.selected_group.group_id
++
++        socket =
++          socket
++          |> assign(:selected_group_route_id, selected_group_id)
++          |> assign(dashboard_assigns)
++          |> push_patch(to: remembered_group_path(socket.assigns.live_action, selected_group_id))
++
++        {:reply, %{selected_group_id: selected_group_id}, socket}
++
++      {:error, _reason} ->
++        reply_with_selected_group(socket)
++    end
++  end
++
++  def handle_event("restore_remembered_group", _params, socket) do
++    reply_with_selected_group(socket)
++  end
++
+   @impl Phoenix.LiveView
+   def handle_info(
+         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
+@@ -80,6 +113,13 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp active_section(:members), do: "members"
+   defp active_section(_live_action), do: "conversations"
+ 
++  defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
++  defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
++
++  defp reply_with_selected_group(socket) do
++    {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}
++  end
++
+   defp refresh_dashboard(socket, club_id, selected_group_id) do
+     case MemberDashboardPresentation.load(
+            club_id,
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 4310dfe..9a1a027 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -123,6 +123,166 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#member-group-email-address")
+   end
+ 
++  test "Everyone fallback exposes browser-local group restoration metadata", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/conversations")
++
++    assert has_element?(
++             view,
++             "#member-club-home[phx-hook='RememberGroupSelection']" <>
++               "[data-club-id='#{alice.club_id}']" <>
++               "[data-selected-group-id='#{everyone_group_id}']" <>
++               "[data-explicit-group-route='false']"
++           )
++  end
++
++  test "an authorised remembered group is restored to its canonical URL", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/members")
++
++    render_hook(view, "restore_remembered_group", %{
++      "group_id" => trip_planning_group.group_id
++    })
++
++    trip_planning_group_id = trip_planning_group.group_id
++
++    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
++    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
++
++    assert has_element?(
++             view,
++             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
++               "[data-explicit-group-route='true']"
++           )
++
++    assert has_element?(view, "#member-group-name", "Trip Planning")
++    refute has_element?(view, "#member-section-panel-members[hidden]")
++  end
++
++  test "a stale unauthorised remembered group falls back to Everyone without disclosure", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, bob)
++
++    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/conversations")
++
++    render_hook(view, "restore_remembered_group", %{"group_id" => private_group.group_id})
++
++    assert_reply view, %{selected_group_id: ^everyone_group_id}
++
++    assert has_element?(
++             view,
++             "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
++               "[data-explicit-group-route='false']"
++           )
++
++    assert has_element?(view, "#member-group-name", "Everyone")
++    refute has_element?(view, "#member-group-name", "Private Planning")
++    refute has_element?(view, "#member-group-link-#{private_group.group_id}")
++  end
++
++  test "an explicit authorised group route wins over a remembered group event", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    hut_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "hut_planning",
++        name: "Hut Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++    add_group_member(hut_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{trip_planning_group.group_id}")
++
++    render_hook(view, "restore_remembered_group", %{"group_id" => hut_group.group_id})
++
++    trip_planning_group_id = trip_planning_group.group_id
++
++    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
++
++    assert has_element?(
++             view,
++             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
++               "[data-explicit-group-route='true']"
++           )
++
++    assert has_element?(view, "#member-group-name", "Trip Planning")
++    refute has_element?(view, "#member-group-name", "Hut Planning")
++  end
++
+   test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
+     alice =
+       create_active_member(
