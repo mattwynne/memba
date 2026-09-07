@@ -17,7 +17,7 @@
 - [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
 - [x] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
 - [x] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
-- [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+- [x] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
 - [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
 - [ ] 020 Preserve correct access for a future conversation shared with several groups.
 - [ ] 021 Add focused Membership, Messaging, dashboard-presentation, LiveView/router, and browser tests for generic custom-group fixtures, selection scope, no-disclosure not-found behaviour, remembered selection, group-aware compose, existing Everyone regression, and club/group mismatch rejection.
