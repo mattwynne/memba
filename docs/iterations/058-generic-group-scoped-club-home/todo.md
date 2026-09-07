@@ -2,7 +2,7 @@
 
 - [x] 001 Inspect the current group projections and Messaging group queries from iterations 056–057.
 - [x] 002 Add a public Membership query for the active groups of a given active member in a given club.
-- [ ] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+- [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
 - [ ] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
 - [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
 - [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.

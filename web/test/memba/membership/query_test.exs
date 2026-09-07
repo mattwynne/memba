@@ -358,12 +358,16 @@ defmodule Memba.Membership.QueryTest do
   end
 
   describe "list_active_groups_for_member/2" do
-    test "returns the groups an active member belongs to in the selected club" do
-      club = create_club("Kootenay Mountaineering Club")
+    test "returns ordered presentation summaries with active counts and optional addresses" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
       other_club = create_club("Nelson Cycling Club")
       alice = create_person(name: "Alice", email: "alice@example.com")
+      bob = create_person(name: "Bob", email: "bob@example.com")
+      carol = create_person(name: "Carol", email: "carol@example.com")
 
-      membership_id = add_member(club.club_id, alice.person_id)
+      alice_membership_id = add_member(club.club_id, alice.person_id)
+      bob_membership_id = add_member(club.club_id, bob.person_id)
+      carol_membership_id = add_member(club.club_id, carol.person_id)
       other_membership_id = add_member(other_club.club_id, alice.person_id)
 
       trip_planning_group_id =
@@ -372,6 +376,17 @@ defmodule Memba.Membership.QueryTest do
           email_slug: "trip-planning",
           name: "Trip Planning"
         )
+
+      alpine_group_id =
+        create_group(club.club_id,
+          group_key: "alpine",
+          email_slug: "alpine",
+          name: "Alpine"
+        )
+
+      GroupProjection
+      |> Memba.Repo.get!(alpine_group_id)
+      |> then(&Memba.Repo.update!(Ecto.Changeset.change(&1, email_slug: nil)))
 
       other_group_id =
         create_group(other_club.club_id,
@@ -383,7 +398,35 @@ defmodule Memba.Membership.QueryTest do
       add_group_member(
         club.club_id,
         trip_planning_group_id,
-        membership_id,
+        alice_membership_id,
+        alice.person_id
+      )
+
+      add_group_member(
+        club.club_id,
+        trip_planning_group_id,
+        bob_membership_id,
+        bob.person_id
+      )
+
+      add_group_member(
+        club.club_id,
+        trip_planning_group_id,
+        carol_membership_id,
+        carol.person_id
+      )
+
+      remove_group_member(
+        club.club_id,
+        trip_planning_group_id,
+        carol_membership_id,
+        carol.person_id
+      )
+
+      add_group_member(
+        club.club_id,
+        alpine_group_id,
+        alice_membership_id,
         alice.person_id
       )
 
@@ -394,23 +437,40 @@ defmodule Memba.Membership.QueryTest do
         alice.person_id
       )
 
+      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+      club_id = club.club_id
       groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
 
-      assert MapSet.new(groups, & &1.group_id) ==
-               MapSet.new([
-                 SystemGroups.everyone_group_id(club.club_id),
-                 trip_planning_group_id
-               ])
+      assert [
+               %{
+                 club_id: ^club_id,
+                 group_id: ^alpine_group_id,
+                 email_slug: nil,
+                 email_address: nil,
+                 group_key: "alpine",
+                 name: "Alpine",
+                 active_member_count: 1
+               },
+               %{
+                 club_id: ^club_id,
+                 group_id: ^everyone_group_id,
+                 email_slug: "everyone",
+                 email_address: "everyone@kmc.clubs.memba.io",
+                 group_key: "everyone",
+                 name: "Everyone",
+                 active_member_count: 3
+               },
+               %{
+                 club_id: ^club_id,
+                 group_id: ^trip_planning_group_id,
+                 email_slug: "trip-planning",
+                 email_address: "trip-planning@kmc.clubs.memba.io",
+                 group_key: "trip_planning",
+                 name: "Trip Planning",
+                 active_member_count: 2
+               }
+             ] = groups
 
-      assert %{
-               club_id: club_id,
-               group_id: ^trip_planning_group_id,
-               email_slug: "trip-planning",
-               group_key: "trip_planning",
-               name: "Trip Planning"
-             } = Enum.find(groups, &(&1.group_id == trip_planning_group_id))
-
-      assert club_id == club.club_id
       refute Enum.any?(groups, &match?(%GroupProjection{}, &1))
     end
 

@@ -5,6 +5,7 @@ defmodule Memba.Membership do
 
   import Ecto.Query
 
+  alias Memba.ClubInboundEmailAddress
   alias Memba.ID
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
@@ -967,43 +968,95 @@ defmodule Memba.Membership do
   List the conversation groups an active member belongs to in a given club.
 
   Both the group-membership row and its matching underlying club membership
-  must be active. Results are plain maps so callers do not depend on Membership
-  projection schemas. Invalid or unknown club and person IDs return an empty
-  list.
+  must be active. Results are ordered by group name and ID and include each
+  group's active member count and optional inbound email address. They are plain
+  maps so callers do not depend on Membership projection schemas. Invalid or
+  unknown club and person IDs return an empty list.
   """
   def list_active_groups_for_member(club_id, person_id) do
     with {:ok, club_id} <- ID.cast(:club, club_id),
          {:ok, person_id} <- ID.cast(:person, person_id) do
-      GroupProjection
-      |> join(:inner, [group], group_membership in GroupMembershipProjection,
-        on:
-          group_membership.group_id == group.group_id and
-            group_membership.club_id == group.club_id
-      )
-      |> join(:inner, [_group, group_membership], membership in MembershipProjection,
-        on:
-          membership.membership_id == group_membership.membership_id and
-            membership.club_id == group_membership.club_id and
-            membership.person_id == group_membership.person_id
-      )
-      |> where([group, _group_membership, _membership], group.club_id == ^club_id)
-      |> where(
-        [_group, group_membership, _membership],
-        group_membership.person_id == ^person_id
-      )
-      |> where(
-        [_group, group_membership, membership],
-        group_membership.active == true and membership.active == true
-      )
-      |> distinct(true)
-      |> select([group, _group_membership, _membership], %{
-        club_id: group.club_id,
-        group_id: group.group_id,
-        email_slug: group.email_slug,
-        group_key: group.group_key,
-        name: group.name
-      })
-      |> Repo.all()
+      active_member_counts =
+        GroupMembershipProjection
+        |> join(:inner, [group_membership], membership in MembershipProjection,
+          on:
+            membership.membership_id == group_membership.membership_id and
+              membership.club_id == group_membership.club_id and
+              membership.person_id == group_membership.person_id
+        )
+        |> join(:inner, [_group_membership, membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> where(
+          [group_membership, membership, _person],
+          group_membership.active == true and membership.active == true
+        )
+        |> group_by([group_membership, _membership, _person], [
+          group_membership.club_id,
+          group_membership.group_id
+        ])
+        |> select([group_membership, _membership, _person], %{
+          club_id: group_membership.club_id,
+          group_id: group_membership.group_id,
+          active_member_count: count(group_membership.membership_id)
+        })
+
+      groups =
+        GroupProjection
+        |> join(:inner, [group], club in Club, on: club.club_id == group.club_id)
+        |> join(:inner, [group, _club], group_membership in GroupMembershipProjection,
+          on:
+            group_membership.group_id == group.group_id and
+              group_membership.club_id == group.club_id
+        )
+        |> join(
+          :inner,
+          [_group, _club, group_membership],
+          membership in MembershipProjection,
+          on:
+            membership.membership_id == group_membership.membership_id and
+              membership.club_id == group_membership.club_id and
+              membership.person_id == group_membership.person_id
+        )
+        |> join(:inner, [_group, _club, _group_membership, membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(
+          :inner,
+          [group, _club, _group_membership, _membership, _person],
+          member_count in subquery(active_member_counts),
+          on: member_count.club_id == group.club_id and member_count.group_id == group.group_id
+        )
+        |> where([group, _club, ...], group.club_id == ^club_id)
+        |> where(
+          [_group, _club, group_membership, _membership, _person, _member_count],
+          group_membership.person_id == ^person_id
+        )
+        |> where(
+          [_group, _club, group_membership, membership, _person, _member_count],
+          group_membership.active == true and membership.active == true
+        )
+        |> distinct(true)
+        |> order_by([group, _club, ...], asc: group.name, asc: group.group_id)
+        |> select([group, club, _group_membership, _membership, _person, member_count], %{
+          club_id: group.club_id,
+          club_slug: club.slug,
+          group_id: group.group_id,
+          email_slug: group.email_slug,
+          group_key: group.group_key,
+          name: group.name,
+          active_member_count: member_count.active_member_count
+        })
+        |> Repo.all()
+
+      Enum.map(groups, fn group ->
+        group
+        |> Map.put(
+          :email_address,
+          ClubInboundEmailAddress.address(group.club_slug, group.email_slug)
+        )
+        |> Map.delete(:club_slug)
+      end)
     else
       :error -> []
     end
