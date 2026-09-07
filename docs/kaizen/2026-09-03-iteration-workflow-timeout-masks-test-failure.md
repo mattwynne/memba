@@ -121,3 +121,70 @@ Recovery and prevention:
 - Final `dev check` passed with 1,129 tests, 0 failures, and 122 browser scenarios / 877 steps passing.
 
 The remaining systemic timeout/diagnostic questions in this note still apply. This recovery demonstrates a useful immediate operating standard: when an outer Cucumber timeout hides a wrapped Playwright helper error, rerun one named scenario with `ACCEPTANCE_STEP_TIMEOUT_MS` longer than Playwright's inner action timeout before changing application code.
+
+### Additional observation: 2026-09-07 — iteration 058 failed after 18 durable task checkpoints
+
+#### Observed facts
+
+Iteration 100, generic group-scoped club home, was deliberately renumbered to iteration 058 after validated iterations 098 and 099 were deferred. Plan-validation run `01M1X3NCJGF4KCJRZ379V4V1A9` succeeded and `main` recorded iteration 058 as `validated` in `770955989`.
+
+The implementation launcher was run from `main` as:
+
+```sh
+./bin/dev fabro deliver docs/iterations/058-generic-group-scoped-club-home/plan.md
+```
+
+It accepted the predecessor and clear-WIP checks, reserved the slot in `ebdc63b08`, and started implementation run `01M1X3TD59C6R2FDNJ7ARPKACD` with that exact source SHA. The launcher later reported `Failed ... 494m43s $176.23`; `3483e1dac` then restored iteration 058 to `validated` on `main`.
+
+`fabro inspect 01M1X3TD59C6R2FDNJ7ARPKACD --no-upgrade-check` records:
+
+- final `failure_class=budget_exhausted` and signature `task_not_ready|budget_exhausted|... task validation requires human input or exceeded retry budget`;
+- a final `implement_next_task` failure of `handler timed out after 2400000ms`, categorized there as `transient_infra` with system actor `timeout`;
+- 18 successful visits each to `pre_validate_snapshot`, `validate_task`, and `task_gate`, followed by the 19th `implement_next_task` visit timing out;
+- `implement_next_task` configured with `timeout=2400s` and `max_visits=30`, while the graph has `max_node_visits=80`.
+
+The inspected visit counts are below both configured visit limits (`implement_next_task=19`, graph-loop nodes at most 19). This run did **not** report Fabro's explicit `node "..." visited ...; run is stuck in a cycle` failure. The observed terminal event was the 40-minute prompt-node timeout; `budget_exhausted` is the terminal failure classification after `task_not_ready`, not evidence by itself that either configured visit ceiling was reached.
+
+Task 018 was durably checkpointed in `e8002dbb9`, independently validated, and marked complete. It added only `docs/iterations/058-generic-group-scoped-club-home/conversation-access-review.md` and the task-018 check-off. The validation evidence records 25 focused tests with zero failures and a passing `git diff --check`. The next failed checkpoint, `7861311f1`, contains unvalidated changes for the subsequent access-control work; the terminal run commit is `0c78bd91` on `origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD`. That branch is 136 commits ahead of `main` and preserves the completed and partial checkpoint work.
+
+#### What the delivery machinery exposed
+
+The task-draining loop re-enters `sync_task_list`, `todo_readable`, `all_tasks_done`, `implement_next_task`, pre-validation, and validation for every task. The workflow has fixed per-node time and visit ceilings, but no preflight or intermediate delivery boundary that compares the remaining task list with those limits or creates a handoff when an iteration is approaching them.
+
+The terminal `task_not_ready` script still emits only:
+
+```text
+Iteration implementation failed: task validation requires human input or exceeded retry budget.
+```
+
+That message does not name the timed-out node, the current task, the preserved run branch, the checkpoint SHA, or a resume command. This is true even though `.fabro/workflows/README.md` already documents a manual resume procedure. The gap is therefore failure-time handoff and discoverability, not the complete absence of recovery documentation.
+
+#### Safe evidence and recovery reference
+
+The following commands are evidence-gathering or documented recovery preparation; they were not used to resume or change this iteration during this investigation:
+
+```sh
+fabro inspect 01M1X3TD59C6R2FDNJ7ARPKACD --no-upgrade-check
+git fetch origin fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
+git log --oneline main..origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
+git diff --stat main...origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
+git show --stat e8002dbb9 7861311f1
+```
+
+The documented recovery path in `.fabro/workflows/README.md` is:
+
+```sh
+git switch -c resume/01M1X3TD59C6R2FDNJ7ARPKACD --track origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
+fabro run .fabro/workflows/iteration-implementation/workflow.toml \
+  -I plan_path=docs/iterations/058-generic-group-scoped-club-home/plan.md \
+  --auto-approve
+```
+
+That starts a new run from the checkpoint branch and must be a deliberate operator decision after inspecting the unvalidated final checkpoint; it is not a safe automatic retry from the terminal message.
+
+#### Hypotheses and follow-up questions
+
+- The 22-task iteration was long enough for the fixed 40-minute task budget and per-run loop limits to become an operational delivery constraint, even though the recorded terminal trigger was a timeout rather than a visit-limit breach.
+- `budget_exhausted` may be an overly broad terminal classification in this path. Its relationship to node timeouts, run cost, and the configured visit ceilings needs confirmation from Fabro's failure-class semantics and events before it is treated as a capacity-limit diagnosis.
+- A delivery launcher that restores lifecycle status after failure should also surface the run ID, branch, last durable task/checkpoint, failed node, and the existing documented resume command. Otherwise useful checkpointed work still requires manual archaeology.
+- The workflow may need an explicit capacity/handoff policy for long task lists: for example, a preflight warning, a bounded task batch, or a timeout artifact that makes the next safe action obvious. These are prevention ideas, not conclusions from this single run.
