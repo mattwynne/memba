@@ -1,0 +1,144 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/conversation-access-review.md b/docs/iterations/058-generic-group-scoped-club-home/conversation-access-review.md
+new file mode 100644
+index 0000000..975e4b9
+--- /dev/null
++++ b/docs/iterations/058-generic-group-scoped-club-home/conversation-access-review.md
+@@ -0,0 +1,125 @@
++# Member-facing conversation access review
++
++Date: 2026-09-07
++
++This is the implementation-plan item 8 review of every member-facing
++conversation detail and action path. It records the boundary in place before
++tasks 019 and 020 make person-level access generic and multi-group aware.
++
++## Required authorization contract
++
++Member-facing conversation reads and actions must be authorized from the
++current person's active group memberships and the root conversation's access
++grants:
++
++- Detail and delivery/receipt reads require active membership in any group with
++  read or write access.
++- In-app follow and unfollow require the same effective read access at action
++  time.
++- In-app reply requires active membership in any group with write access.
++- A root or reply message ID must resolve to the same root conversation before
++  its access grants are evaluated.
++- A matching grant through any one active group is sufficient. Revoking or
++  leaving one group must not remove access supplied independently by another.
++- The selected `group_id` in a URL is return-navigation context, not an access
++  grant. Omitted, stale, or forged rail state must neither grant nor remove
++  effective access.
++- A signed email stop-follow token remains an intentional exception: it may
++  reduce notification state without current membership, but its club,
++  conversation, and member scope must match.
++- Missing resources, foreign-club resources, and conversations for which the
++  current club member has no effective group access must use the ordinary
++  no-disclosure not-found result.
++
++## Route and action inventory
++
++| Surface | Entry point | Current server boundary | Review result |
++| --- | --- | --- | --- |
++| Conversation list link | `GET /groups/:group_id`, then `/messages/:message_id?group_id=...` | `MemberDashboardPresentation` authorizes the selected group; `PageHTML` carries it into the detail URL | The source list is correctly scoped. The query parameter on the destination is navigation context only. |
++| Conversation detail | `GET /messages/:message_id` | `MemberMessageLive.Show` calls `MemberMessageDetail.load/3`, which verifies active selected-club membership and message ownership, then loads only through the deterministic Everyone group | Safe against current private-group disclosure, but it rejects authorized Admin/custom-group members and shared conversations without an Everyone grant. |
++| Live detail refresh | Message, delivery, and follow projection notifications | `MemberMessageLive.Show.refresh_message_detail/1` calls the same loader | It preserves the mount-time Everyone-only rule. It does not react directly to group-membership or access-grant changes. |
++| In-app reply | LiveView `post_reply` event | The sender comes from server assigns. `Messaging.post_message_reply/2` resolves the root and requires active membership in any group with a write grant | The action-time authorization is already group-aware and has the correct any-matching-write-group shape. Detail reachability remains Everyone-only. |
++| In-app follow | LiveView `follow_conversation` event | `Messaging.follow_conversation_as_current_member/2` requires active club membership and a root conversation in that club | It does not require membership in a group that can read the conversation. |
++| In-app unfollow | LiveView `unfollow_conversation` event | `Messaging.unfollow_conversation_as_current_member/2` uses the same club-level predicate as follow | It does not require effective conversation read access. |
++| Per-message delivery and receipts | `GET /messages/:message_id/delivery` for a root or reply | `MemberMessageDeliveryLive.Show` reuses `MemberMessageDetail.load/3`, then queries receipts by message ID | It inherits the safe but Everyone-only gate. The receipt query has no caller authorization of its own, so the shared loader must remain the mandatory web gate. |
++| Receipt-group expansion | LiveView `toggle_receipt_group` event | Changes only socket presentation state after mount | No independent data access occurs; the mounted route's read authorization is the boundary. |
++| Reply-email conversation link | Absolute `/messages/:conversation_id` URL | The destination is the ordinary detail route and carries no selected group | Correct link shape only if detail computes effective person access independently of rail state. |
++| Email stop-follow link | `GET /messages/conversations/stop-following/:token` | `ConversationFollowController` calls `Messaging.stop_following_conversation_from_email_token/2`; the signed token is checked against the existing root's club and conversation | Intentional reduction-only exception. Former members may stop notifications without signing in or retaining group access. |
++| Stop-follow success link | Absolute `/messages/:conversation_id` URL | The destination is the ordinary detail route and carries no selected group | Like reply-email links, it depends on person-level effective access rather than a group query parameter. |
++
++## Existing test evidence
++
++- `member_message_detail_loader_test.exs` proves invalid/unauthorized clubs,
++  missing and foreign-club messages, and the current Everyone-only denial of an
++  Admin conversation.
++- `member_message_live/show_test.exs` covers detail rendering, root/reply
++  delivery links, group-context preservation, and blank-reply behavior.
++- `member_message_live/show_reply_test.exs` covers a server-derived reply
++  sender, in-app follow/unfollow, and denial after club membership ends.
++- `member_message_delivery_live/show_test.exs` covers receipt rendering,
++  foreign-club and non-member denial, root navigation from a reply delivery,
++  and group-context preservation.
++- `messaging/post_message_reply_test.exs` proves reply authorization through an
++  active write-granted group and rejection after group removal, for an
++  unrelated group, and without a write grant.
++- `messaging/message_projection_test.exs` proves the projection can represent a
++  conversation shared with several groups.
++- `conversation_follow_controller_test.exs` covers valid, reused, tampered, and
++  wrong-club stop-follow tokens.
++
++The existing group-context tests use generated IDs to prove URL preservation;
++they do not navigate to an authorized private-group detail or delivery page.
++
++## Changes required by tasks 019 and 020
++
++The smallest coherent implementation seam is a public Messaging authorization
++query that resolves a root or reply message, checks the root's club, obtains
++the groups with the requested access level, and intersects them with
++Membership's public active-group query for the current person and club.
++
++Task 019 can then use that result to:
++
++- replace `MemberMessageDetail`'s Everyone-only load for both detail and
++  delivery;
++- recheck effective read access inside the in-app follow/unfollow boundary;
++- retain the existing write-level reply check; and
++- resolve the signed-in person through a public Membership API rather than
++  matching only the primary email in a club member list.
++
++Task 020 must prove that authorization succeeds through any qualifying active
++group, independent of the selected rail state, including mixed read/write
++grants and loss of one of several qualifying memberships.
++
++Focused tests in task 021 should follow the generated private-group links and
++cover authorized and unauthorized root detail, reply detail, delivery,
++follow/unfollow, direct email links, omitted/forged/stale `group_id`, read-only
++versus write access, and no-disclosure responses.
++
++## Adjacent findings outside this review's implementation slice
++
++- Reply delivery currently selects followers who remain active club members,
++  without rechecking that they still belong to a group that can read the
++  conversation. The iteration explicitly leaves follower-delivery policy out
++  of scope, so this review records the confidentiality risk without changing
++  that policy.
++- The public access-grant commands validate the conversation's club but do not
++  independently verify that the supplied group belongs to that club. There is
++  no member-facing grant-management path in this iteration, but that invariant
++  should be repaired before such a path is introduced.
++- The stop-follow action is a state-changing `GET`; signed scope prevents
++  authority expansion, but automated mail scanners can still exercise a valid
++  link. This behavior predates group-scoped club home.
++
++## Architecture conformance
++
++- ADR 0002 is preserved: read authorization belongs in query/application
++  services, while replies and follow-state changes still dispatch commands.
++- ADR 0005 is preserved: group access decisions do not move recipient
++  resolution into the aggregate.
++- ADR 0007 is preserved: Messaging may coordinate through Membership's public
++  APIs; member-facing web code must not query Membership projection schemas.
++- ADR 0015 is preserved: member detail and delivery remain LiveView surfaces.
++- ADR 0021 is preserved: LiveView refreshes continue to consume committed
++  read-model notifications and re-enter the same authorization loader.
++- ADR 0023 is preserved: `group_id` remains URL-addressable navigation state,
++  while the server computes authority independently on every request/action.
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 51f39ae..c977865 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -17,7 +17,7 @@
+ - [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+ - [x] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+ - [x] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+-- [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
++- [x] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+ - [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
+ - [ ] 020 Preserve correct access for a future conversation shared with several groups.
+ - [ ] 021 Add focused Membership, Messaging, dashboard-presentation, LiveView/router, and browser tests for generic custom-group fixtures, selection scope, no-disclosure not-found behaviour, remembered selection, group-aware compose, existing Everyone regression, and club/group mismatch rejection.
