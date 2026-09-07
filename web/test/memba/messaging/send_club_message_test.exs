@@ -252,6 +252,30 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert count_events(MessageSent) == 0
   end
 
+  test "rejects an audience group owned by another club without creating a conversation" do
+    kootenay_club_id = Memba.ID.generate(:club)
+    nelson_club_id = Memba.ID.generate(:club)
+    create_club(kootenay_club_id, "Kootenay Mountaineering Club")
+    create_club(nelson_club_id, "Nelson Cycling Club")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    add_member(kootenay_club_id, alice.person_id)
+    add_member(nelson_club_id, bob.person_id)
+
+    assert {:error, :audience_group_not_found} =
+             Messaging.send_club_message(%{
+               message_id: Memba.ID.generate(:message),
+               club_id: kootenay_club_id,
+               sender_id: alice.person_id,
+               audience_group_id: SystemGroups.everyone_group_id(nelson_club_id),
+               subject: "Cross-club topic",
+               body: "This must not create a conversation."
+             })
+
+    assert count_events(MessageSent) == 0
+  end
+
   test "sends each active member once at the person's primary email address" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
