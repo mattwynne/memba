@@ -160,7 +160,8 @@ defmodule Memba.Messaging do
 
   The raw `follow_conversation/2` command records follow state for system and
   future email-unsubscribe workflows. Browser surfaces should use this wrapper
-  so only current club members can opt in through the app.
+  so only people with effective read access through an active group membership
+  can opt in through the app.
   """
   def follow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -187,7 +188,8 @@ defmodule Memba.Messaging do
 
   Email stop-follow links intentionally use the raw unfollow command so former
   members can reduce notifications without signing in. In-app unfollow remains
-  limited to current club members.
+  limited to people with effective read access through an active group
+  membership.
   """
   def unfollow_conversation_as_current_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -520,6 +522,45 @@ defmodule Memba.Messaging do
       |> Repo.exists?()
     else
       _invalid -> false
+    end
+  end
+
+  @doc """
+  Return whether a person has the requested access to a projected conversation.
+
+  The message argument may identify the root or any reply; access is always
+  checked against the same-club root conversation. The person's active groups
+  are resolved through Membership's public query API and intersected with the
+  root's group grants. A write grant satisfies a read request, while a read
+  grant does not satisfy a write request.
+
+  Invalid IDs or access levels, missing or orphaned messages, club mismatches,
+  inactive memberships, and conversations without a qualifying grant return
+  `false`.
+  """
+  def member_has_conversation_access?(message_id, club_id, person_id, access_level) do
+    with {:ok, message_id} <- ID.cast(:message, message_id),
+         {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, access_level} <- ConversationAccess.normalize_access_level(access_level),
+         %MessageProjection{club_id: ^club_id} = message <-
+           Repo.get(MessageProjection, message_id),
+         {:ok, conversation_id} <- conversation_id_for_message(message),
+         %MessageProjection{club_id: ^club_id} <-
+           fetch_conversation_root_projection(conversation_id),
+         active_group_ids when active_group_ids != [] <-
+           active_group_ids_for_member(club_id, person_id) do
+      grant_levels = ConversationAccess.grant_levels_including(access_level)
+
+      ConversationGroupAccessProjection
+      |> where(
+        [access],
+        access.conversation_id == ^conversation_id and access.club_id == ^club_id and
+          access.group_id in ^active_group_ids and access.access_level in ^grant_levels
+      )
+      |> Repo.exists?()
+    else
+      _invalid_missing_or_inaccessible -> false
     end
   end
 
@@ -1053,6 +1094,12 @@ defmodule Memba.Messaging do
         access.group_id == ^group_id and access.access_level in ^read_grant_levels
     )
     |> Repo.exists?()
+  end
+
+  defp active_group_ids_for_member(club_id, person_id) do
+    club_id
+    |> Membership.list_active_groups_for_member(person_id)
+    |> Enum.map(& &1.group_id)
   end
 
   defp list_projected_conversation_messages(conversation_id, club_id) do
@@ -1777,48 +1824,38 @@ defmodule Memba.Messaging do
   end
 
   defp authorize_reply_sender(%PostMessageReply{} = command) do
-    command.conversation_id
-    |> conversation_write_group_ids(command.club_id)
-    |> Enum.any?(&Membership.active_member_of_group?(&1, command.sender_id))
-    |> case do
+    case member_has_conversation_access?(
+           command.conversation_id,
+           command.club_id,
+           command.sender_id,
+           :write
+         ) do
       true -> :ok
       false -> {:error, :not_current_member}
     end
   end
 
-  defp authorize_current_club_member(club_id, person_id) do
-    if Membership.active_member_of_club?(club_id, person_id) do
+  defp authorize_current_member_conversation_action(command) do
+    with {:ok, root_message} <- fetch_conversation_root(command.conversation_id),
+         :ok <- require_conversation_in_club(root_message, command.club_id),
+         true <-
+           member_has_conversation_access?(
+             command.conversation_id,
+             command.club_id,
+             command.member_id,
+             :read
+           ) do
       :ok
     else
-      {:error, :not_current_member}
+      false -> {:error, :not_current_member}
+      {:error, _reason} = error -> error
     end
   end
 
-  defp authorize_current_member_conversation_action(command) do
-    with :ok <- authorize_current_club_member(command.club_id, command.member_id),
-         {:ok, root_message} <- fetch_conversation_root(command.conversation_id) do
-      if root_message.club_id == command.club_id do
-        :ok
-      else
-        {:error, :conversation_not_found}
-      end
-    end
-  end
+  defp require_conversation_in_club(%MessageProjection{club_id: club_id}, club_id), do: :ok
 
-  defp conversation_write_group_ids(conversation_id, club_id) do
-    with {:ok, conversation_id} <- ID.cast(:message, conversation_id),
-         {:ok, club_id} <- ID.cast(:club, club_id) do
-      ConversationGroupAccessProjection
-      |> where(
-        [access],
-        access.conversation_id == ^conversation_id and access.club_id == ^club_id and
-          access.access_level == "write"
-      )
-      |> select([access], access.group_id)
-      |> Repo.all()
-    else
-      _invalid -> []
-    end
+  defp require_conversation_in_club(%MessageProjection{}, _club_id) do
+    {:error, :conversation_not_found}
   end
 
   defp ensure_stop_follow_scope(

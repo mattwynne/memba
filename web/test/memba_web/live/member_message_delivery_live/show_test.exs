@@ -4,7 +4,10 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
@@ -473,16 +476,40 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    membership =
+      Repo.insert!(%Membership{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: club_id,
+        person_id: person.person_id,
+        active: true
+      })
+
+    ensure_everyone_group_membership!(club_id, membership, person.person_id)
 
     club
     |> Map.from_struct()
     |> Map.put(:person_id, person.person_id)
+  end
+
+  defp ensure_everyone_group_membership!(club_id, membership, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.get(Group, group_id) ||
+      Repo.insert!(%Group{
+        group_id: group_id,
+        club_id: club_id,
+        group_key: SystemGroups.everyone_key(),
+        email_slug: SystemGroups.everyone_email_slug(),
+        name: SystemGroups.everyone_name()
+      })
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership.membership_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp create_message(attrs) do
