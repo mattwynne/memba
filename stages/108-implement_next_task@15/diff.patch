@@ -1,0 +1,110 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 8ebc650..c292100 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -14,7 +14,7 @@
+ - [x] 012 The server remains the authority for every final selection.
+ - [x] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+ - [x] 014 The compose confirmation and error paths must retain that group.
+-- [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
++- [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+ - [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+ - [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+ - [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 84eff9c..903b923 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -28,19 +28,37 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     :ok
+   end
+ 
+-  test "submit sends a generated club message as the signed-in member and ignores sender params",
++  test "existing compose route sends to Everyone as the signed-in member without audience controls",
+        %{
+          conn: conn
+        } do
+     club_id = Memba.ID.generate(:club)
+     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++    trip_planning_group =
++      create_group(
++        club_id: club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
+ 
+     {:ok, view, _html} =
+       conn
+       |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+       |> live(~p"/messages/new")
+ 
++    assert has_element?(
++             view,
++             "#member-message-compose[data-audience-group-id='#{everyone_group_id}']"
++           )
++
++    refute has_element?(view, "#member-message-compose-form [name='message[audience_group_id]']")
++    refute has_element?(view, "#member-message-compose-form [name='message[group_id]']")
++
+     view
+     |> element("#member-message-compose-form")
+     |> render_submit(%{
+@@ -59,6 +77,10 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     assert message.subject == "Trip planning night"
+     assert message.body == "Bring route ideas."
+ 
++    assert [conversation] = Messaging.list_conversations_for_group(everyone_group_id)
++    assert conversation.message_id == message.message_id
++    assert Messaging.list_conversations_for_group(trip_planning_group.group_id) == []
++
+     assert [
+              %{recipient_id: alice_recipient_id, status: "sent"},
+              %{recipient_id: bob_recipient_id, status: "sent"}
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index e2e4698..2c671c0 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -145,7 +145,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute has_element?(view, "[name='message[sender_id]']")
+   end
+ 
+-  test "routed mount derives recipient count from the Everyone group", %{conn: conn} do
++  test "existing compose route defaults to the Everyone group", %{conn: conn} do
+     alice =
+       create_active_member(
+         email: "alice@example.com",
+@@ -153,6 +153,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+         club_name: "Climbing Club"
+       )
+ 
++    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
++
+     _bob =
+       create_active_member(
+         email: "bob@example.com",
+@@ -169,7 +171,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='1']"
++             "#member-message-compose[data-club-id='#{alice.club_id}']" <>
++               "[data-current-member-id='#{alice.person_id}']" <>
++               "[data-audience-group-id='#{everyone_group_id}']" <>
++               "[data-active-member-count='1']"
+            )
+ 
+     assert has_element?(
+@@ -258,6 +263,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+ 
+     refute has_element?(view, "select")
+     refute has_element?(view, "[name='message[sender_id]']")
++    refute has_element?(view, "#member-message-compose-form [name='message[audience_group_id]']")
++    refute has_element?(view, "#member-message-compose-form [name='message[group_id]']")
+   end
+ 
+   test "routed compose screen shows the selected club inbound email address", %{conn: conn} do
