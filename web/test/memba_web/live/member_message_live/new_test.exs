@@ -145,13 +145,15 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute has_element?(view, "[name='message[sender_id]']")
   end
 
-  test "routed mount derives recipient count from the Everyone group", %{conn: conn} do
+  test "existing compose route defaults to the Everyone group", %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Climbing Club"
       )
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
 
     _bob =
       create_active_member(
@@ -169,7 +171,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='1']"
+             "#member-message-compose[data-club-id='#{alice.club_id}']" <>
+               "[data-current-member-id='#{alice.person_id}']" <>
+               "[data-audience-group-id='#{everyone_group_id}']" <>
+               "[data-active-member-count='1']"
            )
 
     assert has_element?(
@@ -258,6 +263,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     refute has_element?(view, "select")
     refute has_element?(view, "[name='message[sender_id]']")
+    refute has_element?(view, "#member-message-compose-form [name='message[audience_group_id]']")
+    refute has_element?(view, "#member-message-compose-form [name='message[group_id]']")
   end
 
   test "routed compose screen shows the selected club inbound email address", %{conn: conn} do

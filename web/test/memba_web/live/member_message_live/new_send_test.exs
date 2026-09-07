@@ -28,18 +28,36 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     :ok
   end
 
-  test "submit sends a generated club message as the signed-in member and ignores sender params",
+  test "existing compose route sends to Everyone as the signed-in member without audience controls",
        %{
          conn: conn
        } do
     club_id = Memba.ID.generate(:club)
     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    trip_planning_group =
+      create_group(
+        club_id: club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
 
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("alice@example.com", %{club_id: club_id})
       |> live(~p"/messages/new")
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-audience-group-id='#{everyone_group_id}']"
+           )
+
+    refute has_element?(view, "#member-message-compose-form [name='message[audience_group_id]']")
+    refute has_element?(view, "#member-message-compose-form [name='message[group_id]']")
 
     view
     |> element("#member-message-compose-form")
@@ -58,6 +76,10 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert message.sender_id == alice.person_id
     assert message.subject == "Trip planning night"
     assert message.body == "Bring route ideas."
+
+    assert [conversation] = Messaging.list_conversations_for_group(everyone_group_id)
+    assert conversation.message_id == message.message_id
+    assert Messaging.list_conversations_for_group(trip_planning_group.group_id) == []
 
     assert [
              %{recipient_id: alice_recipient_id, status: "sent"},
