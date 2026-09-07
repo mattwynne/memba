@@ -68,7 +68,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
             member_message_path(
               conversation_message_id(@message),
               @selected_club,
-              Map.get(@route_params, "club_id_source")
+              Map.get(@route_params, "club_id_source"),
+              Map.get(@route_params, "group_id")
             )
           }
           class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
@@ -287,7 +288,18 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
 
   defp conversation_message_id(%{message_id: message_id}), do: message_id
 
-  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
+  defp member_message_path(message_id, selected_club, source, group_id) do
+    path = member_message_path(message_id, selected_club, source)
+
+    if is_binary(group_id) and group_id != "" do
+      path <> "?" <> URI.encode_query(%{"group_id" => group_id})
+    else
+      path
+    end
+  end
+
+  defp member_message_path(message_id, _selected_club, "host"),
+    do: ~p"/messages/#{message_id}"
 
   defp member_message_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}")

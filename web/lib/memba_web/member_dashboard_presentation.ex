@@ -3,8 +3,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
   Loads and shapes data for the member dashboard LiveView.
 
   The LiveView owns the route/session boundary; this helper owns the selected
-  club authorization checks and presentation-friendly row data so the mount path
-  stays readable and the dashboard data model can be unit-tested directly.
+  club and group authorization checks and presentation-friendly row data so the
+  mount path stays readable and the dashboard data model can be unit-tested
+  directly.
   """
 
   alias Memba.Accounts
@@ -17,7 +18,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
   @participant_avatar_limit 3
 
   @doc """
-  Load dashboard assigns for a signed-in active member of the selected club.
+  Load Everyone dashboard assigns for a signed-in active member of the selected
+  club.
 
   Returns `{:ok, assigns}` when the selected club belongs to the current
   identity and the identity can be resolved to an active member row. Missing,
@@ -27,10 +29,79 @@ defmodule MembaWeb.MemberDashboardPresentation do
   def load(club_id, current_identity, active_clubs)
       when is_list(active_clubs) do
     with {:ok, club_id} <- cast_selected_club_id(club_id),
-         {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
-         members <- load_members(club_id),
-         {:ok, current_member} <- fetch_current_member(members, current_identity) do
-      messages = load_messages(club_id)
+         everyone_group_id = SystemGroups.everyone_group_id(club_id) do
+      case load_authorized_group(
+             club_id,
+             current_identity,
+             active_clubs,
+             everyone_group_id
+           ) do
+        {:error, :not_found} -> {:error, :forbidden}
+        result -> result
+      end
+    else
+      _missing_or_unauthorized -> {:error, :forbidden}
+    end
+  end
+
+  def load(_club_id, _current_identity, _active_clubs), do: {:error, :forbidden}
+
+  @doc """
+  Load dashboard assigns scoped to an explicitly selected conversation group.
+
+  The group is authorized by finding it in Membership's active-group summaries
+  for the signed-in active club member. Group members and conversations are
+  loaded only after that authorization succeeds. Missing, invalid,
+  foreign-club, and unauthorized group selections all return
+  `{:error, :not_found}` without disclosing which condition applied. Club and
+  identity authorization failures continue to return `{:error, :forbidden}`.
+  """
+  def load(club_id, current_identity, active_clubs, nil) when is_list(active_clubs) do
+    load(club_id, current_identity, active_clubs)
+  end
+
+  def load(club_id, current_identity, active_clubs, selected_group_id)
+      when is_list(active_clubs) do
+    with {:ok, club_id} <- cast_selected_club_id(club_id),
+         {:ok, selected_group_id} <- cast_selected_group_id(selected_group_id) do
+      load_authorized_group(club_id, current_identity, active_clubs, selected_group_id)
+    else
+      {:error, :not_found} -> {:error, :not_found}
+      _missing_or_unauthorized -> {:error, :forbidden}
+    end
+  end
+
+  def load(_club_id, _current_identity, _active_clubs, _selected_group_id),
+    do: {:error, :forbidden}
+
+  defp load_authorized_group(club_id, current_identity, active_clubs, selected_group_id) do
+    with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+         club_members <- load_club_members(club_id),
+         {:ok, current_member} <- fetch_current_member(club_members, current_identity) do
+      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
+
+      load_selected_group(
+        club_id,
+        selected_club,
+        current_member,
+        groups,
+        selected_group_id
+      )
+    else
+      _missing_or_unauthorized -> {:error, :forbidden}
+    end
+  end
+
+  defp load_selected_group(
+         club_id,
+         selected_club,
+         current_member,
+         groups,
+         selected_group_id
+       ) do
+    with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
+      members = load_group_members(selected_group.group_id)
+      messages = load_messages(selected_group.group_id)
       member_names_by_id = Map.new(members, &{&1.id, &1.name})
       message_rows = present_message_rows(messages, member_names_by_id)
 
@@ -38,6 +109,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
        %{
          page_title: selected_club.name,
          selected_club: selected_club,
+         groups: groups,
+         selected_group: selected_group,
          members: members,
          active_member_count: Enum.count(members),
          current_member: current_member,
@@ -47,11 +120,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
          message_rows: message_rows
        }}
     else
-      _missing_or_unauthorized -> {:error, :forbidden}
+      _missing_or_unauthorized -> {:error, :not_found}
     end
   end
-
-  def load(_club_id, _current_identity, _active_clubs), do: {:error, :forbidden}
 
   defp cast_selected_club_id(club_id) do
     case ID.cast(:club, club_id) do
@@ -67,9 +138,29 @@ defmodule MembaWeb.MemberDashboardPresentation do
     end
   end
 
-  defp load_members(club_id) do
+  defp cast_selected_group_id(group_id) do
+    case ID.cast(:group, group_id) do
+      {:ok, group_id} -> {:ok, group_id}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp fetch_selected_group(groups, group_id) do
+    case Enum.find(groups, &(&1.group_id == group_id)) do
+      nil -> {:error, :not_found}
+      selected_group -> {:ok, selected_group}
+    end
+  end
+
+  defp load_club_members(club_id) do
     club_id
     |> Membership.list_active_members_of_club()
+    |> Enum.map(&present_member/1)
+  end
+
+  defp load_group_members(group_id) do
+    group_id
+    |> Membership.list_active_members_of_group()
     |> Enum.map(&present_member/1)
   end
 
@@ -95,11 +186,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp can_manage_members?(_club_id, _current_member), do: false
 
-  defp load_messages(club_id) do
-    club_id
-    |> SystemGroups.everyone_group_id()
-    |> Messaging.list_conversations_for_group()
-  end
+  defp load_messages(group_id), do: Messaging.list_conversations_for_group(group_id)
 
   @doc """
   Shapes recent conversation rows for dashboard rendering.

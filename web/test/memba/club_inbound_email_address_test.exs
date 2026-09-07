@@ -14,6 +14,15 @@ defmodule Memba.ClubInboundEmailAddressTest do
     assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "everyone@kmc.clubs.memba.io"
   end
 
+  test "builds a group address from the group and club slugs" do
+    assert ClubInboundEmailAddress.address(%{slug: " KMC "}, " TRIP-PLANNING ") ==
+             "trip-planning@kmc.clubs.memba.io"
+
+    assert ClubInboundEmailAddress.address("kmc", nil) == nil
+    assert ClubInboundEmailAddress.address(nil, "trip-planning") == nil
+    assert ClubInboundEmailAddress.address("kmc", "not safe") == nil
+  end
+
   test "uses the configured inbound email domain" do
     with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
       assert ClubInboundEmailAddress.domain() == "example.clubs.memba.io"

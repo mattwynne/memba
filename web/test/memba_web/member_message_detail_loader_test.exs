@@ -2,6 +2,8 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
   use MembaWeb.ConnCase, async: true
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging.Projections.MemberEmailDelivery
@@ -42,14 +44,15 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     assert {:ok, assigns} =
              MemberMessageDetail.load(
                %{"club_id" => alice.club_id, "message_id" => message.message_id},
-               [alice]
+               [alice],
+               %{email: "alice@example.com"}
              )
 
     assert assigns.page_title == "Trip planning night"
     assert assigns.selected_club.club_id == alice.club_id
     assert assigns.message.message_id == message.message_id
     assert assigns.sender_name == "Alice Adams"
-    assert assigns.current_member == nil
+    assert assigns.current_member.id == alice.person_id
 
     assert [%{kind: :original, sender_name: "Alice Adams", message: ^message}] =
              assigns.conversation_entries
@@ -180,23 +183,35 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     assert {:error, :not_found} =
              MemberMessageDetail.load(
                %{"club_id" => club.club_id, "message_id" => Memba.ID.generate(:message)},
-               [club]
+               [club],
+               %{email: "alice@example.com"}
              )
 
     assert {:error, :not_found} =
              MemberMessageDetail.load(
                %{"club_id" => club.club_id, "message_id" => mismatched_message.message_id},
-               [club]
+               [club],
+               %{email: "alice@example.com"}
              )
   end
 
-  test "returns not found for a conversation granted only to the Admin group" do
+  test "loads a private conversation for an active group member and hides it from other members" do
     alice =
       create_active_member(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Alpine Club"
       )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    add_to_group(alice, SystemGroups.admin_group_id(alice.club_id), "Admin")
 
     admin_conversation =
       create_message(
@@ -206,7 +221,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         audience_group_id: SystemGroups.admin_group_id(alice.club_id)
       )
 
-    assert {:error, :not_found} =
+    assert {:ok, assigns} =
              MemberMessageDetail.load(
                %{
                  "club_id" => alice.club_id,
@@ -214,6 +229,19 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
                },
                [alice],
                %{email: "alice@example.com"}
+             )
+
+    assert assigns.current_member.id == alice.person_id
+    assert assigns.message.message_id == admin_conversation.message_id
+
+    assert {:error, :not_found} =
+             MemberMessageDetail.load(
+               %{
+                 "club_id" => alice.club_id,
+                 "message_id" => admin_conversation.message_id
+               },
+               [bob],
+               %{email: "bob@example.com"}
              )
   end
 
@@ -240,16 +268,19 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    membership =
+      Repo.insert!(%Membership{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: club_id,
+        person_id: person.person_id,
+        active: true
+      })
 
     club
     |> Map.from_struct()
     |> Map.put(:person_id, person.person_id)
+    |> Map.put(:membership_id, membership.membership_id)
+    |> tap(&add_to_group(&1, SystemGroups.everyone_group_id(club_id), "Everyone"))
   end
 
   defp create_message(attrs) do
@@ -263,6 +294,25 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
+    })
+  end
+
+  defp add_to_group(member, group_id, name) do
+    Repo.get(Group, group_id) ||
+      Repo.insert!(%Group{
+        group_id: group_id,
+        club_id: member.club_id,
+        group_key: String.downcase(name),
+        email_slug: String.downcase(name),
+        name: name
+      })
+
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      active: true
     })
   end
 end

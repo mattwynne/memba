@@ -2,8 +2,8 @@ defmodule Memba.ClubInboundEmailAddress do
   @moduledoc """
   Derives member-facing inbound email addresses for clubs.
 
-  The current slice uses one implicit whole-club address per club subdomain:
-  `everyone@<club-slug>.<configured-domain>`.
+  Each address combines a group's email slug with its club subdomain:
+  `<group-email-slug>@<club-slug>.<configured-domain>`.
   """
 
   alias Memba.Membership.Slug
@@ -11,23 +11,33 @@ defmodule Memba.ClubInboundEmailAddress do
   @default_domain "clubs.memba.io"
 
   @doc """
-  Build the inbound email address for a club or club slug.
+  Build the Everyone inbound email address for a club or club slug.
 
   Returns `nil` when the slug is missing or not a valid public club slug.
   """
-  def address(club_or_slug)
+  def address(club_or_slug), do: address(club_or_slug, "everyone")
 
-  def address(%{slug: slug}), do: address(slug)
+  @doc """
+  Build a group's inbound email address from its club and group email slugs.
 
-  def address(slug) when is_binary(slug) do
-    with {:ok, normalized_slug} <- Slug.normalize_for_lookup(slug) do
-      "everyone@" <> normalized_slug <> "." <> domain()
+  Returns `nil` when either slug is missing or invalid.
+  """
+  def address(club_or_slug, group_email_slug)
+
+  def address(%{slug: club_slug}, group_email_slug),
+    do: address(club_slug, group_email_slug)
+
+  def address(club_slug, group_email_slug)
+      when is_binary(club_slug) and is_binary(group_email_slug) do
+    with {:ok, normalized_club_slug} <- Slug.normalize_for_lookup(club_slug),
+         {:ok, normalized_group_email_slug} <- Slug.normalize_for_lookup(group_email_slug) do
+      normalized_group_email_slug <> "@" <> normalized_club_slug <> "." <> domain()
     else
       {:error, _reason} -> nil
     end
   end
 
-  def address(_club_or_slug), do: nil
+  def address(_club_or_slug, _group_email_slug), do: nil
 
   @doc """
   Return the configured inbound email domain.

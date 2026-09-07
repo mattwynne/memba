@@ -1,290 +1,449 @@
 <% club_id_source = assigns[:club_id_source] || "host" %>
 <% active_section = assigns[:active_section] || "conversations" %>
+<% selected_group_route_id = assigns[:selected_group_route_id] %>
 
 <Layouts.club_site
   flash={@flash}
   club_name={@selected_club.name}
   current_identity={@current_identity}
   member_name={@current_member && @current_member.name}
+  wide
 >
   <div
     id="member-club-home"
     data-live-view="member-dashboard"
     data-club-id={@selected_club.club_id}
-    class="mx-auto max-w-3xl"
+    data-selected-group-id={@selected_group.group_id}
+    data-explicit-group-route={to_string(not is_nil(selected_group_route_id))}
+    phx-hook="RememberGroupSelection"
+    class="club-groups"
   >
-    <div id="member-section-tabs" class="section-tabs">
-      <div
-        id="member-section-tabs-list"
-        class="section-tabs__list"
-        role="tablist"
-        aria-label="Club home sections"
-      >
+    <div class="app-split">
+      <nav id="member-group-rail" class="group-rail" aria-label="Groups">
+        <div class="group-rail__label">Your groups</div>
         <.link
-          id="member-section-tab-conversations"
-          patch={member_section_path("conversations", @selected_club, club_id_source)}
-          class={member_section_tab_class(active_section, "conversations")}
-          data-tab="conversations"
-          role="tab"
-          aria-selected={member_section_aria_selected(active_section, "conversations")}
-          aria-controls="member-section-panel-conversations"
-        >
-          Conversations
-        </.link>
-        <.link
-          id="member-section-tab-members"
-          patch={member_section_path("members", @selected_club, club_id_source)}
-          class={member_section_tab_class(active_section, "members")}
-          data-tab="members"
-          role="tab"
-          aria-selected={member_section_aria_selected(active_section, "members")}
-          aria-controls="member-section-panel-members"
-        >
-          Members
-        </.link>
-      </div>
-      <div id="member-section-tabs-action" class="section-tabs__action">
-        <.button
-          :if={active_member_section?(active_section, "conversations")}
-          id="member-section-action-new-message"
-          href={member_compose_path(@selected_club, club_id_source)}
-          variant="primary"
-          size="sm"
-          data-section-action="conversations"
-        >
-          New message
-        </.button>
-        <.button
-          :if={
-            active_member_section?(active_section, "members") and
-              @current_member_can_manage_members?
+          :for={group <- @groups}
+          id={"member-group-link-#{group.group_id}"}
+          patch={
+            member_section_path(
+              "conversations",
+              @selected_club,
+              club_id_source,
+              group.group_id
+            )
           }
-          id="member-section-action-invite-member"
-          href={member_invitation_path(@selected_club, club_id_source)}
-          variant="primary"
-          size="sm"
-          data-section-action="members"
+          class={member_group_rail_item_class(group, @selected_group)}
+          data-testid="member-group-link"
+          data-group-id={group.group_id}
+          aria-current={member_group_aria_current(group, @selected_group)}
         >
-          Invite member
-        </.button>
-      </div>
-    </div>
+          <span class="group-rail__name">{group.name}</span>
+        </.link>
+      </nav>
 
-    <div
-      id="member-section-panel-conversations"
-      class="section-panel"
-      data-panel="conversations"
-      role="tabpanel"
-      aria-labelledby="member-section-tab-conversations"
-      hidden={not active_member_section?(active_section, "conversations")}
-    >
-      <section id="club-messages">
-        <div id="member-message-list" class="conversation-list mt-4">
-          <div
-            :if={@message_rows == []}
-            id="member-message-list-empty"
-            class="rounded-3xl border border-dashed border-base-300 bg-base-100 px-6 py-8 text-center shadow-sm"
-          >
-            <div class="mx-auto flex size-12 items-center justify-center rounded-2xl bg-base-200 text-ink-2 ring-1 ring-base-300">
-              <.icon name="hero-envelope" class="size-6" />
-            </div>
-            <h3 class="mt-4 text-base font-semibold text-base-content">
-              No club messages yet
-            </h3>
-            <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-ink-2">
-              When a member sends a message, it will appear here.
-            </p>
-            <div class="mt-5">
-              <.button
-                id="member-message-empty-send-link"
-                href={member_compose_path(@selected_club, club_id_source)}
-                variant="secondary"
+      <div
+        id="member-group-content"
+        data-group-id={@selected_group.group_id}
+        class="group-content"
+      >
+        <header
+          id="member-group-header"
+          class="group-head"
+          data-group-id={@selected_group.group_id}
+          aria-labelledby="member-group-name"
+        >
+          <div class="group-head__top">
+            <div class="min-w-0">
+              <h1 id="member-group-name" class="group-head__name">
+                {@selected_group.name}
+              </h1>
+              <div
+                id="member-group-metadata"
+                class="group-head__meta"
+                aria-label="Group details"
               >
-                <.icon name="hero-paper-airplane" class="size-4" /> Send the first message
+                <span id="member-group-member-count">
+                  {group_member_count_label(@selected_group.active_member_count)}
+                </span>
+                <.link
+                  :if={@selected_group.email_address}
+                  id="member-group-email-address"
+                  class="group-head__addr"
+                  href={"mailto:#{@selected_group.email_address}"}
+                >
+                  {@selected_group.email_address}
+                </.link>
+              </div>
+            </div>
+            <div class="group-head__actions">
+              <.button
+                id="member-section-action-new-message"
+                href={
+                  member_compose_path(
+                    @selected_club,
+                    club_id_source,
+                    selected_group_route_id
+                  )
+                }
+                variant="primary"
+                size="sm"
+                data-section-action="conversations"
+              >
+                New message
               </.button>
             </div>
           </div>
+        </header>
 
-          <article
-            :for={message_row <- @message_rows}
-            id={"member-message-#{message_row.message_id}"}
-            data-testid="club-message-row"
-            data-message-id={message_row.message_id}
-            data-message-subject={message_row.subject}
+        <div id="member-section-tabs" class="section-tabs">
+          <div
+            id="member-section-tabs-list"
+            class="section-tabs__list"
+            role="tablist"
+            aria-label="Club home sections"
+            aria-orientation="horizontal"
+            phx-hook=".SectionTabs"
           >
             <.link
-              data-testid="club-message-link"
-              href={member_message_path(message_row.message_id, @selected_club, club_id_source)}
-              class="conversation"
+              id="member-section-tab-conversations"
+              patch={
+                member_section_path(
+                  "conversations",
+                  @selected_club,
+                  club_id_source,
+                  selected_group_route_id
+                )
+              }
+              class={member_section_tab_class(active_section, "conversations")}
+              data-tab="conversations"
+              role="tab"
+              aria-selected={member_section_aria_selected(active_section, "conversations")}
+              aria-controls="member-section-panel-conversations"
+              tabindex={member_section_tab_index(active_section, "conversations")}
             >
-              <.avatar
-                data-testid="message-originator-initials"
-                initials={message_row.originator_initials}
-                size={:md}
-                class="conversation__avatar"
-              />
+              Conversations
+            </.link>
+            <.link
+              id="member-section-tab-members"
+              patch={
+                member_section_path(
+                  "members",
+                  @selected_club,
+                  club_id_source,
+                  selected_group_route_id
+                )
+              }
+              class={member_section_tab_class(active_section, "members")}
+              data-tab="members"
+              role="tab"
+              aria-selected={member_section_aria_selected(active_section, "members")}
+              aria-controls="member-section-panel-members"
+              tabindex={member_section_tab_index(active_section, "members")}
+            >
+              Members
+            </.link>
+          </div>
+          <div id="member-section-tabs-action" class="section-tabs__action">
+            <.button
+              :if={
+                active_member_section?(active_section, "members") and
+                  @current_member_can_manage_members?
+              }
+              id="member-section-action-invite-member"
+              href={
+                member_invitation_path(
+                  @selected_club,
+                  club_id_source,
+                  selected_group_route_id
+                )
+              }
+              variant="primary"
+              size="sm"
+              data-section-action="members"
+            >
+              Invite member
+            </.button>
+          </div>
+        </div>
 
-              <div class="conversation__body">
-                <div class="conversation__head">
-                  <span class="conversation__subject">
-                    {message_row.subject}
-                  </span>
-
-                  <span
-                    :if={message_row.sent_at_label}
-                    data-testid="message-sent-at"
-                    class="conversation__date"
-                  >
-                    {message_row.sent_at_label}
-                  </span>
+        <div
+          id="member-section-panel-conversations"
+          class="section-panel"
+          data-panel="conversations"
+          role="tabpanel"
+          aria-labelledby="member-section-tab-conversations"
+          tabindex="0"
+          hidden={not active_member_section?(active_section, "conversations")}
+        >
+          <section id="club-messages">
+            <div id="member-message-list" class="conversation-list mt-4">
+              <div
+                :if={@message_rows == []}
+                id="member-message-list-empty"
+                class="rounded-3xl border border-dashed border-base-300 bg-base-100 px-6 py-8 text-center shadow-sm"
+              >
+                <div class="mx-auto flex size-12 items-center justify-center rounded-2xl bg-base-200 text-ink-2 ring-1 ring-base-300">
+                  <.icon name="hero-envelope" class="size-6" />
                 </div>
-
-                <div data-testid="message-body-preview" class="conversation__preview">
-                  {message_row.body}
-                </div>
-
-                <span
-                  data-testid="message-started-by"
-                  data-originator-id={message_row.originator_id}
-                  data-originator-name={message_row.originator_name}
-                  class="conversation__replies"
-                >
-                  Started by {message_row.originator_name}
-                </span>
-
-                <div class="conversation__participants">
-                  <div
-                    :if={
-                      message_row.participants != [] or
-                        message_row.additional_participant_count > 0
+                <h3 class="mt-4 text-base font-semibold text-base-content">
+                  No club messages yet
+                </h3>
+                <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-ink-2">
+                  When a member sends a message, it will appear here.
+                </p>
+                <div class="mt-5">
+                  <.button
+                    id="member-message-empty-send-link"
+                    href={
+                      member_compose_path(
+                        @selected_club,
+                        club_id_source,
+                        selected_group_route_id
+                      )
                     }
-                    class="avatar-stack"
-                    data-testid="message-participant-avatar-stack"
-                    aria-label="Conversation participants"
+                    variant="secondary"
                   >
-                    <.avatar
-                      :for={participant <- message_row.participants}
-                      data-testid="message-participant-avatar"
-                      data-participant-id={participant.id}
-                      data-participant-name={participant.name}
-                      initials={participant.initials}
-                      size={:sm}
-                      title={participant.name}
-                    />
+                    <.icon name="hero-paper-airplane" class="size-4" /> Send the first message
+                  </.button>
+                </div>
+              </div>
+
+              <article
+                :for={message_row <- @message_rows}
+                id={"member-message-#{message_row.message_id}"}
+                data-testid="club-message-row"
+                data-message-id={message_row.message_id}
+                data-message-subject={message_row.subject}
+              >
+                <.link
+                  data-testid="club-message-link"
+                  href={
+                    member_message_path(
+                      message_row.message_id,
+                      @selected_club,
+                      club_id_source,
+                      selected_group_route_id
+                    )
+                  }
+                  class="conversation"
+                >
+                  <.avatar
+                    data-testid="message-originator-initials"
+                    initials={message_row.originator_initials}
+                    size={:md}
+                    class="conversation__avatar"
+                  />
+
+                  <div class="conversation__body">
+                    <div class="conversation__head">
+                      <span class="conversation__subject">
+                        {message_row.subject}
+                      </span>
+
+                      <span
+                        :if={message_row.sent_at_label}
+                        data-testid="message-sent-at"
+                        class="conversation__date"
+                      >
+                        {message_row.sent_at_label}
+                      </span>
+                    </div>
+
+                    <div data-testid="message-body-preview" class="conversation__preview">
+                      {message_row.body}
+                    </div>
+
                     <span
-                      :if={message_row.additional_participant_count > 0}
-                      class="is-more"
-                      data-testid="message-participant-overflow"
-                      aria-label={"#{message_row.additional_participant_count} more participants"}
+                      data-testid="message-started-by"
+                      data-originator-id={message_row.originator_id}
+                      data-originator-name={message_row.originator_name}
+                      class="conversation__replies"
                     >
-                      +{message_row.additional_participant_count}
+                      Started by {message_row.originator_name}
+                    </span>
+
+                    <div class="conversation__participants">
+                      <div
+                        :if={
+                          message_row.participants != [] or
+                            message_row.additional_participant_count > 0
+                        }
+                        class="avatar-stack"
+                        data-testid="message-participant-avatar-stack"
+                        aria-label="Conversation participants"
+                      >
+                        <.avatar
+                          :for={participant <- message_row.participants}
+                          data-testid="message-participant-avatar"
+                          data-participant-id={participant.id}
+                          data-participant-name={participant.name}
+                          initials={participant.initials}
+                          size={:sm}
+                          title={participant.name}
+                        />
+                        <span
+                          :if={message_row.additional_participant_count > 0}
+                          class="is-more"
+                          data-testid="message-participant-overflow"
+                          aria-label={"#{message_row.additional_participant_count} more participants"}
+                        >
+                          +{message_row.additional_participant_count}
+                        </span>
+                      </div>
+
+                      <span
+                        data-testid="message-reply-activity"
+                        data-reply-count={message_row.reply_count}
+                        data-latest-replier-id={message_row.latest_replier_id}
+                        data-latest-replier-name={message_row.latest_replier_name}
+                        class="conversation__replies"
+                      >
+                        {message_row.reply_activity_label}
+                      </span>
+                    </div>
+                  </div>
+                </.link>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div
+          id="member-section-panel-members"
+          class="section-panel"
+          data-panel="members"
+          role="tabpanel"
+          aria-labelledby="member-section-tab-members"
+          tabindex="0"
+          hidden={not active_member_section?(active_section, "members")}
+        >
+          <section id="club-members">
+            <div
+              id="active-members-list"
+              data-active-member-count={@active_member_count}
+              data-active-members-state={
+                if @active_member_count <= 1, do: "first-member", else: "active-members"
+              }
+              class="member-list mt-4"
+            >
+              <div
+                :if={@active_member_count <= 1}
+                id="active-members-empty-state"
+                class="text-center"
+              >
+                <div id="active-members-empty-avatar" class="flex justify-center">
+                  <.avatar
+                    :for={member <- Enum.take(@members, 1)}
+                    data-empty-member-id={member.id}
+                    initials={member.initials}
+                    size={:lg}
+                    class="shadow-sm"
+                    title={member.name}
+                  />
+                  <span
+                    :if={@members == []}
+                    class="flex size-12 items-center justify-center rounded-2xl bg-base-200 text-ink-2 ring-1 ring-base-300"
+                    aria-hidden="true"
+                  >
+                    <.icon name="hero-users" class="size-6" />
+                  </span>
+                </div>
+                <h3 class="mt-4 text-base font-semibold text-base-content">
+                  You’re the first member listed
+                </h3>
+                <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-ink-2">
+                  As members are added, you’ll see them here.
+                </p>
+              </div>
+
+              <div
+                :for={member <- @members}
+                id={"club-member-#{member.id}"}
+                data-testid="club-member-row"
+                data-member-id={member.id}
+                data-current-member={
+                  to_string(current_dashboard_member?(member, @current_member))
+                }
+                class="member-row"
+              >
+                <div class="member-row__avatar" aria-hidden="true">
+                  {member.initials}
+                </div>
+
+                <div class="member-row__body">
+                  <div class="member-row__name">
+                    {member.name}
+                  </div>
+                  <div class="member-row__meta">
+                    <span
+                      :if={current_dashboard_member?(member, @current_member)}
+                      data-testid="club-member-current-indicator"
+                    >
+                      You
                     </span>
                   </div>
+                </div>
 
+                <div
+                  :if={Map.get(member, :roles, []) != []}
+                  class="flex flex-none flex-wrap justify-end gap-2"
+                >
                   <span
-                    data-testid="message-reply-activity"
-                    data-reply-count={message_row.reply_count}
-                    data-latest-replier-id={message_row.latest_replier_id}
-                    data-latest-replier-name={message_row.latest_replier_name}
-                    class="conversation__replies"
+                    :for={role <- Map.get(member, :roles, [])}
+                    class="member-row__role badge badge-primary badge-soft"
                   >
-                    {message_row.reply_activity_label}
+                    {role}
                   </span>
                 </div>
               </div>
-            </.link>
-          </article>
+            </div>
+          </section>
         </div>
-      </section>
-    </div>
-
-    <div
-      id="member-section-panel-members"
-      class="section-panel"
-      data-panel="members"
-      role="tabpanel"
-      aria-labelledby="member-section-tab-members"
-      hidden={not active_member_section?(active_section, "members")}
-    >
-      <section id="club-members">
-        <div
-          id="active-members-list"
-          data-active-member-count={@active_member_count}
-          data-active-members-state={
-            if @active_member_count <= 1, do: "first-member", else: "active-members"
-          }
-          class="member-list mt-4"
-        >
-          <div
-            :if={@active_member_count <= 1}
-            id="active-members-empty-state"
-            class="text-center"
-          >
-            <div id="active-members-empty-avatar" class="flex justify-center">
-              <.avatar
-                :for={member <- Enum.take(@members, 1)}
-                data-empty-member-id={member.id}
-                initials={member.initials}
-                size={:lg}
-                class="shadow-sm"
-                title={member.name}
-              />
-              <span
-                :if={@members == []}
-                class="flex size-12 items-center justify-center rounded-2xl bg-base-200 text-ink-2 ring-1 ring-base-300"
-                aria-hidden="true"
-              >
-                <.icon name="hero-users" class="size-6" />
-              </span>
-            </div>
-            <h3 class="mt-4 text-base font-semibold text-base-content">
-              You’re the first member listed
-            </h3>
-            <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-ink-2">
-              As members are added, you’ll see them here.
-            </p>
-          </div>
-
-          <div
-            :for={member <- @members}
-            id={"club-member-#{member.id}"}
-            data-testid="club-member-row"
-            data-member-id={member.id}
-            data-current-member={to_string(current_dashboard_member?(member, @current_member))}
-            class="member-row"
-          >
-            <div class="member-row__avatar" aria-hidden="true">
-              {member.initials}
-            </div>
-
-            <div class="member-row__body">
-              <div class="member-row__name">
-                {member.name}
-              </div>
-              <div class="member-row__meta">
-                <span
-                  :if={current_dashboard_member?(member, @current_member)}
-                  data-testid="club-member-current-indicator"
-                >
-                  You
-                </span>
-              </div>
-            </div>
-
-            <div
-              :if={Map.get(member, :roles, []) != []}
-              class="flex flex-none flex-wrap justify-end gap-2"
-            >
-              <span
-                :for={role <- Map.get(member, :roles, [])}
-                class="member-row__role badge badge-primary badge-soft"
-              >
-                {role}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   </div>
+
+  <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionTabs">
+    export default {
+      mounted() {
+        this.handleKeydown = event => {
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+
+          const tabs = Array.from(this.el.querySelectorAll("[role='tab']"))
+          const currentIndex = tabs.indexOf(event.target)
+
+          if (currentIndex === -1) return
+
+          let nextIndex
+
+          switch (event.key) {
+            case "ArrowRight":
+              nextIndex = (currentIndex + 1) % tabs.length
+              break
+            case "ArrowLeft":
+              nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
+              break
+            case "Home":
+              nextIndex = 0
+              break
+            case "End":
+              nextIndex = tabs.length - 1
+              break
+            default:
+              return
+          }
+
+          event.preventDefault()
+          tabs[nextIndex].click()
+          tabs[nextIndex].focus()
+        }
+
+        this.el.addEventListener("keydown", this.handleKeydown)
+      },
+
+      destroyed() {
+        this.el.removeEventListener("keydown", this.handleKeydown)
+      }
+    }
+  </script>
 </Layouts.club_site>

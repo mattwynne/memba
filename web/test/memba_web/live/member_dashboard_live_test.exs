@@ -4,6 +4,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
@@ -49,6 +51,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
            )
 
+    assert has_element?(view, "#club-site-layout > .app-card.app-card--wide")
+    assert has_element?(view, "#member-club-home.club-groups")
+
+    assert has_element?(
+             view,
+             "#member-club-home .app-split > #member-group-content.group-content"
+           )
+
     assert has_element?(
              view,
              "#club-site-identity-menu .app-menu__who-name",
@@ -64,6 +74,513 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-message-#{message.message_id}")
     assert has_element?(view, "#club-member-#{alice.person_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
+  test "Everyone fallback renders the resolved group as selected in the rail and header", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{everyone_group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-rail[aria-label='Groups'] " <>
+               "#member-group-link-#{everyone_group_id}.group-rail__item.is-active" <>
+               "[data-testid='member-group-link'][data-group-id='#{everyone_group_id}']" <>
+               "[aria-current='true'][href='/groups/#{everyone_group_id}']",
+             "Everyone"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-header[aria-labelledby='member-group-name'] " <>
+               "#member-group-name.group-head__name",
+             "Everyone"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-metadata #member-group-member-count",
+             "1 member"
+           )
+
+    refute has_element?(view, "#member-group-email-address")
+  end
+
+  test "Everyone fallback exposes browser-local group restoration metadata", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(
+             view,
+             "#member-club-home[phx-hook='RememberGroupSelection']" <>
+               "[data-club-id='#{alice.club_id}']" <>
+               "[data-selected-group-id='#{everyone_group_id}']" <>
+               "[data-explicit-group-route='false']"
+           )
+  end
+
+  test "an authorised remembered group is restored to its canonical URL", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    render_hook(view, "restore_remembered_group", %{
+      "group_id" => trip_planning_group.group_id
+    })
+
+    trip_planning_group_id = trip_planning_group.group_id
+
+    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
+    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-explicit-group-route='true']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Trip Planning")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+  end
+
+  test "a stale unauthorised remembered group falls back to Everyone without disclosure", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    render_hook(view, "restore_remembered_group", %{"group_id" => private_group.group_id})
+
+    assert_reply view, %{selected_group_id: ^everyone_group_id}
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
+               "[data-explicit-group-route='false']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Everyone")
+    refute has_element?(view, "#member-group-name", "Private Planning")
+    refute has_element?(view, "#member-group-link-#{private_group.group_id}")
+  end
+
+  @tag :capture_log
+  test "remembered selection fails closed when the server detects revoked club access", %{
+    conn: conn
+  } do
+    Process.flag(:trap_exit, true)
+
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    alice.membership_id
+    |> then(&Repo.get_by!(Membership, membership_id: &1))
+    |> Ecto.Changeset.change(active: false)
+    |> Repo.update!()
+
+    assert {{%MembaWeb.ForbiddenError{}, _stacktrace}, _live_view_call} =
+             catch_exit(
+               render_hook(view, "restore_remembered_group", %{
+                 "group_id" => trip_planning_group.group_id
+               })
+             )
+  end
+
+  test "an explicit authorised group route wins over a remembered group event", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    hut_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "hut_planning",
+        name: "Hut Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(hut_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}")
+
+    render_hook(view, "restore_remembered_group", %{"group_id" => hut_group.group_id})
+
+    trip_planning_group_id = trip_planning_group.group_id
+
+    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-explicit-group-route='true']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Trip Planning")
+    refute has_element?(view, "#member-group-name", "Hut Planning")
+  end
+
+  test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        email_slug: "trip-planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    everyone_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        subject: "Everyone planning"
+      )
+
+    trip_planning_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Trip Planning route",
+        audience_group_id: trip_planning_group.group_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}")
+
+    expected_group_address =
+      alice.club_id
+      |> Memba.Membership.get_club()
+      |> Memba.ClubInboundEmailAddress.address(trip_planning_group.email_slug)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    assert has_element?(
+             view,
+             "#member-group-rail #member-group-link-#{everyone_group_id}" <>
+               "[data-group-id='#{everyone_group_id}'][href='/groups/#{everyone_group_id}']",
+             "Everyone"
+           )
+
+    refute has_element?(
+             view,
+             "#member-group-link-#{everyone_group_id}.is-active[aria-current='true']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-link-#{trip_planning_group.group_id}.group-rail__item.is-active" <>
+               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='true']" <>
+               "[href='/groups/#{trip_planning_group.group_id}']",
+             "Trip Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-header[data-group-id='#{trip_planning_group.group_id}'] " <>
+               "#member-group-name",
+             "Trip Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-metadata #member-group-member-count",
+             "2 members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-email-address[href='mailto:#{expected_group_address}']",
+             expected_group_address
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-content[data-group-id='#{trip_planning_group.group_id}'] " <>
+               "#member-section-panel-conversations"
+           )
+
+    refute has_element?(view, "#member-group-open-groups")
+    refute has_element?(view, "#member-group-new")
+    refute has_element?(view, "#member-group-settings")
+
+    assert has_element?(view, "#member-message-#{trip_planning_conversation.message_id}")
+    refute has_element?(view, "#member-message-#{everyone_conversation.message_id}")
+    assert has_element?(view, "#club-member-#{alice.person_id}")
+    assert has_element?(view, "#club-member-#{bob.person_id}")
+    refute has_element?(view, "#club-member-#{carol.person_id}")
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+    assert has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations[href='/groups/#{trip_planning_group.group_id}']" <>
+               "[data-phx-link='patch']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members[href='/groups/#{trip_planning_group.group_id}/members']" <>
+               "[data-phx-link='patch']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-action-new-message" <>
+               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{trip_planning_conversation.message_id} " <>
+               "[data-testid='club-message-link']" <>
+               "[href='/messages/#{trip_planning_conversation.message_id}?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    view
+    |> element("#member-section-tab-members")
+    |> render_click()
+
+    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+  end
+
+  test "canonical group members route loads the selected group's Members section", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+    grant_manage_members!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}/members")
+
+    assert has_element?(view, "#club-member-#{alice.person_id}")
+    assert has_element?(view, "#club-member-#{bob.person_id}")
+    refute has_element?(view, "#club-member-#{carol.person_id}")
+    assert has_element?(view, "#member-section-panel-conversations[hidden]")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-action-invite-member" <>
+               "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
+           )
+  end
+
+  test "canonical group routes return the ordinary not-found response to non-members", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+
+    secret_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private route details",
+        audience_group_id: private_group.group_id
+      )
+
+    response =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/groups/#{private_group.group_id}")
+      |> html_response(404)
+
+    assert response =~ "Not Found"
+    refute response =~ secret_conversation.subject
+    refute response =~ private_group.name
+
+    malformed_response =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get("/groups/private-planning")
+      |> html_response(404)
+
+    assert malformed_response =~ "Not Found"
+    refute malformed_response =~ private_group.name
   end
 
   test "routed dashboard member sections render only the compact member app footer" do
@@ -132,13 +649,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> live(~p"/conversations")
 
     assert has_element?(view, "#member-section-tabs.section-tabs")
-    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal'][phx-hook]"
+           )
 
     assert has_element?(
              view,
              "#member-section-tab-conversations.section-tab.is-active" <>
                "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
-               "[aria-controls='member-section-panel-conversations']",
+               "[aria-controls='member-section-panel-conversations'][tabindex='0']",
              "Conversations"
            )
 
@@ -146,14 +667,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-tab-members.section-tab" <>
                "[data-tab='members'][role='tab'][aria-selected='false']" <>
-               "[aria-controls='member-section-panel-members']",
+               "[aria-controls='member-section-panel-members'][tabindex='-1']",
              "Members"
            )
 
     assert has_element?(
              view,
              "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']"
+               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']" <>
+               "[tabindex='0']"
            )
 
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
@@ -161,12 +683,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-panel-members.section-panel[data-panel='members']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-members'][hidden]"
+               "[role='tabpanel'][aria-labelledby='member-section-tab-members']" <>
+               "[tabindex='0'][hidden]"
            )
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm" <>
                "[data-section-action='conversations'][href='/messages/new']",
              "New message"
@@ -325,13 +848,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-tab-members.section-tab.is-active" <>
-               "[aria-selected='true'][aria-controls='member-section-panel-members']"
+               "[aria-selected='true'][aria-controls='member-section-panel-members']" <>
+               "[tabindex='0']"
            )
 
     assert has_element?(
              view,
              "#member-section-tab-conversations.section-tab" <>
-               "[aria-selected='false'][aria-controls='member-section-panel-conversations']"
+               "[aria-selected='false'][aria-controls='member-section-panel-conversations']" <>
+               "[tabindex='-1']"
            )
 
     assert has_element?(view, "#member-section-panel-conversations[hidden]")
@@ -344,7 +869,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Invite member"
            )
 
-    refute has_element?(view, "#member-section-action-new-message")
+    assert has_element?(
+             view,
+             "#member-group-header .group-head__actions " <>
+               "#member-section-action-new-message[href='/messages/new']",
+             "New message"
+           )
   end
 
   test "dashboard renders conversations in the default visible section panel", %{
@@ -765,7 +1295,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
@@ -1255,7 +1785,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
              "New message"
            )
@@ -1531,18 +2061,66 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     membership_id = Memba.ID.generate(:membership)
 
+    active? = Keyword.get(attrs, :active, true)
+
     Repo.insert!(%Membership{
       membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
-      active: Keyword.get(attrs, :active, true)
+      active: active?
     })
+
+    if active? do
+      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+    end
 
     %{
       club_id: club_id,
       membership_id: membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+    group_id = SystemGroups.everyone_group_id(club_id)
+
+    Repo.insert!(
+      %Group{
+        club_id: club_id,
+        group_id: group_id,
+        group_key: SystemGroups.everyone_key(),
+        name: SystemGroups.everyone_name()
+      },
+      on_conflict: :nothing
+    )
+
+    Repo.insert!(%GroupMembership{
+      club_id: club_id,
+      group_id: group_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      active: true
+    })
+  end
+
+  defp create_group(attrs) do
+    Repo.insert!(%Group{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      group_id: Memba.ID.generate(:group),
+      group_key: Keyword.fetch!(attrs, :group_key),
+      email_slug: Keyword.get(attrs, :email_slug),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      active: true
+    })
   end
 
   defp grant_manage_members!(member) do
@@ -1628,10 +2206,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp dashboard_html(assigns) do
+    club_id = Memba.ID.generate(:club)
+
+    selected_group = %{
+      club_id: club_id,
+      group_id: SystemGroups.everyone_group_id(club_id),
+      group_key: SystemGroups.everyone_key(),
+      name: SystemGroups.everyone_name(),
+      email_slug: nil,
+      email_address: nil,
+      active_member_count: 0
+    }
+
     %{
       flash: %{},
       current_identity: %{email: "alice@example.com"},
-      selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
+      selected_club: %{club_id: club_id, name: "Alpine Club"},
+      groups: [selected_group],
+      selected_group: selected_group,
+      selected_group_route_id: nil,
       current_member: %{name: "Alice Adams"},
       current_member_can_manage_members?: false,
       active_section: "conversations",

@@ -349,6 +349,17 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp current_member_name(nil), do: "Current member"
   defp current_member_name(current_member), do: current_member.name
 
+  defp club_home_path(_selected_club, %{
+         "club_id_source" => "host",
+         "group_id" => group_id
+       })
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
+
+  defp club_home_path(selected_club, %{"group_id" => group_id})
+       when is_binary(group_id) and group_id != "",
+       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
+
   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
 
   defp club_home_path(selected_club, _route_params),

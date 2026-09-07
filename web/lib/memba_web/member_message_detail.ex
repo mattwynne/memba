@@ -8,10 +8,8 @@ defmodule MembaWeb.MemberMessageDetail do
   initial controller pipeline.
   """
 
-  alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
-  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias MembaWeb.MemberEmailDeliveryPresentation
 
@@ -30,10 +28,13 @@ defmodule MembaWeb.MemberMessageDetail do
       when is_map(params) and is_list(active_clubs) do
     with {:ok, club_id} <- cast_selected_club_id(params),
          {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+         {:ok, current_person} <- fetch_current_person(current_identity),
+         {:ok, current_member} <- fetch_current_member(club_id, current_person),
          {:ok, message} <- fetch_message(params),
          :ok <- require_message_in_club(message, club_id),
-         {:ok, conversation_messages} <- fetch_everyone_conversation(message) do
-      {:ok, detail_assigns(selected_club, message, conversation_messages, current_identity)}
+         :ok <- require_conversation_access(message, club_id, current_person),
+         {:ok, conversation_messages} <- fetch_conversation(message) do
+      {:ok, detail_assigns(selected_club, message, conversation_messages, current_member)}
     end
   end
 
@@ -53,6 +54,25 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
+  defp fetch_current_person(%{email: email}) do
+    case Membership.get_person_by_email(email) do
+      nil -> {:error, :forbidden}
+      current_person -> {:ok, current_person}
+    end
+  end
+
+  defp fetch_current_person(_current_identity), do: {:error, :forbidden}
+
+  defp fetch_current_member(club_id, current_person) do
+    case Enum.find(
+           Membership.list_active_members_of_club(club_id),
+           &(&1.id == current_person.person_id)
+         ) do
+      nil -> {:error, :forbidden}
+      current_member -> {:ok, current_member}
+    end
+  end
+
   defp fetch_message(params) do
     case Messaging.get_message(Map.get(params, "message_id")) do
       nil -> {:error, :not_found}
@@ -68,12 +88,21 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
-  defp fetch_everyone_conversation(message) do
-    conversation_messages =
-      Messaging.list_conversation_messages_for_group(
-        message.message_id,
-        SystemGroups.everyone_group_id(message.club_id)
-      )
+  defp require_conversation_access(message, club_id, current_person) do
+    if Messaging.member_has_conversation_access?(
+         message.message_id,
+         club_id,
+         current_person.person_id,
+         :read
+       ) do
+      :ok
+    else
+      {:error, :not_found}
+    end
+  end
+
+  defp fetch_conversation(message) do
+    conversation_messages = Messaging.list_conversation_messages(message.message_id)
 
     case conversation_messages do
       [] -> {:error, :not_found}
@@ -81,15 +110,13 @@ defmodule MembaWeb.MemberMessageDetail do
     end
   end
 
-  defp detail_assigns(selected_club, message, conversation_messages, current_identity) do
+  defp detail_assigns(selected_club, message, conversation_messages, current_member) do
     receipt_model =
       message.message_id
       |> Messaging.list_member_email_deliverys()
       |> MemberEmailDeliveryPresentation.present_receipts()
 
     sender = Membership.get_person(message.sender_id)
-    active_members = Membership.list_active_members_of_club(selected_club.club_id)
-    current_member = current_member_for_identity(active_members, current_identity)
 
     %{
       page_title: message.subject,
@@ -106,18 +133,6 @@ defmodule MembaWeb.MemberMessageDetail do
       member_email_delivery_groups: receipt_model.groups
     }
   end
-
-  defp current_member_for_identity(_active_members, nil), do: nil
-
-  defp current_member_for_identity(active_members, %{email: email}) do
-    identity_email = Accounts.normalize_email(email)
-
-    Enum.find(active_members, fn member ->
-      Accounts.normalize_email(member.email) == identity_email
-    end)
-  end
-
-  defp current_member_for_identity(_active_members, _identity), do: nil
 
   defp following_conversation?(_message, nil), do: false
 
