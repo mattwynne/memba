@@ -13,14 +13,20 @@ defmodule MembaWeb.MemberDashboardLive do
   alias MembaWeb.MemberDashboardPresentation
 
   @impl Phoenix.LiveView
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     club_id = Map.get(session, "club_id")
+    selected_group_id = Map.get(params, "group_id")
     current_identity = current_identity_from_session(session)
     current_identity_clubs = identity_clubs(current_identity)
 
     socket = assign_current_identity(socket, current_identity, current_identity_clubs)
 
-    case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
+    case MemberDashboardPresentation.load(
+           club_id,
+           current_identity,
+           current_identity_clubs,
+           selected_group_id
+         ) do
       {:ok, dashboard_assigns} ->
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
@@ -29,16 +35,29 @@ defmodule MembaWeb.MemberDashboardLive do
         {:ok,
          socket
          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
+         |> assign(:selected_group_route_id, selected_group_id)
          |> assign(:active_section, "conversations")
          |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
         forbidden!()
+
+      {:error, :not_found} ->
+        not_found!(socket)
     end
   end
 
   @impl Phoenix.LiveView
-  def handle_params(_params, _uri, socket) do
+  def handle_params(params, _uri, socket) do
+    selected_group_id = Map.get(params, "group_id")
+
+    socket =
+      if socket.assigns.selected_group_route_id == selected_group_id do
+        socket
+      else
+        refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
+      end
+
     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
   end
 
@@ -47,7 +66,8 @@ defmodule MembaWeb.MemberDashboardLive do
         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
         %{assigns: %{selected_club: selected_club}} = socket
       ) do
-    {:noreply, refresh_dashboard(socket, selected_club.club_id)}
+    {:noreply,
+     refresh_dashboard(socket, selected_club.club_id, socket.assigns.selected_group_route_id)}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -60,17 +80,23 @@ defmodule MembaWeb.MemberDashboardLive do
   defp active_section(:members), do: "members"
   defp active_section(_live_action), do: "conversations"
 
-  defp refresh_dashboard(socket, club_id) do
+  defp refresh_dashboard(socket, club_id, selected_group_id) do
     case MemberDashboardPresentation.load(
            club_id,
            socket.assigns.current_identity,
-           socket.assigns.current_identity_clubs
+           socket.assigns.current_identity_clubs,
+           selected_group_id
          ) do
       {:ok, dashboard_assigns} ->
-        assign(socket, dashboard_assigns)
+        socket
+        |> assign(:selected_group_route_id, selected_group_id)
+        |> assign(dashboard_assigns)
 
       {:error, :forbidden} ->
         forbidden!()
+
+      {:error, :not_found} ->
+        not_found!(socket)
     end
   end
 
@@ -110,4 +136,14 @@ defmodule MembaWeb.MemberDashboardLive do
   defp identity_clubs(identity), do: identity.active_clubs
 
   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
+
+  defp not_found!(socket) do
+    case socket.private[:connect_info] do
+      %Plug.Conn{} = conn ->
+        raise Phoenix.Router.NoRouteError, conn: conn, router: MembaWeb.Router
+
+      _connect_info ->
+        raise "member dashboard not found"
+    end
+  end
 end

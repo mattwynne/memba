@@ -68,6 +68,171 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        email_slug: "trip-planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    everyone_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        subject: "Everyone planning"
+      )
+
+    trip_planning_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Trip Planning route",
+        audience_group_id: trip_planning_group.group_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}")
+
+    assert has_element?(view, "#member-message-#{trip_planning_conversation.message_id}")
+    refute has_element?(view, "#member-message-#{everyone_conversation.message_id}")
+    assert has_element?(view, "#club-member-#{alice.person_id}")
+    assert has_element?(view, "#club-member-#{bob.person_id}")
+    refute has_element?(view, "#club-member-#{carol.person_id}")
+    refute has_element?(view, "#member-section-panel-conversations[hidden]")
+    assert has_element?(view, "#member-section-panel-members[hidden]")
+  end
+
+  test "canonical group members route loads the selected group's Members section", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}/members")
+
+    assert has_element?(view, "#club-member-#{alice.person_id}")
+    assert has_element?(view, "#club-member-#{bob.person_id}")
+    refute has_element?(view, "#club-member-#{carol.person_id}")
+    assert has_element?(view, "#member-section-panel-conversations[hidden]")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+  end
+
+  test "canonical group routes return the ordinary not-found response to non-members", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+
+    secret_conversation =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Private route details",
+        audience_group_id: private_group.group_id
+      )
+
+    response =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/groups/#{private_group.group_id}")
+      |> html_response(404)
+
+    assert response =~ "Not Found"
+    refute response =~ secret_conversation.subject
+    refute response =~ private_group.name
+
+    malformed_response =
+      build_conn()
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get("/groups/private-planning")
+      |> html_response(404)
+
+    assert malformed_response =~ "Not Found"
+    refute malformed_response =~ private_group.name
+  end
+
   test "routed dashboard member sections render only the compact member app footer" do
     alice =
       create_active_member(
@@ -1571,6 +1736,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       group_id: group_id,
       membership_id: membership_id,
       person_id: person_id,
+      active: true
+    })
+  end
+
+  defp create_group(attrs) do
+    Repo.insert!(%Group{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      group_id: Memba.ID.generate(:group),
+      group_key: Keyword.fetch!(attrs, :group_key),
+      email_slug: Keyword.get(attrs, :email_slug),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
       active: true
     })
   end
