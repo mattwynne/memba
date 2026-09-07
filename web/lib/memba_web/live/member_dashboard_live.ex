@@ -85,8 +85,11 @@ defmodule MembaWeb.MemberDashboardLive do
 
         {:reply, %{selected_group_id: selected_group_id}, socket}
 
-      {:error, _reason} ->
+      {:error, :not_found} ->
         reply_with_selected_group(socket)
+
+      {:error, :forbidden} ->
+        forbidden!()
     end
   end
 

@@ -237,6 +237,46 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-group-link-#{private_group.group_id}")
   end
 
+  @tag :capture_log
+  test "remembered selection fails closed when the server detects revoked club access", %{
+    conn: conn
+  } do
+    Process.flag(:trap_exit, true)
+
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    alice.membership_id
+    |> then(&Repo.get_by!(Membership, membership_id: &1))
+    |> Ecto.Changeset.change(active: false)
+    |> Repo.update!()
+
+    assert {{%MembaWeb.ForbiddenError{}, _stacktrace}, _live_view_call} =
+             catch_exit(
+               render_hook(view, "restore_remembered_group", %{
+                 "group_id" => trip_planning_group.group_id
+               })
+             )
+  end
+
   test "an explicit authorised group route wins over a remembered group event", %{conn: conn} do
     alice =
       create_active_member(

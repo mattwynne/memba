@@ -11,7 +11,7 @@
 - [x] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
 - [x] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
 - [x] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
-- [ ] 012 The server remains the authority for every final selection.
+- [x] 012 The server remains the authority for every final selection.
 - [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
 - [ ] 014 The compose confirmation and error paths must retain that group.
 - [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
