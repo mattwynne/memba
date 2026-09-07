@@ -1,0 +1,429 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 18deca9..ec69688 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+ - [x] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+ - [x] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+-- [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
++- [x] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+ - [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+ - [ ] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+ - [ ] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index c92c494..63ffe71 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -13,14 +13,20 @@ defmodule MembaWeb.MemberDashboardLive do
+   alias MembaWeb.MemberDashboardPresentation
+ 
+   @impl Phoenix.LiveView
+-  def mount(_params, session, socket) do
++  def mount(params, session, socket) do
+     club_id = Map.get(session, "club_id")
++    selected_group_id = Map.get(params, "group_id")
+     current_identity = current_identity_from_session(session)
+     current_identity_clubs = identity_clubs(current_identity)
+ 
+     socket = assign_current_identity(socket, current_identity, current_identity_clubs)
+ 
+-    case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
++    case MemberDashboardPresentation.load(
++           club_id,
++           current_identity,
++           current_identity_clubs,
++           selected_group_id
++         ) do
+       {:ok, dashboard_assigns} ->
+         if connected?(socket) do
+           Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+@@ -29,16 +35,29 @@ defmodule MembaWeb.MemberDashboardLive do
+         {:ok,
+          socket
+          |> assign(:club_id_source, Map.get(session, "club_id_source", "host"))
++         |> assign(:selected_group_route_id, selected_group_id)
+          |> assign(:active_section, "conversations")
+          |> assign(dashboard_assigns)}
+ 
+       {:error, :forbidden} ->
+         forbidden!()
++
++      {:error, :not_found} ->
++        not_found!(socket)
+     end
+   end
+ 
+   @impl Phoenix.LiveView
+-  def handle_params(_params, _uri, socket) do
++  def handle_params(params, _uri, socket) do
++    selected_group_id = Map.get(params, "group_id")
++
++    socket =
++      if socket.assigns.selected_group_route_id == selected_group_id do
++        socket
++      else
++        refresh_dashboard(socket, socket.assigns.selected_club.club_id, selected_group_id)
++      end
++
+     {:noreply, assign(socket, :active_section, active_section(socket.assigns.live_action))}
+   end
+ 
+@@ -47,7 +66,8 @@ defmodule MembaWeb.MemberDashboardLive do
+         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
+         %{assigns: %{selected_club: selected_club}} = socket
+       ) do
+-    {:noreply, refresh_dashboard(socket, selected_club.club_id)}
++    {:noreply,
++     refresh_dashboard(socket, selected_club.club_id, socket.assigns.selected_group_route_id)}
+   end
+ 
+   def handle_info(_message, socket), do: {:noreply, socket}
+@@ -60,17 +80,23 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp active_section(:members), do: "members"
+   defp active_section(_live_action), do: "conversations"
+ 
+-  defp refresh_dashboard(socket, club_id) do
++  defp refresh_dashboard(socket, club_id, selected_group_id) do
+     case MemberDashboardPresentation.load(
+            club_id,
+            socket.assigns.current_identity,
+-           socket.assigns.current_identity_clubs
++           socket.assigns.current_identity_clubs,
++           selected_group_id
+          ) do
+       {:ok, dashboard_assigns} ->
+-        assign(socket, dashboard_assigns)
++        socket
++        |> assign(:selected_group_route_id, selected_group_id)
++        |> assign(dashboard_assigns)
+ 
+       {:error, :forbidden} ->
+         forbidden!()
++
++      {:error, :not_found} ->
++        not_found!(socket)
+     end
+   end
+ 
+@@ -110,4 +136,14 @@ defmodule MembaWeb.MemberDashboardLive do
+   defp identity_clubs(identity), do: identity.active_clubs
+ 
+   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
++
++  defp not_found!(socket) do
++    case socket.private[:connect_info] do
++      %Plug.Conn{} = conn ->
++        raise Phoenix.Router.NoRouteError, conn: conn, router: MembaWeb.Router
++
++      _connect_info ->
++        raise "member dashboard not found"
++    end
++  end
+ end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 93ddb4d..2ff4db4 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -69,6 +69,8 @@ defmodule MembaWeb.Router do
+       session: {MembaWeb.Plugs.ClubSiteMemberRoute, :live_session, []} do
+       live "/conversations", MemberDashboardLive, :conversations
+       live "/members", MemberDashboardLive, :members
++      live "/groups/:group_id", MemberDashboardLive, :conversations
++      live "/groups/:group_id/members", MemberDashboardLive, :members
+       live "/my/settings", MySettingsLive, :profile
+       live "/my/settings/profile", MySettingsLive, :profile
+       live "/my/settings/clubs", MySettingsLive, :clubs
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index a7013f7..d6f7167 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -68,6 +68,171 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(view, "#club-member-#{bob.person_id}")
+   end
+ 
++  test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Canoe",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        email_slug: "trip-planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++    add_group_member(trip_planning_group, bob)
++
++    everyone_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: carol.person_id,
++        subject: "Everyone planning"
++      )
++
++    trip_planning_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Trip Planning route",
++        audience_group_id: trip_planning_group.group_id
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{trip_planning_group.group_id}")
++
++    assert has_element?(view, "#member-message-#{trip_planning_conversation.message_id}")
++    refute has_element?(view, "#member-message-#{everyone_conversation.message_id}")
++    assert has_element?(view, "#club-member-#{alice.person_id}")
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++    refute has_element?(view, "#club-member-#{carol.person_id}")
++    refute has_element?(view, "#member-section-panel-conversations[hidden]")
++    assert has_element?(view, "#member-section-panel-members[hidden]")
++  end
++
++  test "canonical group members route loads the selected group's Members section", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Canoe",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++    add_group_member(trip_planning_group, bob)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/groups/#{trip_planning_group.group_id}/members")
++
++    assert has_element?(view, "#club-member-#{alice.person_id}")
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++    refute has_element?(view, "#club-member-#{carol.person_id}")
++    assert has_element?(view, "#member-section-panel-conversations[hidden]")
++    refute has_element?(view, "#member-section-panel-members[hidden]")
++  end
++
++  test "canonical group routes return the ordinary not-found response to non-members", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, bob)
++
++    secret_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Private route details",
++        audience_group_id: private_group.group_id
++      )
++
++    response =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> get(~p"/groups/#{private_group.group_id}")
++      |> html_response(404)
++
++    assert response =~ "Not Found"
++    refute response =~ secret_conversation.subject
++    refute response =~ private_group.name
++
++    malformed_response =
++      build_conn()
++      |> signed_in_club_host("alice@example.com", alice)
++      |> get("/groups/private-planning")
++      |> html_response(404)
++
++    assert malformed_response =~ "Not Found"
++    refute malformed_response =~ private_group.name
++  end
++
+   test "routed dashboard member sections render only the compact member app footer" do
+     alice =
+       create_active_member(
+@@ -1575,6 +1740,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     })
+   end
+ 
++  defp create_group(attrs) do
++    Repo.insert!(%Group{
++      club_id: Keyword.fetch!(attrs, :club_id),
++      group_id: Memba.ID.generate(:group),
++      group_key: Keyword.fetch!(attrs, :group_key),
++      email_slug: Keyword.get(attrs, :email_slug),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp add_group_member(group, member) do
++    Repo.insert!(%GroupMembership{
++      club_id: member.club_id,
++      group_id: group.group_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      active: true
++    })
++  end
++
+   defp grant_manage_members!(member) do
+     Repo.insert!(%MemberPermission{
+       club_id: member.club_id,
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 6de2644..76f2888 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -7,11 +7,8 @@ defmodule MembaWeb.RouterTest do
+     "/deliveries"
+   ]
+ 
+-  @custom_group_paths [
++  @unrouted_group_management_paths [
+     "/groups",
+-    "/groups/new",
+-    "/groups/group-123",
+-    "/groups/group-123/members",
+     "/admin/groups",
+     "/admin/clubs/club-123/groups",
+     "/admin/clubs/club-123/groups/new",
+@@ -107,6 +104,35 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
++  describe "member dashboard routes" do
++    test "routes Everyone and group-scoped sections through the required club member pipeline" do
++      group_id = Memba.ID.generate(:group)
++
++      assert_member_dashboard_live_route(
++        "/conversations",
++        "/conversations",
++        %{},
++        :conversations
++      )
++
++      assert_member_dashboard_live_route("/members", "/members", %{}, :members)
++
++      assert_member_dashboard_live_route(
++        "/groups/#{group_id}",
++        "/groups/:group_id",
++        %{"group_id" => group_id},
++        :conversations
++      )
++
++      assert_member_dashboard_live_route(
++        "/groups/#{group_id}/members",
++        "/groups/:group_id/members",
++        %{"group_id" => group_id},
++        :members
++      )
++    end
++  end
++
+   describe "member message routes" do
+     test "does not route the legacy inline club-home send endpoint" do
+       assert :error = Phoenix.Router.route_info(MembaWeb.Router, "POST", "/", "localhost")
+@@ -210,10 +236,10 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
+-  describe "custom group routes" do
+-    test "custom group UI/API paths are not routed in this slice" do
++  describe "group management routes" do
++    test "group management UI/API paths remain unrouted" do
+       for method <- ~w(GET POST PATCH DELETE),
+-          path <- @custom_group_paths do
++          path <- @unrouted_group_management_paths do
+         assert :error = Phoenix.Router.route_info(MembaWeb.Router, method, path, "localhost")
+       end
+     end
+@@ -246,4 +272,22 @@ defmodule MembaWeb.RouterTest do
+                "localhost"
+              )
+   end
++
++  defp assert_member_dashboard_live_route(path, route_pattern, path_params, live_action) do
++    assert %{
++             path_params: ^path_params,
++             pipe_through: [:browser, :club_member_required],
++             phoenix_live_view:
++               {MembaWeb.MemberDashboardLive, ^live_action, _opts, _live_session},
++             plug: Phoenix.LiveView.Plug,
++             plug_opts: ^live_action,
++             route: ^route_pattern
++           } =
++             Phoenix.Router.route_info(
++               MembaWeb.Router,
++               "GET",
++               path,
++               "localhost"
++             )
++  end
+ end
