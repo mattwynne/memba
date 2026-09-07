@@ -200,7 +200,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     refute Enum.any?(assigns.messages, &(&1.message_id == admin_conversation.message_id))
   end
 
-  test "authorizes and loads members and conversations for a selected group" do
+  test "authorizes and presents member and conversation rows for a selected group" do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -235,6 +235,31 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     add_group_member(trip_planning_group, alice)
     add_group_member(trip_planning_group, bob)
 
+    chair_role =
+      create_role(
+        club_id: alice.club_id,
+        role_key: "chair",
+        name: "Chair"
+      )
+
+    trip_organizer_role =
+      create_role(
+        club_id: alice.club_id,
+        role_key: "trip_organizer",
+        name: "Trip organizer"
+      )
+
+    treasurer_role =
+      create_role(
+        club_id: alice.club_id,
+        role_key: "treasurer",
+        name: "Treasurer"
+      )
+
+    assign_role(bob, trip_organizer_role)
+    assign_role(bob, chair_role)
+    assign_role(carol, treasurer_role)
+
     everyone_conversation =
       create_message(
         club_id: alice.club_id,
@@ -242,12 +267,35 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         subject: "Club-wide plans"
       )
 
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
     trip_planning_conversation =
       create_message(
         club_id: alice.club_id,
         sender_id: bob.person_id,
         subject: "Private trip plans",
-        audience_group_id: trip_planning_group.group_id
+        audience_group_id: trip_planning_group.group_id,
+        inserted_at: now
+      )
+
+    _outside_selected_group_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: carol.person_id,
+        conversation_id: trip_planning_conversation.message_id,
+        reply_to_message_id: trip_planning_conversation.message_id,
+        subject: trip_planning_conversation.subject,
+        inserted_at: DateTime.add(now, 30, :second)
+      )
+
+    _alice_reply =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        conversation_id: trip_planning_conversation.message_id,
+        reply_to_message_id: trip_planning_conversation.message_id,
+        subject: trip_planning_conversation.subject,
+        inserted_at: DateTime.add(now, 60, :second)
       )
 
     assert {:ok, assigns} =
@@ -267,19 +315,67 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
                trip_planning_group.group_id
              ])
 
-    assert Enum.map(assigns.members, & &1.id) == [alice.person_id, bob.person_id]
+    assert [
+             %{
+               id: alice_person_id,
+               name: "Alice Adams",
+               roles: [],
+               initials: "AA",
+               avatar_initials: "AA"
+             },
+             %{
+               id: bob_person_id,
+               name: "Bob Builder",
+               roles: ["Chair", "Trip organizer"],
+               initials: "BB",
+               avatar_initials: "BB"
+             }
+           ] = assigns.members
+
+    assert alice_person_id == alice.person_id
+    assert bob_person_id == bob.person_id
+
+    assert assigns.member_names_by_id == %{
+             alice.person_id => "Alice Adams",
+             bob.person_id => "Bob Builder"
+           }
+
     assert assigns.active_member_count == 2
     assert assigns.current_member.id == alice.person_id
+    assert assigns.current_member.roles == []
 
     assert Enum.map(assigns.messages, & &1.message_id) == [
              trip_planning_conversation.message_id
            ]
 
-    assert Enum.map(assigns.message_rows, & &1.message_id) == [
-             trip_planning_conversation.message_id
-           ]
+    assert [
+             %{
+               message_id: message_id,
+               originator_id: originator_id,
+               originator_name: "Bob Builder",
+               originator_initials: "BB",
+               reply_count: 2,
+               latest_replier_id: latest_replier_id,
+               latest_replier_name: "Alice Adams",
+               reply_activity_label: "2 replies · latest from Alice Adams",
+               participants: [
+                 %{id: outside_group_member_id, name: "Club member", initials: "CM"},
+                 %{id: selected_member_id, name: "Alice Adams", initials: "AA"}
+               ],
+               additional_participant_count: 0
+             }
+           ] = assigns.message_rows
+
+    assert message_id == trip_planning_conversation.message_id
+    assert originator_id == bob.person_id
+    assert latest_replier_id == alice.person_id
+    assert outside_group_member_id == carol.person_id
+    assert selected_member_id == alice.person_id
 
     refute Enum.any?(assigns.messages, &(&1.message_id == everyone_conversation.message_id))
+    refute Map.has_key?(assigns.member_names_by_id, carol.person_id)
+    refute Enum.any?(assigns.members, &(&1.id == carol.person_id))
+    refute Enum.any?(assigns.members, &("Treasurer" in &1.roles))
   end
 
   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do

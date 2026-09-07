@@ -4,7 +4,7 @@
 - [x] 002 Add a public Membership query for the active groups of a given active member in a given club.
 - [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
 - [x] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
-- [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+- [x] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
 - [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
 - [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
 - [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
