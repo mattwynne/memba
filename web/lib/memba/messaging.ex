@@ -57,8 +57,10 @@ defmodule Memba.Messaging do
   The service resolves recipients through Membership's public query API, builds
   a `SendMessage` command containing those resolved recipients, and dispatches it
   to the Messaging Commanded application. The audience defaults to the club's
-  Everyone group when `:audience_group_id` is omitted. Provider delivery happens
-  asynchronously from projected `EmailDelivery` records.
+  Everyone group when `:audience_group_id` is omitted. The audience must resolve
+  to a group owned by the supplied club before recipients are loaded or a command
+  is built. Provider delivery happens asynchronously from projected
+  `EmailDelivery` records.
   """
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -1604,12 +1606,12 @@ defmodule Memba.Messaging do
 
   defp send_club_message_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
          {:ok, subject} <- fetch_required(attrs, :subject),
-         {:ok, body} <- fetch_required(attrs, :body) do
-      everyone_group_id = SystemGroups.everyone_group_id(club_id)
-      audience_group_id = optional_audience_group_id(attrs, everyone_group_id)
+         {:ok, body} <- fetch_required(attrs, :body),
+         {:ok, audience_group} <- resolve_audience_group(attrs, club_id) do
+      audience_group_id = audience_group.group_id
 
       {:ok,
        %SendMessage{
@@ -1621,6 +1623,20 @@ defmodule Memba.Messaging do
          body: body,
          recipients: resolve_group_recipients(audience_group_id)
        }}
+    end
+  end
+
+  defp resolve_audience_group(attrs, club_id) do
+    audience_group_id =
+      optional_audience_group_id(attrs, SystemGroups.everyone_group_id(club_id))
+
+    with {:ok, audience_group_id} <- ID.cast(:group, audience_group_id) do
+      case Membership.get_group(audience_group_id) do
+        %{club_id: ^club_id} = audience_group -> {:ok, audience_group}
+        _missing_or_foreign_group -> {:error, :audience_group_not_found}
+      end
+    else
+      :error -> {:error, :invalid_audience_group_id}
     end
   end
 

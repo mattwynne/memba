@@ -232,6 +232,26 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
   end
 
+  test "rejects an unknown audience group before dispatching the message command" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    assert {:error, :audience_group_not_found} =
+             Messaging.send_club_message(%{
+               message_id: Memba.ID.generate(:message),
+               club_id: club_id,
+               sender_id: alice.person_id,
+               audience_group_id: Memba.ID.generate(:group),
+               subject: "Private topic",
+               body: "Please discuss this with the selected group."
+             })
+
+    assert count_events(MessageSent) == 0
+  end
+
   test "sends each active member once at the person's primary email address" do
     club_id = Memba.ID.generate(:club)
     create_club(club_id, "Kootenay Mountaineering Club")
