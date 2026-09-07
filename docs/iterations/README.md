@@ -67,7 +67,7 @@ green than before.
 | 057 | 2026-09-03 | merged | Admin group email conversations | [plan](057-admin-group-email-conversations/plan.md) — `member_message_deliverability.feature`, `club_message_replies.feature` |
 | 098 | 2026-08-13 | validated | Members change their own name | [plan](098-member-name-editing/plan.md) |
 | 099 | 2026-08-13 | validated | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
-| 058 | 2026-09-06 | ready | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
+| 058 | 2026-09-06 | validated | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
 
 Status notes:
 
