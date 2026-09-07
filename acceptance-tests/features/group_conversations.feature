@@ -1,6 +1,4 @@
 @iteration-058
-@todo-domain
-@todo-ui
 Feature: Group-scoped club conversations
   Club members need to find and use the conversations and people in the groups
   they belong to, without learning about private groups they do not belong to.
@@ -58,12 +56,14 @@ Feature: Group-scoped club conversations
 
   Rule: The club home returns to the member's last selected group
 
+    @not-domain
     Scenario: Bob returns to Admin
       Given Bob and Carol are members of the Kootenay Mountaineering Club Admin group
       And Bob most recently viewed the Admin group in Kootenay Mountaineering Club
       When Bob opens the Kootenay Mountaineering Club home
       Then Bob should see the Admin group selected
 
+    @not-domain
     Scenario: Alice has no remembered group
       Given Alice has not previously selected a group in Kootenay Mountaineering Club
       When Alice opens the Kootenay Mountaineering Club home

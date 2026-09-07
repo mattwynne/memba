@@ -21,4 +21,4 @@
 - [x] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
 - [x] 020 Preserve correct access for a future conversation shared with several groups.
 - [x] 021 Add focused Membership, Messaging, dashboard-presentation, LiveView/router, and browser tests for generic custom-group fixtures, selection scope, no-disclosure not-found behaviour, remembered selection, group-aware compose, existing Everyone regression, and club/group mismatch rejection.
-- [ ] 022 Implement the planned Cucumber step support, remove/narrow runner-debt tags as each runner becomes executable, and run `dev check`.
+- [x] 022 Implement the planned Cucumber step support, remove/narrow runner-debt tags as each runner becomes executable, and run `dev check`.

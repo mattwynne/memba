@@ -55,7 +55,9 @@ defmodule Memba.Cucumber.MembershipSteps do
   end
 
   step "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", context do
-    add_members(context, ["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
+    context
+    |> create_people(["Alice", "Bob", "Carol", "Dana"])
+    |> add_members(["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
   end
 
   step "Alice and Bob are members of Kootenay Mountaineering Club", context do
