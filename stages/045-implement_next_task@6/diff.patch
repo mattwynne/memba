@@ -1,0 +1,171 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 89d00e7..18deca9 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+ - [x] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+ - [x] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+-- [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
++- [x] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+ - [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+ - [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+ - [ ] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index b244b31..8c0e957 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -30,7 +30,15 @@ defmodule MembaWeb.MemberDashboardPresentation do
+       when is_list(active_clubs) do
+     with {:ok, club_id} <- cast_selected_club_id(club_id),
+          everyone_group_id = SystemGroups.everyone_group_id(club_id) do
+-      load_authorized_group(club_id, current_identity, active_clubs, everyone_group_id)
++      case load_authorized_group(
++             club_id,
++             current_identity,
++             active_clubs,
++             everyone_group_id
++           ) do
++        {:error, :not_found} -> {:error, :forbidden}
++        result -> result
++      end
+     else
+       _missing_or_unauthorized -> {:error, :forbidden}
+     end
+@@ -43,7 +51,10 @@ defmodule MembaWeb.MemberDashboardPresentation do
+ 
+   The group is authorized by finding it in Membership's active-group summaries
+   for the signed-in active club member. Group members and conversations are
+-  loaded only after that authorization succeeds.
++  loaded only after that authorization succeeds. Missing, invalid,
++  foreign-club, and unauthorized group selections all return
++  `{:error, :not_found}` without disclosing which condition applied. Club and
++  identity authorization failures continue to return `{:error, :forbidden}`.
+   """
+   def load(club_id, current_identity, active_clubs, nil) when is_list(active_clubs) do
+     load(club_id, current_identity, active_clubs)
+@@ -55,6 +66,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+          {:ok, selected_group_id} <- cast_selected_group_id(selected_group_id) do
+       load_authorized_group(club_id, current_identity, active_clubs, selected_group_id)
+     else
++      {:error, :not_found} -> {:error, :not_found}
+       _missing_or_unauthorized -> {:error, :forbidden}
+     end
+   end
+@@ -65,9 +77,29 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp load_authorized_group(club_id, current_identity, active_clubs, selected_group_id) do
+     with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+          club_members <- load_club_members(club_id),
+-         {:ok, current_member} <- fetch_current_member(club_members, current_identity),
+-         groups <- Membership.list_active_groups_for_member(club_id, current_member.id),
+-         {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
++         {:ok, current_member} <- fetch_current_member(club_members, current_identity) do
++      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
++
++      load_selected_group(
++        club_id,
++        selected_club,
++        current_member,
++        groups,
++        selected_group_id
++      )
++    else
++      _missing_or_unauthorized -> {:error, :forbidden}
++    end
++  end
++
++  defp load_selected_group(
++         club_id,
++         selected_club,
++         current_member,
++         groups,
++         selected_group_id
++       ) do
++    with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
+       members = load_group_members(selected_group.group_id)
+       messages = load_messages(selected_group.group_id)
+       member_names_by_id = Map.new(members, &{&1.id, &1.name})
+@@ -88,7 +120,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+          message_rows: message_rows
+        }}
+     else
+-      _missing_or_unauthorized -> {:error, :forbidden}
++      _missing_or_unauthorized -> {:error, :not_found}
+     end
+   end
+ 
+@@ -109,13 +141,13 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp cast_selected_group_id(group_id) do
+     case ID.cast(:group, group_id) do
+       {:ok, group_id} -> {:ok, group_id}
+-      :error -> {:error, :forbidden}
++      :error -> {:error, :not_found}
+     end
+   end
+ 
+   defp fetch_selected_group(groups, group_id) do
+     case Enum.find(groups, &(&1.group_id == group_id)) do
+-      nil -> {:error, :forbidden}
++      nil -> {:error, :not_found}
+       selected_group -> {:ok, selected_group}
+     end
+   end
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 2e03d62..b4f2413 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -378,6 +378,54 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     refute Enum.any?(assigns.members, &("Treasurer" in &1.roles))
+   end
+ 
++  test "returns the same not-found result for missing, foreign-club, and non-member groups" do
++    alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private",
++        name: "Private"
++      )
++
++    add_group_member(private_group, bob)
++
++    other_club_member =
++      create_active_member(email: "pat@example.com", club_name: "Paddling Club")
++
++    foreign_group =
++      create_group(
++        club_id: other_club_member.club_id,
++        group_key: "trips",
++        name: "Trips"
++      )
++
++    add_group_member(foreign_group, other_club_member)
++
++    selected_group_ids = [
++      Memba.ID.generate(:group),
++      foreign_group.group_id,
++      private_group.group_id
++    ]
++
++    for selected_group_id <- selected_group_ids do
++      assert {:error, :not_found} =
++               MemberDashboardPresentation.load(
++                 alice.club_id,
++                 %{email: "alice@example.com"},
++                 [alice.club],
++                 selected_group_id
++               )
++    end
++  end
++
+   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
+     root = %Message{
+       message_id: Memba.ID.generate(:message),
