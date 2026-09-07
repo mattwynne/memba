@@ -130,6 +130,32 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-member-#{carol.person_id}")
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
     assert has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations[href='/groups/#{trip_planning_group.group_id}']" <>
+               "[data-phx-link='patch']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members[href='/groups/#{trip_planning_group.group_id}/members']" <>
+               "[data-phx-link='patch']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{trip_planning_conversation.message_id} " <>
+               "[data-testid='club-message-link']" <>
+               "[href='/messages/#{trip_planning_conversation.message_id}?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    view
+    |> element("#member-section-tab-members")
+    |> render_click()
+
+    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
   end
 
   test "canonical group members route loads the selected group's Members section", %{conn: conn} do
@@ -165,6 +191,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     add_group_member(trip_planning_group, alice)
     add_group_member(trip_planning_group, bob)
+    grant_manage_members!(alice)
 
     {:ok, view, _html} =
       conn
@@ -176,6 +203,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-member-#{carol.person_id}")
     assert has_element?(view, "#member-section-panel-conversations[hidden]")
     refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-action-invite-member" <>
+               "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
+           )
   end
 
   test "canonical group routes return the ordinary not-found response to non-members", %{

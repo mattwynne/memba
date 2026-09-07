@@ -112,6 +112,35 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     refute has_element?(view, "#member-club-invitation-club-home-link[href*='club_id=']")
   end
 
+  test "invitation return links preserve selected-group context", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+    group_id = Memba.Membership.SystemGroups.everyone_group_id(robin.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/members/invitations/new?#{[group_id: group_id]}")
+
+    assert has_element?(
+             view,
+             "#member-club-invitation-club-home-link[href='/groups/#{group_id}']",
+             "Club home"
+           )
+
+    assert has_element?(
+             view,
+             "#cancel-member-club-invitation-link[href='/groups/#{group_id}']",
+             "Cancel"
+           )
+  end
+
   test "membership admin invitation form asks for email address only", %{conn: conn} do
     robin =
       create_active_member(

@@ -13,6 +13,7 @@ defmodule MembaWeb.PageHTML do
   attr :entry, :map, required: true
   attr :selected_club, :map, required: true
   attr :club_id_source, :string, default: nil
+  attr :group_id, :string, default: nil
 
   defp conversation_entry_card(assigns) do
     ~H"""
@@ -50,7 +51,8 @@ defmodule MembaWeb.PageHTML do
                 member_message_delivery_path(
                   @entry.message.message_id,
                   @selected_club,
-                  @club_id_source
+                  @club_id_source,
+                  @group_id
                 )
               }
               role="menuitem"
@@ -108,15 +110,45 @@ defmodule MembaWeb.PageHTML do
     "member-conversation-body-#{message_id}"
   end
 
-  defp member_club_home_path(_selected_club, "host"), do: ~p"/conversations"
+  defp member_club_home_path(_selected_club, %{
+         "club_id_source" => "host",
+         "group_id" => group_id
+       })
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
 
-  defp member_club_home_path(selected_club, _source),
+  defp member_club_home_path(selected_club, %{"group_id" => group_id})
+       when is_binary(group_id) and group_id != "",
+       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
+
+  defp member_club_home_path(_selected_club, %{"club_id_source" => "host"}),
+    do: ~p"/conversations"
+
+  defp member_club_home_path(selected_club, _route_params),
     do: ClubSite.url(selected_club, "/conversations")
 
-  defp member_section_path("conversations", _selected_club, "host"), do: ~p"/conversations"
-  defp member_section_path("members", _selected_club, "host"), do: ~p"/members"
+  defp member_section_path("conversations", _selected_club, "host", group_id)
+       when is_binary(group_id),
+       do: ~p"/groups/#{group_id}"
 
-  defp member_section_path(section, selected_club, _source),
+  defp member_section_path("members", _selected_club, "host", group_id)
+       when is_binary(group_id),
+       do: ~p"/groups/#{group_id}/members"
+
+  defp member_section_path("conversations", _selected_club, "host", nil),
+    do: ~p"/conversations"
+
+  defp member_section_path("members", _selected_club, "host", nil), do: ~p"/members"
+
+  defp member_section_path("conversations", selected_club, _source, group_id)
+       when is_binary(group_id),
+       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
+
+  defp member_section_path("members", selected_club, _source, group_id)
+       when is_binary(group_id),
+       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}/members")
+
+  defp member_section_path(section, selected_club, _source, nil),
     do: ClubSite.url(selected_club, "/#{section}")
 
   defp member_compose_path(_selected_club, "host"), do: ~p"/messages/new"
@@ -124,19 +156,45 @@ defmodule MembaWeb.PageHTML do
   defp member_compose_path(selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/new")
 
+  defp member_invitation_path(selected_club, source, group_id) do
+    selected_club
+    |> member_invitation_path(source)
+    |> with_group_context(group_id)
+  end
+
   defp member_invitation_path(_selected_club, "host"), do: ~p"/members/invitations/new"
 
   defp member_invitation_path(selected_club, _source),
     do: ClubSite.url(selected_club, "/members/invitations/new")
 
-  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
+  defp member_message_path(message_id, selected_club, source, group_id) do
+    message_id
+    |> member_message_path(selected_club, source)
+    |> with_group_context(group_id)
+  end
+
+  defp member_message_path(message_id, _selected_club, "host"),
+    do: ~p"/messages/#{message_id}"
 
   defp member_message_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}")
 
-  defp member_message_delivery_path(message_id, _selected_club, "host"),
-    do: ~p"/messages/#{message_id}/delivery"
+  defp member_message_delivery_path(message_id, selected_club, source, group_id) do
+    message_id
+    |> member_message_delivery_path(selected_club, source)
+    |> with_group_context(group_id)
+  end
+
+  defp member_message_delivery_path(message_id, _selected_club, "host") do
+    ~p"/messages/#{message_id}/delivery"
+  end
 
   defp member_message_delivery_path(message_id, selected_club, _source),
     do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
+
+  defp with_group_context(path, group_id) when is_binary(group_id) and group_id != "" do
+    path <> "?" <> URI.encode_query(%{"group_id" => group_id})
+  end
+
+  defp with_group_context(path, _group_id), do: path
 end

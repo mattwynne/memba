@@ -152,6 +152,44 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute response =~ "Footer navigation"
   end
 
+  test "message detail preserves selected-group context in conversation and delivery links", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    group_id = Memba.ID.generate(:group)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/#{message.message_id}?#{[group_id: group_id]}")
+
+    assert has_element?(
+             view,
+             "a#back-to-club-home-link[href='/groups/#{group_id}']",
+             "All conversations"
+           )
+
+    assert has_element?(
+             view,
+             "#member-conversation-entry-delivery-link-#{message.message_id}" <>
+               "[href='/messages/#{message.message_id}/delivery?group_id=#{group_id}']",
+             "Delivery details"
+           )
+  end
+
   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
     conn: conn
   } do
