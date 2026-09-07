@@ -456,6 +456,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
+             "#member-section-action-new-message" <>
+               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
              "#member-message-#{trip_planning_conversation.message_id} " <>
                "[data-testid='club-message-link']" <>
                "[href='/messages/#{trip_planning_conversation.message_id}?group_id=#{trip_planning_group.group_id}']"

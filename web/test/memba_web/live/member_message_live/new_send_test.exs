@@ -4,9 +4,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership
+  alias Memba.Membership.Projections.Group
+  alias Memba.Membership.Projections.GroupMembership
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+  alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -102,6 +106,64 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
            )
 
     refute has_element?(view, "#member-message-compose-form")
+  end
+
+  test "submit carries an authorized selected group as the message audience", %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+    carol = create_active_member(club_id, name: "Carol Canoe", email: "carol@example.com")
+
+    trip_planning_group =
+      create_group(
+        club_id: club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-active-member-count='2']"
+           )
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Trip planning night",
+        "body" => "Bring route ideas."
+      }
+    })
+
+    await_delivery_projection!()
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+
+    recipient_ids =
+      message.message_id
+      |> Messaging.list_member_email_deliverys()
+      |> Enum.map(& &1.recipient_id)
+      |> Enum.sort()
+
+    assert recipient_ids == Enum.sort([alice.person_id, bob.person_id])
+    refute carol.person_id in recipient_ids
+
+    assert [%{message_id: message_id}] =
+             Messaging.list_conversations_for_group(trip_planning_group.group_id)
+
+    assert message_id == message.message_id
+
+    assert Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(club_id)) == []
   end
 
   test "blank body validation keeps the compose form and does not send", %{conn: conn} do
@@ -255,22 +317,44 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
                consistency: :strong
              )
 
+    membership_id = Memba.ID.generate(:membership)
+
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Memba.ID.generate(:membership),
+                 membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
                },
                consistency: :strong
              )
 
-    %{club_id: club_id, person_id: person_id}
+    %{club_id: club_id, membership_id: membership_id, person_id: person_id}
+  end
+
+  defp create_group(attrs) do
+    Repo.insert!(%Group{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      group_id: Memba.ID.generate(:group),
+      group_key: Keyword.fetch!(attrs, :group_key),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      active: true
+    })
   end
 
   defp await_delivery_projection! do
     Memba.ProjectionBarrier.await!(
       [
+        Memba.Messaging.Projectors.ConversationGroupAccess,
         Memba.Messaging.Projectors.EmailDelivery,
         Memba.Messaging.Projectors.MemberEmailDelivery
       ],

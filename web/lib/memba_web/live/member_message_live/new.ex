@@ -27,6 +27,7 @@ defmodule MembaWeb.MemberMessageLive.New do
       %{"club_id" => club_id} ->
         case compose_context(
                club_id,
+               Map.get(params, "group_id"),
                socket.assigns.current_identity,
                socket.assigns.current_identity_clubs
              ) do
@@ -40,6 +41,9 @@ defmodule MembaWeb.MemberMessageLive.New do
 
           {:error, :forbidden} ->
             forbidden!(socket)
+
+          {:error, :not_found} ->
+            not_found!(socket)
         end
 
       _params ->
@@ -119,6 +123,7 @@ defmodule MembaWeb.MemberMessageLive.New do
         id="member-message-compose"
         data-live-view="member-message-compose"
         data-club-id={selected_club_id(@selected_club, @route_params)}
+        data-audience-group-id={audience_group_id(@audience_group)}
         data-current-member-id={current_member_id(@current_member)}
         data-active-member-count={@active_member_count}
         data-compose-state={@compose_state}
@@ -379,13 +384,18 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   defp send_current_member_message(socket, message_params) do
-    with %{selected_club: %{club_id: club_id}, current_member: %{id: sender_id}} <- socket.assigns do
+    with %{
+           selected_club: %{club_id: club_id},
+           current_member: %{id: sender_id},
+           audience_group: %{group_id: audience_group_id}
+         } <- socket.assigns do
       message_id = Memba.ID.generate(:message)
 
       attrs = %{
         "message_id" => message_id,
         "club_id" => club_id,
         "sender_id" => sender_id,
+        "audience_group_id" => audience_group_id,
         "subject" => Map.get(message_params, "subject", ""),
         "body" => Map.get(message_params, "body", "")
       }
@@ -410,21 +420,51 @@ defmodule MembaWeb.MemberMessageLive.New do
     )
   end
 
-  defp compose_context(club_id, current_identity, current_identity_clubs) do
+  defp compose_context(club_id, requested_group_id, current_identity, current_identity_clubs) do
     with selected_club when not is_nil(selected_club) <-
            selected_club(current_identity_clubs, club_id),
-         everyone_group_id <- SystemGroups.everyone_group_id(club_id),
-         members <- Membership.list_active_members_of_group(everyone_group_id),
+         club_members <- Membership.list_active_members_of_club(club_id),
          current_member when not is_nil(current_member) <-
-           current_member_for_identity(members, current_identity) do
-      {:ok,
-       %{
-         selected_club: selected_club,
-         current_member: current_member,
-         active_member_count: Enum.count(members)
-       }}
+           current_member_for_identity(club_members, current_identity) do
+      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
+      group_id = requested_group_id || SystemGroups.everyone_group_id(club_id)
+
+      compose_group_context(
+        selected_club,
+        current_member,
+        groups,
+        group_id,
+        requested_group_id
+      )
     else
       _not_authorized -> {:error, :forbidden}
+    end
+  end
+
+  defp compose_group_context(
+         selected_club,
+         current_member,
+         groups,
+         group_id,
+         requested_group_id
+       ) do
+    case Enum.find(groups, &(&1.group_id == group_id)) do
+      nil when is_nil(requested_group_id) ->
+        {:error, :forbidden}
+
+      nil ->
+        {:error, :not_found}
+
+      audience_group ->
+        members = Membership.list_active_members_of_group(audience_group.group_id)
+
+        {:ok,
+         %{
+           selected_club: selected_club,
+           current_member: current_member,
+           audience_group: audience_group,
+           active_member_count: Enum.count(members)
+         }}
     end
   end
 
@@ -444,6 +484,7 @@ defmodule MembaWeb.MemberMessageLive.New do
     socket
     |> assign(:selected_club, nil)
     |> assign(:current_member, nil)
+    |> assign(:audience_group, nil)
     |> assign(:active_member_count, nil)
     |> assign_initial_send_state()
     |> assign(:message_form, message_form())
@@ -502,6 +543,9 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp current_member_id(nil), do: nil
   defp current_member_id(current_member), do: current_member.id
 
+  defp audience_group_id(nil), do: nil
+  defp audience_group_id(audience_group), do: audience_group.group_id
+
   defp club_home_path(nil, _route_params), do: ~p"/conversations"
 
   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
@@ -547,4 +591,14 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
+
+  defp not_found!(socket) do
+    case socket.private[:connect_info] do
+      %Plug.Conn{} = conn ->
+        raise Phoenix.Router.NoRouteError, conn: conn, router: MembaWeb.Router
+
+      _connect_info ->
+        raise "member message compose not found"
+    end
+  end
 end

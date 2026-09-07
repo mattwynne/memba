@@ -362,6 +362,42 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert response(conn, 403) == "Forbidden"
   end
 
+  test "routed GET returns not found when the requested audience group is not available to the member",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Climbing Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+
+    response =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> get(~p"/messages/new?#{[group_id: private_group.group_id]}")
+      |> html_response(404)
+
+    assert response =~ "Not Found"
+    refute response =~ private_group.name
+  end
+
   defp signed_in_club_host(conn, email, club) do
     conn
     |> club_host(club)
@@ -403,7 +439,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       insert_everyone_group_membership!(club_id, membership_id, person.person_id)
     end
 
-    %{club_id: club_id, person_id: person.person_id}
+    %{club_id: club_id, membership_id: membership_id, person_id: person.person_id}
   end
 
   defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
@@ -424,6 +460,25 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       group_id: group_id,
       membership_id: membership_id,
       person_id: person_id,
+      active: true
+    })
+  end
+
+  defp create_group(attrs) do
+    Repo.insert!(%Group{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      group_id: Memba.ID.generate(:group),
+      group_key: Keyword.fetch!(attrs, :group_key),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
+  defp add_group_member(group, member) do
+    Repo.insert!(%GroupMembership{
+      club_id: member.club_id,
+      group_id: group.group_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
       active: true
     })
   end
