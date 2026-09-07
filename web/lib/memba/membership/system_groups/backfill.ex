@@ -22,22 +22,10 @@ defmodule Memba.Membership.SystemGroups.Backfill do
 
   @default_page_size 500
 
-  # Run 34047959394 appended this Everyone grant before its release command timed
-  # out. Keep the exact evidence-scoped repair idempotent; do not infer repairs
-  # from multi-group access, which can become valid when shared audiences arrive.
-  @known_erroneous_everyone_access [
-    %{
-      conversation_id: "msg_ec4465c4-f306-4b4b-af68-53810f5a87e2",
-      club_id: "clb_9d87f308-9ccd-40a4-a613-0c11bb003cb9",
-      group_id: "grp_1f75d34f-2a18-3606-cd4d-6df61f989811"
-    }
-  ]
-
   @type phase ::
           :system_group_definitions
           | :everyone_group_memberships
           | :admin_group_memberships
-          | :known_erroneous_everyone_access_cleanup
           | :everyone_conversation_access
 
   @type phase_summary :: %{
@@ -67,7 +55,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
         :system_group_definitions,
         :everyone_group_memberships,
         :admin_group_memberships,
-        :known_erroneous_everyone_access_cleanup,
         :everyone_conversation_access
       ]
       |> Enum.reduce(%{}, fn phase, summaries ->
@@ -76,7 +63,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
       end)
 
     await_projectors!()
-    ensure_known_revocations_projected!()
     Logger.info("system_groups_backfill complete summary=#{inspect(summaries)}")
     summaries
   end
@@ -133,35 +119,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
     Membership.list_admin_group_membership_backfill_page(cursor, page_size)
   end
 
-  defp fetch_page(:known_erroneous_everyone_access_cleanup, cursor, page_size) do
-    remaining_entries =
-      Enum.filter(@known_erroneous_everyone_access, fn entry ->
-        is_nil(cursor) or entry.conversation_id > cursor
-      end)
-
-    source_entries = Enum.take(remaining_entries, page_size)
-
-    entries =
-      Enum.filter(source_entries, fn entry ->
-        Messaging.group_has_conversation_access?(
-          entry.conversation_id,
-          entry.group_id,
-          :read
-        )
-      end)
-
-    next_cursor =
-      if length(remaining_entries) > length(source_entries) do
-        source_entries |> List.last() |> Map.fetch!(:conversation_id)
-      end
-
-    %{
-      entries: entries,
-      next_cursor: next_cursor,
-      source_count: length(source_entries)
-    }
-  end
-
   defp fetch_page(:everyone_conversation_access, cursor, page_size) do
     Messaging.list_everyone_conversation_access_backfill_page(cursor, page_size)
   end
@@ -212,23 +169,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
     after_command!(opts, phase, entry, attrs)
   end
 
-  defp dispatch_entry!(:known_erroneous_everyone_access_cleanup = phase, entry, opts) do
-    attrs = %{
-      conversation_id: entry.conversation_id,
-      club_id: entry.club_id,
-      group_id: entry.group_id
-    }
-
-    case Messaging.revoke_conversation_access_from_group(attrs, consistency: :eventual) do
-      :ok -> :ok
-      {:ok, _result} -> :ok
-      {:error, reason} -> raise backfill_error(phase, attrs, reason)
-      other -> raise backfill_error(phase, attrs, {:unexpected_dispatch_result, other})
-    end
-
-    after_command!(opts, phase, entry, attrs)
-  end
-
   defp dispatch_membership!(phase, command, _consistency) do
     case MembershipApp.dispatch(command, consistency: :eventual) do
       :ok -> :ok
@@ -245,22 +185,6 @@ defmodule Memba.Membership.SystemGroups.Backfill do
     Memba.ProjectionBarrier.await!([Group, GroupMembership, ConversationGroupAccess],
       timeout: timeout
     )
-  end
-
-  defp ensure_known_revocations_projected! do
-    case Enum.find(@known_erroneous_everyone_access, fn entry ->
-           Messaging.group_has_conversation_access?(
-             entry.conversation_id,
-             entry.group_id,
-             :read
-           )
-         end) do
-      nil ->
-        :ok
-
-      entry ->
-        raise "known erroneous Everyone conversation access remains projected after backfill: #{inspect(entry)}"
-    end
   end
 
   defp after_command!(opts, phase, entry, command) do

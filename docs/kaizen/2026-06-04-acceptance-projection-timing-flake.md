@@ -421,3 +421,16 @@ predicate becomes false and normal barriers automatically apply again. A
 regression stops the conversation-access projector, appends the exact event,
 proves the bridge recognizes that state, and verifies the release backfill can
 complete without broadening the exception to other conversations.
+
+### Post-repair cleanup
+
+Continuous Delivery run `34055243180` successfully promoted the temporary
+upgrade bridge. Run `34056510719` then succeeded with the bridge removed, normal
+projection barriers restored, and a hard assertion proving the erroneous
+Everyone projection row was absent.
+
+After that production proof, the exact-ID cleanup phase and its assertion were
+removed from the reusable system-group backfill. The compensating event remains
+in event history, and the reusable revocation support, aggregate-level
+initial-access precondition, and regression coverage preventing future audience
+widening remain in the application.

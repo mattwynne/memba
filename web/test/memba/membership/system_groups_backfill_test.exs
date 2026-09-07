@@ -26,13 +26,8 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.ConversationAccessGrantedToGroup
-  alias Memba.Messaging.Events.ConversationAccessRevokedFromGroup
   alias Memba.Messaging.Recipient
   alias Memba.Release
-
-  @repair_conversation_id "msg_ec4465c4-f306-4b4b-af68-53810f5a87e2"
-  @repair_club_id "clb_9d87f308-9ccd-40a4-a613-0c11bb003cb9"
-  @repair_everyone_group_id "grp_1f75d34f-2a18-3606-cd4d-6df61f989811"
 
   test "first run appends missing system-group, membership, and conversation-access facts" do
     club = seed_historic_club!()
@@ -88,48 +83,6 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
 
     assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
     refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
-  end
-
-  test "appends the evidence-scoped compensating revocation for the production conversation" do
-    club = seed_historic_club!(@repair_club_id)
-    member = add_active_member!(club.club_id)
-    append_historic_system_groups!(club.club_id)
-    admin_group_id = SystemGroups.admin_group_id(club.club_id)
-    everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
-    assert everyone_group_id == @repair_everyone_group_id
-
-    conversation_id =
-      send_group_root_conversation!(
-        club.club_id,
-        member.person_id,
-        admin_group_id,
-        @repair_conversation_id
-      )
-
-    assert :ok =
-             Messaging.grant_conversation_access_to_group(%{
-               conversation_id: conversation_id,
-               club_id: club.club_id,
-               group_id: everyone_group_id,
-               access_level: :write
-             })
-
-    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
-    assert Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :write)
-
-    assert %{
-             known_erroneous_everyone_access_cleanup: %{dispatched_count: 1},
-             everyone_conversation_access: %{dispatched_count: 0}
-           } = Backfill.run!(page_size: 10)
-
-    assert Messaging.group_has_conversation_access?(conversation_id, admin_group_id, :write)
-    refute Messaging.group_has_conversation_access?(conversation_id, everyone_group_id, :read)
-    assert messaging_event_count(conversation_id, ConversationAccessRevokedFromGroup) == 1
-
-    assert %{known_erroneous_everyone_access_cleanup: %{dispatched_count: 0}} =
-             Backfill.run!(page_size: 10)
-
-    assert messaging_event_count(conversation_id, ConversationAccessRevokedFromGroup) == 1
   end
 
   test "second run is idempotent and appends no duplicate facts" do
