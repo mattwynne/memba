@@ -1,0 +1,441 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index c284344..db37a96 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+ - [x] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+ - [x] 012 The server remains the authority for every final selection.
+-- [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
++- [x] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+ - [ ] 014 The compose confirmation and error paths must retain that group.
+ - [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+ - [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 18ea7f6..6585a09 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -173,6 +173,12 @@ defmodule MembaWeb.PageHTML do
+   defp member_section_path(section, selected_club, _source, nil),
+     do: ClubSite.url(selected_club, "/#{section}")
+ 
++  defp member_compose_path(selected_club, source, group_id) do
++    selected_club
++    |> member_compose_path(source)
++    |> with_group_context(group_id)
++  end
++
+   defp member_compose_path(_selected_club, "host"), do: ~p"/messages/new"
+ 
+   defp member_compose_path(selected_club, _source),
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 906be20..4c34de4 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -78,7 +78,13 @@
+             <div class="group-head__actions">
+               <.button
+                 id="member-section-action-new-message"
+-                href={member_compose_path(@selected_club, club_id_source)}
++                href={
++                  member_compose_path(
++                    @selected_club,
++                    club_id_source,
++                    selected_group_route_id
++                  )
++                }
+                 variant="primary"
+                 size="sm"
+                 data-section-action="conversations"
+@@ -188,7 +194,13 @@
+                 <div class="mt-5">
+                   <.button
+                     id="member-message-empty-send-link"
+-                    href={member_compose_path(@selected_club, club_id_source)}
++                    href={
++                      member_compose_path(
++                        @selected_club,
++                        club_id_source,
++                        selected_group_route_id
++                      )
++                    }
+                     variant="secondary"
+                   >
+                     <.icon name="hero-paper-airplane" class="size-4" /> Send the first message
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index 03a6a50..d3f2816 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -27,6 +27,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+       %{"club_id" => club_id} ->
+         case compose_context(
+                club_id,
++               Map.get(params, "group_id"),
+                socket.assigns.current_identity,
+                socket.assigns.current_identity_clubs
+              ) do
+@@ -40,6 +41,9 @@ defmodule MembaWeb.MemberMessageLive.New do
+ 
+           {:error, :forbidden} ->
+             forbidden!(socket)
++
++          {:error, :not_found} ->
++            not_found!(socket)
+         end
+ 
+       _params ->
+@@ -119,6 +123,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+         id="member-message-compose"
+         data-live-view="member-message-compose"
+         data-club-id={selected_club_id(@selected_club, @route_params)}
++        data-audience-group-id={audience_group_id(@audience_group)}
+         data-current-member-id={current_member_id(@current_member)}
+         data-active-member-count={@active_member_count}
+         data-compose-state={@compose_state}
+@@ -379,13 +384,18 @@ defmodule MembaWeb.MemberMessageLive.New do
+   end
+ 
+   defp send_current_member_message(socket, message_params) do
+-    with %{selected_club: %{club_id: club_id}, current_member: %{id: sender_id}} <- socket.assigns do
++    with %{
++           selected_club: %{club_id: club_id},
++           current_member: %{id: sender_id},
++           audience_group: %{group_id: audience_group_id}
++         } <- socket.assigns do
+       message_id = Memba.ID.generate(:message)
+ 
+       attrs = %{
+         "message_id" => message_id,
+         "club_id" => club_id,
+         "sender_id" => sender_id,
++        "audience_group_id" => audience_group_id,
+         "subject" => Map.get(message_params, "subject", ""),
+         "body" => Map.get(message_params, "body", "")
+       }
+@@ -410,24 +420,54 @@ defmodule MembaWeb.MemberMessageLive.New do
+     )
+   end
+ 
+-  defp compose_context(club_id, current_identity, current_identity_clubs) do
++  defp compose_context(club_id, requested_group_id, current_identity, current_identity_clubs) do
+     with selected_club when not is_nil(selected_club) <-
+            selected_club(current_identity_clubs, club_id),
+-         everyone_group_id <- SystemGroups.everyone_group_id(club_id),
+-         members <- Membership.list_active_members_of_group(everyone_group_id),
++         club_members <- Membership.list_active_members_of_club(club_id),
+          current_member when not is_nil(current_member) <-
+-           current_member_for_identity(members, current_identity) do
+-      {:ok,
+-       %{
+-         selected_club: selected_club,
+-         current_member: current_member,
+-         active_member_count: Enum.count(members)
+-       }}
++           current_member_for_identity(club_members, current_identity) do
++      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
++      group_id = requested_group_id || SystemGroups.everyone_group_id(club_id)
++
++      compose_group_context(
++        selected_club,
++        current_member,
++        groups,
++        group_id,
++        requested_group_id
++      )
+     else
+       _not_authorized -> {:error, :forbidden}
+     end
+   end
+ 
++  defp compose_group_context(
++         selected_club,
++         current_member,
++         groups,
++         group_id,
++         requested_group_id
++       ) do
++    case Enum.find(groups, &(&1.group_id == group_id)) do
++      nil when is_nil(requested_group_id) ->
++        {:error, :forbidden}
++
++      nil ->
++        {:error, :not_found}
++
++      audience_group ->
++        members = Membership.list_active_members_of_group(audience_group.group_id)
++
++        {:ok,
++         %{
++           selected_club: selected_club,
++           current_member: current_member,
++           audience_group: audience_group,
++           active_member_count: Enum.count(members)
++         }}
++    end
++  end
++
+   defp selected_club(current_identity_clubs, club_id) do
+     Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
+   end
+@@ -444,6 +484,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+     socket
+     |> assign(:selected_club, nil)
+     |> assign(:current_member, nil)
++    |> assign(:audience_group, nil)
+     |> assign(:active_member_count, nil)
+     |> assign_initial_send_state()
+     |> assign(:message_form, message_form())
+@@ -502,6 +543,9 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp current_member_id(nil), do: nil
+   defp current_member_id(current_member), do: current_member.id
+ 
++  defp audience_group_id(nil), do: nil
++  defp audience_group_id(audience_group), do: audience_group.group_id
++
+   defp club_home_path(nil, _route_params), do: ~p"/conversations"
+ 
+   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
+@@ -547,4 +591,14 @@ defmodule MembaWeb.MemberMessageLive.New do
+   end
+ 
+   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
++
++  defp not_found!(socket) do
++    case socket.private[:connect_info] do
++      %Plug.Conn{} = conn ->
++        raise Phoenix.Router.NoRouteError, conn: conn, router: MembaWeb.Router
++
++      _connect_info ->
++        raise "member message compose not found"
++    end
++  end
+ end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index cab171d..9461de9 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -454,6 +454,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+                "[data-phx-link='patch']"
+            )
+ 
++    assert has_element?(
++             view,
++             "#member-section-action-new-message" <>
++               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']"
++           )
++
+     assert has_element?(
+              view,
+              "#member-message-#{trip_planning_conversation.message_id} " <>
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 0279bb0..3e2b429 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -4,9 +4,13 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
++  alias Memba.Membership.SystemGroups
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
++  alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+ 
+@@ -104,6 +108,64 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     refute has_element?(view, "#member-message-compose-form")
+   end
+ 
++  test "submit carries an authorized selected group as the message audience", %{conn: conn} do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
++    carol = create_active_member(club_id, name: "Carol Canoe", email: "carol@example.com")
++
++    trip_planning_group =
++      create_group(
++        club_id: club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++    add_group_member(trip_planning_group, bob)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
++      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
++
++    assert has_element?(
++             view,
++             "#member-message-compose" <>
++               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
++               "[data-active-member-count='2']"
++           )
++
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "Trip planning night",
++        "body" => "Bring route ideas."
++      }
++    })
++
++    await_delivery_projection!()
++
++    assert [message] = Messaging.list_messages_for_club(club_id)
++
++    recipient_ids =
++      message.message_id
++      |> Messaging.list_member_email_deliverys()
++      |> Enum.map(& &1.recipient_id)
++      |> Enum.sort()
++
++    assert recipient_ids == Enum.sort([alice.person_id, bob.person_id])
++    refute carol.person_id in recipient_ids
++
++    assert [%{message_id: message_id}] =
++             Messaging.list_conversations_for_group(trip_planning_group.group_id)
++
++    assert message_id == message.message_id
++
++    assert Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(club_id)) == []
++  end
++
+   test "blank body validation keeps the compose form and does not send", %{conn: conn} do
+     club_id = Memba.ID.generate(:club)
+     _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+@@ -255,22 +317,44 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+                consistency: :strong
+              )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     assert :ok =
+              Membership.add_member(
+                %{
+-                 membership_id: Memba.ID.generate(:membership),
++                 membership_id: membership_id,
+                  club_id: club_id,
+                  person_id: person_id
+                },
+                consistency: :strong
+              )
+ 
+-    %{club_id: club_id, person_id: person_id}
++    %{club_id: club_id, membership_id: membership_id, person_id: person_id}
++  end
++
++  defp create_group(attrs) do
++    Repo.insert!(%Group{
++      club_id: Keyword.fetch!(attrs, :club_id),
++      group_id: Memba.ID.generate(:group),
++      group_key: Keyword.fetch!(attrs, :group_key),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp add_group_member(group, member) do
++    Repo.insert!(%GroupMembership{
++      club_id: member.club_id,
++      group_id: group.group_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      active: true
++    })
+   end
+ 
+   defp await_delivery_projection! do
+     Memba.ProjectionBarrier.await!(
+       [
++        Memba.Messaging.Projectors.ConversationGroupAccess,
+         Memba.Messaging.Projectors.EmailDelivery,
+         Memba.Messaging.Projectors.MemberEmailDelivery
+       ],
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 2a611bf..e2e4698 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -362,6 +362,42 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     assert response(conn, 403) == "Forbidden"
+   end
+ 
++  test "routed GET returns not found when the requested audience group is not available to the member",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Climbing Club",
++        club_id: alice.club_id
++      )
++
++    private_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "private_planning",
++        name: "Private Planning"
++      )
++
++    add_group_member(private_group, bob)
++
++    response =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> get(~p"/messages/new?#{[group_id: private_group.group_id]}")
++      |> html_response(404)
++
++    assert response =~ "Not Found"
++    refute response =~ private_group.name
++  end
++
+   defp signed_in_club_host(conn, email, club) do
+     conn
+     |> club_host(club)
+@@ -403,7 +439,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+       insert_everyone_group_membership!(club_id, membership_id, person.person_id)
+     end
+ 
+-    %{club_id: club_id, person_id: person.person_id}
++    %{club_id: club_id, membership_id: membership_id, person_id: person.person_id}
+   end
+ 
+   defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
+@@ -428,6 +464,25 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     })
+   end
+ 
++  defp create_group(attrs) do
++    Repo.insert!(%Group{
++      club_id: Keyword.fetch!(attrs, :club_id),
++      group_id: Memba.ID.generate(:group),
++      group_key: Keyword.fetch!(attrs, :group_key),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp add_group_member(group, member) do
++    Repo.insert!(%GroupMembership{
++      club_id: member.club_id,
++      group_id: group.group_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      active: true
++    })
++  end
++
+   defp club_attrs(attrs, club_id) do
+     base = [
+       club_id: club_id,
