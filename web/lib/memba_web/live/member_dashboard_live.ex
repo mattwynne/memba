@@ -62,6 +62,39 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event(
+        "restore_remembered_group",
+        %{"group_id" => remembered_group_id},
+        %{assigns: %{selected_group_route_id: nil}} = socket
+      )
+      when is_binary(remembered_group_id) and remembered_group_id != "" do
+    case MemberDashboardPresentation.load(
+           socket.assigns.selected_club.club_id,
+           socket.assigns.current_identity,
+           socket.assigns.current_identity_clubs,
+           remembered_group_id
+         ) do
+      {:ok, dashboard_assigns} ->
+        selected_group_id = dashboard_assigns.selected_group.group_id
+
+        socket =
+          socket
+          |> assign(:selected_group_route_id, selected_group_id)
+          |> assign(dashboard_assigns)
+          |> push_patch(to: remembered_group_path(socket.assigns.live_action, selected_group_id))
+
+        {:reply, %{selected_group_id: selected_group_id}, socket}
+
+      {:error, _reason} ->
+        reply_with_selected_group(socket)
+    end
+  end
+
+  def handle_event("restore_remembered_group", _params, socket) do
+    reply_with_selected_group(socket)
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(
         {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
         %{assigns: %{selected_club: selected_club}} = socket
@@ -79,6 +112,13 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp active_section(:members), do: "members"
   defp active_section(_live_action), do: "conversations"
+
+  defp remembered_group_path(:members, group_id), do: ~p"/groups/#{group_id}/members"
+  defp remembered_group_path(_live_action, group_id), do: ~p"/groups/#{group_id}"
+
+  defp reply_with_selected_group(socket) do
+    {:reply, %{selected_group_id: socket.assigns.selected_group.group_id}, socket}
+  end
 
   defp refresh_dashboard(socket, club_id, selected_group_id) do
     case MemberDashboardPresentation.load(

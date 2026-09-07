@@ -123,6 +123,166 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-group-email-address")
   end
 
+  test "Everyone fallback exposes browser-local group restoration metadata", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(
+             view,
+             "#member-club-home[phx-hook='RememberGroupSelection']" <>
+               "[data-club-id='#{alice.club_id}']" <>
+               "[data-selected-group-id='#{everyone_group_id}']" <>
+               "[data-explicit-group-route='false']"
+           )
+  end
+
+  test "an authorised remembered group is restored to its canonical URL", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/members")
+
+    render_hook(view, "restore_remembered_group", %{
+      "group_id" => trip_planning_group.group_id
+    })
+
+    trip_planning_group_id = trip_planning_group.group_id
+
+    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
+    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-explicit-group-route='true']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Trip Planning")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+  end
+
+  test "a stale unauthorised remembered group falls back to Everyone without disclosure", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private_planning",
+        name: "Private Planning"
+      )
+
+    add_group_member(private_group, bob)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    render_hook(view, "restore_remembered_group", %{"group_id" => private_group.group_id})
+
+    assert_reply view, %{selected_group_id: ^everyone_group_id}
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{everyone_group_id}']" <>
+               "[data-explicit-group-route='false']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Everyone")
+    refute has_element?(view, "#member-group-name", "Private Planning")
+    refute has_element?(view, "#member-group-link-#{private_group.group_id}")
+  end
+
+  test "an explicit authorised group route wins over a remembered group event", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    hut_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "hut_planning",
+        name: "Hut Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(hut_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}")
+
+    render_hook(view, "restore_remembered_group", %{"group_id" => hut_group.group_id})
+
+    trip_planning_group_id = trip_planning_group.group_id
+
+    assert_reply view, %{selected_group_id: ^trip_planning_group_id}
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-explicit-group-route='true']"
+           )
+
+    assert has_element?(view, "#member-group-name", "Trip Planning")
+    refute has_element?(view, "#member-group-name", "Hut Planning")
+  end
+
   test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
     alice =
       create_active_member(
