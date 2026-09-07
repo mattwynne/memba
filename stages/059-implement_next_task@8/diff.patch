@@ -1,0 +1,493 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index ec69688..5c219e6 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+ - [x] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+ - [x] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+-- [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
++- [x] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+ - [ ] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+ - [ ] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+ - [ ] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 6bdb9d4..4b6d0c3 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -13,6 +13,7 @@ defmodule MembaWeb.PageHTML do
+   attr :entry, :map, required: true
+   attr :selected_club, :map, required: true
+   attr :club_id_source, :string, default: nil
++  attr :group_id, :string, default: nil
+ 
+   defp conversation_entry_card(assigns) do
+     ~H"""
+@@ -50,7 +51,8 @@ defmodule MembaWeb.PageHTML do
+                 member_message_delivery_path(
+                   @entry.message.message_id,
+                   @selected_club,
+-                  @club_id_source
++                  @club_id_source,
++                  @group_id
+                 )
+               }
+               role="menuitem"
+@@ -108,15 +110,45 @@ defmodule MembaWeb.PageHTML do
+     "member-conversation-body-#{message_id}"
+   end
+ 
+-  defp member_club_home_path(_selected_club, "host"), do: ~p"/conversations"
++  defp member_club_home_path(_selected_club, %{
++         "club_id_source" => "host",
++         "group_id" => group_id
++       })
++       when is_binary(group_id) and group_id != "",
++       do: ~p"/groups/#{group_id}"
+ 
+-  defp member_club_home_path(selected_club, _source),
++  defp member_club_home_path(selected_club, %{"group_id" => group_id})
++       when is_binary(group_id) and group_id != "",
++       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
++
++  defp member_club_home_path(_selected_club, %{"club_id_source" => "host"}),
++    do: ~p"/conversations"
++
++  defp member_club_home_path(selected_club, _route_params),
+     do: ClubSite.url(selected_club, "/conversations")
+ 
+-  defp member_section_path("conversations", _selected_club, "host"), do: ~p"/conversations"
+-  defp member_section_path("members", _selected_club, "host"), do: ~p"/members"
++  defp member_section_path("conversations", _selected_club, "host", group_id)
++       when is_binary(group_id),
++       do: ~p"/groups/#{group_id}"
++
++  defp member_section_path("members", _selected_club, "host", group_id)
++       when is_binary(group_id),
++       do: ~p"/groups/#{group_id}/members"
++
++  defp member_section_path("conversations", _selected_club, "host", nil),
++    do: ~p"/conversations"
++
++  defp member_section_path("members", _selected_club, "host", nil), do: ~p"/members"
+ 
+-  defp member_section_path(section, selected_club, _source),
++  defp member_section_path("conversations", selected_club, _source, group_id)
++       when is_binary(group_id),
++       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
++
++  defp member_section_path("members", selected_club, _source, group_id)
++       when is_binary(group_id),
++       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}/members")
++
++  defp member_section_path(section, selected_club, _source, nil),
+     do: ClubSite.url(selected_club, "/#{section}")
+ 
+   defp member_compose_path(_selected_club, "host"), do: ~p"/messages/new"
+@@ -124,19 +156,45 @@ defmodule MembaWeb.PageHTML do
+   defp member_compose_path(selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/new")
+ 
++  defp member_invitation_path(selected_club, source, group_id) do
++    selected_club
++    |> member_invitation_path(source)
++    |> with_group_context(group_id)
++  end
++
+   defp member_invitation_path(_selected_club, "host"), do: ~p"/members/invitations/new"
+ 
+   defp member_invitation_path(selected_club, _source),
+     do: ClubSite.url(selected_club, "/members/invitations/new")
+ 
+-  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
++  defp member_message_path(message_id, selected_club, source, group_id) do
++    message_id
++    |> member_message_path(selected_club, source)
++    |> with_group_context(group_id)
++  end
++
++  defp member_message_path(message_id, _selected_club, "host"),
++    do: ~p"/messages/#{message_id}"
+ 
+   defp member_message_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+ 
+-  defp member_message_delivery_path(message_id, _selected_club, "host"),
+-    do: ~p"/messages/#{message_id}/delivery"
++  defp member_message_delivery_path(message_id, selected_club, source, group_id) do
++    message_id
++    |> member_message_delivery_path(selected_club, source)
++    |> with_group_context(group_id)
++  end
++
++  defp member_message_delivery_path(message_id, _selected_club, "host") do
++    ~p"/messages/#{message_id}/delivery"
++  end
+ 
+   defp member_message_delivery_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}/delivery")
++
++  defp with_group_context(path, group_id) when is_binary(group_id) and group_id != "" do
++    path <> "?" <> URI.encode_query(%{"group_id" => group_id})
++  end
++
++  defp with_group_context(path, _group_id), do: path
+ end
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index e97585f..a134ffc 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -1,5 +1,6 @@
+ <% club_id_source = assigns[:club_id_source] || "host" %>
+ <% active_section = assigns[:active_section] || "conversations" %>
++<% selected_group_route_id = assigns[:selected_group_route_id] %>
+ 
+ <Layouts.club_site
+   flash={@flash}
+@@ -22,7 +23,14 @@
+       >
+         <.link
+           id="member-section-tab-conversations"
+-          patch={member_section_path("conversations", @selected_club, club_id_source)}
++          patch={
++            member_section_path(
++              "conversations",
++              @selected_club,
++              club_id_source,
++              selected_group_route_id
++            )
++          }
+           class={member_section_tab_class(active_section, "conversations")}
+           data-tab="conversations"
+           role="tab"
+@@ -33,7 +41,14 @@
+         </.link>
+         <.link
+           id="member-section-tab-members"
+-          patch={member_section_path("members", @selected_club, club_id_source)}
++          patch={
++            member_section_path(
++              "members",
++              @selected_club,
++              club_id_source,
++              selected_group_route_id
++            )
++          }
+           class={member_section_tab_class(active_section, "members")}
+           data-tab="members"
+           role="tab"
+@@ -60,7 +75,13 @@
+               @current_member_can_manage_members?
+           }
+           id="member-section-action-invite-member"
+-          href={member_invitation_path(@selected_club, club_id_source)}
++          href={
++            member_invitation_path(
++              @selected_club,
++              club_id_source,
++              selected_group_route_id
++            )
++          }
+           variant="primary"
+           size="sm"
+           data-section-action="members"
+@@ -114,7 +135,14 @@
+           >
+             <.link
+               data-testid="club-message-link"
+-              href={member_message_path(message_row.message_id, @selected_club, club_id_source)}
++              href={
++                member_message_path(
++                  message_row.message_id,
++                  @selected_club,
++                  club_id_source,
++                  selected_group_route_id
++                )
++              }
+               class="conversation"
+             >
+               <.avatar
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 64ea11a..e87a3f5 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -14,7 +14,7 @@
+   >
+     <.link
+       id="back-to-club-home-link"
+-      href={member_club_home_path(@selected_club, Map.get(@route_params, "club_id_source"))}
++      href={member_club_home_path(@selected_club, @route_params)}
+       class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
+     >
+       <.icon name="hero-arrow-left" class="size-4" /> All conversations
+@@ -104,6 +104,7 @@
+           entry={entry}
+           selected_club={@selected_club}
+           club_id_source={Map.get(@route_params, "club_id_source")}
++          group_id={Map.get(@route_params, "group_id")}
+         />
+       </div>
+ 
+@@ -113,6 +114,7 @@
+           entry={entry}
+           selected_club={@selected_club}
+           club_id_source={Map.get(@route_params, "club_id_source")}
++          group_id={Map.get(@route_params, "group_id")}
+         />
+       </div>
+ 
+diff --git a/web/lib/memba_web/live/member_invitation_live/new.ex b/web/lib/memba_web/live/member_invitation_live/new.ex
+index 553c9d3..57345ac 100644
+--- a/web/lib/memba_web/live/member_invitation_live/new.ex
++++ b/web/lib/memba_web/live/member_invitation_live/new.ex
+@@ -349,6 +349,17 @@ defmodule MembaWeb.MemberInvitationLive.New do
+   defp current_member_name(nil), do: "Current member"
+   defp current_member_name(current_member), do: current_member.name
+ 
++  defp club_home_path(_selected_club, %{
++         "club_id_source" => "host",
++         "group_id" => group_id
++       })
++       when is_binary(group_id) and group_id != "",
++       do: ~p"/groups/#{group_id}"
++
++  defp club_home_path(selected_club, %{"group_id" => group_id})
++       when is_binary(group_id) and group_id != "",
++       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
++
+   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
+ 
+   defp club_home_path(selected_club, _route_params),
+diff --git a/web/lib/memba_web/live/member_message_delivery_live/show.ex b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+index ec9a0d3..8c5b464 100644
+--- a/web/lib/memba_web/live/member_message_delivery_live/show.ex
++++ b/web/lib/memba_web/live/member_message_delivery_live/show.ex
+@@ -68,7 +68,8 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+             member_message_path(
+               conversation_message_id(@message),
+               @selected_club,
+-              Map.get(@route_params, "club_id_source")
++              Map.get(@route_params, "club_id_source"),
++              Map.get(@route_params, "group_id")
+             )
+           }
+           class="inline-flex items-center gap-2 text-sm font-semibold text-ink-2 transition duration-200 hover:text-base-content"
+@@ -287,7 +288,18 @@ defmodule MembaWeb.MemberMessageDeliveryLive.Show do
+ 
+   defp conversation_message_id(%{message_id: message_id}), do: message_id
+ 
+-  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
++  defp member_message_path(message_id, selected_club, source, group_id) do
++    path = member_message_path(message_id, selected_club, source)
++
++    if is_binary(group_id) and group_id != "" do
++      path <> "?" <> URI.encode_query(%{"group_id" => group_id})
++    else
++      path
++    end
++  end
++
++  defp member_message_path(message_id, _selected_club, "host"),
++    do: ~p"/messages/#{message_id}"
+ 
+   defp member_message_path(message_id, selected_club, _source),
+     do: ClubSite.url(selected_club, "/messages/#{message_id}")
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d6f7167..5ef2aa6 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -130,6 +130,32 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#club-member-#{carol.person_id}")
+     refute has_element?(view, "#member-section-panel-conversations[hidden]")
+     assert has_element?(view, "#member-section-panel-members[hidden]")
++
++    assert has_element?(
++             view,
++             "#member-section-tab-conversations[href='/groups/#{trip_planning_group.group_id}']" <>
++               "[data-phx-link='patch']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-section-tab-members[href='/groups/#{trip_planning_group.group_id}/members']" <>
++               "[data-phx-link='patch']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-#{trip_planning_conversation.message_id} " <>
++               "[data-testid='club-message-link']" <>
++               "[href='/messages/#{trip_planning_conversation.message_id}?group_id=#{trip_planning_group.group_id}']"
++           )
++
++    view
++    |> element("#member-section-tab-members")
++    |> render_click()
++
++    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}/members")
++    refute has_element?(view, "#member-section-panel-members[hidden]")
+   end
+ 
+   test "canonical group members route loads the selected group's Members section", %{conn: conn} do
+@@ -165,6 +191,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     add_group_member(trip_planning_group, alice)
+     add_group_member(trip_planning_group, bob)
++    grant_manage_members!(alice)
+ 
+     {:ok, view, _html} =
+       conn
+@@ -176,6 +203,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "#club-member-#{carol.person_id}")
+     assert has_element?(view, "#member-section-panel-conversations[hidden]")
+     refute has_element?(view, "#member-section-panel-members[hidden]")
++
++    assert has_element?(
++             view,
++             "#member-section-action-invite-member" <>
++               "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
++           )
+   end
+ 
+   test "canonical group routes return the ordinary not-found response to non-members", %{
+diff --git a/web/test/memba_web/live/member_invitation_live/new_test.exs b/web/test/memba_web/live/member_invitation_live/new_test.exs
+index 86e546d..7df0c47 100644
+--- a/web/test/memba_web/live/member_invitation_live/new_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/new_test.exs
+@@ -112,6 +112,35 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
+     refute has_element?(view, "#member-club-invitation-club-home-link[href*='club_id=']")
+   end
+ 
++  test "invitation return links preserve selected-group context", %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers"
++      )
++
++    grant_manage_members!(robin)
++    group_id = Memba.Membership.SystemGroups.everyone_group_id(robin.club_id)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("robin@example.com", robin)
++      |> live(~p"/members/invitations/new?#{[group_id: group_id]}")
++
++    assert has_element?(
++             view,
++             "#member-club-invitation-club-home-link[href='/groups/#{group_id}']",
++             "Club home"
++           )
++
++    assert has_element?(
++             view,
++             "#cancel-member-club-invitation-link[href='/groups/#{group_id}']",
++             "Cancel"
++           )
++  end
++
+   test "membership admin invitation form asks for email address only", %{conn: conn} do
+     robin =
+       create_active_member(
+diff --git a/web/test/memba_web/live/member_message_delivery_live/show_test.exs b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+index 594db77..743bd09 100644
+--- a/web/test/memba_web/live/member_message_delivery_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_delivery_live/show_test.exs
+@@ -342,6 +342,47 @@ defmodule MembaWeb.MemberMessageDeliveryLive.ShowTest do
+            )
+   end
+ 
++  test "delivery page preserves selected-group context when returning to the conversation", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    reply =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        conversation_id: conversation.message_id,
++        reply_to_message_id: conversation.message_id,
++        subject: "Re: Trip planning night"
++      )
++
++    group_id = Memba.ID.generate(:group)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/#{reply.message_id}/delivery?#{[group_id: group_id]}")
++
++    assert has_element?(
++             view,
++             "a#member-delivery-back-to-conversation-link" <>
++               "[href='/messages/#{conversation.message_id}?group_id=#{group_id}']",
++             "Back to conversation"
++           )
++  end
++
+   test "routed delivery page shows an explicit zero-recipient state with safe bar widths", %{
+     conn: conn
+   } do
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 1c799bd..11183a0 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -152,6 +152,44 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute response =~ "Footer navigation"
+   end
+ 
++  test "message detail preserves selected-group context in conversation and delivery links", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    group_id = Memba.ID.generate(:group)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", alice)
++      |> live(~p"/messages/#{message.message_id}?#{[group_id: group_id]}")
++
++    assert has_element?(
++             view,
++             "a#back-to-club-home-link[href='/groups/#{group_id}']",
++             "All conversations"
++           )
++
++    assert has_element?(
++             view,
++             "#member-conversation-entry-delivery-link-#{message.message_id}" <>
++               "[href='/messages/#{message.message_id}/delivery?group_id=#{group_id}']",
++             "Delivery details"
++           )
++  end
++
+   test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
+     conn: conn
+   } do
