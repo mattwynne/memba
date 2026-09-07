@@ -83,6 +83,24 @@ defmodule MembaWeb.PageHTML do
     active_member_section?(active_section, section) |> to_string()
   end
 
+  defp member_group_rail_item_class(group, selected_group) do
+    ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
+  end
+
+  defp member_group_aria_current(group, selected_group) do
+    if selected_group?(group, selected_group), do: "page"
+  end
+
+  defp selected_group?(%{group_id: group_id}, %{group_id: selected_group_id}) do
+    group_id == selected_group_id
+  end
+
+  defp group_member_count_label(1), do: "1 member"
+
+  defp group_member_count_label(member_count) when is_integer(member_count) do
+    "#{member_count} members"
+  end
+
   defp current_dashboard_member?(%{id: member_id}, %{id: current_member_id}) do
     member_id == current_member_id
   end

@@ -68,6 +68,53 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#club-member-#{bob.person_id}")
   end
 
+  test "Everyone fallback renders the resolved group as selected in the rail and header", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/conversations")
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-selected-group-id='#{everyone_group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-rail[aria-label='Groups'] " <>
+               "#member-group-link-#{everyone_group_id}.group-rail__item.is-active" <>
+               "[data-testid='member-group-link'][data-group-id='#{everyone_group_id}']" <>
+               "[aria-current='page'][href='/groups/#{everyone_group_id}']",
+             "Everyone"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-header[aria-labelledby='member-group-name'] " <>
+               "#member-group-name.group-head__name",
+             "Everyone"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-metadata #member-group-member-count",
+             "1 member"
+           )
+
+    refute has_element?(view, "#member-group-email-address")
+  end
+
   test "canonical group route scopes the Conversations section by opaque group ID", %{conn: conn} do
     alice =
       create_active_member(
@@ -122,6 +169,62 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       conn
       |> signed_in_club_host("alice@example.com", alice)
       |> live(~p"/groups/#{trip_planning_group.group_id}")
+
+    expected_group_address =
+      alice.club_id
+      |> Memba.Membership.get_club()
+      |> Memba.ClubInboundEmailAddress.address(trip_planning_group.email_slug)
+
+    everyone_group_id = SystemGroups.everyone_group_id(alice.club_id)
+
+    assert has_element?(
+             view,
+             "#member-group-rail #member-group-link-#{everyone_group_id}" <>
+               "[data-group-id='#{everyone_group_id}'][href='/groups/#{everyone_group_id}']",
+             "Everyone"
+           )
+
+    refute has_element?(
+             view,
+             "#member-group-link-#{everyone_group_id}.is-active[aria-current='page']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-link-#{trip_planning_group.group_id}.group-rail__item.is-active" <>
+               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='page']" <>
+               "[href='/groups/#{trip_planning_group.group_id}']",
+             "Trip Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-header[data-group-id='#{trip_planning_group.group_id}'] " <>
+               "#member-group-name",
+             "Trip Planning"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-metadata #member-group-member-count",
+             "2 members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-email-address[href='mailto:#{expected_group_address}']",
+             expected_group_address
+           )
+
+    assert has_element?(
+             view,
+             "#member-group-content[data-group-id='#{trip_planning_group.group_id}'] " <>
+               "#member-section-panel-conversations"
+           )
+
+    refute has_element?(view, "#member-group-open-groups")
+    refute has_element?(view, "#member-group-new")
+    refute has_element?(view, "#member-group-settings")
 
     assert has_element?(view, "#member-message-#{trip_planning_conversation.message_id}")
     refute has_element?(view, "#member-message-#{everyone_conversation.message_id}")
@@ -1876,10 +1979,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp dashboard_html(assigns) do
+    club_id = Memba.ID.generate(:club)
+
+    selected_group = %{
+      club_id: club_id,
+      group_id: SystemGroups.everyone_group_id(club_id),
+      group_key: SystemGroups.everyone_key(),
+      name: SystemGroups.everyone_name(),
+      email_slug: nil,
+      email_address: nil,
+      active_member_count: 0
+    }
+
     %{
       flash: %{},
       current_identity: %{email: "alice@example.com"},
-      selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
+      selected_club: %{club_id: club_id, name: "Alpine Club"},
+      groups: [selected_group],
+      selected_group: selected_group,
+      selected_group_route_id: nil,
       current_member: %{name: "Alice Adams"},
       current_member_can_manage_members?: false,
       active_section: "conversations",
