@@ -225,3 +225,16 @@ This investigation used `fabro inspect`, `fabro events --json`, `fabro logs 01M1
 - The missing PostgreSQL socket prevented one focused test invocation, but that invocation ended quickly and was followed by continued review. It is evidence of a validation-environment problem, not proof that it caused the outer timeout or that the candidate had a product test failure.
 
 The next improvement should be evaluated against this root cause: preserve the existing branch/checkpoint behaviour, but add a timeout-specific handoff that emits the failed node, selected todo item, original timeout/error, last durable checkpoint and diff status, and the documented resume command. It should not relabel a timeout as a validation/retry-budget failure.
+
+#### First recovery experiment: single-owner per-task nodes
+
+Before retrying iteration 058, we selected one smaller intervention aimed at completion probability rather than attempting every prevention idea at once. Run events show that task 019 spawned a research subagent 24 seconds after the node began. The parent started waiting for it at `12:46:00`; it returned at `13:01:35` after 56 turns. The parent then spawned a second, independent review subagent at `13:09:40` and waited from `13:11:52` until the outer timeout at `13:16:04`. Across the task-019 parent session, Fabro recorded 99 tool calls, including two spawns and two waits.
+
+The first research result may have helped the implementation, so this evidence does not prove all delegation is waste. It does establish two avoidable deadline risks:
+
+- child work is unbounded unless the spawning agent supplies `max_turns`;
+- the second review duplicated the workflow's mandatory next-stage `validate_task` review and prevented the implementor from returning while time remained.
+
+As the first controlled improvement, `implement_next_task.md` now makes each bounded per-task node a single-owner stage: do not spawn subagents and do not commission an extra independent review. It also tells resumed agents to inspect existing implementation notes, reviews, recovery handoffs, and committed failed candidate checkpoints before repeating broad research. The existing focused-validation requirement, automatic checkpoint, independent `validate_task`, final `dev ci`, plan-conformance gate, and publish gate remain intact.
+
+A focused contract regression checks those invariants. The next resumed delivery run is the experiment: if it completes task 019 without child-agent waits, this intervention helped; if it fails elsewhere, investigate that evidence before adding another safeguard. Missing-PostgreSQL-socket classification and a timeout-specific terminal handoff remain separate candidate improvements, deliberately not bundled into this experiment.
