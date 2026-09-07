@@ -67,7 +67,7 @@ green than before.
 | 057 | 2026-09-03 | merged | Admin group email conversations | [plan](057-admin-group-email-conversations/plan.md) — `member_message_deliverability.feature`, `club_message_replies.feature` |
 | 098 | 2026-08-13 | validated | Members change their own name | [plan](098-member-name-editing/plan.md) |
 | 099 | 2026-08-13 | validated | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
-| 100 | 2026-09-06 | validated | Generic group-scoped club home | [plan](100-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
+| 058 | 2026-09-06 | ready | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
 
 Status notes:
 
@@ -93,4 +93,4 @@ Shared acceptance feature files used across these iterations:
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
 - [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (new in iteration 098; self-service profile editing from `/my/settings`. Iteration 098 adds `@iteration-098 @todo-domain @todo-ui` scenarios for changing your own name; iteration 099 adds `@iteration-099 @todo-domain @todo-ui` scenarios for adding, replacing, and removing a profile photo, including upload rejection, upload failure, and signed-in-only photo visibility. Both sets stay excluded from the domain and browser runners until their iteration implements the steps)
-- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (new in iteration 100; `@iteration-100 @todo-domain @todo-ui` planning scenarios cover generic group discovery, selected group scope, group-aware web composition, non-member no-disclosure, and remembered selection until delivery supplies the domain and browser support)
+- [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (new in iteration 058; `@iteration-058 @todo-domain @todo-ui` planning scenarios cover generic group discovery, selected group scope, group-aware web composition, non-member no-disclosure, and remembered selection until delivery supplies the domain and browser support)

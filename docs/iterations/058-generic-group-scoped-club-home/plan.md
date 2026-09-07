@@ -1,7 +1,7 @@
 # Generic group-scoped club home
 
 Date: 2026-09-06
-Status: validated
+Status: ready
 
 ## Goal
 
@@ -89,7 +89,7 @@ private-group discovery, access control, conversation scope, and composition
 recipient scope.
 
 Planning adds [`acceptance-tests/features/group_conversations.feature`](../../../acceptance-tests/features/group_conversations.feature), tagged
-`@iteration-100 @todo-domain @todo-ui`. Its scenarios define:
+`@iteration-058 @todo-domain @todo-ui`. Its scenarios define:
 
 - ordinary and Admin members seeing only their own groups;
 - a future named group being rendered with no group-specific UI;
