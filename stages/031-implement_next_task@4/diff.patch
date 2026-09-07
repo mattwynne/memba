@@ -1,0 +1,480 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 96f306c..e9b35a1 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current group projections and Messaging group queries from iterations 056–057.
+ - [x] 002 Add a public Membership query for the active groups of a given active member in a given club.
+ - [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+-- [ ] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
++- [x] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+ - [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+ - [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+ - [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 0251936..b244b31 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -3,8 +3,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   Loads and shapes data for the member dashboard LiveView.
+ 
+   The LiveView owns the route/session boundary; this helper owns the selected
+-  club authorization checks and presentation-friendly row data so the mount path
+-  stays readable and the dashboard data model can be unit-tested directly.
++  club and group authorization checks and presentation-friendly row data so the
++  mount path stays readable and the dashboard data model can be unit-tested
++  directly.
+   """
+ 
+   alias Memba.Accounts
+@@ -17,7 +18,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   @participant_avatar_limit 3
+ 
+   @doc """
+-  Load dashboard assigns for a signed-in active member of the selected club.
++  Load Everyone dashboard assigns for a signed-in active member of the selected
++  club.
+ 
+   Returns `{:ok, assigns}` when the selected club belongs to the current
+   identity and the identity can be resolved to an active member row. Missing,
+@@ -27,10 +29,47 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   def load(club_id, current_identity, active_clubs)
+       when is_list(active_clubs) do
+     with {:ok, club_id} <- cast_selected_club_id(club_id),
+-         {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
+-         members <- load_members(club_id),
+-         {:ok, current_member} <- fetch_current_member(members, current_identity) do
+-      messages = load_messages(club_id)
++         everyone_group_id = SystemGroups.everyone_group_id(club_id) do
++      load_authorized_group(club_id, current_identity, active_clubs, everyone_group_id)
++    else
++      _missing_or_unauthorized -> {:error, :forbidden}
++    end
++  end
++
++  def load(_club_id, _current_identity, _active_clubs), do: {:error, :forbidden}
++
++  @doc """
++  Load dashboard assigns scoped to an explicitly selected conversation group.
++
++  The group is authorized by finding it in Membership's active-group summaries
++  for the signed-in active club member. Group members and conversations are
++  loaded only after that authorization succeeds.
++  """
++  def load(club_id, current_identity, active_clubs, nil) when is_list(active_clubs) do
++    load(club_id, current_identity, active_clubs)
++  end
++
++  def load(club_id, current_identity, active_clubs, selected_group_id)
++      when is_list(active_clubs) do
++    with {:ok, club_id} <- cast_selected_club_id(club_id),
++         {:ok, selected_group_id} <- cast_selected_group_id(selected_group_id) do
++      load_authorized_group(club_id, current_identity, active_clubs, selected_group_id)
++    else
++      _missing_or_unauthorized -> {:error, :forbidden}
++    end
++  end
++
++  def load(_club_id, _current_identity, _active_clubs, _selected_group_id),
++    do: {:error, :forbidden}
++
++  defp load_authorized_group(club_id, current_identity, active_clubs, selected_group_id) do
++    with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
++         club_members <- load_club_members(club_id),
++         {:ok, current_member} <- fetch_current_member(club_members, current_identity),
++         groups <- Membership.list_active_groups_for_member(club_id, current_member.id),
++         {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
++      members = load_group_members(selected_group.group_id)
++      messages = load_messages(selected_group.group_id)
+       member_names_by_id = Map.new(members, &{&1.id, &1.name})
+       message_rows = present_message_rows(messages, member_names_by_id)
+ 
+@@ -38,6 +77,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
+        %{
+          page_title: selected_club.name,
+          selected_club: selected_club,
++         groups: groups,
++         selected_group: selected_group,
+          members: members,
+          active_member_count: Enum.count(members),
+          current_member: current_member,
+@@ -51,8 +92,6 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     end
+   end
+ 
+-  def load(_club_id, _current_identity, _active_clubs), do: {:error, :forbidden}
+-
+   defp cast_selected_club_id(club_id) do
+     case ID.cast(:club, club_id) do
+       {:ok, club_id} -> {:ok, club_id}
+@@ -67,12 +106,32 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     end
+   end
+ 
+-  defp load_members(club_id) do
++  defp cast_selected_group_id(group_id) do
++    case ID.cast(:group, group_id) do
++      {:ok, group_id} -> {:ok, group_id}
++      :error -> {:error, :forbidden}
++    end
++  end
++
++  defp fetch_selected_group(groups, group_id) do
++    case Enum.find(groups, &(&1.group_id == group_id)) do
++      nil -> {:error, :forbidden}
++      selected_group -> {:ok, selected_group}
++    end
++  end
++
++  defp load_club_members(club_id) do
+     club_id
+     |> Membership.list_active_members_of_club()
+     |> Enum.map(&present_member/1)
+   end
+ 
++  defp load_group_members(group_id) do
++    group_id
++    |> Membership.list_active_members_of_group()
++    |> Enum.map(&present_member/1)
++  end
++
+   defp fetch_current_member(_members, nil), do: {:error, :forbidden}
+ 
+   defp fetch_current_member(members, identity) do
+@@ -95,11 +154,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+ 
+   defp can_manage_members?(_club_id, _current_member), do: false
+ 
+-  defp load_messages(club_id) do
+-    club_id
+-    |> SystemGroups.everyone_group_id()
+-    |> Messaging.list_conversations_for_group()
+-  end
++  defp load_messages(group_id), do: Messaging.list_conversations_for_group(group_id)
+ 
+   @doc """
+   Shapes recent conversation rows for dashboard rendering.
+diff --git a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+index 4081c3a..99ce54c 100644
+--- a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
++++ b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+@@ -95,11 +95,19 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
+ 
+   test "staff email invitation link carries an unknown invitee through profile completion to the club",
+        %{conn: conn} do
+-    club =
+-      insert_membership_club!(
+-        name: "Kootenay Mountaineering Club",
+-        slug: "kootenay-mountaineering"
+-      )
++    club_id = Memba.ID.generate(:club)
++
++    assert :ok =
++             Membership.create_club(
++               %{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kootenay-mountaineering"
++               },
++               consistency: :strong
++             )
++
++    club = Membership.get_club(club_id)
+ 
+     conn
+     |> sign_in_staff()
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index af24cd7..a7013f7 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -4,6 +4,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   import Phoenix.LiveViewTest
+ 
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+@@ -1531,13 +1533,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     membership_id = Memba.ID.generate(:membership)
+ 
++    active? = Keyword.get(attrs, :active, true)
++
+     Repo.insert!(%Membership{
+       membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+-      active: Keyword.get(attrs, :active, true)
++      active: active?
+     })
+ 
++    if active? do
++      insert_everyone_group_membership!(club_id, membership_id, person.person_id)
++    end
++
+     %{
+       club_id: club_id,
+       membership_id: membership_id,
+@@ -1545,6 +1553,28 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     }
+   end
+ 
++  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.insert!(%GroupMembership{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp grant_manage_members!(member) do
+     Repo.insert!(%MemberPermission{
+       club_id: member.club_id,
+diff --git a/web/test/memba_web/live/member_invitation_live/send_test.exs b/web/test/memba_web/live/member_invitation_live/send_test.exs
+index 8953f22..c7b66e3 100644
+--- a/web/test/memba_web/live/member_invitation_live/send_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/send_test.exs
+@@ -9,8 +9,11 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+   alias Memba.Membership
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.ClubInvitation
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.SystemGroups
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -222,10 +225,15 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+     person_id = Memba.ID.generate(:person)
+ 
+-    Repo.get(Memba.Membership.Projections.Club, club_id) ||
+-      attrs
+-      |> club_attrs(club_id)
+-      |> insert_membership_club!()
++    unless Repo.get(Memba.Membership.Projections.Club, club_id) do
++      assert :ok =
++               Membership.create_club(
++                 attrs
++                 |> club_attrs(club_id)
++                 |> Map.new(),
++                 consistency: :strong
++               )
++    end
+ 
+     person =
+       insert_membership_person!(
+@@ -242,6 +250,8 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+         active: true
+       })
+ 
++    insert_everyone_group_membership!(club_id, membership.membership_id, person.person_id)
++
+     %{
+       club_id: club_id,
+       membership_id: membership.membership_id,
+@@ -249,6 +259,28 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     }
+   end
+ 
++  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.insert!(%GroupMembership{
++      club_id: club_id,
++      group_id: group_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      active: true
++    })
++  end
++
+   defp grant_manage_members!(member) do
+     Repo.insert!(%MemberPermission{
+       club_id: member.club_id,
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index e7494cb..bd69d0a 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -2,6 +2,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+   use Memba.DataCase, async: true
+ 
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Group
++  alias Memba.Membership.Projections.GroupMembership
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Role
+   alias Memba.Membership.Projections.RoleAssignment
+@@ -198,6 +200,88 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     refute Enum.any?(assigns.messages, &(&1.message_id == admin_conversation.message_id))
+   end
+ 
++  test "authorizes and loads members and conversations for a selected group" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Canoe",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    trip_planning_group =
++      create_group(
++        club_id: alice.club_id,
++        group_key: "trip_planning",
++        email_slug: "trip-planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++    add_group_member(trip_planning_group, bob)
++
++    everyone_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: carol.person_id,
++        subject: "Club-wide plans"
++      )
++
++    trip_planning_conversation =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Private trip plans",
++        audience_group_id: trip_planning_group.group_id
++      )
++
++    assert {:ok, assigns} =
++             MemberDashboardPresentation.load(
++               alice.club_id,
++               %{email: "alice@example.com"},
++               [alice.club],
++               trip_planning_group.group_id
++             )
++
++    assert assigns.selected_group.group_id == trip_planning_group.group_id
++    assert assigns.selected_group.name == "Trip Planning"
++
++    assert MapSet.new(assigns.groups, & &1.group_id) ==
++             MapSet.new([
++               SystemGroups.everyone_group_id(alice.club_id),
++               trip_planning_group.group_id
++             ])
++
++    assert Enum.map(assigns.members, & &1.id) == [alice.person_id, bob.person_id]
++    assert assigns.active_member_count == 2
++    assert assigns.current_member.id == alice.person_id
++
++    assert Enum.map(assigns.messages, & &1.message_id) == [
++             trip_planning_conversation.message_id
++           ]
++
++    assert Enum.map(assigns.message_rows, & &1.message_id) == [
++             trip_planning_conversation.message_id
++           ]
++
++    refute Enum.any?(assigns.messages, &(&1.message_id == everyone_conversation.message_id))
++  end
++
+   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
+     root = %Message{
+       message_id: Memba.ID.generate(:message),
+@@ -438,6 +522,12 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+       active: true
+     })
+ 
++    add_group_member(ensure_everyone_group(club_id), %{
++      club_id: club_id,
++      membership_id: membership_id,
++      person_id: person.person_id
++    })
++
+     %{
+       club: club,
+       club_id: club_id,
+@@ -446,6 +536,42 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     }
+   end
+ 
++  defp ensure_everyone_group(club_id) do
++    group_id = SystemGroups.everyone_group_id(club_id)
++
++    Repo.insert!(
++      %Group{
++        club_id: club_id,
++        group_id: group_id,
++        group_key: SystemGroups.everyone_key(),
++        name: SystemGroups.everyone_name()
++      },
++      on_conflict: :nothing
++    )
++
++    Repo.get!(Group, group_id)
++  end
++
++  defp create_group(attrs) do
++    Repo.insert!(%Group{
++      club_id: Keyword.fetch!(attrs, :club_id),
++      group_id: Memba.ID.generate(:group),
++      group_key: Keyword.fetch!(attrs, :group_key),
++      email_slug: Keyword.get(attrs, :email_slug),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp add_group_member(group, member) do
++    Repo.insert!(%GroupMembership{
++      club_id: member.club_id,
++      group_id: group.group_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      active: true
++    })
++  end
++
+   defp create_role(attrs) do
+     Repo.insert!(%Role{
+       role_id: Memba.ID.generate(:role),
