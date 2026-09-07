@@ -5,7 +5,7 @@
 - [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
 - [x] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
 - [x] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
-- [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+- [x] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
 - [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
 - [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
 - [ ] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.

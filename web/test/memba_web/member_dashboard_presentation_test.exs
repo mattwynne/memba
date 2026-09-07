@@ -378,6 +378,54 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     refute Enum.any?(assigns.members, &("Treasurer" in &1.roles))
   end
 
+  test "returns the same not-found result for missing, foreign-club, and non-member groups" do
+    alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    private_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "private",
+        name: "Private"
+      )
+
+    add_group_member(private_group, bob)
+
+    other_club_member =
+      create_active_member(email: "pat@example.com", club_name: "Paddling Club")
+
+    foreign_group =
+      create_group(
+        club_id: other_club_member.club_id,
+        group_key: "trips",
+        name: "Trips"
+      )
+
+    add_group_member(foreign_group, other_club_member)
+
+    selected_group_ids = [
+      Memba.ID.generate(:group),
+      foreign_group.group_id,
+      private_group.group_id
+    ]
+
+    for selected_group_id <- selected_group_ids do
+      assert {:error, :not_found} =
+               MemberDashboardPresentation.load(
+                 alice.club_id,
+                 %{email: "alice@example.com"},
+                 [alice.club],
+                 selected_group_id
+               )
+    end
+  end
+
   test "omits timestamp labels for conversation rows without an inserted_at timestamp" do
     root = %Message{
       message_id: Memba.ID.generate(:message),

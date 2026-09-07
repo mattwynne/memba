@@ -30,7 +30,15 @@ defmodule MembaWeb.MemberDashboardPresentation do
       when is_list(active_clubs) do
     with {:ok, club_id} <- cast_selected_club_id(club_id),
          everyone_group_id = SystemGroups.everyone_group_id(club_id) do
-      load_authorized_group(club_id, current_identity, active_clubs, everyone_group_id)
+      case load_authorized_group(
+             club_id,
+             current_identity,
+             active_clubs,
+             everyone_group_id
+           ) do
+        {:error, :not_found} -> {:error, :forbidden}
+        result -> result
+      end
     else
       _missing_or_unauthorized -> {:error, :forbidden}
     end
@@ -43,7 +51,10 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   The group is authorized by finding it in Membership's active-group summaries
   for the signed-in active club member. Group members and conversations are
-  loaded only after that authorization succeeds.
+  loaded only after that authorization succeeds. Missing, invalid,
+  foreign-club, and unauthorized group selections all return
+  `{:error, :not_found}` without disclosing which condition applied. Club and
+  identity authorization failures continue to return `{:error, :forbidden}`.
   """
   def load(club_id, current_identity, active_clubs, nil) when is_list(active_clubs) do
     load(club_id, current_identity, active_clubs)
@@ -55,6 +66,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
          {:ok, selected_group_id} <- cast_selected_group_id(selected_group_id) do
       load_authorized_group(club_id, current_identity, active_clubs, selected_group_id)
     else
+      {:error, :not_found} -> {:error, :not_found}
       _missing_or_unauthorized -> {:error, :forbidden}
     end
   end
@@ -65,9 +77,29 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp load_authorized_group(club_id, current_identity, active_clubs, selected_group_id) do
     with {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),
          club_members <- load_club_members(club_id),
-         {:ok, current_member} <- fetch_current_member(club_members, current_identity),
-         groups <- Membership.list_active_groups_for_member(club_id, current_member.id),
-         {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
+         {:ok, current_member} <- fetch_current_member(club_members, current_identity) do
+      groups = Membership.list_active_groups_for_member(club_id, current_member.id)
+
+      load_selected_group(
+        club_id,
+        selected_club,
+        current_member,
+        groups,
+        selected_group_id
+      )
+    else
+      _missing_or_unauthorized -> {:error, :forbidden}
+    end
+  end
+
+  defp load_selected_group(
+         club_id,
+         selected_club,
+         current_member,
+         groups,
+         selected_group_id
+       ) do
+    with {:ok, selected_group} <- fetch_selected_group(groups, selected_group_id) do
       members = load_group_members(selected_group.group_id)
       messages = load_messages(selected_group.group_id)
       member_names_by_id = Map.new(members, &{&1.id, &1.name})
@@ -88,7 +120,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
          message_rows: message_rows
        }}
     else
-      _missing_or_unauthorized -> {:error, :forbidden}
+      _missing_or_unauthorized -> {:error, :not_found}
     end
   end
 
@@ -109,13 +141,13 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp cast_selected_group_id(group_id) do
     case ID.cast(:group, group_id) do
       {:ok, group_id} -> {:ok, group_id}
-      :error -> {:error, :forbidden}
+      :error -> {:error, :not_found}
     end
   end
 
   defp fetch_selected_group(groups, group_id) do
     case Enum.find(groups, &(&1.group_id == group_id)) do
-      nil -> {:error, :forbidden}
+      nil -> {:error, :not_found}
       selected_group -> {:ok, selected_group}
     end
   end
