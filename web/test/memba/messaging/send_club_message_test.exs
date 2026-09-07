@@ -3,10 +3,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
@@ -230,6 +233,68 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
     assert is_nil(Messaging.get_member_email_delivery(message_id, dana.person_id))
     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+  end
+
+  test "resolves recipients from a future named group without system-group assumptions" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+    trips_group_id = create_group(club_id, "Trips committee")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    bob = create_person(name: "Bob", email: "bob@example.com")
+    carol = create_person(name: "Carol", email: "carol@example.com")
+    dana = create_person(name: "Dana", email: "dana@example.com")
+
+    alice_membership_id = add_member(club_id, alice.person_id)
+    bob_membership_id = add_member(club_id, bob.person_id)
+    add_member(club_id, carol.person_id)
+    dana_membership_id = add_member(club_id, dana.person_id)
+
+    add_group_member(club_id, trips_group_id, alice_membership_id, alice.person_id)
+    add_group_member(club_id, trips_group_id, bob_membership_id, bob.person_id)
+    add_group_member(club_id, trips_group_id, dana_membership_id, dana.person_id)
+    remove_group_member(club_id, trips_group_id, dana_membership_id, dana.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 4,
+              events: [
+                %MessageSent{message_id: ^message_id},
+                %ConversationAccessGrantedToGroup{
+                  conversation_id: ^message_id,
+                  club_id: ^club_id,
+                  group_id: ^trips_group_id,
+                  access_level: "write"
+                }
+                | delivery_events
+              ]
+            }} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 audience_group_id: trips_group_id,
+                 subject: "Summer objectives",
+                 body: "Choose the committee's next trip."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert [
+             %EmailDeliveryCreated{recipient_id: alice_id},
+             %EmailDeliveryCreated{recipient_id: bob_id}
+           ] = delivery_events
+
+    assert [alice_id, bob_id] == [alice.person_id, bob.person_id]
+    refute carol.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    refute dana.person_id in Enum.map(delivery_events, & &1.recipient_id)
+    assert Messaging.group_has_conversation_access?(message_id, trips_group_id, :write)
+    assert [%{message_id: ^message_id}] = Messaging.list_conversations_for_group(trips_group_id)
   end
 
   test "rejects an unknown audience group before dispatching the message command" do
@@ -636,6 +701,49 @@ defmodule Memba.Messaging.SendClubMessageTest do
              )
 
     membership_id
+  end
+
+  defp create_group(club_id, name) do
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             MembershipApp.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 email_slug: name |> String.downcase() |> String.replace(" ", "-"),
+                 name: name
+               },
+               consistency: :strong
+             )
+
+    group_id
+  end
+
+  defp add_group_member(club_id, group_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp remove_group_member(club_id, group_id, membership_id, person_id) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
   end
 
   defp assign_admin_role(club_id, membership_id, person_id) do
