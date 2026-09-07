@@ -51,6 +51,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
            )
 
+    assert has_element?(view, "#club-site-layout > .app-card.app-card--wide")
+    assert has_element?(view, "#member-club-home.club-groups")
+
+    assert has_element?(
+             view,
+             "#member-club-home .app-split > #member-group-content.group-content"
+           )
+
     assert has_element?(
              view,
              "#club-site-identity-menu .app-menu__who-name",
@@ -95,7 +103,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-group-rail[aria-label='Groups'] " <>
                "#member-group-link-#{everyone_group_id}.group-rail__item.is-active" <>
                "[data-testid='member-group-link'][data-group-id='#{everyone_group_id}']" <>
-               "[aria-current='page'][href='/groups/#{everyone_group_id}']",
+               "[aria-current='true'][href='/groups/#{everyone_group_id}']",
              "Everyone"
            )
 
@@ -186,13 +194,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     refute has_element?(
              view,
-             "#member-group-link-#{everyone_group_id}.is-active[aria-current='page']"
+             "#member-group-link-#{everyone_group_id}.is-active[aria-current='true']"
            )
 
     assert has_element?(
              view,
              "#member-group-link-#{trip_planning_group.group_id}.group-rail__item.is-active" <>
-               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='page']" <>
+               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='true']" <>
                "[href='/groups/#{trip_planning_group.group_id}']",
              "Trip Planning"
            )
@@ -435,13 +443,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> live(~p"/conversations")
 
     assert has_element?(view, "#member-section-tabs.section-tabs")
-    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal'][phx-hook]"
+           )
 
     assert has_element?(
              view,
              "#member-section-tab-conversations.section-tab.is-active" <>
                "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
-               "[aria-controls='member-section-panel-conversations']",
+               "[aria-controls='member-section-panel-conversations'][tabindex='0']",
              "Conversations"
            )
 
@@ -449,14 +461,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-tab-members.section-tab" <>
                "[data-tab='members'][role='tab'][aria-selected='false']" <>
-               "[aria-controls='member-section-panel-members']",
+               "[aria-controls='member-section-panel-members'][tabindex='-1']",
              "Members"
            )
 
     assert has_element?(
              view,
              "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']"
+               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']" <>
+               "[tabindex='0']"
            )
 
     refute has_element?(view, "#member-section-panel-conversations[hidden]")
@@ -464,12 +477,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-panel-members.section-panel[data-panel='members']" <>
-               "[role='tabpanel'][aria-labelledby='member-section-tab-members'][hidden]"
+               "[role='tabpanel'][aria-labelledby='member-section-tab-members']" <>
+               "[tabindex='0'][hidden]"
            )
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm" <>
                "[data-section-action='conversations'][href='/messages/new']",
              "New message"
@@ -628,13 +642,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-section-tab-members.section-tab.is-active" <>
-               "[aria-selected='true'][aria-controls='member-section-panel-members']"
+               "[aria-selected='true'][aria-controls='member-section-panel-members']" <>
+               "[tabindex='0']"
            )
 
     assert has_element?(
              view,
              "#member-section-tab-conversations.section-tab" <>
-               "[aria-selected='false'][aria-controls='member-section-panel-conversations']"
+               "[aria-selected='false'][aria-controls='member-section-panel-conversations']" <>
+               "[tabindex='-1']"
            )
 
     assert has_element?(view, "#member-section-panel-conversations[hidden]")
@@ -647,7 +663,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Invite member"
            )
 
-    refute has_element?(view, "#member-section-action-new-message")
+    assert has_element?(
+             view,
+             "#member-group-header .group-head__actions " <>
+               "#member-section-action-new-message[href='/messages/new']",
+             "New message"
+           )
   end
 
   test "dashboard renders conversations in the default visible section panel", %{
@@ -1068,7 +1089,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
@@ -1558,7 +1579,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-tabs .section-tabs__action " <>
+             "#member-group-header .group-head__actions " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
              "New message"
            )

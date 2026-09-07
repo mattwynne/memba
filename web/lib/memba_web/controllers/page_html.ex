@@ -83,12 +83,16 @@ defmodule MembaWeb.PageHTML do
     active_member_section?(active_section, section) |> to_string()
   end
 
+  defp member_section_tab_index(active_section, section) do
+    if active_member_section?(active_section, section), do: "0", else: "-1"
+  end
+
   defp member_group_rail_item_class(group, selected_group) do
     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
   end
 
   defp member_group_aria_current(group, selected_group) do
-    if selected_group?(group, selected_group), do: "page"
+    if selected_group?(group, selected_group), do: "true"
   end
 
   defp selected_group?(%{group_id: group_id}, %{group_id: selected_group_id}) do

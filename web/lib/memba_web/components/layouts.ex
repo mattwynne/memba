@@ -305,6 +305,10 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the optional signed-in member display name shown in club member chrome"
 
+  attr :wide, :boolean,
+    default: false,
+    doc: "expands the member card and removes main padding for split-screen app layouts"
+
   attr :current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
@@ -319,7 +323,7 @@ defmodule MembaWeb.Layouts do
       class="app-frame"
     >
       <div id="club-site-global-bar" class="global-bar">
-        <div class="global-bar__inner">
+        <div class={["global-bar__inner", @wide && "global-bar__inner--wide"]}>
           <div class="global-bar__brand">
             <.sprig variant={:solid} class="global-bar__mark" />
             <span class="global-bar__word">Memba</span>
@@ -379,7 +383,7 @@ defmodule MembaWeb.Layouts do
         </div>
       </div>
 
-      <div class="app-card">
+      <div class={["app-card", @wide && "app-card--wide"]}>
         <header>
           <div class="app-bar">
             <div class="app-bar__brand">
@@ -388,7 +392,7 @@ defmodule MembaWeb.Layouts do
           </div>
         </header>
 
-        <main class="px-4 py-10 sm:px-6 lg:px-8">
+        <main class={(@wide && "app-main--flush") || "px-4 py-10 sm:px-6 lg:px-8"}>
           {render_slot(@inner_block)}
         </main>
       </div>

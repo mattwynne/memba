@@ -9,7 +9,7 @@
 - [x] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
 - [x] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
 - [x] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
-- [ ] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+- [x] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
 - [ ] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
 - [ ] 012 The server remains the authority for every final selection.
 - [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.

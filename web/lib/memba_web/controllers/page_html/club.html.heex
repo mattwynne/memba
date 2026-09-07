@@ -7,13 +7,14 @@
   club_name={@selected_club.name}
   current_identity={@current_identity}
   member_name={@current_member && @current_member.name}
+  wide
 >
   <div
     id="member-club-home"
     data-live-view="member-dashboard"
     data-club-id={@selected_club.club_id}
     data-selected-group-id={@selected_group.group_id}
-    class="mx-auto max-w-3xl"
+    class="club-groups"
   >
     <div class="app-split">
       <nav id="member-group-rail" class="group-rail" aria-label="Groups">
@@ -41,6 +42,7 @@
       <div
         id="member-group-content"
         data-group-id={@selected_group.group_id}
+        class="group-content"
       >
         <header
           id="member-group-header"
@@ -49,7 +51,7 @@
           aria-labelledby="member-group-name"
         >
           <div class="group-head__top">
-            <div>
+            <div class="min-w-0">
               <h1 id="member-group-name" class="group-head__name">
                 {@selected_group.name}
               </h1>
@@ -71,6 +73,17 @@
                 </.link>
               </div>
             </div>
+            <div class="group-head__actions">
+              <.button
+                id="member-section-action-new-message"
+                href={member_compose_path(@selected_club, club_id_source)}
+                variant="primary"
+                size="sm"
+                data-section-action="conversations"
+              >
+                New message
+              </.button>
+            </div>
           </div>
         </header>
 
@@ -80,6 +93,8 @@
             class="section-tabs__list"
             role="tablist"
             aria-label="Club home sections"
+            aria-orientation="horizontal"
+            phx-hook=".SectionTabs"
           >
             <.link
               id="member-section-tab-conversations"
@@ -96,6 +111,7 @@
               role="tab"
               aria-selected={member_section_aria_selected(active_section, "conversations")}
               aria-controls="member-section-panel-conversations"
+              tabindex={member_section_tab_index(active_section, "conversations")}
             >
               Conversations
             </.link>
@@ -114,21 +130,12 @@
               role="tab"
               aria-selected={member_section_aria_selected(active_section, "members")}
               aria-controls="member-section-panel-members"
+              tabindex={member_section_tab_index(active_section, "members")}
             >
               Members
             </.link>
           </div>
           <div id="member-section-tabs-action" class="section-tabs__action">
-            <.button
-              :if={active_member_section?(active_section, "conversations")}
-              id="member-section-action-new-message"
-              href={member_compose_path(@selected_club, club_id_source)}
-              variant="primary"
-              size="sm"
-              data-section-action="conversations"
-            >
-              New message
-            </.button>
             <.button
               :if={
                 active_member_section?(active_section, "members") and
@@ -157,6 +164,7 @@
           data-panel="conversations"
           role="tabpanel"
           aria-labelledby="member-section-tab-conversations"
+          tabindex="0"
           hidden={not active_member_section?(active_section, "conversations")}
         >
           <section id="club-messages">
@@ -292,6 +300,7 @@
           data-panel="members"
           role="tabpanel"
           aria-labelledby="member-section-tab-members"
+          tabindex="0"
           hidden={not active_member_section?(active_section, "members")}
         >
           <section id="club-members">
@@ -379,4 +388,48 @@
       </div>
     </div>
   </div>
+
+  <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionTabs">
+    export default {
+      mounted() {
+        this.handleKeydown = event => {
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+
+          const tabs = Array.from(this.el.querySelectorAll("[role='tab']"))
+          const currentIndex = tabs.indexOf(event.target)
+
+          if (currentIndex === -1) return
+
+          let nextIndex
+
+          switch (event.key) {
+            case "ArrowRight":
+              nextIndex = (currentIndex + 1) % tabs.length
+              break
+            case "ArrowLeft":
+              nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
+              break
+            case "Home":
+              nextIndex = 0
+              break
+            case "End":
+              nextIndex = tabs.length - 1
+              break
+            default:
+              return
+          }
+
+          event.preventDefault()
+          tabs[nextIndex].click()
+          tabs[nextIndex].focus()
+        }
+
+        this.el.addEventListener("keydown", this.handleKeydown)
+      },
+
+      destroyed() {
+        this.el.removeEventListener("keydown", this.handleKeydown)
+      }
+    }
+  </script>
 </Layouts.club_site>
