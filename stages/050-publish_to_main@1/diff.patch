@@ -1,0 +1,159 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/plan.md b/docs/iterations/058-generic-group-scoped-club-home/plan.md
+index 885ec0c..1c7c2a5 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/plan.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/plan.md
+@@ -1,7 +1,11 @@
+ # Generic group-scoped club home
+ 
+ Date: 2026-09-06
+-Status: implementing
++<<<<<<< HEAD
++Status: merged
++=======
++Status: validated
++>>>>>>> origin/main
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 48b1aa9..c21bafe 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -67,7 +67,11 @@ green than before.
+ | 057 | 2026-09-03 | merged | Admin group email conversations | [plan](057-admin-group-email-conversations/plan.md) — `member_message_deliverability.feature`, `club_message_replies.feature` |
+ | 098 | 2026-08-13 | validated | Members change their own name | [plan](098-member-name-editing/plan.md) |
+ | 099 | 2026-08-13 | validated | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
+-| 058 | 2026-09-06 | implementing | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
++<<<<<<< HEAD
++| 058 | 2026-09-06 | merged | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
++=======
++| 058 | 2026-09-06 | validated | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
++>>>>>>> origin/main
+ 
+ Status notes:
+ 
+diff --git a/docs/kaizen/2026-09-03-iteration-workflow-timeout-masks-test-failure.md b/docs/kaizen/2026-09-03-iteration-workflow-timeout-masks-test-failure.md
+index 4ae3120..4e4ac79 100644
+--- a/docs/kaizen/2026-09-03-iteration-workflow-timeout-masks-test-failure.md
++++ b/docs/kaizen/2026-09-03-iteration-workflow-timeout-masks-test-failure.md
+@@ -121,3 +121,120 @@ Recovery and prevention:
+ - Final `dev check` passed with 1,129 tests, 0 failures, and 122 browser scenarios / 877 steps passing.
+ 
+ The remaining systemic timeout/diagnostic questions in this note still apply. This recovery demonstrates a useful immediate operating standard: when an outer Cucumber timeout hides a wrapped Playwright helper error, rerun one named scenario with `ACCEPTANCE_STEP_TIMEOUT_MS` longer than Playwright's inner action timeout before changing application code.
++
++### Additional observation: 2026-09-07 — iteration 058 failed after 18 durable task checkpoints
++
++#### Observed facts
++
++Iteration 100, generic group-scoped club home, was deliberately renumbered to iteration 058 after validated iterations 098 and 099 were deferred. Plan-validation run `01M1X3NCJGF4KCJRZ379V4V1A9` succeeded and `main` recorded iteration 058 as `validated` in `770955989`.
++
++The implementation launcher was run from `main` as:
++
++```sh
++./bin/dev fabro deliver docs/iterations/058-generic-group-scoped-club-home/plan.md
++```
++
++It accepted the predecessor and clear-WIP checks, reserved the slot in `ebdc63b08`, and started implementation run `01M1X3TD59C6R2FDNJ7ARPKACD` with that exact source SHA. The launcher later reported `Failed ... 494m43s $176.23`; `3483e1dac` then restored iteration 058 to `validated` on `main`.
++
++`fabro inspect 01M1X3TD59C6R2FDNJ7ARPKACD --no-upgrade-check` records:
++
++- final `failure_class=budget_exhausted` and signature `task_not_ready|budget_exhausted|... task validation requires human input or exceeded retry budget`;
++- a final `implement_next_task` failure of `handler timed out after 2400000ms`, categorized there as `transient_infra` with system actor `timeout`;
++- 18 successful visits each to `pre_validate_snapshot`, `validate_task`, and `task_gate`, followed by the 19th `implement_next_task` visit timing out;
++- `implement_next_task` configured with `timeout=2400s` and `max_visits=30`, while the graph has `max_node_visits=80`.
++
++The inspected visit counts are below both configured visit limits (`implement_next_task=19`, graph-loop nodes at most 19). This run did **not** report Fabro's explicit `node "..." visited ...; run is stuck in a cycle` failure. The observed terminal event was the 40-minute prompt-node timeout; `budget_exhausted` is the terminal failure classification after `task_not_ready`, not evidence by itself that either configured visit ceiling was reached.
++
++Task 018 was durably checkpointed in `e8002dbb9`, independently validated, and marked complete. It added only `docs/iterations/058-generic-group-scoped-club-home/conversation-access-review.md` and the task-018 check-off. The validation evidence records 25 focused tests with zero failures and a passing `git diff --check`. The next failed checkpoint, `7861311f1`, contains unvalidated changes for the subsequent access-control work; the terminal run commit is `0c78bd91` on `origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD`. That branch is 136 commits ahead of `main` and preserves the completed and partial checkpoint work.
++
++#### What the delivery machinery exposed
++
++The task-draining loop re-enters `sync_task_list`, `todo_readable`, `all_tasks_done`, `implement_next_task`, pre-validation, and validation for every task. The workflow has fixed per-node time and visit ceilings, but no preflight or intermediate delivery boundary that compares the remaining task list with those limits or creates a handoff when an iteration is approaching them.
++
++The terminal `task_not_ready` script still emits only:
++
++```text
++Iteration implementation failed: task validation requires human input or exceeded retry budget.
++```
++
++That message does not name the timed-out node, the current task, the preserved run branch, the checkpoint SHA, or a resume command. This is true even though `.fabro/workflows/README.md` already documents a manual resume procedure. The gap is therefore failure-time handoff and discoverability, not the complete absence of recovery documentation.
++
++#### Safe evidence and recovery reference
++
++The following commands are evidence-gathering or documented recovery preparation; they were not used to resume or change this iteration during this investigation:
++
++```sh
++fabro inspect 01M1X3TD59C6R2FDNJ7ARPKACD --no-upgrade-check
++git fetch origin fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
++git log --oneline main..origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
++git diff --stat main...origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
++git show --stat e8002dbb9 7861311f1
++```
++
++The documented recovery path in `.fabro/workflows/README.md` is:
++
++```sh
++git switch -c resume/01M1X3TD59C6R2FDNJ7ARPKACD --track origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD
++fabro run .fabro/workflows/iteration-implementation/workflow.toml \
++  -I plan_path=docs/iterations/058-generic-group-scoped-club-home/plan.md \
++  --auto-approve
++```
++
++That starts a new run from the checkpoint branch and must be a deliberate operator decision after inspecting the unvalidated final checkpoint; it is not a safe automatic retry from the terminal message.
++
++#### Hypotheses and follow-up questions
++
++- The 22-task iteration was long enough for the fixed 40-minute task budget and per-run loop limits to become an operational delivery constraint, even though the recorded terminal trigger was a timeout rather than a visit-limit breach.
++- `budget_exhausted` may be an overly broad terminal classification in this path. Its relationship to node timeouts, run cost, and the configured visit ceilings needs confirmation from Fabro's failure-class semantics and events before it is treated as a capacity-limit diagnosis.
++- A delivery launcher that restores lifecycle status after failure should also surface the run ID, branch, last durable task/checkpoint, failed node, and the existing documented resume command. Otherwise useful checkpointed work still requires manual archaeology.
++- The workflow may need an explicit capacity/handoff policy for long task lists: for example, a preflight warning, a bounded task batch, or a timeout artifact that makes the next safe action obvious. These are prevention ideas, not conclusions from this single run.
++
++#### Root-cause investigation / Five Whys: 2026-09-07 run `01M1X3TD59C6R2FDNJ7ARPKACD`
++
++This investigation used `fabro inspect`, `fabro events --json`, `fabro logs 01M1X3TD59C6R2FDNJ7ARPKACD --tail 300`, the workflow and prompt, and the checkpoint branch/diffs. It corrects an important possible reading of the terminal status: this run did not reach a task-validation retry budget or either node-visit limit.
++
++##### Direct answers
++
++1. **What the outer 40-minute timer was waiting for.** It was waiting for the entire `implement_next_task@19` agent handler to return, not for a particular shell command or test. The node started at `2026-09-07T12:36:04.702654Z`; Fabro raised `handler timed out after 2400000ms` at `13:16:04.712209Z` (40:00.009555 later). Its configured `timeout="2400s"` covers all main-agent reasoning, tools, spawned-agent work, and waits in that handler.
++2. **What the agent was doing when it was killed.** The main agent had spawned an independent review of the uncommitted task-019 candidate at `13:09:40` and, from `13:11:52`, was waiting for that subagent (`agent_id 57c1b303`). No completion event for that wait or subagent was recorded before cancellation. The subagent was still reviewing: it launched a focused `mix test` command at `13:14:21`, but that command exited in 1.198 seconds because the PostgreSQL socket `/tmp/devenv/postgres/.s.PGSQL.15432` was absent. That is an environment/setup failure, not a failing test assertion. It then continued source/test inspection; its last recorded action completed at `13:15:42`, after which an LLM request began with no recorded output before the outer timeout. Thus the logs establish an outstanding parent wait and a subagent in review/LLM work; they do **not** establish an exact inner wait, a hung command, or that provider overload caused the timeout. The retryable overloaded-provider messages occurred earlier and requests subsequently completed.
++3. **Why there was no usable timeout/recovery handoff.** `implement_next_task` has only a success edge to `pre_validate_snapshot`; every failure, including a system timeout, takes the unconditional edge labelled `Implementation/provider failure` to `task_not_ready`. No timeout-specific node records the selected task, last activity, last command result, unvalidated diff, checkpoint SHA, or resume command. `task_not_ready` then emits the static validation/retry-budget sentence and exits. Fabro did preserve the candidate as failed checkpoint `7861311f1` and pushed `origin/fabro/run/01M1X3TD59C6R2FDNJ7ARPKACD`; the documented manual resume procedure existed in `.fabro/workflows/README.md`. The failure was therefore not loss of recovery material, but failure to make the safe recovery handoff visible at the point of failure.
++4. **Deeper systemic cause.** The workflow models a prompt node as either successfully completed or generically failed. A hard wall-clock cancellation of a composite agent handler is treated identically to an implementation/provider failure, while task validation and its evidence run only after a successful return. The delivery contract has no structured partial-progress/timeout artifact or child-work deadline/reserve. That design conflates (a) an incomplete task, (b) a failed validation/retry path, and (c) an externally cancelled handler, so the terminal classification is generated by the generic failure script rather than by the actual timeout event.
++
++##### What happened, factually
++
++- Task 018 was the last validated task. After the task loop selected task 019, its requirement was to authorize the current person through an active group with sufficient conversation access; tasks 020–022 remained unchecked.
++- The task-019 handler changed `web/lib/memba/messaging.ex`, `web/lib/memba_web/member_message_detail.ex`, and five focused conversation/detail/delivery test files. The resulting failed checkpoint has 458 additions and 89 deletions. It was created only after the handler was cancelled, so it is unvalidated candidate work, not evidence that task 019 completed.
++- Because the handler never returned, `pre_validate_snapshot`, `validate_task`, and `task_gate` were not visited for task 019, and task 019 was not checked off.
++- The 19th `implement_next_task` visit was below its `max_visits=30`; the graph's loop nodes were at most 19 visits, below `max_node_visits=80`. The `budget_exhausted` terminal class comes from the deliberately failing `task_not_ready` script. The immediately preceding node failure was `transient_infra`, system actor `timeout`; it was not a visit-limit breach.
++- The parent agent had earlier waited for a different task-019 research subagent, which completed successfully at `13:01:35` after 56 turns. The subsequent review subagent and its unfinished wait consumed the final minutes. This shows where the final time went, but does not prove that spawning/reviewing was the underlying reason the task could not finish within 40 minutes.
++
++##### Five Whys
++
++| Why | Established answer | Status |
++| --- | --- | --- |
++| 1. Why did task 019 have no validation result? | Fabro cancelled `implement_next_task@19` at its 2,400-second handler timeout before the handler returned; validation is reachable only from the success edge. | Fact |
++| 2. Why did the run report “task validation requires human input or exceeded retry budget”? | The timeout took the unconditional `implement_next_task -> task_not_ready` edge, and `task_not_ready` prints that static text. | Fact |
++| 3. Why did that terminal path not say what actually timed out or how to continue safely? | It has no timeout-specific branch or handoff artifact; it discards the original failure context in favour of a generic script failure. | Fact |
++| 4. Why could an incomplete task leave only archaeology rather than a validated/retryable state? | The workflow checkpoints the worktree automatically, but its task protocol is atomic: selection, implementation, focused checks, and check-off must all finish before the success-only validation protocol can run. | Fact |
++| 5. Why is a hard cancellation indistinguishable from validation/retry exhaustion? | The workflow lacks an explicit failure taxonomy and recovery contract for timed-out composite agent work (including spawned agents). | Root cause |
++
++##### Hypotheses deliberately not promoted to findings
++
++- The 40-minute budget may be too small for task 019's implementation plus independent review, or the implementation/review approach may have spent time inefficiently. The timestamps show both activities; they do not prove either was unnecessary or sufficient to cause the timeout.
++- The two provider-overload retries may have contributed small delays. Successful later responses and the absence of a causal timing chain mean they are not established as the cause.
++- The missing PostgreSQL socket prevented one focused test invocation, but that invocation ended quickly and was followed by continued review. It is evidence of a validation-environment problem, not proof that it caused the outer timeout or that the candidate had a product test failure.
++
++The next improvement should be evaluated against this root cause: preserve the existing branch/checkpoint behaviour, but add a timeout-specific handoff that emits the failed node, selected todo item, original timeout/error, last durable checkpoint and diff status, and the documented resume command. It should not relabel a timeout as a validation/retry-budget failure.
++
++#### First recovery experiment: single-owner per-task nodes
++
++Before retrying iteration 058, we selected one smaller intervention aimed at completion probability rather than attempting every prevention idea at once. Run events show that task 019 spawned a research subagent 24 seconds after the node began. The parent started waiting for it at `12:46:00`; it returned at `13:01:35` after 56 turns. The parent then spawned a second, independent review subagent at `13:09:40` and waited from `13:11:52` until the outer timeout at `13:16:04`. Across the task-019 parent session, Fabro recorded 99 tool calls, including two spawns and two waits.
++
++The first research result may have helped the implementation, so this evidence does not prove all delegation is waste. It does establish two avoidable deadline risks:
++
++- child work is unbounded unless the spawning agent supplies `max_turns`;
++- the second review duplicated the workflow's mandatory next-stage `validate_task` review and prevented the implementor from returning while time remained.
++
++As the first controlled improvement, `implement_next_task.md` now makes each bounded per-task node a single-owner stage: do not spawn subagents and do not commission an extra independent review. It also tells resumed agents to inspect existing implementation notes, reviews, recovery handoffs, and committed failed candidate checkpoints before repeating broad research. The existing focused-validation requirement, automatic checkpoint, independent `validate_task`, final `dev ci`, plan-conformance gate, and publish gate remain intact.
++
++A focused contract regression checks those invariants. The next resumed delivery run is the experiment: if it completes task 019 without child-agent waits, this intervention helped; if it fails elsewhere, investigate that evidence before adding another safeguard. Missing-PostgreSQL-socket classification and a timeout-specific terminal handoff remain separate candidate improvements, deliberately not bundled into this experiment.
