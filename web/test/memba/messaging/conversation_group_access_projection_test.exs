@@ -236,6 +236,73 @@ defmodule Memba.Messaging.ConversationGroupAccessProjectionTest do
            )
   end
 
+  test "member access composes grants across every active group on a shared conversation" do
+    club = insert_membership_club!(name: "Alpine Club")
+    reader = insert_membership_person!(name: "Riley Reader", email: "riley@example.com")
+    writer = insert_membership_person!(name: "Wendy Writer", email: "wendy@example.com")
+    outsider = insert_membership_person!(name: "Oscar Outsider", email: "oscar@example.com")
+    readers_group = insert_group!(club.club_id, "Trip followers")
+    writers_group = insert_group!(club.club_id, "Trip planners")
+
+    insert_active_group_member!(club.club_id, readers_group.group_id, reader.person_id)
+    insert_active_group_member!(club.club_id, writers_group.group_id, writer.person_id)
+    insert_active_club_member!(club.club_id, outsider.person_id)
+
+    root =
+      insert_message!(
+        club_id: club.club_id,
+        sender_id: writer.person_id,
+        subject: "Shared trip planning"
+      )
+
+    for {group_id, access_level} <- [
+          {readers_group.group_id, "read"},
+          {writers_group.group_id, "write"}
+        ] do
+      Repo.insert!(%ConversationGroupAccessProjection{
+        conversation_id: root.message_id,
+        club_id: club.club_id,
+        group_id: group_id,
+        access_level: access_level
+      })
+    end
+
+    assert Messaging.member_has_conversation_access?(
+             root.message_id,
+             club.club_id,
+             reader.person_id,
+             :read
+           )
+
+    refute Messaging.member_has_conversation_access?(
+             root.message_id,
+             club.club_id,
+             reader.person_id,
+             :write
+           )
+
+    assert Messaging.member_has_conversation_access?(
+             root.message_id,
+             club.club_id,
+             writer.person_id,
+             :read
+           )
+
+    assert Messaging.member_has_conversation_access?(
+             root.message_id,
+             club.club_id,
+             writer.person_id,
+             :write
+           )
+
+    refute Messaging.member_has_conversation_access?(
+             root.message_id,
+             club.club_id,
+             outsider.person_id,
+             :read
+           )
+  end
+
   test "member access and in-app follow actions reject a club member outside the access group" do
     club = insert_membership_club!(name: "Alpine Club")
     alice = insert_membership_person!(name: "Alice Adams", email: "alice@example.com")
