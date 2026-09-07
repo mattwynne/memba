@@ -1,0 +1,99 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index c292100..ca2db74 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -15,7 +15,7 @@
+ - [x] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+ - [x] 014 The compose confirmation and error paths must retain that group.
+ - [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+-- [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
++- [x] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+ - [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+ - [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+ - [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 8230b95..e26e58e 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -57,8 +57,10 @@ defmodule Memba.Messaging do
+   The service resolves recipients through Membership's public query API, builds
+   a `SendMessage` command containing those resolved recipients, and dispatches it
+   to the Messaging Commanded application. The audience defaults to the club's
+-  Everyone group when `:audience_group_id` is omitted. Provider delivery happens
+-  asynchronously from projected `EmailDelivery` records.
++  Everyone group when `:audience_group_id` is omitted. The audience must resolve
++  to a group owned by the supplied club before recipients are loaded or a command
++  is built. Provider delivery happens asynchronously from projected
++  `EmailDelivery` records.
+   """
+   def send_club_message(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+@@ -1604,12 +1606,12 @@ defmodule Memba.Messaging do
+ 
+   defp send_club_message_command(attrs) do
+     with {:ok, message_id} <- fetch_required(attrs, :message_id),
+-         {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, club_id} <- fetch_required_id(attrs, :club_id, :club),
+          {:ok, sender_id} <- fetch_required(attrs, :sender_id),
+          {:ok, subject} <- fetch_required(attrs, :subject),
+-         {:ok, body} <- fetch_required(attrs, :body) do
+-      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+-      audience_group_id = optional_audience_group_id(attrs, everyone_group_id)
++         {:ok, body} <- fetch_required(attrs, :body),
++         {:ok, audience_group} <- resolve_audience_group(attrs, club_id) do
++      audience_group_id = audience_group.group_id
+ 
+       {:ok,
+        %SendMessage{
+@@ -1624,6 +1626,20 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp resolve_audience_group(attrs, club_id) do
++    audience_group_id =
++      optional_audience_group_id(attrs, SystemGroups.everyone_group_id(club_id))
++
++    with {:ok, audience_group_id} <- ID.cast(:group, audience_group_id) do
++      case Membership.get_group(audience_group_id) do
++        %{club_id: ^club_id} = audience_group -> {:ok, audience_group}
++        _missing_or_foreign_group -> {:error, :audience_group_not_found}
++      end
++    else
++      :error -> {:error, :invalid_audience_group_id}
++    end
++  end
++
+   defp optional_audience_group_id(attrs, default_group_id) do
+     case fetch_required(attrs, :audience_group_id) do
+       {:ok, audience_group_id} -> audience_group_id
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index d37e060..f8417af 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -232,6 +232,26 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert Messaging.group_has_conversation_access?(message_id, admin_group_id, :write)
+   end
+ 
++  test "rejects an unknown audience group before dispatching the message command" do
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    add_member(club_id, alice.person_id)
++
++    assert {:error, :audience_group_not_found} =
++             Messaging.send_club_message(%{
++               message_id: Memba.ID.generate(:message),
++               club_id: club_id,
++               sender_id: alice.person_id,
++               audience_group_id: Memba.ID.generate(:group),
++               subject: "Private topic",
++               body: "Please discuss this with the selected group."
++             })
++
++    assert count_events(MessageSent) == 0
++  end
++
+   test "sends each active member once at the person's primary email address" do
+     club_id = Memba.ID.generate(:club)
+     create_club(club_id, "Kootenay Mountaineering Club")
