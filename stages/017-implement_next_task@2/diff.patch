@@ -1,0 +1,272 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 5c9fc9b..bc1ccff 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current group projections and Messaging group queries from iterations 056–057.
+-- [ ] 002 Add a public Membership query for the active groups of a given active member in a given club.
++- [x] 002 Add a public Membership query for the active groups of a given active member in a given club.
+ - [ ] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+ - [ ] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+ - [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 3f73a76..9c12955 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -963,6 +963,52 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  List the conversation groups an active member belongs to in a given club.
++
++  Both the group-membership row and its matching underlying club membership
++  must be active. Results are plain maps so callers do not depend on Membership
++  projection schemas. Invalid or unknown club and person IDs return an empty
++  list.
++  """
++  def list_active_groups_for_member(club_id, person_id) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         {:ok, person_id} <- ID.cast(:person, person_id) do
++      GroupProjection
++      |> join(:inner, [group], group_membership in GroupMembershipProjection,
++        on:
++          group_membership.group_id == group.group_id and
++            group_membership.club_id == group.club_id
++      )
++      |> join(:inner, [_group, group_membership], membership in MembershipProjection,
++        on:
++          membership.membership_id == group_membership.membership_id and
++            membership.club_id == group_membership.club_id and
++            membership.person_id == group_membership.person_id
++      )
++      |> where([group, _group_membership, _membership], group.club_id == ^club_id)
++      |> where(
++        [_group, group_membership, _membership],
++        group_membership.person_id == ^person_id
++      )
++      |> where(
++        [_group, group_membership, membership],
++        group_membership.active == true and membership.active == true
++      )
++      |> distinct(true)
++      |> select([group, _group_membership, _membership], %{
++        club_id: group.club_id,
++        group_id: group.group_id,
++        email_slug: group.email_slug,
++        group_key: group.group_key,
++        name: group.name
++      })
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   Return one keyset page of incomplete system-group definitions for release backfill.
+ 
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index f5ed046..ae86513 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -23,6 +23,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def list_active_club_memberships_for_person("
+     assert source =~ "def list_active_members_of_club("
+     assert source =~ "def list_active_members_of_group("
++    assert source =~ "def list_active_groups_for_member("
+     assert source =~ "def list_system_group_definition_backfill_page("
+     assert source =~ "def list_everyone_group_membership_backfill_page("
+     assert source =~ "def list_admin_group_membership_backfill_page("
+@@ -46,6 +47,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+              "list_active_club_memberships_for_person",
+              "list_active_members_of_club",
+              "list_active_members_of_group",
++             "list_active_groups_for_member",
+              "list_system_group_definition_backfill_page",
+              "list_everyone_group_membership_backfill_page",
+              "list_admin_group_membership_backfill_page",
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 1dd4083..41ff1ee 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -3,11 +3,14 @@ defmodule Memba.Membership.QueryTest do
+ 
+   alias Memba.Membership
+   alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddGroupMember
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
++  alias Memba.Membership.Commands.RemoveGroupMember
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Group, as: GroupProjection
+@@ -354,6 +357,111 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "list_active_groups_for_member/2" do
++    test "returns the groups an active member belongs to in the selected club" do
++      club = create_club("Kootenay Mountaineering Club")
++      other_club = create_club("Nelson Cycling Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++
++      membership_id = add_member(club.club_id, alice.person_id)
++      other_membership_id = add_member(other_club.club_id, alice.person_id)
++
++      trip_planning_group_id =
++        create_group(club.club_id,
++          group_key: "trip_planning",
++          email_slug: "trip-planning",
++          name: "Trip Planning"
++        )
++
++      other_group_id =
++        create_group(other_club.club_id,
++          group_key: "trail_crew",
++          email_slug: "trail-crew",
++          name: "Trail Crew"
++        )
++
++      add_group_member(
++        club.club_id,
++        trip_planning_group_id,
++        membership_id,
++        alice.person_id
++      )
++
++      add_group_member(
++        other_club.club_id,
++        other_group_id,
++        other_membership_id,
++        alice.person_id
++      )
++
++      groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
++
++      assert MapSet.new(groups, & &1.group_id) ==
++               MapSet.new([
++                 SystemGroups.everyone_group_id(club.club_id),
++                 trip_planning_group_id
++               ])
++
++      assert %{
++               club_id: club_id,
++               group_id: ^trip_planning_group_id,
++               email_slug: "trip-planning",
++               group_key: "trip_planning",
++               name: "Trip Planning"
++             } = Enum.find(groups, &(&1.group_id == trip_planning_group_id))
++
++      assert club_id == club.club_id
++      refute Enum.any?(groups, &match?(%GroupProjection{}, &1))
++    end
++
++    test "excludes inactive group memberships and groups of an inactive club member" do
++      club = create_club("Kootenay Mountaineering Club")
++      alice = create_person(name: "Alice", email: "alice@example.com")
++      membership_id = add_member(club.club_id, alice.person_id)
++
++      group_id =
++        create_group(club.club_id,
++          group_key: "trip_planning",
++          email_slug: "trip-planning",
++          name: "Trip Planning"
++        )
++
++      add_group_member(club.club_id, group_id, membership_id, alice.person_id)
++
++      assert Enum.any?(
++               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
++               &(&1.group_id == group_id)
++             )
++
++      remove_group_member(club.club_id, group_id, membership_id, alice.person_id)
++
++      refute Enum.any?(
++               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
++               &(&1.group_id == group_id)
++             )
++
++      add_group_member(club.club_id, group_id, membership_id, alice.person_id)
++      remove_member(membership_id)
++
++      assert Membership.list_active_groups_for_member(club.club_id, alice.person_id) == []
++    end
++
++    test "returns an empty list for invalid or unknown club and person IDs" do
++      assert Membership.list_active_groups_for_member(
++               Memba.ID.generate(:club),
++               Memba.ID.generate(:person)
++             ) == []
++
++      assert Membership.list_active_groups_for_member("not-a-uuid", Memba.ID.generate(:person)) ==
++               []
++
++      assert Membership.list_active_groups_for_member(Memba.ID.generate(:club), "not-a-uuid") ==
++               []
++
++      assert Membership.list_active_groups_for_member(nil, nil) == []
++    end
++  end
++
+   describe "person email address query APIs" do
+     test "fetches a person's primary and alternate email addresses" do
+       alice =
+@@ -714,6 +822,50 @@ defmodule Memba.Membership.QueryTest do
+     membership_id
+   end
+ 
++  defp create_group(club_id, attrs) do
++    group_id = Memba.ID.generate(:group)
++
++    assert :ok =
++             App.dispatch(
++               %CreateGroup{
++                 club_id: club_id,
++                 group_id: group_id,
++                 group_key: Keyword.get(attrs, :group_key),
++                 email_slug: Keyword.get(attrs, :email_slug),
++                 name: Keyword.fetch!(attrs, :name)
++               },
++               consistency: :strong
++             )
++
++    group_id
++  end
++
++  defp add_group_member(club_id, group_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AddGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp remove_group_member(club_id, group_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %RemoveGroupMember{
++                 club_id: club_id,
++                 group_id: group_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
+   defp define_role(club_id, attrs) do
+     role_id = Memba.ID.generate(:role)
+ 
