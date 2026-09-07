@@ -1,0 +1,727 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index 89b4f53..5404645 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+ - [x] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+ - [x] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+-- [ ] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
++- [x] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+ - [ ] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+ - [ ] 012 The server remains the authority for every final selection.
+ - [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+diff --git a/styles.css b/styles.css
+index da096d8..1067ee6 100644
+--- a/styles.css
++++ b/styles.css
+@@ -17,6 +17,7 @@
+   --color-line: #e8e6d4;
+   --color-line-strong: #d9d6bf;
+   --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
++  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+ }
+ 
+ /* ============================================================
+@@ -47,6 +48,14 @@
+   overflow: hidden;
+ }
+ 
++.app-card--wide {
++  width: min(100%, 1040px);
++}
++
++.app-main--flush {
++  padding: 0;
++}
++
+ .app-bar {
+   min-height: 64px;
+   padding: 14px 22px;
+@@ -94,6 +103,10 @@
+   gap: 10px;
+ }
+ 
++.global-bar__inner--wide {
++  width: min(100%, 1040px);
++}
++
+ .global-bar__brand {
+   display: flex;
+   align-items: center;
+@@ -295,6 +308,138 @@
+   display: block;
+ }
+ 
++/* ============================================================
++   Club groups.
++
++   The selected group uses a persistent rail on wider screens and
++   a compact horizontal chooser on phones. The split owns its own
++   spacing so the wide member-app layout can sit flush in the card.
++   ============================================================ */
++.club-groups {
++  width: 100%;
++}
++
++.app-split {
++  display: grid;
++  grid-template-columns: 210px minmax(0, 1fr);
++  min-height: 560px;
++}
++
++.group-content {
++  min-width: 0;
++  padding-bottom: 28px;
++}
++
++.group-rail {
++  min-width: 0;
++  padding: 24px 12px;
++  border-right: 1px solid var(--color-line);
++  background: color-mix(in srgb, var(--color-cream) 72%, var(--color-paper));
++}
++
++.group-rail__label {
++  padding: 0 11px 9px;
++  color: var(--color-ink-3);
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.08em;
++  line-height: 1.2;
++  text-transform: uppercase;
++}
++
++.group-rail__item {
++  min-height: 40px;
++  margin-top: 2px;
++  padding: 9px 11px;
++  border-radius: 9px;
++  color: var(--color-ink-2);
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  font-size: 13.5px;
++  font-weight: 600;
++  line-height: 1.35;
++  text-decoration: none;
++  transition:
++    background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    color 120ms cubic-bezier(0.22, 0.61, 0.36, 1),
++    transform 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
++}
++
++.group-rail__item:hover {
++  background: var(--color-sage-50);
++  color: var(--color-sage-700);
++}
++
++.group-rail__item:focus-visible {
++  outline: 2px solid var(--color-sage-400);
++  outline-offset: 1px;
++}
++
++.group-rail__item.is-active {
++  background: var(--color-sage-100);
++  color: var(--color-sage-800);
++}
++
++.group-rail__name {
++  min-width: 0;
++  overflow-wrap: anywhere;
++}
++
++.group-head {
++  padding: 28px 28px 0;
++}
++
++.group-head__top {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 20px;
++}
++
++.group-head__name {
++  color: var(--color-ink);
++  font-size: 28px;
++  font-weight: 700;
++  letter-spacing: -0.03em;
++  line-height: 1.15;
++  overflow-wrap: anywhere;
++}
++
++.group-head__meta {
++  margin-top: 7px;
++  color: var(--color-ink-3);
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 5px 14px;
++  font-size: 13px;
++  line-height: 1.45;
++}
++
++.group-head__addr {
++  color: var(--color-sage-700);
++  font-family: var(--font-mono);
++  font-size: 12px;
++  overflow-wrap: anywhere;
++  text-decoration: none;
++}
++
++.group-head__addr:hover {
++  text-decoration: underline;
++  text-underline-offset: 3px;
++}
++
++.group-head__addr:focus-visible {
++  border-radius: 3px;
++  outline: 2px solid var(--color-sage-400);
++  outline-offset: 2px;
++}
++
++.group-head__actions {
++  flex: none;
++}
++
+ /* ============================================================
+    Club-home section tabs.
+ 
+@@ -344,6 +489,12 @@
+   color: var(--color-ink-2);
+ }
+ 
++.section-tab:focus-visible {
++  border-radius: 3px 3px 0 0;
++  outline: 2px solid var(--color-sage-400);
++  outline-offset: 3px;
++}
++
+ .section-tab.is-active {
+   color: var(--color-sage-700);
+   border-bottom-color: var(--color-sage-500);
+@@ -378,3 +529,62 @@
+     padding: 9px 12px;
+   }
+ }
++
++@media (max-width: 700px) {
++  .app-split {
++    display: block;
++    min-height: 0;
++  }
++
++  .group-rail {
++    padding: 10px 12px;
++    border-right: 0;
++    border-bottom: 1px solid var(--color-line);
++    display: flex;
++    align-items: center;
++    gap: 4px;
++    overflow-x: auto;
++    overscroll-behavior-x: contain;
++    scrollbar-width: thin;
++  }
++
++  .group-rail__label {
++    flex: none;
++    padding: 0 8px 0 2px;
++  }
++
++  .group-rail__item {
++    flex: none;
++    min-height: 38px;
++    margin-top: 0;
++    padding: 8px 11px;
++    white-space: nowrap;
++  }
++
++  .group-rail__name {
++    overflow-wrap: normal;
++  }
++
++  .group-head {
++    padding: 22px 18px 0;
++  }
++
++  .group-head__top {
++    align-items: stretch;
++    flex-direction: column;
++    gap: 16px;
++  }
++
++  .group-head__name {
++    font-size: 24px;
++  }
++
++  .group-head__actions,
++  .group-head__actions .btn {
++    width: 100%;
++  }
++
++  .section-tabs {
++    padding-inline: 18px;
++  }
++}
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index b2a44eb..c32f9ab 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -305,6 +305,10 @@ defmodule MembaWeb.Layouts do
+     default: nil,
+     doc: "the optional signed-in member display name shown in club member chrome"
+ 
++  attr :wide, :boolean,
++    default: false,
++    doc: "expands the member card and removes main padding for split-screen app layouts"
++
+   attr :current_scope, :map,
+     default: nil,
+     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+@@ -319,7 +323,7 @@ defmodule MembaWeb.Layouts do
+       class="app-frame"
+     >
+       <div id="club-site-global-bar" class="global-bar">
+-        <div class="global-bar__inner">
++        <div class={["global-bar__inner", @wide && "global-bar__inner--wide"]}>
+           <div class="global-bar__brand">
+             <.sprig variant={:solid} class="global-bar__mark" />
+             <span class="global-bar__word">Memba</span>
+@@ -379,7 +383,7 @@ defmodule MembaWeb.Layouts do
+         </div>
+       </div>
+ 
+-      <div class="app-card">
++      <div class={["app-card", @wide && "app-card--wide"]}>
+         <header>
+           <div class="app-bar">
+             <div class="app-bar__brand">
+@@ -388,7 +392,7 @@ defmodule MembaWeb.Layouts do
+           </div>
+         </header>
+ 
+-        <main class="px-4 py-10 sm:px-6 lg:px-8">
++        <main class={(@wide && "app-main--flush") || "px-4 py-10 sm:px-6 lg:px-8"}>
+           {render_slot(@inner_block)}
+         </main>
+       </div>
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index b4d45b2..18ea7f6 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -83,12 +83,16 @@ defmodule MembaWeb.PageHTML do
+     active_member_section?(active_section, section) |> to_string()
+   end
+ 
++  defp member_section_tab_index(active_section, section) do
++    if active_member_section?(active_section, section), do: "0", else: "-1"
++  end
++
+   defp member_group_rail_item_class(group, selected_group) do
+     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]
+   end
+ 
+   defp member_group_aria_current(group, selected_group) do
+-    if selected_group?(group, selected_group), do: "page"
++    if selected_group?(group, selected_group), do: "true"
+   end
+ 
+   defp selected_group?(%{group_id: group_id}, %{group_id: selected_group_id}) do
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index bb83f94..dd34838 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -7,13 +7,14 @@
+   club_name={@selected_club.name}
+   current_identity={@current_identity}
+   member_name={@current_member && @current_member.name}
++  wide
+ >
+   <div
+     id="member-club-home"
+     data-live-view="member-dashboard"
+     data-club-id={@selected_club.club_id}
+     data-selected-group-id={@selected_group.group_id}
+-    class="mx-auto max-w-3xl"
++    class="club-groups"
+   >
+     <div class="app-split">
+       <nav id="member-group-rail" class="group-rail" aria-label="Groups">
+@@ -41,6 +42,7 @@
+       <div
+         id="member-group-content"
+         data-group-id={@selected_group.group_id}
++        class="group-content"
+       >
+         <header
+           id="member-group-header"
+@@ -49,7 +51,7 @@
+           aria-labelledby="member-group-name"
+         >
+           <div class="group-head__top">
+-            <div>
++            <div class="min-w-0">
+               <h1 id="member-group-name" class="group-head__name">
+                 {@selected_group.name}
+               </h1>
+@@ -71,6 +73,17 @@
+                 </.link>
+               </div>
+             </div>
++            <div class="group-head__actions">
++              <.button
++                id="member-section-action-new-message"
++                href={member_compose_path(@selected_club, club_id_source)}
++                variant="primary"
++                size="sm"
++                data-section-action="conversations"
++              >
++                New message
++              </.button>
++            </div>
+           </div>
+         </header>
+ 
+@@ -80,6 +93,8 @@
+             class="section-tabs__list"
+             role="tablist"
+             aria-label="Club home sections"
++            aria-orientation="horizontal"
++            phx-hook=".SectionTabs"
+           >
+             <.link
+               id="member-section-tab-conversations"
+@@ -96,6 +111,7 @@
+               role="tab"
+               aria-selected={member_section_aria_selected(active_section, "conversations")}
+               aria-controls="member-section-panel-conversations"
++              tabindex={member_section_tab_index(active_section, "conversations")}
+             >
+               Conversations
+             </.link>
+@@ -114,21 +130,12 @@
+               role="tab"
+               aria-selected={member_section_aria_selected(active_section, "members")}
+               aria-controls="member-section-panel-members"
++              tabindex={member_section_tab_index(active_section, "members")}
+             >
+               Members
+             </.link>
+           </div>
+           <div id="member-section-tabs-action" class="section-tabs__action">
+-            <.button
+-              :if={active_member_section?(active_section, "conversations")}
+-              id="member-section-action-new-message"
+-              href={member_compose_path(@selected_club, club_id_source)}
+-              variant="primary"
+-              size="sm"
+-              data-section-action="conversations"
+-            >
+-              New message
+-            </.button>
+             <.button
+               :if={
+                 active_member_section?(active_section, "members") and
+@@ -157,6 +164,7 @@
+           data-panel="conversations"
+           role="tabpanel"
+           aria-labelledby="member-section-tab-conversations"
++          tabindex="0"
+           hidden={not active_member_section?(active_section, "conversations")}
+         >
+           <section id="club-messages">
+@@ -292,6 +300,7 @@
+           data-panel="members"
+           role="tabpanel"
+           aria-labelledby="member-section-tab-members"
++          tabindex="0"
+           hidden={not active_member_section?(active_section, "members")}
+         >
+           <section id="club-members">
+@@ -379,4 +388,48 @@
+       </div>
+     </div>
+   </div>
++
++  <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionTabs">
++    export default {
++      mounted() {
++        this.handleKeydown = event => {
++          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
++
++          const tabs = Array.from(this.el.querySelectorAll("[role='tab']"))
++          const currentIndex = tabs.indexOf(event.target)
++
++          if (currentIndex === -1) return
++
++          let nextIndex
++
++          switch (event.key) {
++            case "ArrowRight":
++              nextIndex = (currentIndex + 1) % tabs.length
++              break
++            case "ArrowLeft":
++              nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
++              break
++            case "Home":
++              nextIndex = 0
++              break
++            case "End":
++              nextIndex = tabs.length - 1
++              break
++            default:
++              return
++          }
++
++          event.preventDefault()
++          tabs[nextIndex].click()
++          tabs[nextIndex].focus()
++        }
++
++        this.el.addEventListener("keydown", this.handleKeydown)
++      },
++
++      destroyed() {
++        this.el.removeEventListener("keydown", this.handleKeydown)
++      }
++    }
++  </script>
+ </Layouts.club_site>
+diff --git a/web/test/memba_web/app_shell_css_test.exs b/web/test/memba_web/app_shell_css_test.exs
+index 0705cb9..de656a4 100644
+--- a/web/test/memba_web/app_shell_css_test.exs
++++ b/web/test/memba_web/app_shell_css_test.exs
+@@ -19,11 +19,13 @@ defmodule MembaWeb.AppShellCssTest do
+     for selector <- [
+           ".app-frame",
+           ".app-card",
++          ".app-card--wide",
+           ".app-bar",
+           ".app-bar__brand",
+           ".app-bar__club",
+           ".global-bar",
+           ".global-bar__inner",
++          ".global-bar__inner--wide",
+           ".global-bar__brand",
+           ".global-bar__mark",
+           ".global-bar__word",
+@@ -51,6 +53,35 @@ defmodule MembaWeb.AppShellCssTest do
+     end
+   end
+ 
++  test "design-system stylesheet defines the responsive club-groups layout" do
++    css = File.read!(@design_system_css)
++
++    for selector <- [
++          ".app-main--flush",
++          ".app-split",
++          ".group-content",
++          ".group-rail",
++          ".group-rail__label",
++          ".group-rail__item",
++          ".group-rail__item:hover",
++          ".group-rail__item:focus-visible",
++          ".group-rail__item.is-active",
++          ".group-rail__name",
++          ".group-head",
++          ".group-head__top",
++          ".group-head__name",
++          ".group-head__meta",
++          ".group-head__addr"
++        ] do
++      assert css =~ selector
++    end
++
++    assert css =~ "grid-template-columns: 210px minmax(0, 1fr);"
++    assert css =~ "@media (max-width: 700px)"
++    assert css =~ "overflow-x: auto;"
++    assert css =~ "scrollbar-width: thin;"
++  end
++
+   test "design-system app-shell CSS defines every token it consumes" do
+     css = File.read!(@design_system_css)
+ 
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 1fce4a4..dc44d0d 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -250,6 +250,30 @@ defmodule MembaWeb.LayoutsTest do
+     assert [] = attributes(html, "#club-site-layout", "style")
+   end
+ 
++  test "club-site layout offers the wide flush-content variant used by the group home" do
++    assigns = %{flash: %{}}
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club" wide>
++        <section id="wide-club-site-layout-slot">Wide member page content</section>
++      </Layouts.club_site>
++      """)
++
++    assert_selector(html, "#club-site-layout > .app-card.app-card--wide")
++
++    assert_selector(
++      html,
++      "#club-site-global-bar > .global-bar__inner.global-bar__inner--wide"
++    )
++
++    assert_selector(
++      html,
++      "#club-site-layout > .app-card.app-card--wide > main.app-main--flush > " <>
++        "#wide-club-site-layout-slot"
++    )
++  end
++
+   test "club-site layout renders flash messages" do
+     assigns = %{flash: %{"info" => "Club settings saved"}}
+ 
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index ed5c100..4310dfe 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -51,6 +51,14 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
+            )
+ 
++    assert has_element?(view, "#club-site-layout > .app-card.app-card--wide")
++    assert has_element?(view, "#member-club-home.club-groups")
++
++    assert has_element?(
++             view,
++             "#member-club-home .app-split > #member-group-content.group-content"
++           )
++
+     assert has_element?(
+              view,
+              "#club-site-identity-menu .app-menu__who-name",
+@@ -95,7 +103,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-group-rail[aria-label='Groups'] " <>
+                "#member-group-link-#{everyone_group_id}.group-rail__item.is-active" <>
+                "[data-testid='member-group-link'][data-group-id='#{everyone_group_id}']" <>
+-               "[aria-current='page'][href='/groups/#{everyone_group_id}']",
++               "[aria-current='true'][href='/groups/#{everyone_group_id}']",
+              "Everyone"
+            )
+ 
+@@ -186,13 +194,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     refute has_element?(
+              view,
+-             "#member-group-link-#{everyone_group_id}.is-active[aria-current='page']"
++             "#member-group-link-#{everyone_group_id}.is-active[aria-current='true']"
+            )
+ 
+     assert has_element?(
+              view,
+              "#member-group-link-#{trip_planning_group.group_id}.group-rail__item.is-active" <>
+-               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='page']" <>
++               "[data-group-id='#{trip_planning_group.group_id}'][aria-current='true']" <>
+                "[href='/groups/#{trip_planning_group.group_id}']",
+              "Trip Planning"
+            )
+@@ -435,13 +443,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       |> live(~p"/conversations")
+ 
+     assert has_element?(view, "#member-section-tabs.section-tabs")
+-    assert has_element?(view, "#member-section-tabs-list[role='tablist']")
++
++    assert has_element?(
++             view,
++             "#member-section-tabs-list[role='tablist'][aria-orientation='horizontal'][phx-hook]"
++           )
+ 
+     assert has_element?(
+              view,
+              "#member-section-tab-conversations.section-tab.is-active" <>
+                "[data-tab='conversations'][role='tab'][aria-selected='true']" <>
+-               "[aria-controls='member-section-panel-conversations']",
++               "[aria-controls='member-section-panel-conversations'][tabindex='0']",
+              "Conversations"
+            )
+ 
+@@ -449,14 +461,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              view,
+              "#member-section-tab-members.section-tab" <>
+                "[data-tab='members'][role='tab'][aria-selected='false']" <>
+-               "[aria-controls='member-section-panel-members']",
++               "[aria-controls='member-section-panel-members'][tabindex='-1']",
+              "Members"
+            )
+ 
+     assert has_element?(
+              view,
+              "#member-section-panel-conversations.section-panel[data-panel='conversations']" <>
+-               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']"
++               "[role='tabpanel'][aria-labelledby='member-section-tab-conversations']" <>
++               "[tabindex='0']"
+            )
+ 
+     refute has_element?(view, "#member-section-panel-conversations[hidden]")
+@@ -464,12 +477,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#member-section-panel-members.section-panel[data-panel='members']" <>
+-               "[role='tabpanel'][aria-labelledby='member-section-tab-members'][hidden]"
++               "[role='tabpanel'][aria-labelledby='member-section-tab-members']" <>
++               "[tabindex='0'][hidden]"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-section-tabs .section-tabs__action " <>
++             "#member-group-header .group-head__actions " <>
+                "#member-section-action-new-message.btn.btn-primary.btn-sm" <>
+                "[data-section-action='conversations'][href='/messages/new']",
+              "New message"
+@@ -628,13 +642,15 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#member-section-tab-members.section-tab.is-active" <>
+-               "[aria-selected='true'][aria-controls='member-section-panel-members']"
++               "[aria-selected='true'][aria-controls='member-section-panel-members']" <>
++               "[tabindex='0']"
+            )
+ 
+     assert has_element?(
+              view,
+              "#member-section-tab-conversations.section-tab" <>
+-               "[aria-selected='false'][aria-controls='member-section-panel-conversations']"
++               "[aria-selected='false'][aria-controls='member-section-panel-conversations']" <>
++               "[tabindex='-1']"
+            )
+ 
+     assert has_element?(view, "#member-section-panel-conversations[hidden]")
+@@ -647,7 +663,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "Invite member"
+            )
+ 
+-    refute has_element?(view, "#member-section-action-new-message")
++    assert has_element?(
++             view,
++             "#member-group-header .group-head__actions " <>
++               "#member-section-action-new-message[href='/messages/new']",
++             "New message"
++           )
+   end
+ 
+   test "dashboard renders conversations in the default visible section panel", %{
+@@ -1068,7 +1089,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-section-tabs .section-tabs__action " <>
++             "#member-group-header .group-head__actions " <>
+                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-section-action='conversations'][href='/messages/new']",
+              "New message"
+            )
+@@ -1558,7 +1579,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     assert has_element?(
+              view,
+-             "#member-section-tabs .section-tabs__action " <>
++             "#member-group-header .group-head__actions " <>
+                "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+              "New message"
+            )
