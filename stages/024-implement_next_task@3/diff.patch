@@ -1,0 +1,364 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index bc1ccff..96f306c 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current group projections and Messaging group queries from iterations 056–057.
+ - [x] 002 Add a public Membership query for the active groups of a given active member in a given club.
+-- [ ] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
++- [x] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+ - [ ] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+ - [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+ - [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+diff --git a/web/lib/memba/club_inbound_email_address.ex b/web/lib/memba/club_inbound_email_address.ex
+index 49693b1..e4938a7 100644
+--- a/web/lib/memba/club_inbound_email_address.ex
++++ b/web/lib/memba/club_inbound_email_address.ex
+@@ -2,8 +2,8 @@ defmodule Memba.ClubInboundEmailAddress do
+   @moduledoc """
+   Derives member-facing inbound email addresses for clubs.
+ 
+-  The current slice uses one implicit whole-club address per club subdomain:
+-  `everyone@<club-slug>.<configured-domain>`.
++  Each address combines a group's email slug with its club subdomain:
++  `<group-email-slug>@<club-slug>.<configured-domain>`.
+   """
+ 
+   alias Memba.Membership.Slug
+@@ -11,23 +11,33 @@ defmodule Memba.ClubInboundEmailAddress do
+   @default_domain "clubs.memba.io"
+ 
+   @doc """
+-  Build the inbound email address for a club or club slug.
++  Build the Everyone inbound email address for a club or club slug.
+ 
+   Returns `nil` when the slug is missing or not a valid public club slug.
+   """
+-  def address(club_or_slug)
++  def address(club_or_slug), do: address(club_or_slug, "everyone")
+ 
+-  def address(%{slug: slug}), do: address(slug)
++  @doc """
++  Build a group's inbound email address from its club and group email slugs.
++
++  Returns `nil` when either slug is missing or invalid.
++  """
++  def address(club_or_slug, group_email_slug)
++
++  def address(%{slug: club_slug}, group_email_slug),
++    do: address(club_slug, group_email_slug)
+ 
+-  def address(slug) when is_binary(slug) do
+-    with {:ok, normalized_slug} <- Slug.normalize_for_lookup(slug) do
+-      "everyone@" <> normalized_slug <> "." <> domain()
++  def address(club_slug, group_email_slug)
++      when is_binary(club_slug) and is_binary(group_email_slug) do
++    with {:ok, normalized_club_slug} <- Slug.normalize_for_lookup(club_slug),
++         {:ok, normalized_group_email_slug} <- Slug.normalize_for_lookup(group_email_slug) do
++      normalized_group_email_slug <> "@" <> normalized_club_slug <> "." <> domain()
+     else
+       {:error, _reason} -> nil
+     end
+   end
+ 
+-  def address(_club_or_slug), do: nil
++  def address(_club_or_slug, _group_email_slug), do: nil
+ 
+   @doc """
+   Return the configured inbound email domain.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 9c12955..fbeb746 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -5,6 +5,7 @@ defmodule Memba.Membership do
+ 
+   import Ecto.Query
+ 
++  alias Memba.ClubInboundEmailAddress
+   alias Memba.ID
+   alias Memba.Membership.App
+   alias Memba.Membership.Authorization
+@@ -967,43 +968,95 @@ defmodule Memba.Membership do
+   List the conversation groups an active member belongs to in a given club.
+ 
+   Both the group-membership row and its matching underlying club membership
+-  must be active. Results are plain maps so callers do not depend on Membership
+-  projection schemas. Invalid or unknown club and person IDs return an empty
+-  list.
++  must be active. Results are ordered by group name and ID and include each
++  group's active member count and optional inbound email address. They are plain
++  maps so callers do not depend on Membership projection schemas. Invalid or
++  unknown club and person IDs return an empty list.
+   """
+   def list_active_groups_for_member(club_id, person_id) do
+     with {:ok, club_id} <- ID.cast(:club, club_id),
+          {:ok, person_id} <- ID.cast(:person, person_id) do
+-      GroupProjection
+-      |> join(:inner, [group], group_membership in GroupMembershipProjection,
+-        on:
+-          group_membership.group_id == group.group_id and
+-            group_membership.club_id == group.club_id
+-      )
+-      |> join(:inner, [_group, group_membership], membership in MembershipProjection,
+-        on:
+-          membership.membership_id == group_membership.membership_id and
+-            membership.club_id == group_membership.club_id and
+-            membership.person_id == group_membership.person_id
+-      )
+-      |> where([group, _group_membership, _membership], group.club_id == ^club_id)
+-      |> where(
+-        [_group, group_membership, _membership],
+-        group_membership.person_id == ^person_id
+-      )
+-      |> where(
+-        [_group, group_membership, membership],
+-        group_membership.active == true and membership.active == true
+-      )
+-      |> distinct(true)
+-      |> select([group, _group_membership, _membership], %{
+-        club_id: group.club_id,
+-        group_id: group.group_id,
+-        email_slug: group.email_slug,
+-        group_key: group.group_key,
+-        name: group.name
+-      })
+-      |> Repo.all()
++      active_member_counts =
++        GroupMembershipProjection
++        |> join(:inner, [group_membership], membership in MembershipProjection,
++          on:
++            membership.membership_id == group_membership.membership_id and
++              membership.club_id == group_membership.club_id and
++              membership.person_id == group_membership.person_id
++        )
++        |> join(:inner, [_group_membership, membership], person in Person,
++          on: person.person_id == membership.person_id
++        )
++        |> where(
++          [group_membership, membership, _person],
++          group_membership.active == true and membership.active == true
++        )
++        |> group_by([group_membership, _membership, _person], [
++          group_membership.club_id,
++          group_membership.group_id
++        ])
++        |> select([group_membership, _membership, _person], %{
++          club_id: group_membership.club_id,
++          group_id: group_membership.group_id,
++          active_member_count: count(group_membership.membership_id)
++        })
++
++      groups =
++        GroupProjection
++        |> join(:inner, [group], club in Club, on: club.club_id == group.club_id)
++        |> join(:inner, [group, _club], group_membership in GroupMembershipProjection,
++          on:
++            group_membership.group_id == group.group_id and
++              group_membership.club_id == group.club_id
++        )
++        |> join(
++          :inner,
++          [_group, _club, group_membership],
++          membership in MembershipProjection,
++          on:
++            membership.membership_id == group_membership.membership_id and
++              membership.club_id == group_membership.club_id and
++              membership.person_id == group_membership.person_id
++        )
++        |> join(:inner, [_group, _club, _group_membership, membership], person in Person,
++          on: person.person_id == membership.person_id
++        )
++        |> join(
++          :inner,
++          [group, _club, _group_membership, _membership, _person],
++          member_count in subquery(active_member_counts),
++          on: member_count.club_id == group.club_id and member_count.group_id == group.group_id
++        )
++        |> where([group, _club, ...], group.club_id == ^club_id)
++        |> where(
++          [_group, _club, group_membership, _membership, _person, _member_count],
++          group_membership.person_id == ^person_id
++        )
++        |> where(
++          [_group, _club, group_membership, membership, _person, _member_count],
++          group_membership.active == true and membership.active == true
++        )
++        |> distinct(true)
++        |> order_by([group, _club, ...], asc: group.name, asc: group.group_id)
++        |> select([group, club, _group_membership, _membership, _person, member_count], %{
++          club_id: group.club_id,
++          club_slug: club.slug,
++          group_id: group.group_id,
++          email_slug: group.email_slug,
++          group_key: group.group_key,
++          name: group.name,
++          active_member_count: member_count.active_member_count
++        })
++        |> Repo.all()
++
++      Enum.map(groups, fn group ->
++        group
++        |> Map.put(
++          :email_address,
++          ClubInboundEmailAddress.address(group.club_slug, group.email_slug)
++        )
++        |> Map.delete(:club_slug)
++      end)
+     else
+       :error -> []
+     end
+diff --git a/web/test/memba/club_inbound_email_address_test.exs b/web/test/memba/club_inbound_email_address_test.exs
+index 9ba7e11..f32651f 100644
+--- a/web/test/memba/club_inbound_email_address_test.exs
++++ b/web/test/memba/club_inbound_email_address_test.exs
+@@ -14,6 +14,15 @@ defmodule Memba.ClubInboundEmailAddressTest do
+     assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "everyone@kmc.clubs.memba.io"
+   end
+ 
++  test "builds a group address from the group and club slugs" do
++    assert ClubInboundEmailAddress.address(%{slug: " KMC "}, " TRIP-PLANNING ") ==
++             "trip-planning@kmc.clubs.memba.io"
++
++    assert ClubInboundEmailAddress.address("kmc", nil) == nil
++    assert ClubInboundEmailAddress.address(nil, "trip-planning") == nil
++    assert ClubInboundEmailAddress.address("kmc", "not safe") == nil
++  end
++
+   test "uses the configured inbound email domain" do
+     with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
+       assert ClubInboundEmailAddress.domain() == "example.clubs.memba.io"
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 41ff1ee..144d391 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -358,12 +358,16 @@ defmodule Memba.Membership.QueryTest do
+   end
+ 
+   describe "list_active_groups_for_member/2" do
+-    test "returns the groups an active member belongs to in the selected club" do
+-      club = create_club("Kootenay Mountaineering Club")
++    test "returns ordered presentation summaries with active counts and optional addresses" do
++      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+       other_club = create_club("Nelson Cycling Club")
+       alice = create_person(name: "Alice", email: "alice@example.com")
++      bob = create_person(name: "Bob", email: "bob@example.com")
++      carol = create_person(name: "Carol", email: "carol@example.com")
+ 
+-      membership_id = add_member(club.club_id, alice.person_id)
++      alice_membership_id = add_member(club.club_id, alice.person_id)
++      bob_membership_id = add_member(club.club_id, bob.person_id)
++      carol_membership_id = add_member(club.club_id, carol.person_id)
+       other_membership_id = add_member(other_club.club_id, alice.person_id)
+ 
+       trip_planning_group_id =
+@@ -373,6 +377,17 @@ defmodule Memba.Membership.QueryTest do
+           name: "Trip Planning"
+         )
+ 
++      alpine_group_id =
++        create_group(club.club_id,
++          group_key: "alpine",
++          email_slug: "alpine",
++          name: "Alpine"
++        )
++
++      GroupProjection
++      |> Memba.Repo.get!(alpine_group_id)
++      |> then(&Memba.Repo.update!(Ecto.Changeset.change(&1, email_slug: nil)))
++
+       other_group_id =
+         create_group(other_club.club_id,
+           group_key: "trail_crew",
+@@ -383,7 +398,35 @@ defmodule Memba.Membership.QueryTest do
+       add_group_member(
+         club.club_id,
+         trip_planning_group_id,
+-        membership_id,
++        alice_membership_id,
++        alice.person_id
++      )
++
++      add_group_member(
++        club.club_id,
++        trip_planning_group_id,
++        bob_membership_id,
++        bob.person_id
++      )
++
++      add_group_member(
++        club.club_id,
++        trip_planning_group_id,
++        carol_membership_id,
++        carol.person_id
++      )
++
++      remove_group_member(
++        club.club_id,
++        trip_planning_group_id,
++        carol_membership_id,
++        carol.person_id
++      )
++
++      add_group_member(
++        club.club_id,
++        alpine_group_id,
++        alice_membership_id,
+         alice.person_id
+       )
+ 
+@@ -394,23 +437,40 @@ defmodule Memba.Membership.QueryTest do
+         alice.person_id
+       )
+ 
++      everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
++      club_id = club.club_id
+       groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
+ 
+-      assert MapSet.new(groups, & &1.group_id) ==
+-               MapSet.new([
+-                 SystemGroups.everyone_group_id(club.club_id),
+-                 trip_planning_group_id
+-               ])
+-
+-      assert %{
+-               club_id: club_id,
+-               group_id: ^trip_planning_group_id,
+-               email_slug: "trip-planning",
+-               group_key: "trip_planning",
+-               name: "Trip Planning"
+-             } = Enum.find(groups, &(&1.group_id == trip_planning_group_id))
++      assert [
++               %{
++                 club_id: ^club_id,
++                 group_id: ^alpine_group_id,
++                 email_slug: nil,
++                 email_address: nil,
++                 group_key: "alpine",
++                 name: "Alpine",
++                 active_member_count: 1
++               },
++               %{
++                 club_id: ^club_id,
++                 group_id: ^everyone_group_id,
++                 email_slug: "everyone",
++                 email_address: "everyone@kmc.clubs.memba.io",
++                 group_key: "everyone",
++                 name: "Everyone",
++                 active_member_count: 3
++               },
++               %{
++                 club_id: ^club_id,
++                 group_id: ^trip_planning_group_id,
++                 email_slug: "trip-planning",
++                 email_address: "trip-planning@kmc.clubs.memba.io",
++                 group_key: "trip_planning",
++                 name: "Trip Planning",
++                 active_member_count: 2
++               }
++             ] = groups
+ 
+-      assert club_id == club.club_id
+       refute Enum.any?(groups, &match?(%GroupProjection{}, &1))
+     end
+ 
