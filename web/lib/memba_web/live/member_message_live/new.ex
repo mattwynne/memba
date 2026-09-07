@@ -546,6 +546,17 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp audience_group_id(nil), do: nil
   defp audience_group_id(audience_group), do: audience_group.group_id
 
+  defp club_home_path(_selected_club, %{
+         "club_id_source" => "host",
+         "group_id" => group_id
+       })
+       when is_binary(group_id) and group_id != "",
+       do: ~p"/groups/#{group_id}"
+
+  defp club_home_path(selected_club, %{"group_id" => group_id})
+       when not is_nil(selected_club) and is_binary(group_id) and group_id != "",
+       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
+
   defp club_home_path(nil, _route_params), do: ~p"/conversations"
 
   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
@@ -553,23 +564,46 @@ defmodule MembaWeb.MemberMessageLive.New do
   defp club_home_path(selected_club, _route_params),
     do: ClubSite.url(selected_club, "/conversations")
 
-  defp compose_path(nil, _route_params), do: ~p"/messages/new"
+  defp compose_path(selected_club, route_params) do
+    selected_club
+    |> compose_path_without_group(route_params)
+    |> with_group_context(Map.get(route_params, "group_id"))
+  end
 
-  defp compose_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/messages/new"
+  defp compose_path_without_group(nil, _route_params), do: ~p"/messages/new"
 
-  defp compose_path(selected_club, _route_params),
+  defp compose_path_without_group(_selected_club, %{"club_id_source" => "host"}),
+    do: ~p"/messages/new"
+
+  defp compose_path_without_group(selected_club, _route_params),
     do: ClubSite.url(selected_club, "/messages/new")
 
-  defp message_detail_path(message_id, _selected_club, %{"club_id_source" => "host"}) do
+  defp message_detail_path(message_id, selected_club, route_params) do
+    message_id
+    |> message_detail_path_without_group(selected_club, route_params)
+    |> with_group_context(Map.get(route_params, "group_id"))
+  end
+
+  defp message_detail_path_without_group(
+         message_id,
+         _selected_club,
+         %{"club_id_source" => "host"}
+       ) do
     ~p"/messages/#{message_id}"
   end
 
-  defp message_detail_path(message_id, selected_club, _route_params) do
+  defp message_detail_path_without_group(message_id, selected_club, _route_params) do
     case selected_club do
       nil -> ~p"/messages/#{message_id}"
       club -> ClubSite.url(club, "/messages/#{message_id}")
     end
   end
+
+  defp with_group_context(path, group_id) when is_binary(group_id) and group_id != "" do
+    path <> "?" <> URI.encode_query(%{"group_id" => group_id})
+  end
+
+  defp with_group_context(path, _group_id), do: path
 
   defp active_member_count_summary(nil), do: "all current members"
   defp active_member_count_summary(1), do: "the current member"

@@ -164,6 +164,119 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert message_id == message.message_id
 
     assert Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(club_id)) == []
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-compose-state='sent']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-see-receipts-link" <>
+               "[href='/messages/#{message.message_id}?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-send-another-link" <>
+               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-back-home-link[href='/groups/#{trip_planning_group.group_id}']"
+           )
+  end
+
+  test "selected group survives compose validation, send failure, and retry", %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+
+    trip_planning_group =
+      create_group(
+        club_id: club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
+      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Trip planning night",
+        "body" => "  \n\t "
+      }
+    })
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-compose-state='composing']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
+
+    assert has_element?(
+             view,
+             "#member-compose-club-home-link[href='/groups/#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-cancel-link[href='/groups/#{trip_planning_group.group_id}']"
+           )
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "  ",
+        "body" => "Bring route ideas."
+      }
+    })
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-compose-state='send_failed']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
+
+    assert has_element?(
+             view,
+             "#member-compose-back-home-after-error-link" <>
+               "[href='/groups/#{trip_planning_group.group_id}']"
+           )
+
+    view
+    |> element("#member-compose-try-again-button")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-compose-state='composing']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-cancel-link[href='/groups/#{trip_planning_group.group_id}']"
+           )
+
+    assert Messaging.list_messages_for_club(club_id) == []
   end
 
   test "blank body validation keeps the compose form and does not send", %{conn: conn} do

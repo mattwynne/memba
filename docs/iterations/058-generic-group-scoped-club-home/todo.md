@@ -13,7 +13,7 @@
 - [x] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
 - [x] 012 The server remains the authority for every final selection.
 - [x] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
-- [ ] 014 The compose confirmation and error paths must retain that group.
+- [x] 014 The compose confirmation and error paths must retain that group.
 - [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
 - [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
 - [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
