@@ -1,0 +1,24 @@
+# Implementation TODO
+
+- [ ] 001 Inspect the current group projections and Messaging group queries from iterations 056–057.
+- [ ] 002 Add a public Membership query for the active groups of a given active member in a given club.
+- [ ] 003 It must return plain presentation summaries (group ID, name, key, optional email slug/address information, and active member count) in stable display order, and validate club/group/person relationships within Membership rather than leaking projection schemas.
+- [ ] 004 Refactor `MembaWeb.MemberDashboardPresentation` so it resolves the signed-in active club membership once, authorises a selected group through the new Membership API, and loads the selected group's active members and readable conversations.
+- [ ] 005 Keep all current row presentation—including participant names and role badges—working against the selected member set.
+- [ ] 006 Return the same not-found result for missing, foreign-club, or non-member group selection.
+- [ ] 007 Add canonical group-scoped member routes for Conversations and Members using an opaque group ID, while retaining `/conversations` and `/members` as Everyone routes.
+- [ ] 008 Ensure tabs, message links, invitation affordances, and return navigation preserve the selected group where applicable.
+- [ ] 009 Adapt `MemberDashboardLive` and `PageHTML.club` to render the generic rail, group header, selected state, accessible metadata, and selected-group Conversations / Members panels from assigns.
+- [ ] 010 Follow the referenced design's desktop/mobile layout and accessible nav/tab semantics.
+- [ ] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+- [ ] 012 The server remains the authority for every final selection.
+- [ ] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+- [ ] 014 The compose confirmation and error paths must retain that group.
+- [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+- [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+- [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+- [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+- [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
+- [ ] 020 Preserve correct access for a future conversation shared with several groups.
+- [ ] 021 Add focused Membership, Messaging, dashboard-presentation, LiveView/router, and browser tests for generic custom-group fixtures, selection scope, no-disclosure not-found behaviour, remembered selection, group-aware compose, existing Everyone regression, and club/group mismatch rejection.
+- [ ] 022 Implement the planned Cucumber step support, remove/narrow runner-debt tags as each runner becomes executable, and run `dev check`.
