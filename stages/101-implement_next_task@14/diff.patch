@@ -1,0 +1,212 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index db37a96..8ebc650 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 Add a small LiveView client hook or equivalent browser-local mechanism that remembers a successful rail selection by club, restores it only when no explicit group route is requested, and lets the server fall back safely to Everyone when a saved group is absent or unauthorised.
+ - [x] 012 The server remains the authority for every final selection.
+ - [x] 013 Generalise the member compose entry and submit path to carry an authorised audience group from the selected group route.
+-- [ ] 014 The compose confirmation and error paths must retain that group.
++- [x] 014 The compose confirmation and error paths must retain that group.
+ - [ ] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+ - [ ] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+ - [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index d3f2816..5e2331e 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -546,6 +546,17 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp audience_group_id(nil), do: nil
+   defp audience_group_id(audience_group), do: audience_group.group_id
+ 
++  defp club_home_path(_selected_club, %{
++         "club_id_source" => "host",
++         "group_id" => group_id
++       })
++       when is_binary(group_id) and group_id != "",
++       do: ~p"/groups/#{group_id}"
++
++  defp club_home_path(selected_club, %{"group_id" => group_id})
++       when not is_nil(selected_club) and is_binary(group_id) and group_id != "",
++       do: ClubSite.url(selected_club, ~p"/groups/#{group_id}")
++
+   defp club_home_path(nil, _route_params), do: ~p"/conversations"
+ 
+   defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/conversations"
+@@ -553,24 +564,47 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp club_home_path(selected_club, _route_params),
+     do: ClubSite.url(selected_club, "/conversations")
+ 
+-  defp compose_path(nil, _route_params), do: ~p"/messages/new"
++  defp compose_path(selected_club, route_params) do
++    selected_club
++    |> compose_path_without_group(route_params)
++    |> with_group_context(Map.get(route_params, "group_id"))
++  end
+ 
+-  defp compose_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/messages/new"
++  defp compose_path_without_group(nil, _route_params), do: ~p"/messages/new"
+ 
+-  defp compose_path(selected_club, _route_params),
++  defp compose_path_without_group(_selected_club, %{"club_id_source" => "host"}),
++    do: ~p"/messages/new"
++
++  defp compose_path_without_group(selected_club, _route_params),
+     do: ClubSite.url(selected_club, "/messages/new")
+ 
+-  defp message_detail_path(message_id, _selected_club, %{"club_id_source" => "host"}) do
++  defp message_detail_path(message_id, selected_club, route_params) do
++    message_id
++    |> message_detail_path_without_group(selected_club, route_params)
++    |> with_group_context(Map.get(route_params, "group_id"))
++  end
++
++  defp message_detail_path_without_group(
++         message_id,
++         _selected_club,
++         %{"club_id_source" => "host"}
++       ) do
+     ~p"/messages/#{message_id}"
+   end
+ 
+-  defp message_detail_path(message_id, selected_club, _route_params) do
++  defp message_detail_path_without_group(message_id, selected_club, _route_params) do
+     case selected_club do
+       nil -> ~p"/messages/#{message_id}"
+       club -> ClubSite.url(club, "/messages/#{message_id}")
+     end
+   end
+ 
++  defp with_group_context(path, group_id) when is_binary(group_id) and group_id != "" do
++    path <> "?" <> URI.encode_query(%{"group_id" => group_id})
++  end
++
++  defp with_group_context(path, _group_id), do: path
++
+   defp active_member_count_summary(nil), do: "all current members"
+   defp active_member_count_summary(1), do: "the current member"
+   defp active_member_count_summary(count), do: "all #{count} current members"
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index 3e2b429..84eff9c 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -164,6 +164,119 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     assert message_id == message.message_id
+ 
+     assert Messaging.list_conversations_for_group(SystemGroups.everyone_group_id(club_id)) == []
++
++    assert has_element?(
++             view,
++             "#member-message-compose" <>
++               "[data-compose-state='sent']" <>
++               "[data-audience-group-id='#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-see-receipts-link" <>
++               "[href='/messages/#{message.message_id}?group_id=#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-send-another-link" <>
++               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-back-home-link[href='/groups/#{trip_planning_group.group_id}']"
++           )
++  end
++
++  test "selected group survives compose validation, send failure, and retry", %{conn: conn} do
++    club_id = Memba.ID.generate(:club)
++    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
++
++    trip_planning_group =
++      create_group(
++        club_id: club_id,
++        group_key: "trip_planning",
++        name: "Trip Planning"
++      )
++
++    add_group_member(trip_planning_group, alice)
++
++    {:ok, view, _html} =
++      conn
++      |> signed_in_club_host("alice@example.com", %{club_id: club_id})
++      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
++
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "Trip planning night",
++        "body" => "  \n\t "
++      }
++    })
++
++    assert has_element?(
++             view,
++             "#member-message-compose" <>
++               "[data-compose-state='composing']" <>
++               "[data-audience-group-id='#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
++
++    assert has_element?(
++             view,
++             "#member-compose-club-home-link[href='/groups/#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-cancel-link[href='/groups/#{trip_planning_group.group_id}']"
++           )
++
++    view
++    |> element("#member-message-compose-form")
++    |> render_submit(%{
++      "message" => %{
++        "subject" => "  ",
++        "body" => "Bring route ideas."
++      }
++    })
++
++    assert has_element?(
++             view,
++             "#member-message-compose" <>
++               "[data-compose-state='send_failed']" <>
++               "[data-audience-group-id='#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
++
++    assert has_element?(
++             view,
++             "#member-compose-back-home-after-error-link" <>
++               "[href='/groups/#{trip_planning_group.group_id}']"
++           )
++
++    view
++    |> element("#member-compose-try-again-button")
++    |> render_click()
++
++    assert has_element?(
++             view,
++             "#member-message-compose" <>
++               "[data-compose-state='composing']" <>
++               "[data-audience-group-id='#{trip_planning_group.group_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-message-cancel-link[href='/groups/#{trip_planning_group.group_id}']"
++           )
++
++    assert Messaging.list_messages_for_club(club_id) == []
+   end
+ 
+   test "blank body validation keeps the compose form and does not send", %{conn: conn} do
