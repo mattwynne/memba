@@ -3,11 +3,14 @@ defmodule Memba.Membership.QueryTest do
 
   alias Memba.Membership
   alias Memba.Membership.App
+  alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.RemoveGroupMember
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
@@ -351,6 +354,111 @@ defmodule Memba.Membership.QueryTest do
       assert Membership.list_active_members_of_group(Memba.ID.generate(:group)) == []
       assert Membership.list_active_members_of_group(nil) == []
       assert Membership.list_active_members_of_group("not-a-uuid") == []
+    end
+  end
+
+  describe "list_active_groups_for_member/2" do
+    test "returns the groups an active member belongs to in the selected club" do
+      club = create_club("Kootenay Mountaineering Club")
+      other_club = create_club("Nelson Cycling Club")
+      alice = create_person(name: "Alice", email: "alice@example.com")
+
+      membership_id = add_member(club.club_id, alice.person_id)
+      other_membership_id = add_member(other_club.club_id, alice.person_id)
+
+      trip_planning_group_id =
+        create_group(club.club_id,
+          group_key: "trip_planning",
+          email_slug: "trip-planning",
+          name: "Trip Planning"
+        )
+
+      other_group_id =
+        create_group(other_club.club_id,
+          group_key: "trail_crew",
+          email_slug: "trail-crew",
+          name: "Trail Crew"
+        )
+
+      add_group_member(
+        club.club_id,
+        trip_planning_group_id,
+        membership_id,
+        alice.person_id
+      )
+
+      add_group_member(
+        other_club.club_id,
+        other_group_id,
+        other_membership_id,
+        alice.person_id
+      )
+
+      groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
+
+      assert MapSet.new(groups, & &1.group_id) ==
+               MapSet.new([
+                 SystemGroups.everyone_group_id(club.club_id),
+                 trip_planning_group_id
+               ])
+
+      assert %{
+               club_id: club_id,
+               group_id: ^trip_planning_group_id,
+               email_slug: "trip-planning",
+               group_key: "trip_planning",
+               name: "Trip Planning"
+             } = Enum.find(groups, &(&1.group_id == trip_planning_group_id))
+
+      assert club_id == club.club_id
+      refute Enum.any?(groups, &match?(%GroupProjection{}, &1))
+    end
+
+    test "excludes inactive group memberships and groups of an inactive club member" do
+      club = create_club("Kootenay Mountaineering Club")
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      membership_id = add_member(club.club_id, alice.person_id)
+
+      group_id =
+        create_group(club.club_id,
+          group_key: "trip_planning",
+          email_slug: "trip-planning",
+          name: "Trip Planning"
+        )
+
+      add_group_member(club.club_id, group_id, membership_id, alice.person_id)
+
+      assert Enum.any?(
+               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
+               &(&1.group_id == group_id)
+             )
+
+      remove_group_member(club.club_id, group_id, membership_id, alice.person_id)
+
+      refute Enum.any?(
+               Membership.list_active_groups_for_member(club.club_id, alice.person_id),
+               &(&1.group_id == group_id)
+             )
+
+      add_group_member(club.club_id, group_id, membership_id, alice.person_id)
+      remove_member(membership_id)
+
+      assert Membership.list_active_groups_for_member(club.club_id, alice.person_id) == []
+    end
+
+    test "returns an empty list for invalid or unknown club and person IDs" do
+      assert Membership.list_active_groups_for_member(
+               Memba.ID.generate(:club),
+               Memba.ID.generate(:person)
+             ) == []
+
+      assert Membership.list_active_groups_for_member("not-a-uuid", Memba.ID.generate(:person)) ==
+               []
+
+      assert Membership.list_active_groups_for_member(Memba.ID.generate(:club), "not-a-uuid") ==
+               []
+
+      assert Membership.list_active_groups_for_member(nil, nil) == []
     end
   end
 
@@ -712,6 +820,50 @@ defmodule Memba.Membership.QueryTest do
              )
 
     membership_id
+  end
+
+  defp create_group(club_id, attrs) do
+    group_id = Memba.ID.generate(:group)
+
+    assert :ok =
+             App.dispatch(
+               %CreateGroup{
+                 club_id: club_id,
+                 group_id: group_id,
+                 group_key: Keyword.get(attrs, :group_key),
+                 email_slug: Keyword.get(attrs, :email_slug),
+                 name: Keyword.fetch!(attrs, :name)
+               },
+               consistency: :strong
+             )
+
+    group_id
+  end
+
+  defp add_group_member(club_id, group_id, membership_id, person_id) do
+    assert :ok =
+             App.dispatch(
+               %AddGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp remove_group_member(club_id, group_id, membership_id, person_id) do
+    assert :ok =
+             App.dispatch(
+               %RemoveGroupMember{
+                 club_id: club_id,
+                 group_id: group_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
   end
 
   defp define_role(club_id, attrs) do

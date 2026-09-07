@@ -23,6 +23,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert source =~ "def list_active_club_memberships_for_person("
     assert source =~ "def list_active_members_of_club("
     assert source =~ "def list_active_members_of_group("
+    assert source =~ "def list_active_groups_for_member("
     assert source =~ "def list_system_group_definition_backfill_page("
     assert source =~ "def list_everyone_group_membership_backfill_page("
     assert source =~ "def list_admin_group_membership_backfill_page("
@@ -46,6 +47,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
              "list_active_club_memberships_for_person",
              "list_active_members_of_club",
              "list_active_members_of_group",
+             "list_active_groups_for_member",
              "list_system_group_definition_backfill_page",
              "list_everyone_group_membership_backfill_page",
              "list_admin_group_membership_backfill_page",
