@@ -1598,7 +1598,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-07T05:01:30.345972543Z",
-  "last_event_at": "2026-09-07T12:13:53.547554748Z",
+  "last_event_at": "2026-09-07T12:14:09.315350672Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -43033,9 +43033,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 11353,
       "checkpoint": {
-        "timestamp": "2026-09-07T12:14:04.923083045Z",
+        "timestamp": "2026-09-07T12:14:09.306304397Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -43163,6 +43163,426 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.node_visit_count": 17,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "command.output": "blob://sha256/02da5aafad9a8d40cbf9ef1dc0df027d02336596a51c080e908c95233e1720ee",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.verify_source_head": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.run_id": "01M1X3TD59C6R2FDNJ7ARPKACD",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "preferred_label": "valid",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.todo_readable": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.start": 0,
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "failure_class": "",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "failure_signature": "",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.thread_id": "all_tasks_done",
+          "task_retry_available": false,
+          "internal.retry_count.wip_gate": 0,
+          "task_valid": true,
+          "last_stage": "implement_next_task",
+          "thread.start.current_node": "verify_source_head",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "response.validate_task": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evidence\":[\"Commit e9a4d6a changed exactly task 016 from unchecked to checked; its parent confirms task 016 was the first unchecked task. Tasks 017–022 remain intact and ordered.\",\"The checkpoint contains substantive implementation changes in web/lib/memba/messaging.ex: club IDs are validated, explicit/default audience groups are resolved through Membership.get_group/1, ownership by the supplied club is verified, and recipient lookup plus SendMessage construction occur only after verification.\",\"A regression test was added in web/test/memba/messaging/send_club_message_test.exs proving an unknown audience group returns :audience_group_not_found and appends no MessageSent event.\",\"Independent focused validation passed: dev test test/memba/messaging/send_club_message_test.exs completed with 9 tests and 0 failures. The implementation report also records dev check --quick passing with 1,165 tests and 0 failures.\",\"The working tree is clean; the implementation is preserved in recent checkpoint commit e9a4d6a, corroborated by the pre-validation snapshot and current history. The commit passes git diff --check.\",\"No acceptance feature files were changed. The work implements plan item 7's first independently useful slice while leaving the explicit cross-club mismatch regression for task 017.\",\"The implementation respects ADR 0002 by enforcing the invariant before Commanded dispatch, ADR 0005 by resolving recipients before constructing and dispatching SendMessage, and ADR 0007 by using Membership's public query API without accessing its projection schemas.\"]}",
+          "internal.retry_count.task_gate": 0,
+          "current_node": "implement_next_task",
+          "response.implement_next_task": "Implemented task 017: “Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.”\n\n1. Added a two-club regression test in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:255). It creates populated clubs, attempts to send using the other club’s Everyone group, and verifies:\n\n   - `{:error, :audience_group_not_found}` is returned.\n   - No `MessageSent` event—and therefore no cross-club conversation—is created.\n\n2. No production change was needed. Task 016’s existing boundary logic already validates group ownership before resolving recipients or constructing the command.\n\n3. Validation passed:\n\n   - `dev test test/memba/messaging/send_club_message_test.exs` — 10 tests, 0 failures.\n   - `dev check --quick` — 1,166 tests, 0 failures.\n   - `git diff --check` — passed.\n\n4. Checked off exactly [todo.md task 017](/workspace/memba/docs/iterations/058-generic-group-scoped-club-home/todo.md:19).\n\n5. No tasks were split, added, removed, or reordered. Tasks 018–022 remain unchecked.\n\n6. ADR conformance:\n\n   - ADR 0002: the regression verifies the invariant is enforced before Commanded dispatch.\n   - ADR 0005: foreign-group rejection occurs before recipient resolution and `SendMessage` construction.\n   - ADR 0007: group ownership remains resolved through Membership’s public API, preserving the Membership/Messaging boundary.",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.verify_source_head.current_node": "read_plan",
+          "graph.rankdir": "LR",
+          "last_response": "Implemented task 017: “Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.”\n\n1. Added a t",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.read_plan": 0,
+          "outcome": "succeeded",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.validate_task": 0
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/02da5aafad9a8d40cbf9ef1dc0df027d02336596a51c080e908c95233e1720ee"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 151,
+              "active_time_ms": 151
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5f40c7d22e319307be1f140d4e1797135d22d96ab05201f3ad3f9a481debf484"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/56f5c458f43fa0be96a6f8ed6cb3e774c46a785ee4c2d6d253c2c08eece7053b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "valid",
+            "context_updates": {
+              "last_response": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evidence\":[\"Com",
+              "response.validate_task": "{\"preferred_next_label\":\"valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evidence\":[\"Commit e9a4d6a changed exactly task 016 from unchecked to checked; its parent confirms task 016 was the first unchecked task. Tasks 017–022 remain intact and ordered.\",\"The checkpoint contains substantive implementation changes in web/lib/memba/messaging.ex: club IDs are validated, explicit/default audience groups are resolved through Membership.get_group/1, ownership by the supplied club is verified, and recipient lookup plus SendMessage construction occur only after verification.\",\"A regression test was added in web/test/memba/messaging/send_club_message_test.exs proving an unknown audience group returns :audience_group_not_found and appends no MessageSent event.\",\"Independent focused validation passed: dev test test/memba/messaging/send_club_message_test.exs completed with 9 tests and 0 failures. The implementation report also records dev check --quick passing with 1,165 tests and 0 failures.\",\"The working tree is clean; the implementation is preserved in recent checkpoint commit e9a4d6a, corroborated by the pre-validation snapshot and current history. The commit passes git diff --check.\",\"No acceptance feature files were changed. The work implements plan item 7's first independently useful slice while leaving the explicit cross-club mismatch regression for task 017.\",\"The implementation respects ADR 0002 by enforcing the invariant before Commanded dispatch, ADR 0005 by resolving recipients before constructing and dispatching SendMessage, and ADR 0007 by using Membership's public query API without accessing its projection schemas.\"]}",
+              "last_stage": "validate_task",
+              "task_retry_available": false,
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 427623,
+                    "output_tokens": 1895,
+                    "reasoning_tokens": 681,
+                    "cache_read_tokens": 201088,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2315939
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 100362,
+              "tool_time_ms": 11778,
+              "active_time_ms": 112140
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e242e838a86a8555f4ee082a45acc4fe999b334cb0aa1bf7d73933914ce0341c"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh 'ebdc63b089339bd3b6911139bce1c12fd94b2d1b'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented task 017: “Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.”\n\n1. Added a t",
+              "response.implement_next_task": "Implemented task 017: “Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.”\n\n1. Added a two-club regression test in [send_club_message_test.exs](/workspace/memba/web/test/memba/messaging/send_club_message_test.exs:255). It creates populated clubs, attempts to send using the other club’s Everyone group, and verifies:\n\n   - `{:error, :audience_group_not_found}` is returned.\n   - No `MessageSent` event—and therefore no cross-club conversation—is created.\n\n2. No production change was needed. Task 016’s existing boundary logic already validates group ownership before resolving recipients or constructing the command.\n\n3. Validation passed:\n\n   - `dev test test/memba/messaging/send_club_message_test.exs` — 10 tests, 0 failures.\n   - `dev check --quick` — 1,166 tests, 0 failures.\n   - `git diff --check` — passed.\n\n4. Checked off exactly [todo.md task 017](/workspace/memba/docs/iterations/058-generic-group-scoped-club-home/todo.md:19).\n\n5. No tasks were split, added, removed, or reordered. Tasks 018–022 remain unchecked.\n\n6. ADR conformance:\n\n   - ADR 0002: the regression verifies the invariant is enforced before Commanded dispatch.\n   - ADR 0005: foreign-group rejection occurs before recipient resolution and `SendMessage` construction.\n   - ADR 0007: group ownership remains resolved through Membership’s public API, preserving the Membership/Messaging boundary."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 543554,
+                    "output_tokens": 3403,
+                    "reasoning_tokens": 1606,
+                    "cache_read_tokens": 783232,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3259656
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 193560,
+              "tool_time_ms": 105142,
+              "active_time_ms": 298702
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fb78c7e616f68c28af5ef20e8a7afe5a82e229e264a2f46ff3b8e021c4e15840"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5837e12a977628e1ab92730d22dc477df2fbce1d2028afce3f9f447a5ce185d6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0dbeb6c3eb2af14fc7a886a90bb5a65349032290f9820c8961d412466b4ee517"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1604,
+              "active_time_ms": 1604
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/885f0f50265b48ac1daa54bf4d8a3902879e2f5612ab2172907a487036d4895a"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 93400,
+              "active_time_ms": 93400
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a226b24b3ce6eb14ec7e22932cea992ff3defca2edffc1c50f7c33fba7c6ed21"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 149,
+              "active_time_ms": 149
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "5fc6011bd0d30d767d1df69e225361f61374895e",
+        "node_visits": {
+          "all_tasks_done": 17,
+          "sync_task_list": 17,
+          "resume_gate": 1,
+          "todo_readable": 17,
+          "validate_task": 16,
+          "task_gate": 16,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "implement_next_task": 17,
+          "verify_source_head": 1,
+          "pre_validate_snapshot": 16,
+          "start": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md\nindex ca2db74..51f39ae 100644\n--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md\n+++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md\n@@ -16,7 +16,7 @@\n - [x] 014 The compose confirmation and error paths must retain that group.\n - [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.\n - [x] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.\n-- [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.\n+- [x] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.\n - [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.\n - [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.\n - [ ] 020 Preserve correct access for a future conversation shared with several groups.\ndiff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs\nindex f8417af..6543fea 100644\n--- a/web/test/memba/messaging/send_club_message_test.exs\n+++ b/web/test/memba/messaging/send_club_message_test.exs\n@@ -252,6 +252,30 @@ defmodule Memba.Messaging.SendClubMessageTest do\n     assert count_events(MessageSent) == 0\n   end\n \n+  test \"rejects an audience group owned by another club without creating a conversation\" do\n+    kootenay_club_id = Memba.ID.generate(:club)\n+    nelson_club_id = Memba.ID.generate(:club)\n+    create_club(kootenay_club_id, \"Kootenay Mountaineering Club\")\n+    create_club(nelson_club_id, \"Nelson Cycling Club\")\n+\n+    alice = create_person(name: \"Alice\", email: \"alice@example.com\")\n+    bob = create_person(name: \"Bob\", email: \"bob@example.com\")\n+    add_member(kootenay_club_id, alice.person_id)\n+    add_member(nelson_club_id, bob.person_id)\n+\n+    assert {:error, :audience_group_not_found} =\n+             Messaging.send_club_message(%{\n+               message_id: Memba.ID.generate(:message),\n+               club_id: kootenay_club_id,\n+               sender_id: alice.person_id,\n+               audience_group_id: SystemGroups.everyone_group_id(nelson_club_id),\n+               subject: \"Cross-club topic\",\n+               body: \"This must not create a conversation.\"\n+             })\n+\n+    assert count_events(MessageSent) == 0\n+  end\n+\n   test \"sends each active member once at the person's primary email address\" do\n     club_id = Memba.ID.generate(:club)\n     create_club(club_id, \"Kootenay Mountaineering Club\")\n",
+        "summary": {
+          "files_changed": 35,
+          "additions": 3155,
+          "deletions": 341
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-07T12:14:09.481278956Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.sync_task_list": 0,
           "thread.sync_task_list.current_node": "todo_readable",
@@ -43175,7 +43595,7 @@
           "internal.retry_count.preflight_sandbox": 0,
           "task_retry_available": false,
           "internal.fidelity": "summary:high",
-          "command.output": "blob://sha256/02da5aafad9a8d40cbf9ef1dc0df027d02336596a51c080e908c95233e1720ee",
+          "command.output": "blob://sha256/764a4dcb6a973fcea3efaf834157f262ce501979a2c8294ff3bf56e268d9da15",
           "internal.retry_count.validate_task": 0,
           "thread.validate_task.current_node": "task_gate",
           "thread.verify_source_head.current_node": "read_plan",
@@ -43186,7 +43606,7 @@
           "thread.wip_gate.current_node": "preflight_sandbox",
           "failure_class": "",
           "internal.retry_count.start": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.wip_gate": 0,
           "last_stage": "implement_next_task",
           "last_response": "Implemented task 017: “Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.”\n\n1. Added a t",
@@ -43199,7 +43619,7 @@
           "preferred_label": "valid",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "outcome": "succeeded",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "thread.read_plan.current_node": "wip_gate",
           "internal.retry_count.pre_validate_snapshot": 0,
@@ -43336,15 +43756,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/fb78c7e616f68c28af5ef20e8a7afe5a82e229e264a2f46ff3b8e021c4e15840"
+              "command.output": "blob://sha256/764a4dcb6a973fcea3efaf834157f262ce501979a2c8294ff3bf56e268d9da15"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 154,
-              "active_time_ms": 154
+              "tool_time_ms": 157,
+              "active_time_ms": 157
             }
           },
           "wip_gate": {
@@ -43424,13 +43844,13 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "sync_task_list": 17,
           "all_tasks_done": 17,
           "verify_source_head": 1,
           "wip_gate": 1,
-          "pre_validate_snapshot": 16,
+          "pre_validate_snapshot": 17,
           "resume_gate": 1,
           "task_gate": 16,
           "start": 1,
@@ -43475,7 +43895,12 @@
       "first_event_seq": 11196,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-07T12:14:04.921615889Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -43490,16 +43915,20 @@
       "started_at": "2026-09-07T12:09:05.839554617Z",
       "handler": "agent",
       "graph_visit": 17,
-      "live_inference_ms": 167511,
-      "live_tool_ms": 105145,
+      "timing": {
+        "wall_time_ms": 299080,
+        "inference_time_ms": 193560,
+        "tool_time_ms": 105142,
+        "active_time_ms": 298702
+      },
       "usage": {
-        "input_tokens": 541877,
-        "output_tokens": 3051,
-        "total_tokens": 1235714,
-        "reasoning_tokens": 1250,
-        "cache_read_tokens": 689536,
+        "input_tokens": 543554,
+        "output_tokens": 3403,
+        "total_tokens": 1331795,
+        "reasoning_tokens": 1606,
+        "cache_read_tokens": 783232,
         "cache_write_tokens": 0,
-        "total_usd_micros": 3183183
+        "total_usd_micros": 3259656
       },
       "model": {
         "provider": "openai",
@@ -43614,12 +44043,12 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 94410,
-        "usage_percent": 34.70955882352941,
+        "input_tokens": 95373,
+        "usage_percent": 35.06360294117647,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-07T12:13:38.734165132Z",
-        "event_seq": 11339,
+        "generated_at": "2026-09-07T12:14:04.915248572Z",
+        "event_seq": 11346,
         "breakdown": [
           {
             "category": "system_prompt",
@@ -43638,8 +44067,8 @@
           },
           {
             "category": "conversation",
-            "tokens": 89952,
-            "usage_percent": 33.07058823529412
+            "tokens": 90915,
+            "usage_percent": 33.424632352941174
           },
           {
             "category": "other",
@@ -43649,19 +44078,8 @@
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "c29fc8e7-c753-4dcd-8417-d987e3616c94",
-        "started_at": "2026-09-07T12:13:38.890870779Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-07T12:13:53.547554748Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@12": {
       "first_event_seq": 7936,
@@ -53353,6 +53771,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@17": {
+      "first_event_seq": 11356,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/058-generic-group-scoped-club-home/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-07T12:14:09.314524287Z",
+      "handler": "command",
+      "graph_visit": 17,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "validate_task@5": {
       "first_event_seq": 3457,

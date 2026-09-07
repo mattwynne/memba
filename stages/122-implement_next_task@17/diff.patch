@@ -1,0 +1,48 @@
+diff --git a/docs/iterations/058-generic-group-scoped-club-home/todo.md b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+index ca2db74..51f39ae 100644
+--- a/docs/iterations/058-generic-group-scoped-club-home/todo.md
++++ b/docs/iterations/058-generic-group-scoped-club-home/todo.md
+@@ -16,7 +16,7 @@
+ - [x] 014 The compose confirmation and error paths must retain that group.
+ - [x] 015 Retain the current Everyone default when entered through existing routes; do not expose an audience selector.
+ - [x] 016 At the Messaging boundary, resolve/verify the audience group under the supplied club before recipient lookup and command construction.
+-- [ ] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
++- [x] 017 Make this invariant fail closed for mismatched group/club IDs, and cover it with a regression test so a future caller cannot create a cross-club conversation.
+ - [ ] 018 Review all member-facing conversation detail, in-app reply, follow/unfollow, receipt/delivery, and direct action paths.
+ - [ ] 019 Authorise the current person via an active group with the conversation's required access level, not merely via club membership or current rail state.
+ - [ ] 020 Preserve correct access for a future conversation shared with several groups.
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index f8417af..6543fea 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -252,6 +252,30 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert count_events(MessageSent) == 0
+   end
+ 
++  test "rejects an audience group owned by another club without creating a conversation" do
++    kootenay_club_id = Memba.ID.generate(:club)
++    nelson_club_id = Memba.ID.generate(:club)
++    create_club(kootenay_club_id, "Kootenay Mountaineering Club")
++    create_club(nelson_club_id, "Nelson Cycling Club")
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    bob = create_person(name: "Bob", email: "bob@example.com")
++    add_member(kootenay_club_id, alice.person_id)
++    add_member(nelson_club_id, bob.person_id)
++
++    assert {:error, :audience_group_not_found} =
++             Messaging.send_club_message(%{
++               message_id: Memba.ID.generate(:message),
++               club_id: kootenay_club_id,
++               sender_id: alice.person_id,
++               audience_group_id: SystemGroups.everyone_group_id(nelson_club_id),
++               subject: "Cross-club topic",
++               body: "This must not create a conversation."
++             })
++
++    assert count_events(MessageSent) == 0
++  end
++
+   test "sends each active member once at the person's primary email address" do
+     club_id = Memba.ID.generate(:club)
+     create_club(club_id, "Kootenay Mountaineering Club")
