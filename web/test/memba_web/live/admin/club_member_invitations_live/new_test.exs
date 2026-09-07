@@ -95,11 +95,19 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
 
   test "staff email invitation link carries an unknown invitee through profile completion to the club",
        %{conn: conn} do
-    club =
-      insert_membership_club!(
-        name: "Kootenay Mountaineering Club",
-        slug: "kootenay-mountaineering"
-      )
+    club_id = Memba.ID.generate(:club)
+
+    assert :ok =
+             Membership.create_club(
+               %{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kootenay-mountaineering"
+               },
+               consistency: :strong
+             )
+
+    club = Membership.get_club(club_id)
 
     conn
     |> sign_in_staff()

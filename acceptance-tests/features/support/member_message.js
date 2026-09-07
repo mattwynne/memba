@@ -1658,7 +1658,7 @@ async function assertAdminMessageDeliveredToMembers(
   expectedRecipientNames,
   clubName
 ) {
-  const message = await recordAcceptedInboundRootMessage(world, subject);
+  const message = world.messages[subject] || (await recordAcceptedInboundRootMessage(world, subject));
   serverCommands.dispatchPendingEmailDeliveries();
 
   const baseline = world.localDeliveryFactsBeforeSend || [];

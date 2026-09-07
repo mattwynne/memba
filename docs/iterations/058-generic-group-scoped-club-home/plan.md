@@ -1,7 +1,7 @@
 # Generic group-scoped club home
 
 Date: 2026-09-06
-Status: validated
+Status: merged
 
 ## Goal
 

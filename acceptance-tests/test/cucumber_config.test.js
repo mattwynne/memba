@@ -24,6 +24,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "club_membership_administration.feature",
     "club_message_replies.feature",
     "email_branding.feature",
+    "group_conversations.feature",
     "homepage.feature",
     "list_members.feature",
     "memba_staff_email_deliverability.feature",
@@ -70,6 +71,22 @@ test("iteration 057 scenarios are no longer blocked from either acceptance runne
   );
 
   assert.equal(iterationScenarios.length, 4);
+  assert.deepEqual(
+    iterationScenarios.filter(
+      (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")
+    ),
+    []
+  );
+});
+
+test("iteration 058 scenarios are no longer blocked from either acceptance runner", () => {
+  const iterationScenarios = browserFeatures().flatMap((feature) =>
+    feature.scenarios
+      .filter((scenario) => scenario.tags.includes("@iteration-058"))
+      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
+  );
+
+  assert.equal(iterationScenarios.length, 8);
   assert.deepEqual(
     iterationScenarios.filter(
       (scenario) => scenario.includes("@todo-domain") || scenario.includes("@todo-ui")

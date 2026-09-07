@@ -19,11 +19,13 @@ defmodule MembaWeb.AppShellCssTest do
     for selector <- [
           ".app-frame",
           ".app-card",
+          ".app-card--wide",
           ".app-bar",
           ".app-bar__brand",
           ".app-bar__club",
           ".global-bar",
           ".global-bar__inner",
+          ".global-bar__inner--wide",
           ".global-bar__brand",
           ".global-bar__mark",
           ".global-bar__word",
@@ -49,6 +51,35 @@ defmodule MembaWeb.AppShellCssTest do
         ] do
       assert css =~ selector
     end
+  end
+
+  test "design-system stylesheet defines the responsive club-groups layout" do
+    css = File.read!(@design_system_css)
+
+    for selector <- [
+          ".app-main--flush",
+          ".app-split",
+          ".group-content",
+          ".group-rail",
+          ".group-rail__label",
+          ".group-rail__item",
+          ".group-rail__item:hover",
+          ".group-rail__item:focus-visible",
+          ".group-rail__item.is-active",
+          ".group-rail__name",
+          ".group-head",
+          ".group-head__top",
+          ".group-head__name",
+          ".group-head__meta",
+          ".group-head__addr"
+        ] do
+      assert css =~ selector
+    end
+
+    assert css =~ "grid-template-columns: 210px minmax(0, 1fr);"
+    assert css =~ "@media (max-width: 700px)"
+    assert css =~ "overflow-x: auto;"
+    assert css =~ "scrollbar-width: thin;"
   end
 
   test "design-system app-shell CSS defines every token it consumes" do

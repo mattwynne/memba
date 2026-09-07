@@ -250,6 +250,30 @@ defmodule MembaWeb.LayoutsTest do
     assert [] = attributes(html, "#club-site-layout", "style")
   end
 
+  test "club-site layout offers the wide flush-content variant used by the group home" do
+    assigns = %{flash: %{}}
+
+    html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club" wide>
+        <section id="wide-club-site-layout-slot">Wide member page content</section>
+      </Layouts.club_site>
+      """)
+
+    assert_selector(html, "#club-site-layout > .app-card.app-card--wide")
+
+    assert_selector(
+      html,
+      "#club-site-global-bar > .global-bar__inner.global-bar__inner--wide"
+    )
+
+    assert_selector(
+      html,
+      "#club-site-layout > .app-card.app-card--wide > main.app-main--flush > " <>
+        "#wide-club-site-layout-slot"
+    )
+  end
+
   test "club-site layout renders flash messages" do
     assigns = %{flash: %{"info" => "Club settings saved"}}
 

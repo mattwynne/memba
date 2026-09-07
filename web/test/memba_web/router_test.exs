@@ -7,11 +7,8 @@ defmodule MembaWeb.RouterTest do
     "/deliveries"
   ]
 
-  @custom_group_paths [
+  @unrouted_group_management_paths [
     "/groups",
-    "/groups/new",
-    "/groups/group-123",
-    "/groups/group-123/members",
     "/admin/groups",
     "/admin/clubs/club-123/groups",
     "/admin/clubs/club-123/groups/new",
@@ -104,6 +101,35 @@ defmodule MembaWeb.RouterTest do
                  "/webhooks/postmark/inbound",
                  "localhost"
                )
+    end
+  end
+
+  describe "member dashboard routes" do
+    test "routes Everyone and group-scoped sections through the required club member pipeline" do
+      group_id = Memba.ID.generate(:group)
+
+      assert_member_dashboard_live_route(
+        "/conversations",
+        "/conversations",
+        %{},
+        :conversations
+      )
+
+      assert_member_dashboard_live_route("/members", "/members", %{}, :members)
+
+      assert_member_dashboard_live_route(
+        "/groups/#{group_id}",
+        "/groups/:group_id",
+        %{"group_id" => group_id},
+        :conversations
+      )
+
+      assert_member_dashboard_live_route(
+        "/groups/#{group_id}/members",
+        "/groups/:group_id/members",
+        %{"group_id" => group_id},
+        :members
+      )
     end
   end
 
@@ -210,10 +236,10 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
-  describe "custom group routes" do
-    test "custom group UI/API paths are not routed in this slice" do
+  describe "group management routes" do
+    test "group management UI/API paths remain unrouted" do
       for method <- ~w(GET POST PATCH DELETE),
-          path <- @custom_group_paths do
+          path <- @unrouted_group_management_paths do
         assert :error = Phoenix.Router.route_info(MembaWeb.Router, method, path, "localhost")
       end
     end
@@ -235,6 +261,24 @@ defmodule MembaWeb.RouterTest do
              path_params: ^path_params,
              pipe_through: [:browser, :club_member_required],
              phoenix_live_view: {MembaWeb.MySettingsLive, ^live_action, _opts, _live_session},
+             plug: Phoenix.LiveView.Plug,
+             plug_opts: ^live_action,
+             route: ^route_pattern
+           } =
+             Phoenix.Router.route_info(
+               MembaWeb.Router,
+               "GET",
+               path,
+               "localhost"
+             )
+  end
+
+  defp assert_member_dashboard_live_route(path, route_pattern, path_params, live_action) do
+    assert %{
+             path_params: ^path_params,
+             pipe_through: [:browser, :club_member_required],
+             phoenix_live_view:
+               {MembaWeb.MemberDashboardLive, ^live_action, _opts, _live_session},
              plug: Phoenix.LiveView.Plug,
              plug_opts: ^live_action,
              route: ^route_pattern

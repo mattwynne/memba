@@ -445,7 +445,15 @@ function ensureSmokeTestClub({ clubName, clubSlug, personName, email }) {
   return member;
 }
 
-function sendClubMessage({ clubId, senderId, senderName, subject, body, timeoutMs = 1000 }) {
+function sendClubMessage({
+  clubId,
+  senderId,
+  senderName,
+  subject,
+  body,
+  audienceGroupId = null,
+  timeoutMs = 1000
+}) {
   return runCommand(
     `
 club_id = Map.fetch!(payload, "clubId")
@@ -453,11 +461,26 @@ sender_id = Map.fetch!(payload, "senderId")
 sender_name = Map.fetch!(payload, "senderName")
 subject = Map.fetch!(payload, "subject")
 body = Map.fetch!(payload, "body")
+audience_group_id = Map.get(payload, "audienceGroupId")
 timeout = Map.get(payload, "timeoutMs", 1000)
 message_id = Memba.ID.generate(:message)
 
+attrs =
+  %{
+    message_id: message_id,
+    club_id: club_id,
+    sender_id: sender_id,
+    subject: subject,
+    body: body
+  }
+  |> then(fn attrs ->
+    if is_binary(audience_group_id),
+      do: Map.put(attrs, :audience_group_id, audience_group_id),
+      else: attrs
+  end)
+
 :ok = Memba.Messaging.send_club_message(
-  %{message_id: message_id, club_id: club_id, sender_id: sender_id, subject: subject, body: body},
+  attrs,
   consistency: :strong
 )
 
@@ -479,7 +502,7 @@ Memba.ProjectionBarrier.await!(
   body: body
 }
 `,
-    { clubId, senderId, senderName, subject, body, timeoutMs }
+    { clubId, senderId, senderName, subject, body, audienceGroupId, timeoutMs }
   );
 }
 
