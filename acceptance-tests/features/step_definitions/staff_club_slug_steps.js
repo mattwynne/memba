@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { When, Then } = require("@cucumber/cucumber");
 const { expect: playwrightExpect } = require("@playwright/test");
-const { appUrl } = require("../support/member_message");
+const { appUrl, waitForLiveViewConnected } = require("../support/member_message");
 const serverCommands = require("../support/server_commands");
 
 When("Pat starts creating the club {string}", async function (clubName) {
@@ -77,6 +77,7 @@ Then(/^(.+) should keep its previous slug$/, async function (clubName) {
 async function openClubsPage(world) {
   await world.page.goto(appUrl(world.baseUrl, "/admin/clubs"));
   await playwrightExpect(world.page.locator("#clubs-index")).toBeVisible();
+  await waitForLiveViewConnected(world);
 }
 
 async function fetchKnownClub(world, clubName) {

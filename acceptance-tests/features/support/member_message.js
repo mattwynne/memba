@@ -319,6 +319,17 @@ async function browserInteraction(description, action) {
   }
 }
 
+async function waitForLiveViewConnected(
+  world,
+  { timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  await world.page.waitForFunction(
+    () => Boolean(window.liveSocket && window.liveSocket.isConnected()),
+    null,
+    { timeout: timeoutMs }
+  );
+}
+
 function assertFinalBrowserState(description, assertion) {
   try {
     return assertion();
@@ -578,6 +589,7 @@ async function openMemberComposeFromClubHome(world, clubName, { expect = playwri
     `member compose form for ${clubName}`,
     { expect, timeoutMs }
   );
+  await waitForLiveViewConnected(world, { timeoutMs });
 }
 
 async function openMemberMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -4224,6 +4236,7 @@ module.exports = {
   updatePersonEmailAddresses,
   unfollowConversation,
   visitClubsIndex,
+  waitForLiveViewConnected,
   waitForLocalDeliveryFacts,
   waitForMailboxEmails
 };

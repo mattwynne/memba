@@ -31,6 +31,7 @@ const {
   kootenayClubName,
   memberReceiptIconForLabel,
   memberReceiptStatusForEventType,
+  openMemberComposeFromClubHome,
   openMemberClubHome,
   openMemberMessage,
   postmarkPayloadForStatus,
@@ -171,6 +172,10 @@ class FakePage {
 
   url() {
     return this.currentUrl;
+  }
+
+  async waitForFunction() {
+    this.actions.push(["waitForLiveViewConnected"]);
   }
 
   getByLabel(name) {
@@ -646,6 +651,29 @@ test("sending a Kootenay member message drives the club form and opens the real 
   ]);
 });
 
+test("member compose waits for LiveView connection before form interaction", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
+
+  await openMemberComposeFromClubHome(world, kootenayClubName, {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(page.actions, [
+    ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
+    ["click", "locator", "#member-section-action-new-message"],
+    ["waitForLiveViewConnected"]
+  ]);
+});
+
 test("member send flow opens compose from club home and stores the new message", async () => {
   const page = new FakePage();
   const expectations = [];
@@ -682,6 +710,7 @@ test("member send flow opens compose from club home and stores the new message",
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
     ["click", "locator", "#member-section-action-new-message"],
+    ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
     ["click", "button", { name: "Send to all current members" }],
