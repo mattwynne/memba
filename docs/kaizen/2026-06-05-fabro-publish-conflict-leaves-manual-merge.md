@@ -79,3 +79,70 @@ Validation:
 Remaining follow-up:
 
 - Observe the first real conflict-recovery run to tune the prompt and decide whether recurring conflict classes should get deterministic merge helpers.
+
+### Additional observation: 2026-09-07 — the recovery gate lost a real lifecycle conflict
+
+#### Context
+
+Iteration-implementation recovery run `01M1YGGME8RMTSHTEFBNX3MY3Z` resumed iteration 058 from the failed run's durable checkpoint branch. It completed and validated tasks 019–022, passed the final `dev check`, plan-conformance gate, and final-artifact gate, then entered `publish_to_main`.
+
+The earlier failed delivery had started from reservation commit `ebdc63b`, where iteration 058 was `implementing`. After that failure, `main` restored the iteration to `validated` so it would not occupy the WIP slot. The resumed run retained the reservation ancestry and, at publication, correctly attempted to mark the completed iteration `merged`.
+
+#### Expected standard
+
+When the final rebase finds a mechanical conflict, `publish_to_main.sh` should preserve the attempted artifact, materialize the conflict on the active run branch, and route through `publish_conflict_recovery_gate` to bounded resolution. A resumed run should not fail merely because failure recovery previously restored lifecycle metadata to `validated`.
+
+#### What happened
+
+The attempted implementation commit `5b8d20364` rebased onto `origin/main` with content conflicts in:
+
+- `docs/iterations/058-generic-group-scoped-club-home/plan.md` — `Status: validated` on `main` versus `Status: merged` in the completed implementation;
+- `docs/iterations/README.md` — the iteration 058 row had the same `validated` versus `merged` conflict.
+
+No application-code conflict was reported. The script pushed the complete attempted artifact to `origin/fabro/rescue/unknown-058-publish-conflict` and said the workflow could route the state to conflict resolution. The immediately following `publish_conflict_recovery_gate`, however, found no unmerged paths and reported only:
+
+```text
+Publish failed, but the worktree does not contain conflict markers for agent recovery.
+## fabro/run/01M1YGGME8RMTSHTEFBNX3MY3Z
+?? .fabro/tmp/
+```
+
+The run therefore terminated at `publish_failed`; nothing reached `main` despite every implementation and quality gate having passed.
+
+#### Impact
+
+Publication of a validated 51-file implementation was blocked by two lifecycle-status lines. The artifact was preserved, but recovery again requires operator investigation and a deliberate replay through the final gates. This is delivery-blocking workflow friction rather than a product failure.
+
+#### What allowed it to happen
+
+Two workflow weaknesses aligned:
+
+- Lifecycle restoration and resumed publication both edit the same duplicated status in the plan and iteration index, but publication has no deterministic rule for the expected `validated` to `merged` transition. Git therefore encounters a predictable textual conflict late in delivery.
+- The conflict producer and recovery gate have a brittle handoff. `publish_to_main.sh` detects the conflict in a disposable rebase, then separately tries to materialize it on the active run branch. The gate accepts only live unmerged paths. In this run, the first step proved a conflict while the second left no conflict markers, so the gate discarded otherwise sufficient evidence and could not invoke the resolver.
+
+The script suppresses output from the active-branch `git reset` and `git merge` attempt and does not report whether reset failed, merge unexpectedly succeeded, or some other materialization condition occurred. The exact reason conflict markers were absent is therefore not established by the run logs.
+
+#### Observations
+
+- Run: `01M1YGGME8RMTSHTEFBNX3MY3Z`.
+- Last successful checkpoint: final artifact gate commit `c638cbb`; final `dev check` passed at checkpoint `df78e3a`.
+- Attempted/rescued publication commit: `5b8d2036409f906b1e41f84a1f7130dbe3002b15`, parented at reservation commit `ebdc63b`.
+- The rescue branch uses `unknown` instead of the actual Fabro run ID, weakening traceability even though the terminal output and commit trailers identify the run.
+- This is the first observed real conflict-recovery run after the June fix recorded above. It shows that preserving the rescue artifact works, while automatic recovery still depends on successful conflict materialization.
+
+#### Why this matters
+
+Resume is the safety mechanism for long Fabro deliveries. If lifecycle restoration makes resumed publication conflict predictably, and recovery then requires ephemeral conflict markers rather than durable conflict evidence, a fully green implementation can repeatedly stop at the final step. That wastes validation time and makes successful recovery depend on Git archaeology.
+
+#### Open questions
+
+- Why did the active-branch conflict-materialization sequence leave no unmerged files after the disposable rebase reported two conflicts?
+- Why was `FABRO_RUN_ID` unavailable to the publish script, producing an `unknown` rescue branch?
+- Should lifecycle status conflicts be treated differently from product-code conflicts when the only valid completed state is `merged`?
+
+#### Possible prevention ideas
+
+- Add regression coverage for a resumed iteration whose `main` status was restored from `implementing` to `validated`, proving publication can advance it to `merged`.
+- Make conflict handoff rely on durable attempted-commit/conflicted-path evidence, or fail explicitly when materialization fails, rather than reporting a generic absence of markers.
+- Preserve and expose stderr/status from each conflict-materialization command so the recovery gate can distinguish reset failure, clean merge, and genuine unmerged state.
+- Ensure rescue and recovery refs include the actual run ID.
