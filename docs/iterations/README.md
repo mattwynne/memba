@@ -68,6 +68,7 @@ green than before.
 | 098 | 2026-08-13 | validated | Members change their own name | [plan](098-member-name-editing/plan.md) |
 | 099 | 2026-08-13 | validated | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
 | 058 | 2026-09-06 | merged | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
+| 100 | 2026-09-08 | ready | Populated clubs always have an Admin | [plan](100-populated-clubs-always-have-an-admin/plan.md) — `club_membership_administration.feature` |
 
 Status notes:
 
