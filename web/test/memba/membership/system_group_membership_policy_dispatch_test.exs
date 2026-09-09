@@ -36,7 +36,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
 
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
   end
@@ -104,7 +111,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
 
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)

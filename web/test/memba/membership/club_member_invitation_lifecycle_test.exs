@@ -51,6 +51,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       membership_id = Memba.ID.generate(:membership)
       invitation_id = Memba.ID.generate(:club_invitation)
 
+      create_club!(club_id)
+
       assert :ok =
                Membership.create_person(
                  %{
@@ -148,6 +150,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       person_id = Memba.ID.generate(:person)
       membership_id = Memba.ID.generate(:membership)
 
+      create_club!(club_id)
+
       assert :ok =
                Membership.create_person(
                  %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
@@ -206,6 +210,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       invitation_id = Memba.ID.generate(:club_invitation)
       person_id = Memba.ID.generate(:person)
       membership_id = Memba.ID.generate(:membership)
+
+      create_club!(club_id)
 
       assert {:ok, %{invitation_token: _invitation_token}} =
                Membership.invite_club_member(
@@ -276,6 +282,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       person_id = Memba.ID.generate(:person)
       membership_id = Memba.ID.generate(:membership)
 
+      create_club!(club_id)
+
       assert {:ok, %{invitation_token: invitation_token}} =
                Membership.invite_club_member(
                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
@@ -327,6 +335,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       membership_id = Memba.ID.generate(:membership)
       duplicate_person_id = Memba.ID.generate(:person)
       duplicate_membership_id = Memba.ID.generate(:membership)
+
+      create_club!(club_id)
 
       assert {:ok, %{invitation_token: invitation_token}} =
                Membership.invite_club_member(
@@ -380,6 +390,14 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert is_nil(Membership.get_person(duplicate_person_id))
       assert is_nil(Repo.get(MembershipProjection, duplicate_membership_id))
     end
+  end
+
+  defp create_club!(club_id) do
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
   end
 
   defp member_permission?(club_id, person_id, permission) do

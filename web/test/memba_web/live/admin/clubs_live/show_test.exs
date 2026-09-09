@@ -9,7 +9,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   alias MembaWeb.ClubSite
 
   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     assert :ok =
@@ -43,7 +43,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   end
 
   test "club detail does not offer staff-side message composition", %{conn: conn} do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     assert :ok =
@@ -261,7 +261,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "people and member lists show primary and alternate email addresses distinctly", %{
     conn: conn
   } do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    club = create_membership_club!(name: "Kootenay Mountaineering Club")
     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
     insert_membership_person_email_address!(
@@ -363,7 +363,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   end
 
   test "staff can remove a member from a club", %{conn: conn} do
-    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    club = create_membership_club!(name: "Kootenay Mountaineering Club")
     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
     membership_id = Memba.ID.generate(:membership)
 
@@ -390,6 +390,13 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
     refute has_element?(view, "#member-#{alice.person_id}")
     refute Membership.active_member_of_club?(club.club_id, alice.person_id)
+  end
+
+  defp create_membership_club!(attrs) do
+    club_attrs = membership_club_attrs(attrs)
+
+    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
+    Membership.get_club(club_attrs.club_id)
   end
 
   defp input_value(html, selector) do

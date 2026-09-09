@@ -3,6 +3,7 @@ defmodule Memba.Membership.MembershipProjectionTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
@@ -10,6 +11,8 @@ defmodule Memba.Membership.MembershipProjectionTest do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
+
+    create_club(club_id)
 
     assert is_nil(Repo.get(MembershipProjection, membership_id))
 
@@ -36,6 +39,8 @@ defmodule Memba.Membership.MembershipProjectionTest do
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
 
+    create_club(club_id)
+
     assert :ok =
              App.dispatch(
                %AddMember{
@@ -47,8 +52,27 @@ defmodule Memba.Membership.MembershipProjectionTest do
              )
 
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert %MembershipProjection{active: false} = Repo.get(MembershipProjection, membership_id)
+  end
+
+  defp create_club(club_id) do
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
   end
 end

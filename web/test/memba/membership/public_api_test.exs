@@ -1106,7 +1106,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert {:ok,
             %ExecutionResult{
-              aggregate_uuid: ^membership_id,
+              aggregate_uuid: ^club_id,
               events: [
                 %MemberAdded{
                   membership_id: ^membership_id,
@@ -1138,7 +1138,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert {:ok,
             %ExecutionResult{
-              aggregate_uuid: ^membership_id,
+              aggregate_uuid: ^club_id,
               events: [%MemberRemoved{membership_id: ^membership_id}]
             }} =
              Membership.remove_member(%{membership_id: membership_id},
@@ -1317,6 +1317,12 @@ defmodule Memba.Membership.PublicApiTest do
     invitation_id = Memba.ID.generate(:club_invitation)
 
     assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
              Membership.create_person(
                %{
                  person_id: person_id,
@@ -1454,6 +1460,12 @@ defmodule Memba.Membership.PublicApiTest do
     membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
              Membership.create_person(
                %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
                consistency: :strong
@@ -1472,7 +1484,7 @@ defmodule Memba.Membership.PublicApiTest do
               person_id: ^person_id,
               membership_id: ^membership_id,
               membership_execution_result: %ExecutionResult{
-                aggregate_uuid: ^membership_id,
+                aggregate_uuid: ^club_id,
                 events: [
                   %MemberAdded{
                     membership_id: ^membership_id,
@@ -1517,6 +1529,12 @@ defmodule Memba.Membership.PublicApiTest do
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
 
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
     assert {:ok, %{invitation_token: _token}} =
              Membership.invite_club_member(
                %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
@@ -1545,7 +1563,7 @@ defmodule Memba.Membership.PublicApiTest do
                 ]
               },
               membership_execution_result: %ExecutionResult{
-                aggregate_uuid: ^membership_id,
+                aggregate_uuid: ^club_id,
                 events: [
                   %MemberAdded{
                     membership_id: ^membership_id,

@@ -213,7 +213,15 @@ defmodule Memba.Membership.RoleProjectionTest do
     add_member!(membership_id, club_id, person_id)
     assign_role!(club_id, membership_id, person_id, role_id)
 
-    assert :ok = App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+    assert :ok =
+             App.dispatch(
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert %RoleAssignmentProjection{active: false} = role_assignment(membership_id, role_id)
 

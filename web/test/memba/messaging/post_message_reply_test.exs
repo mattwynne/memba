@@ -46,7 +46,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
     follow_conversation(club_id, root_message_id, dana.person_id)
     follow_conversation(club_id, root_message_id, erin.person_id)
     follow_conversation(club_id, root_message_id, pat.person_id)
-    remove_member(erin_membership_id)
+    remove_member(club_id, erin_membership_id, erin.person_id)
 
     reply_message_id = Memba.ID.generate(:message)
 
@@ -491,10 +491,14 @@ defmodule Memba.Messaging.PostMessageReplyTest do
              )
   end
 
-  defp remove_member(membership_id) do
+  defp remove_member(club_id, membership_id, person_id) do
     assert :ok =
              MembershipApp.dispatch(
-               %RemoveMember{membership_id: membership_id},
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
                consistency: :strong
              )
   end

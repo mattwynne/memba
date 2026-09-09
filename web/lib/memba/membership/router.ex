@@ -7,7 +7,6 @@ defmodule Memba.Membership.Router do
 
   alias Memba.Membership.Club
   alias Memba.Membership.ClubInvitation
-  alias Memba.Membership.Membership
   alias Memba.Membership.Person
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddGroupMember
@@ -33,12 +32,11 @@ defmodule Memba.Membership.Router do
 
   identify(Club, by: :club_id)
   identify(ClubInvitation, by: :invitation_id)
-  identify(Membership, by: :membership_id)
   identify(Person, by: :person_id)
 
   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)
   dispatch(AddGroupMember, to: Club)
-  dispatch(AddMember, to: Membership)
+  dispatch(AddMember, to: Club)
   dispatch(AddPersonEmailAddress, to: Person)
   dispatch(AssignGroupEmailSlug, to: Club)
   dispatch(AssignMemberRole, to: Club)
@@ -50,7 +48,7 @@ defmodule Memba.Membership.Router do
   dispatch(InviteClubMember, to: ClubInvitation)
   dispatch(MakePersonEmailAddressPrimary, to: Person)
   dispatch(RemoveGroupMember, to: Club)
-  dispatch(RemoveMember, to: Membership)
+  dispatch(RemoveMember, to: Club)
   dispatch(RemoveMemberRole, to: Club)
   dispatch(RemovePersonEmailAddress, to: Person)
   dispatch(ReplacePersonEmailAddresses, to: Person)

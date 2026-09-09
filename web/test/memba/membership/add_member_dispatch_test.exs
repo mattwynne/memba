@@ -3,14 +3,27 @@ defmodule Memba.Membership.AddMemberDispatchTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App
+  alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Membership
+  alias Memba.Membership.Events.MemberRemoved
 
-  test "Membership app dispatch routes AddMember to the Membership aggregate" do
+  test "Membership app routes member activation and removal to the Club aggregate" do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
 
     command = %AddMember{
       membership_id: membership_id,
@@ -20,8 +33,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
 
     assert {:ok,
             %ExecutionResult{
-              aggregate_uuid: ^membership_id,
-              aggregate_version: 1,
+              aggregate_uuid: ^club_id,
               events: [
                 %MemberAdded{
                   membership_id: ^membership_id,
@@ -29,30 +41,42 @@ defmodule Memba.Membership.AddMemberDispatchTest do
                   person_id: ^person_id
                 }
               ],
-              aggregate_state: %Membership{
-                membership_id: ^membership_id,
+              aggregate_state: %Club{
                 club_id: ^club_id,
-                person_id: ^person_id,
-                active: true
+                active_memberships: %{^membership_id => ^person_id}
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
 
-    assert %Membership{
-             membership_id: ^membership_id,
-             club_id: ^club_id,
-             person_id: ^person_id,
-             active: true
-           } = App.aggregate_state(Membership, membership_id)
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              events: [
+                %MemberRemoved{
+                  membership_id: ^membership_id,
+                  club_id: ^club_id,
+                  person_id: ^person_id
+                }
+              ],
+              aggregate_state: %Club{club_id: ^club_id, active_memberships: %{}}
+            }} =
+             App.dispatch(
+               %RemoveMember{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
   end
 
-  test "Membership app rejects a duplicate AddMember for the same aggregate identity" do
+  test "Membership app requires the routed Club aggregate to exist" do
     command = %AddMember{
       membership_id: Memba.ID.generate(:membership),
       club_id: Memba.ID.generate(:club),
       person_id: Memba.ID.generate(:person)
     }
 
-    assert :ok = App.dispatch(command, consistency: :strong)
-    assert {:error, :already_added} = App.dispatch(command)
+    assert {:error, :not_created} = App.dispatch(command)
   end
 end

@@ -6,6 +6,7 @@ defmodule Memba.Membership.Club do
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
@@ -13,6 +14,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
@@ -98,6 +100,41 @@ defmodule Memba.Membership.Club do
   end
 
   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+
+  def execute(%__MODULE__{club_id: nil}, %AddMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %AddMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <- ensure_membership_id_available(club, command.membership_id) do
+      %MemberAdded{
+        club_id: command.club_id,
+        membership_id: command.membership_id,
+        person_id: command.person_id
+      }
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %RemoveMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %RemoveMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <-
+           ensure_active_membership_identity(
+             club,
+             command.membership_id,
+             command.person_id
+           ) do
+      %MemberRemoved{
+        club_id: command.club_id,
+        membership_id: command.membership_id,
+        person_id: command.person_id
+      }
+    end
+  end
 
   def execute(%__MODULE__{club_id: nil}, %DefineClubRole{}), do: {:error, :not_created}
 
@@ -396,6 +433,22 @@ defmodule Memba.Membership.Club do
 
   defp validate_optional_id(type, value, error) do
     validate_id(type, value, error)
+  end
+
+  defp ensure_membership_id_available(%__MODULE__{} = club, membership_id) do
+    if Map.has_key?(club.active_memberships, membership_id) do
+      {:error, :already_added}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_active_membership_identity(%__MODULE__{} = club, membership_id, person_id) do
+    case Map.fetch(club.active_memberships, membership_id) do
+      {:ok, ^person_id} -> :ok
+      {:ok, _different_person_id} -> {:error, :membership_person_mismatch}
+      :error -> {:error, :not_found}
+    end
   end
 
   defp normalize_name(name) when is_binary(name) do

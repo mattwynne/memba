@@ -3,6 +3,7 @@ defmodule Memba.Membership.ClubTest do
 
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
@@ -10,6 +11,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
@@ -20,6 +22,8 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
@@ -187,6 +191,112 @@ defmodule Memba.Membership.ClubTest do
                  club_id: club_id,
                  name: "KMC Alpine Club",
                  slug: "KMC Alpine!"
+               })
+    end
+  end
+
+  describe "execute/2 AddMember and RemoveMember" do
+    test "emits member lifecycle events with the Club-routed identities" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      club = created_club(club_id)
+
+      add_command = %AddMember{
+        club_id: club_id,
+        membership_id: membership_id,
+        person_id: person_id
+      }
+
+      assert %MemberAdded{
+               club_id: ^club_id,
+               membership_id: ^membership_id,
+               person_id: ^person_id
+             } = add_event = Club.execute(club, add_command)
+
+      club = Club.apply(club, add_event)
+
+      assert %MemberRemoved{
+               club_id: ^club_id,
+               membership_id: ^membership_id,
+               person_id: ^person_id
+             } =
+               Club.execute(club, %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "requires an existing Club and validates every command identity" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      assert {:error, :not_created} =
+               Club.execute(%Club{}, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      club = created_club(club_id)
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(club, %AddMember{
+                 club_id: Memba.ID.generate(:club),
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert {:error, :invalid_membership_id} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: "not-a-uuid",
+                 person_id: person_id
+               })
+
+      assert {:error, :invalid_person_id} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: "not-a-uuid"
+               })
+    end
+
+    test "removal requires the active membership's club and person identities" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> Club.apply(%MemberAdded{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+
+      assert {:error, :invalid_club_id} =
+               Club.execute(club, %RemoveMember{
+                 club_id: Memba.ID.generate(:club),
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert {:error, :membership_person_mismatch} =
+               Club.execute(club, %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: Memba.ID.generate(:person)
+               })
+
+      assert {:error, :not_found} =
+               Club.execute(club, %RemoveMember{
+                 club_id: club_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: person_id
                })
     end
   end

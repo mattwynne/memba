@@ -189,7 +189,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert :ok =
              MembershipApp.dispatch(
-               %RemoveMember{membership_id: dana_membership_id},
+               %RemoveMember{
+                 club_id: club_id,
+                 membership_id: dana_membership_id,
+                 person_id: dana.person_id
+               },
                consistency: :strong
              )
 

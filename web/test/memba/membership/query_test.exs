@@ -117,6 +117,8 @@ defmodule Memba.Membership.QueryTest do
     test "returns active members of the given club and excludes members of other clubs" do
       kootenay_club_id = Memba.ID.generate(:club)
       nelson_club_id = Memba.ID.generate(:club)
+      create_club_with_id(kootenay_club_id, "Kootenay Mountaineering Club")
+      create_club_with_id(nelson_club_id, "Nelson Cycling Club")
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       bob = create_person(name: "Bob", email: "bob@example.com")
@@ -181,6 +183,7 @@ defmodule Memba.Membership.QueryTest do
 
     test "returns one row per active member using each person's primary email address" do
       club_id = Memba.ID.generate(:club)
+      create_club_with_id(club_id, "Kootenay Mountaineering Club")
 
       alice =
         create_person(
@@ -661,6 +664,8 @@ defmodule Memba.Membership.QueryTest do
     test "returns true only when the person has an active membership in the club" do
       kootenay_club_id = Memba.ID.generate(:club)
       nelson_club_id = Memba.ID.generate(:club)
+      create_club_with_id(kootenay_club_id, "Kootenay Mountaineering Club")
+      create_club_with_id(nelson_club_id, "Nelson Cycling Club")
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       pat = create_person(name: "Pat", email: "pat@example.com")
@@ -832,6 +837,22 @@ defmodule Memba.Membership.QueryTest do
     club
   end
 
+  defp create_club_with_id(club_id, name) do
+    club = %{club_id: club_id, name: name, slug: slug_for(name)}
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club.club_id,
+                 name: club.name,
+                 slug: club.slug
+               },
+               consistency: :strong
+             )
+
+    club
+  end
+
   defp create_person(attrs) do
     email = Keyword.fetch!(attrs, :email)
     email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
@@ -957,7 +978,16 @@ defmodule Memba.Membership.QueryTest do
   end
 
   defp remove_member(membership_id) do
+    membership = Repo.get!(MembershipProjection, membership_id)
+
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveMember{
+                 club_id: membership.club_id,
+                 membership_id: membership_id,
+                 person_id: membership.person_id
+               },
+               consistency: :strong
+             )
   end
 end

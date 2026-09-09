@@ -399,8 +399,10 @@ defmodule Memba.Membership do
   @doc """
   Remove a person from active club membership through the Membership context.
 
-  The caller supplies the membership aggregate identity as `:membership_id` or
-  `"membership_id"`.
+  The caller supplies `:membership_id` or `"membership_id"`. It may also supply
+  the matching club and person identities; otherwise the application service
+  resolves those routing fields from the membership projection before the Club
+  aggregate validates them.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
@@ -1632,8 +1634,36 @@ defmodule Memba.Membership do
   end
 
   defp remove_member_command(attrs) do
-    with {:ok, membership_id} <- fetch_required(attrs, :membership_id) do
-      {:ok, %RemoveMember{membership_id: membership_id}}
+    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, club_id, person_id} <- removal_identity(attrs, membership_id) do
+      {:ok,
+       %RemoveMember{
+         club_id: club_id,
+         membership_id: membership_id,
+         person_id: person_id
+       }}
+    end
+  end
+
+  defp removal_identity(attrs, membership_id) do
+    case {fetch_optional(attrs, :club_id), fetch_optional(attrs, :person_id)} do
+      {{:ok, club_id}, {:ok, person_id}} ->
+        {:ok, club_id, person_id}
+
+      {:error, :error} ->
+        case Repo.get(MembershipProjection, membership_id) do
+          %MembershipProjection{club_id: club_id, person_id: person_id} ->
+            {:ok, club_id, person_id}
+
+          nil ->
+            {:error, :not_found}
+        end
+
+      {:error, {:ok, _person_id}} ->
+        {:error, {:missing_required_attribute, :club_id}}
+
+      {{:ok, _club_id}, :error} ->
+        {:error, {:missing_required_attribute, :person_id}}
     end
   end
 

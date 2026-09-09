@@ -68,7 +68,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   test "does not give Everyone access to a conversation that already has an Admin audience" do
     club = seed_historic_club!()
     member = add_active_member!(club.club_id)
-    append_historic_system_groups!(club.club_id)
+    append_historic_system_groups!(club.club_id, 4)
     admin_group_id = SystemGroups.admin_group_id(club.club_id)
     everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
 
@@ -396,7 +396,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
     %{membership_id: membership_id, person_id: person_id}
   end
 
-  defp append_historic_system_groups!(club_id) do
+  defp append_historic_system_groups!(club_id, expected_version \\ 3) do
     events =
       [
         %GroupCreated{
@@ -414,7 +414,13 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
       ]
       |> Enum.map(&Mapper.map_to_event_data/1)
 
-    assert :ok = Commanded.EventStore.append_to_stream(MembershipApp, club_id, 3, events)
+    assert :ok =
+             Commanded.EventStore.append_to_stream(
+               MembershipApp,
+               club_id,
+               expected_version,
+               events
+             )
 
     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
     Memba.ProjectionBarrier.await!([GroupProjector], checkpoint: checkpoint)

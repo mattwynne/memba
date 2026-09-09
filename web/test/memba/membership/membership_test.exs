@@ -108,26 +108,38 @@ defmodule Memba.Membership.MembershipTest do
                club_id: ^club_id,
                person_id: ^person_id
              } =
-               Membership.execute(membership, %RemoveMember{membership_id: membership_id})
+               Membership.execute(membership, %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
     end
 
     test "rejects removing a membership that has not been added" do
       assert {:error, :not_found} =
                Membership.execute(%Membership{}, %RemoveMember{
-                 membership_id: Memba.ID.generate(:membership)
+                 club_id: Memba.ID.generate(:club),
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: Memba.ID.generate(:person)
                })
     end
 
     test "rejects removing a membership twice" do
       membership_id = Memba.ID.generate(:membership)
+      club_id = Memba.ID.generate(:club)
+      person_id = Memba.ID.generate(:person)
 
       membership =
         membership_id
-        |> active_membership(Memba.ID.generate(:club), Memba.ID.generate(:person))
+        |> active_membership(club_id, person_id)
         |> Membership.apply(%MemberRemoved{membership_id: membership_id})
 
       assert {:error, :already_removed} =
-               Membership.execute(membership, %RemoveMember{membership_id: membership_id})
+               Membership.execute(membership, %RemoveMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
     end
   end
 
