@@ -302,20 +302,28 @@ defmodule Memba.Membership.Club do
     group_membership = %{person_id: event.person_id, active: true}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
-    %__MODULE__{
-      club
-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
-    }
+    club =
+      %__MODULE__{
+        club
+        | group_memberships:
+            Map.put(club.group_memberships, group_membership_key, group_membership)
+      }
+
+    apply_everyone_compatibility_membership(club, event, :activate)
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
     group_membership = %{person_id: event.person_id, active: false}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
-    %__MODULE__{
-      club
-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
-    }
+    club =
+      %__MODULE__{
+        club
+        | group_memberships:
+            Map.put(club.group_memberships, group_membership_key, group_membership)
+      }
+
+    apply_everyone_compatibility_membership(club, event, :deactivate)
   end
 
   def apply(%__MODULE__{} = club, %MemberAdded{} = event) do
@@ -661,6 +669,35 @@ defmodule Memba.Membership.Club do
 
   defp put_role_key(role_keys, nil, _role_id), do: role_keys
   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+
+  defp apply_everyone_compatibility_membership(
+         %__MODULE__{club_id: club_id} = club,
+         event,
+         lifecycle
+       )
+       when is_binary(club_id) do
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    if event.group_id == everyone_group_id and
+         not MapSet.member?(club.native_membership_ids, event.membership_id) do
+      active_memberships =
+        case lifecycle do
+          :activate ->
+            Map.put(club.active_memberships, event.membership_id, event.person_id)
+
+          :deactivate ->
+            Map.delete(club.active_memberships, event.membership_id)
+        end
+
+      club = %__MODULE__{club | active_memberships: active_memberships}
+      derive_active_admin_membership_ids(club)
+    else
+      club
+    end
+  end
+
+  defp apply_everyone_compatibility_membership(%__MODULE__{} = club, _event, _lifecycle),
+    do: club
 
   defp derive_active_admin_membership_ids(%__MODULE__{} = club) do
     admin_role_id = Roles.membership_administrator_role_id(club.club_id)

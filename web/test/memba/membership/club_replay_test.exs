@@ -13,8 +13,6 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.SystemGroups
 
   describe "historic Club stream replay" do
-    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
-
     test "hydrates the active roster from Everyone membership facts" do
       ids = replay_ids()
 
@@ -71,11 +69,39 @@ defmodule Memba.Membership.ClubReplayTest do
                {ids.first_membership_id, ids.admin_role_id}
              )
     end
+
+    test "keeps non-Everyone membership facts out of the active roster" do
+      ids = replay_ids()
+      custom_group_id = Memba.ID.generate(:group)
+      membership_id = ids.first_membership_id
+      person_id = ids.first_person_id
+
+      club =
+        replay(ids.club_id, [
+          %GroupMemberAdded{
+            club_id: ids.club_id,
+            group_id: custom_group_id,
+            membership_id: membership_id,
+            person_id: person_id
+          }
+        ])
+
+      assert_replay_state(club,
+        active_memberships: %{},
+        native_membership_ids: MapSet.new(),
+        active_admin_membership_ids: MapSet.new()
+      )
+
+      assert %{
+               {^custom_group_id, ^membership_id} => %{
+                 person_id: ^person_id,
+                 active: true
+               }
+             } = club.group_memberships
+    end
   end
 
   describe "mixed native and compatibility Club stream replay" do
-    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
-
     test "delayed Everyone facts cannot override native membership lifecycle facts" do
       ids = replay_ids()
 
