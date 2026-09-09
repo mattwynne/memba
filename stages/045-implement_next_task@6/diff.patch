@@ -1,0 +1,1024 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index 43b89dd..aa5c31a 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Write `cutover-check.md` with exact one-time read-only production checks for source-fact compatibility and populated clubs without an active Admin, including pre/post-deploy expectations and stop instructions.
+ - [x] 004 Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
+ - [x] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+-- [ ] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
++- [x] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+ - [ ] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+ - [ ] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+ - [ ] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index fbeb746..867ddbb 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -399,8 +399,10 @@ defmodule Memba.Membership do
+   @doc """
+   Remove a person from active club membership through the Membership context.
+ 
+-  The caller supplies the membership aggregate identity as `:membership_id` or
+-  `"membership_id"`.
++  The caller supplies `:membership_id` or `"membership_id"`. It may also supply
++  the matching club and person identities; otherwise the application service
++  resolves those routing fields from the membership projection before the Club
++  aggregate validates them.
+   """
+   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_member_command(attrs) do
+@@ -1632,8 +1634,36 @@ defmodule Memba.Membership do
+   end
+ 
+   defp remove_member_command(attrs) do
+-    with {:ok, membership_id} <- fetch_required(attrs, :membership_id) do
+-      {:ok, %RemoveMember{membership_id: membership_id}}
++    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
++         {:ok, club_id, person_id} <- removal_identity(attrs, membership_id) do
++      {:ok,
++       %RemoveMember{
++         club_id: club_id,
++         membership_id: membership_id,
++         person_id: person_id
++       }}
++    end
++  end
++
++  defp removal_identity(attrs, membership_id) do
++    case {fetch_optional(attrs, :club_id), fetch_optional(attrs, :person_id)} do
++      {{:ok, club_id}, {:ok, person_id}} ->
++        {:ok, club_id, person_id}
++
++      {:error, :error} ->
++        case Repo.get(MembershipProjection, membership_id) do
++          %MembershipProjection{club_id: club_id, person_id: person_id} ->
++            {:ok, club_id, person_id}
++
++          nil ->
++            {:error, :not_found}
++        end
++
++      {:error, {:ok, _person_id}} ->
++        {:error, {:missing_required_attribute, :club_id}}
++
++      {{:ok, _club_id}, :error} ->
++        {:error, {:missing_required_attribute, :person_id}}
+     end
+   end
+ 
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 56ffe92..58b7ce7 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.Club do
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.ID
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+@@ -13,6 +14,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+@@ -99,6 +101,41 @@ defmodule Memba.Membership.Club do
+ 
+   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+ 
++  def execute(%__MODULE__{club_id: nil}, %AddMember{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %AddMember{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
++         :ok <- ensure_membership_id_available(club, command.membership_id) do
++      %MemberAdded{
++        club_id: command.club_id,
++        membership_id: command.membership_id,
++        person_id: command.person_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{club_id: nil}, %RemoveMember{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %RemoveMember{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
++         :ok <-
++           ensure_active_membership_identity(
++             club,
++             command.membership_id,
++             command.person_id
++           ) do
++      %MemberRemoved{
++        club_id: command.club_id,
++        membership_id: command.membership_id,
++        person_id: command.person_id
++      }
++    end
++  end
++
+   def execute(%__MODULE__{club_id: nil}, %DefineClubRole{}), do: {:error, :not_created}
+ 
+   def execute(%__MODULE__{} = club, %DefineClubRole{} = command) do
+@@ -398,6 +435,22 @@ defmodule Memba.Membership.Club do
+     validate_id(type, value, error)
+   end
+ 
++  defp ensure_membership_id_available(%__MODULE__{} = club, membership_id) do
++    if Map.has_key?(club.active_memberships, membership_id) do
++      {:error, :already_added}
++    else
++      :ok
++    end
++  end
++
++  defp ensure_active_membership_identity(%__MODULE__{} = club, membership_id, person_id) do
++    case Map.fetch(club.active_memberships, membership_id) do
++      {:ok, ^person_id} -> :ok
++      {:ok, _different_person_id} -> {:error, :membership_person_mismatch}
++      :error -> {:error, :not_found}
++    end
++  end
++
+   defp normalize_name(name) when is_binary(name) do
+     case String.trim(name) do
+       "" -> {:error, :invalid_name}
+diff --git a/web/lib/memba/membership/commands/add_member.ex b/web/lib/memba/membership/commands/add_member.ex
+index bdb72dc..7261fb0 100644
+--- a/web/lib/memba/membership/commands/add_member.ex
++++ b/web/lib/memba/membership/commands/add_member.ex
+@@ -2,7 +2,8 @@ defmodule Memba.Membership.Commands.AddMember do
+   @moduledoc """
+   Command to add a person as an active member of a club.
+ 
+-  The caller supplies the aggregate identity as `membership_id`.
++  The command is routed to the Club aggregate by `club_id`. The caller also
++  supplies the new membership and person identities.
+   """
+ 
+   @enforce_keys [:membership_id, :club_id, :person_id]
+diff --git a/web/lib/memba/membership/commands/remove_member.ex b/web/lib/memba/membership/commands/remove_member.ex
+index e95473c..e08b4a9 100644
+--- a/web/lib/memba/membership/commands/remove_member.ex
++++ b/web/lib/memba/membership/commands/remove_member.ex
+@@ -2,9 +2,10 @@ defmodule Memba.Membership.Commands.RemoveMember do
+   @moduledoc """
+   Command to remove a person from active club membership.
+ 
+-  The caller supplies the aggregate identity as `membership_id`.
++  The command is routed to the Club aggregate by `club_id`. The membership and
++  person identities must match the Club's active roster.
+   """
+ 
+-  @enforce_keys [:membership_id]
+-  defstruct [:membership_id]
++  @enforce_keys [:club_id, :membership_id, :person_id]
++  defstruct [:club_id, :membership_id, :person_id]
+ end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 631e784..aa94ba3 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -7,7 +7,6 @@ defmodule Memba.Membership.Router do
+ 
+   alias Memba.Membership.Club
+   alias Memba.Membership.ClubInvitation
+-  alias Memba.Membership.Membership
+   alias Memba.Membership.Person
+   alias Memba.Membership.Commands.AcceptClubMemberInvitation
+   alias Memba.Membership.Commands.AddGroupMember
+@@ -33,12 +32,11 @@ defmodule Memba.Membership.Router do
+ 
+   identify(Club, by: :club_id)
+   identify(ClubInvitation, by: :invitation_id)
+-  identify(Membership, by: :membership_id)
+   identify(Person, by: :person_id)
+ 
+   dispatch(AcceptClubMemberInvitation, to: ClubInvitation)
+   dispatch(AddGroupMember, to: Club)
+-  dispatch(AddMember, to: Membership)
++  dispatch(AddMember, to: Club)
+   dispatch(AddPersonEmailAddress, to: Person)
+   dispatch(AssignGroupEmailSlug, to: Club)
+   dispatch(AssignMemberRole, to: Club)
+@@ -50,7 +48,7 @@ defmodule Memba.Membership.Router do
+   dispatch(InviteClubMember, to: ClubInvitation)
+   dispatch(MakePersonEmailAddressPrimary, to: Person)
+   dispatch(RemoveGroupMember, to: Club)
+-  dispatch(RemoveMember, to: Membership)
++  dispatch(RemoveMember, to: Club)
+   dispatch(RemoveMemberRole, to: Club)
+   dispatch(RemovePersonEmailAddress, to: Person)
+   dispatch(ReplacePersonEmailAddresses, to: Person)
+diff --git a/web/test/memba/membership/add_member_dispatch_test.exs b/web/test/memba/membership/add_member_dispatch_test.exs
+index 4f8b845..b9681d4 100644
+--- a/web/test/memba/membership/add_member_dispatch_test.exs
++++ b/web/test/memba/membership/add_member_dispatch_test.exs
+@@ -3,15 +3,28 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App
++  alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Events.MemberAdded
+-  alias Memba.Membership.Membership
++  alias Memba.Membership.Events.MemberRemoved
+ 
+-  test "Membership app dispatch routes AddMember to the Membership aggregate" do
++  test "Membership app routes member activation and removal to the Club aggregate" do
+     membership_id = Memba.ID.generate(:membership)
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+ 
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
+     command = %AddMember{
+       membership_id: membership_id,
+       club_id: club_id,
+@@ -20,8 +33,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+ 
+     assert {:ok,
+             %ExecutionResult{
+-              aggregate_uuid: ^membership_id,
+-              aggregate_version: 1,
++              aggregate_uuid: ^club_id,
+               events: [
+                 %MemberAdded{
+                   membership_id: ^membership_id,
+@@ -29,30 +41,42 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+                   person_id: ^person_id
+                 }
+               ],
+-              aggregate_state: %Membership{
+-                membership_id: ^membership_id,
++              aggregate_state: %Club{
+                 club_id: ^club_id,
+-                person_id: ^person_id,
+-                active: true
++                active_memberships: %{^membership_id => ^person_id}
+               }
+             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+ 
+-    assert %Membership{
+-             membership_id: ^membership_id,
+-             club_id: ^club_id,
+-             person_id: ^person_id,
+-             active: true
+-           } = App.aggregate_state(Membership, membership_id)
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %MemberRemoved{
++                  membership_id: ^membership_id,
++                  club_id: ^club_id,
++                  person_id: ^person_id
++                }
++              ],
++              aggregate_state: %Club{club_id: ^club_id, active_memberships: %{}}
++            }} =
++             App.dispatch(
++               %RemoveMember{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
+   end
+ 
+-  test "Membership app rejects a duplicate AddMember for the same aggregate identity" do
++  test "Membership app requires the routed Club aggregate to exist" do
+     command = %AddMember{
+       membership_id: Memba.ID.generate(:membership),
+       club_id: Memba.ID.generate(:club),
+       person_id: Memba.ID.generate(:person)
+     }
+ 
+-    assert :ok = App.dispatch(command, consistency: :strong)
+-    assert {:error, :already_added} = App.dispatch(command)
++    assert {:error, :not_created} = App.dispatch(command)
+   end
+ end
+diff --git a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+index cfb54f3..d67fe8f 100644
+--- a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
++++ b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+@@ -51,6 +51,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       membership_id = Memba.ID.generate(:membership)
+       invitation_id = Memba.ID.generate(:club_invitation)
+ 
++      create_club!(club_id)
++
+       assert :ok =
+                Membership.create_person(
+                  %{
+@@ -148,6 +150,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       person_id = Memba.ID.generate(:person)
+       membership_id = Memba.ID.generate(:membership)
+ 
++      create_club!(club_id)
++
+       assert :ok =
+                Membership.create_person(
+                  %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
+@@ -207,6 +211,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       person_id = Memba.ID.generate(:person)
+       membership_id = Memba.ID.generate(:membership)
+ 
++      create_club!(club_id)
++
+       assert {:ok, %{invitation_token: _invitation_token}} =
+                Membership.invite_club_member(
+                  %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
+@@ -276,6 +282,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       person_id = Memba.ID.generate(:person)
+       membership_id = Memba.ID.generate(:membership)
+ 
++      create_club!(club_id)
++
+       assert {:ok, %{invitation_token: invitation_token}} =
+                Membership.invite_club_member(
+                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+@@ -328,6 +336,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       duplicate_person_id = Memba.ID.generate(:person)
+       duplicate_membership_id = Memba.ID.generate(:membership)
+ 
++      create_club!(club_id)
++
+       assert {:ok, %{invitation_token: invitation_token}} =
+                Membership.invite_club_member(
+                  %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+@@ -382,6 +392,14 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+     end
+   end
+ 
++  defp create_club!(club_id) do
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++  end
++
+   defp member_permission?(club_id, person_id, permission) do
+     Repo.exists?(
+       from(member_permission in MemberPermission,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 6bb47b1..fcf0f8d 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Membership.ClubTest do
+ 
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+@@ -10,6 +11,7 @@ defmodule Memba.Membership.ClubTest do
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+   alias Memba.Membership.Commands.RemoveGroupMember
++  alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+@@ -20,6 +22,8 @@ defmodule Memba.Membership.ClubTest do
+   alias Memba.Membership.Events.GroupEmailSlugAssigned
+   alias Memba.Membership.Events.GroupMemberAdded
+   alias Memba.Membership.Events.GroupMemberRemoved
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Events.MemberRemoved
+   alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Permissions
+@@ -191,6 +195,112 @@ defmodule Memba.Membership.ClubTest do
+     end
+   end
+ 
++  describe "execute/2 AddMember and RemoveMember" do
++    test "emits member lifecycle events with the Club-routed identities" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++      club = created_club(club_id)
++
++      add_command = %AddMember{
++        club_id: club_id,
++        membership_id: membership_id,
++        person_id: person_id
++      }
++
++      assert %MemberAdded{
++               club_id: ^club_id,
++               membership_id: ^membership_id,
++               person_id: ^person_id
++             } = add_event = Club.execute(club, add_command)
++
++      club = Club.apply(club, add_event)
++
++      assert %MemberRemoved{
++               club_id: ^club_id,
++               membership_id: ^membership_id,
++               person_id: ^person_id
++             } =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++    end
++
++    test "requires an existing Club and validates every command identity" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      assert {:error, :not_created} =
++               Club.execute(%Club{}, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      club = created_club(club_id)
++
++      assert {:error, :invalid_club_id} =
++               Club.execute(club, %AddMember{
++                 club_id: Memba.ID.generate(:club),
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      assert {:error, :invalid_membership_id} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: "not-a-uuid",
++                 person_id: person_id
++               })
++
++      assert {:error, :invalid_person_id} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: "not-a-uuid"
++               })
++    end
++
++    test "removal requires the active membership's club and person identities" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%MemberAdded{
++          club_id: club_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++
++      assert {:error, :invalid_club_id} =
++               Club.execute(club, %RemoveMember{
++                 club_id: Memba.ID.generate(:club),
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      assert {:error, :membership_person_mismatch} =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: Memba.ID.generate(:person)
++               })
++
++      assert {:error, :not_found} =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: Memba.ID.generate(:membership),
++                 person_id: person_id
++               })
++    end
++  end
++
+   describe "execute/2 DefineClubRole" do
+     test "emits ClubRoleDefined for the default Admin role" do
+       club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/membership/membership_projection_test.exs b/web/test/memba/membership/membership_projection_test.exs
+index df18a50..a0f6471 100644
+--- a/web/test/memba/membership/membership_projection_test.exs
++++ b/web/test/memba/membership/membership_projection_test.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Membership.MembershipProjectionTest do
+ 
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+ 
+@@ -11,6 +12,8 @@ defmodule Memba.Membership.MembershipProjectionTest do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+ 
++    create_club(club_id)
++
+     assert is_nil(Repo.get(MembershipProjection, membership_id))
+ 
+     assert :ok =
+@@ -36,6 +39,8 @@ defmodule Memba.Membership.MembershipProjectionTest do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+ 
++    create_club(club_id)
++
+     assert :ok =
+              App.dispatch(
+                %AddMember{
+@@ -47,8 +52,27 @@ defmodule Memba.Membership.MembershipProjectionTest do
+              )
+ 
+     assert :ok =
+-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++             App.dispatch(
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
+ 
+     assert %MembershipProjection{active: false} = Repo.get(MembershipProjection, membership_id)
+   end
++
++  defp create_club(club_id) do
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++  end
+ end
+diff --git a/web/test/memba/membership/membership_test.exs b/web/test/memba/membership/membership_test.exs
+index 15f6ddd..28f976c 100644
+--- a/web/test/memba/membership/membership_test.exs
++++ b/web/test/memba/membership/membership_test.exs
+@@ -108,26 +108,38 @@ defmodule Memba.Membership.MembershipTest do
+                club_id: ^club_id,
+                person_id: ^person_id
+              } =
+-               Membership.execute(membership, %RemoveMember{membership_id: membership_id})
++               Membership.execute(membership, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
+     end
+ 
+     test "rejects removing a membership that has not been added" do
+       assert {:error, :not_found} =
+                Membership.execute(%Membership{}, %RemoveMember{
+-                 membership_id: Memba.ID.generate(:membership)
++                 club_id: Memba.ID.generate(:club),
++                 membership_id: Memba.ID.generate(:membership),
++                 person_id: Memba.ID.generate(:person)
+                })
+     end
+ 
+     test "rejects removing a membership twice" do
+       membership_id = Memba.ID.generate(:membership)
++      club_id = Memba.ID.generate(:club)
++      person_id = Memba.ID.generate(:person)
+ 
+       membership =
+         membership_id
+-        |> active_membership(Memba.ID.generate(:club), Memba.ID.generate(:person))
++        |> active_membership(club_id, person_id)
+         |> Membership.apply(%MemberRemoved{membership_id: membership_id})
+ 
+       assert {:error, :already_removed} =
+-               Membership.execute(membership, %RemoveMember{membership_id: membership_id})
++               Membership.execute(membership, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
+     end
+   end
+ 
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 636a7da..fefc7d7 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -1106,7 +1106,7 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+     assert {:ok,
+             %ExecutionResult{
+-              aggregate_uuid: ^membership_id,
++              aggregate_uuid: ^club_id,
+               events: [
+                 %MemberAdded{
+                   membership_id: ^membership_id,
+@@ -1138,7 +1138,7 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+     assert {:ok,
+             %ExecutionResult{
+-              aggregate_uuid: ^membership_id,
++              aggregate_uuid: ^club_id,
+               events: [%MemberRemoved{membership_id: ^membership_id}]
+             }} =
+              Membership.remove_member(%{membership_id: membership_id},
+@@ -1316,6 +1316,12 @@ defmodule Memba.Membership.PublicApiTest do
+     membership_id = Memba.ID.generate(:membership)
+     invitation_id = Memba.ID.generate(:club_invitation)
+ 
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++
+     assert :ok =
+              Membership.create_person(
+                %{
+@@ -1453,6 +1459,12 @@ defmodule Memba.Membership.PublicApiTest do
+     person_id = Memba.ID.generate(:person)
+     membership_id = Memba.ID.generate(:membership)
+ 
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++
+     assert :ok =
+              Membership.create_person(
+                %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
+@@ -1472,7 +1484,7 @@ defmodule Memba.Membership.PublicApiTest do
+               person_id: ^person_id,
+               membership_id: ^membership_id,
+               membership_execution_result: %ExecutionResult{
+-                aggregate_uuid: ^membership_id,
++                aggregate_uuid: ^club_id,
+                 events: [
+                   %MemberAdded{
+                     membership_id: ^membership_id,
+@@ -1517,6 +1529,12 @@ defmodule Memba.Membership.PublicApiTest do
+     person_id = Memba.ID.generate(:person)
+     membership_id = Memba.ID.generate(:membership)
+ 
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++
+     assert {:ok, %{invitation_token: _token}} =
+              Membership.invite_club_member(
+                %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
+@@ -1545,7 +1563,7 @@ defmodule Memba.Membership.PublicApiTest do
+                 ]
+               },
+               membership_execution_result: %ExecutionResult{
+-                aggregate_uuid: ^membership_id,
++                aggregate_uuid: ^club_id,
+                 events: [
+                   %MemberAdded{
+                     membership_id: ^membership_id,
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 144d391..78c99ef 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -117,6 +117,8 @@ defmodule Memba.Membership.QueryTest do
+     test "returns active members of the given club and excludes members of other clubs" do
+       kootenay_club_id = Memba.ID.generate(:club)
+       nelson_club_id = Memba.ID.generate(:club)
++      create_club_with_id(kootenay_club_id, "Kootenay Mountaineering Club")
++      create_club_with_id(nelson_club_id, "Nelson Cycling Club")
+ 
+       alice = create_person(name: "Alice", email: "alice@example.com")
+       bob = create_person(name: "Bob", email: "bob@example.com")
+@@ -181,6 +183,7 @@ defmodule Memba.Membership.QueryTest do
+ 
+     test "returns one row per active member using each person's primary email address" do
+       club_id = Memba.ID.generate(:club)
++      create_club_with_id(club_id, "Kootenay Mountaineering Club")
+ 
+       alice =
+         create_person(
+@@ -661,6 +664,8 @@ defmodule Memba.Membership.QueryTest do
+     test "returns true only when the person has an active membership in the club" do
+       kootenay_club_id = Memba.ID.generate(:club)
+       nelson_club_id = Memba.ID.generate(:club)
++      create_club_with_id(kootenay_club_id, "Kootenay Mountaineering Club")
++      create_club_with_id(nelson_club_id, "Nelson Cycling Club")
+ 
+       alice = create_person(name: "Alice", email: "alice@example.com")
+       pat = create_person(name: "Pat", email: "pat@example.com")
+@@ -832,6 +837,22 @@ defmodule Memba.Membership.QueryTest do
+     club
+   end
+ 
++  defp create_club_with_id(club_id, name) do
++    club = %{club_id: club_id, name: name, slug: slug_for(name)}
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club.club_id,
++                 name: club.name,
++                 slug: club.slug
++               },
++               consistency: :strong
++             )
++
++    club
++  end
++
+   defp create_person(attrs) do
+     email = Keyword.fetch!(attrs, :email)
+     email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
+@@ -957,7 +978,16 @@ defmodule Memba.Membership.QueryTest do
+   end
+ 
+   defp remove_member(membership_id) do
++    membership = Repo.get!(MembershipProjection, membership_id)
++
+     assert :ok =
+-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++             App.dispatch(
++               %RemoveMember{
++                 club_id: membership.club_id,
++                 membership_id: membership_id,
++                 person_id: membership.person_id
++               },
++               consistency: :strong
++             )
+   end
+ end
+diff --git a/web/test/memba/membership/role_projection_test.exs b/web/test/memba/membership/role_projection_test.exs
+index 2543c9a..ef10edf 100644
+--- a/web/test/memba/membership/role_projection_test.exs
++++ b/web/test/memba/membership/role_projection_test.exs
+@@ -213,7 +213,15 @@ defmodule Memba.Membership.RoleProjectionTest do
+     add_member!(membership_id, club_id, person_id)
+     assign_role!(club_id, membership_id, person_id, role_id)
+ 
+-    assert :ok = App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++    assert :ok =
++             App.dispatch(
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
+ 
+     assert %RoleAssignmentProjection{active: false} = role_assignment(membership_id, role_id)
+ 
+diff --git a/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+index 1aa9f95..a408a7b 100644
+--- a/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
++++ b/web/test/memba/membership/system_group_membership_policy_dispatch_test.exs
+@@ -36,7 +36,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
+     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
+ 
+     assert :ok =
+-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++             App.dispatch(
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
+ 
+     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
+   end
+@@ -104,7 +111,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
+     assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
+ 
+     assert :ok =
+-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++             App.dispatch(
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
+ 
+     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
+     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
+diff --git a/web/test/memba/membership/system_groups_backfill_test.exs b/web/test/memba/membership/system_groups_backfill_test.exs
+index a968ee5..ce18a9d 100644
+--- a/web/test/memba/membership/system_groups_backfill_test.exs
++++ b/web/test/memba/membership/system_groups_backfill_test.exs
+@@ -68,7 +68,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+   test "does not give Everyone access to a conversation that already has an Admin audience" do
+     club = seed_historic_club!()
+     member = add_active_member!(club.club_id)
+-    append_historic_system_groups!(club.club_id)
++    append_historic_system_groups!(club.club_id, 4)
+     admin_group_id = SystemGroups.admin_group_id(club.club_id)
+     everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
+ 
+@@ -396,7 +396,7 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+     %{membership_id: membership_id, person_id: person_id}
+   end
+ 
+-  defp append_historic_system_groups!(club_id) do
++  defp append_historic_system_groups!(club_id, expected_version \\ 3) do
+     events =
+       [
+         %GroupCreated{
+@@ -414,7 +414,13 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
+       ]
+       |> Enum.map(&Mapper.map_to_event_data/1)
+ 
+-    assert :ok = Commanded.EventStore.append_to_stream(MembershipApp, club_id, 3, events)
++    assert :ok =
++             Commanded.EventStore.append_to_stream(
++               MembershipApp,
++               club_id,
++               expected_version,
++               events
++             )
+ 
+     checkpoint = Memba.ProjectionBarrier.current_checkpoint()
+     Memba.ProjectionBarrier.await!([GroupProjector], checkpoint: checkpoint)
+diff --git a/web/test/memba/messaging/post_message_reply_test.exs b/web/test/memba/messaging/post_message_reply_test.exs
+index f9fd362..a29f847 100644
+--- a/web/test/memba/messaging/post_message_reply_test.exs
++++ b/web/test/memba/messaging/post_message_reply_test.exs
+@@ -46,7 +46,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+     follow_conversation(club_id, root_message_id, dana.person_id)
+     follow_conversation(club_id, root_message_id, erin.person_id)
+     follow_conversation(club_id, root_message_id, pat.person_id)
+-    remove_member(erin_membership_id)
++    remove_member(club_id, erin_membership_id, erin.person_id)
+ 
+     reply_message_id = Memba.ID.generate(:message)
+ 
+@@ -491,10 +491,14 @@ defmodule Memba.Messaging.PostMessageReplyTest do
+              )
+   end
+ 
+-  defp remove_member(membership_id) do
++  defp remove_member(club_id, membership_id, person_id) do
+     assert :ok =
+              MembershipApp.dispatch(
+-               %RemoveMember{membership_id: membership_id},
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
+                consistency: :strong
+              )
+   end
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 6f66c0a..e38f0ce 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -189,7 +189,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
+ 
+     assert :ok =
+              MembershipApp.dispatch(
+-               %RemoveMember{membership_id: dana_membership_id},
++               %RemoveMember{
++                 club_id: club_id,
++                 membership_id: dana_membership_id,
++                 person_id: dana.person_id
++               },
+                consistency: :strong
+              )
+ 
+diff --git a/web/test/memba_web/controllers/club_member_invitation_controller_test.exs b/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
+index bfe6f12..6ad8d13 100644
+--- a/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
++++ b/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
+@@ -55,7 +55,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
+ 
+     test "accepts a pending invitation for an existing person, signs in, and lands in the club",
+          %{conn: conn} do
+-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+       person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+       {invitation, token} = invite_member!(club, "ALICE@EXAMPLE.COM")
+ 
+@@ -80,7 +80,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
+ 
+     test "reopening an accepted invitation link signs in and does not create duplicate membership",
+          %{conn: conn} do
+-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+       person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+       {_invitation, token} = invite_member!(club, "alice@example.com")
+ 
+@@ -183,7 +183,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
+ 
+     test "creates the invitee profile, activates ordinary membership, and clears journey state",
+          %{conn: conn} do
+-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+       {invitation, token} = invite_member!(club, "robin@example.com")
+ 
+       conn = get(conn, ~p"/invitations/club-members/#{token}")
+@@ -213,6 +213,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
+     end
+   end
+ 
++  defp create_membership_club!(attrs) do
++    club_attrs = membership_club_attrs(attrs)
++
++    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
++    Membership.get_club(club_attrs.club_id)
++  end
++
+   defp invite_member!(club, email) do
+     assert {:ok, %{invitation_id: invitation_id, invitation_token: token}} =
+              Membership.invite_club_member(
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index d0abeac..0eb7826 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -9,7 +9,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+   alias MembaWeb.ClubSite
+ 
+   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
+-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+ 
+     assert :ok =
+@@ -43,7 +43,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+   end
+ 
+   test "club detail does not offer staff-side message composition", %{conn: conn} do
+-    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+ 
+     assert :ok =
+@@ -261,7 +261,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+   test "people and member lists show primary and alternate email addresses distinctly", %{
+     conn: conn
+   } do
+-    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++    club = create_membership_club!(name: "Kootenay Mountaineering Club")
+     person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+ 
+     insert_membership_person_email_address!(
+@@ -363,7 +363,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+   end
+ 
+   test "staff can remove a member from a club", %{conn: conn} do
+-    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++    club = create_membership_club!(name: "Kootenay Mountaineering Club")
+     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+     membership_id = Memba.ID.generate(:membership)
+ 
+@@ -392,6 +392,13 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+     refute Membership.active_member_of_club?(club.club_id, alice.person_id)
+   end
+ 
++  defp create_membership_club!(attrs) do
++    club_attrs = membership_club_attrs(attrs)
++
++    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
++    Membership.get_club(club_attrs.club_id)
++  end
++
+   defp input_value(html, selector) do
+     values =
+       html
