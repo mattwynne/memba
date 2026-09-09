@@ -1,0 +1,373 @@
+# Iteration 059 production cutover check
+
+Run this one-time, read-only check immediately before the first production
+deployment containing iteration 059, then run the same check again immediately
+after that deployment. It is not a permanent release gate.
+
+The check compares current Membership projections with immutable facts on each
+Club stream. It answers two questions:
+
+1. Does every projected active membership have either a native Club-stream
+   membership lifecycle fact or the iteration-056 Everyone membership fact
+   needed for historical Club replay?
+2. Does every populated club have an active assignment of its deterministic
+   Admin role to an active member, backed by `MemberRoleAssigned` on that
+   Club's stream?
+
+Both results must report `violation_count = 0` and `violations = []`.
+
+## Safety and ownership
+
+- This procedure contains only `SELECT`, transaction-control, and `psql`
+  display commands. The transaction is explicitly `READ ONLY`.
+- Do not edit projections, rewrite events, dispatch repair commands, or run the
+  system-group backfill in response to this check.
+- Capture the command output, UTC time, and delivery-candidate Git SHA in the
+  private operations log. Do not put production data or credentials in git.
+- Any command error, unexpected database/schema result, non-zero violation
+  count, or missing output is a failed check. Stop and ask Matt (or the
+  designated production operator) for a decision.
+
+This procedure intentionally does not audit inactive pre-cutover membership IDs
+which are absent from Club streams. Iteration 059 does not import those
+tombstones.
+
+## Connect to the production database
+
+Use Fly's database console from a trusted operator workstation:
+
+```sh
+flyctl postgres connect --app memba-db --database memba
+```
+
+Do not continue if the connection command selects a database other than
+`memba`, or if the schema preflight below does not report `bytea` for both
+EventStore payload columns. The queries decode the JSON serializer's UTF-8
+payload from those `bytea` columns.
+
+At the `psql` prompt, run the whole transaction below. `ON_ERROR_STOP` prevents
+later statements from disguising an earlier failure.
+
+```sql
+\set ON_ERROR_STOP on
+\pset pager off
+\timing on
+
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+
+SELECT
+  current_database() AS database_name,
+  current_setting('transaction_read_only') AS transaction_read_only,
+  statement_timestamp() AT TIME ZONE 'UTC' AS checked_at_utc;
+
+SELECT
+  column_name,
+  data_type
+FROM information_schema.columns
+WHERE table_schema = 'event_store'
+  AND table_name = 'events'
+  AND column_name IN ('data', 'metadata')
+ORDER BY column_name;
+
+-- Check 1: every active membership can be hydrated from its Club stream.
+WITH active_membership_hashes AS (
+  SELECT
+    membership.club_id,
+    membership.membership_id,
+    membership.person_id,
+    md5(
+      convert_to('system-group', 'UTF8')
+      || decode('00', 'hex')
+      || convert_to(membership.club_id, 'UTF8')
+      || decode('00', 'hex')
+      || convert_to('everyone', 'UTF8')
+    ) AS everyone_group_hash
+  FROM membership_memberships AS membership
+  WHERE membership.active
+),
+active_memberships AS (
+  SELECT
+    club_id,
+    membership_id,
+    person_id,
+    'grp_'
+      || substr(everyone_group_hash, 1, 8)
+      || '-'
+      || substr(everyone_group_hash, 9, 4)
+      || '-'
+      || substr(everyone_group_hash, 13, 4)
+      || '-'
+      || substr(everyone_group_hash, 17, 4)
+      || '-'
+      || substr(everyone_group_hash, 21, 12)
+      AS expected_everyone_group_id
+  FROM active_membership_hashes
+),
+club_events AS (
+  SELECT
+    stream.stream_uuid AS club_id,
+    stream_event.stream_version,
+    event.event_type,
+    convert_from(event.data, 'UTF8')::jsonb AS event_data
+  FROM event_store.events AS event
+  JOIN event_store.stream_events AS stream_event
+    ON stream_event.event_id = event.event_id
+  JOIN event_store.streams AS stream
+    ON stream.stream_id = stream_event.stream_id
+  WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
+    AND event.event_type IN (
+      'Elixir.Memba.Membership.Events.MemberAdded',
+      'Elixir.Memba.Membership.Events.MemberRemoved',
+      'Elixir.Memba.Membership.Events.GroupMemberAdded',
+      'Elixir.Memba.Membership.Events.GroupMemberRemoved'
+    )
+),
+source_fact_violations AS (
+  SELECT
+    membership.club_id,
+    membership.membership_id,
+    membership.person_id,
+    membership.expected_everyone_group_id
+  FROM active_memberships AS membership
+  WHERE COALESCE(
+    (
+      SELECT
+        (
+          event.event_type =
+            'Elixir.Memba.Membership.Events.MemberAdded'
+          AND event.event_data ->> 'club_id' = membership.club_id
+          AND event.event_data ->> 'person_id' = membership.person_id
+        ) IS TRUE
+      FROM club_events AS event
+      WHERE event.club_id = membership.club_id
+        AND event.event_data ->> 'membership_id' =
+          membership.membership_id
+        AND event.event_type IN (
+          'Elixir.Memba.Membership.Events.MemberAdded',
+          'Elixir.Memba.Membership.Events.MemberRemoved'
+        )
+      ORDER BY event.stream_version DESC
+      LIMIT 1
+    ),
+    (
+      SELECT
+        (
+          event.event_type =
+            'Elixir.Memba.Membership.Events.GroupMemberAdded'
+          AND event.event_data ->> 'club_id' = membership.club_id
+          AND event.event_data ->> 'person_id' = membership.person_id
+        ) IS TRUE
+      FROM club_events AS event
+      WHERE event.club_id = membership.club_id
+        AND event.event_data ->> 'membership_id' =
+          membership.membership_id
+        AND event.event_data ->> 'group_id' =
+          membership.expected_everyone_group_id
+        AND event.event_type IN (
+          'Elixir.Memba.Membership.Events.GroupMemberAdded',
+          'Elixir.Memba.Membership.Events.GroupMemberRemoved'
+        )
+      ORDER BY event.stream_version DESC
+      LIMIT 1
+    ),
+    false
+  ) IS NOT TRUE
+)
+SELECT
+  count(*) AS violation_count,
+  COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'club_id', violation.club_id,
+        'membership_id', violation.membership_id,
+        'person_id', violation.person_id,
+        'expected_everyone_group_id',
+          violation.expected_everyone_group_id
+      )
+      ORDER BY violation.club_id, violation.membership_id
+    ),
+    '[]'::jsonb
+  ) AS violations
+FROM source_fact_violations AS violation;
+
+-- Check 2: every populated club has a source-backed active Admin.
+WITH populated_club_hashes AS (
+  SELECT
+    membership.club_id,
+    count(*) AS active_member_count,
+    md5(
+      convert_to('membership_administrator', 'UTF8')
+      || decode('00', 'hex')
+      || convert_to(membership.club_id, 'UTF8')
+    ) AS admin_role_hash
+  FROM membership_memberships AS membership
+  WHERE membership.active
+  GROUP BY membership.club_id
+),
+populated_clubs AS (
+  SELECT
+    club_id,
+    active_member_count,
+    'rol_'
+      || substr(admin_role_hash, 1, 8)
+      || '-'
+      || substr(admin_role_hash, 9, 4)
+      || '-'
+      || substr(admin_role_hash, 13, 4)
+      || '-'
+      || substr(admin_role_hash, 17, 4)
+      || '-'
+      || substr(admin_role_hash, 21, 12)
+      AS expected_admin_role_id
+  FROM populated_club_hashes
+),
+club_admin_assignment_facts AS (
+  SELECT
+    stream.stream_uuid AS club_id,
+    stream_event.stream_version,
+    event.event_type,
+    convert_from(event.data, 'UTF8')::jsonb AS event_data
+  FROM event_store.events AS event
+  JOIN event_store.stream_events AS stream_event
+    ON stream_event.event_id = event.event_id
+  JOIN event_store.streams AS stream
+    ON stream.stream_id = stream_event.stream_id
+  WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
+    AND event.event_type IN (
+      'Elixir.Memba.Membership.Events.MemberRoleAssigned',
+      'Elixir.Memba.Membership.Events.MemberRoleRemoved'
+    )
+),
+admin_invariant_violations AS (
+  SELECT
+    club.club_id,
+    club.active_member_count,
+    club.expected_admin_role_id
+  FROM populated_clubs AS club
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM membership_role_assignments AS assignment
+    JOIN membership_memberships AS membership
+      ON membership.membership_id = assignment.membership_id
+      AND membership.club_id = assignment.club_id
+      AND membership.person_id = assignment.person_id
+      AND membership.active
+    WHERE assignment.club_id = club.club_id
+      AND assignment.role_id = club.expected_admin_role_id
+      AND assignment.active
+      AND COALESCE(
+        (
+          SELECT
+            (
+              fact.event_type =
+                'Elixir.Memba.Membership.Events.MemberRoleAssigned'
+              AND fact.event_data ->> 'club_id' = club.club_id
+              AND fact.event_data ->> 'person_id' =
+                assignment.person_id
+            ) IS TRUE
+          FROM club_admin_assignment_facts AS fact
+          WHERE fact.club_id = club.club_id
+            AND fact.event_data ->> 'membership_id' =
+              assignment.membership_id
+            AND fact.event_data ->> 'role_id' =
+              club.expected_admin_role_id
+          ORDER BY fact.stream_version DESC
+          LIMIT 1
+        ),
+        false
+      )
+  )
+)
+SELECT
+  count(*) AS violation_count,
+  COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'club_id', violation.club_id,
+        'active_member_count', violation.active_member_count,
+        'expected_admin_role_id', violation.expected_admin_role_id
+      )
+      ORDER BY violation.club_id
+    ),
+    '[]'::jsonb
+  ) AS violations
+FROM admin_invariant_violations AS violation;
+
+ROLLBACK;
+```
+
+## Expected result
+
+The preflight identifies the production database, proves the transaction is
+read-only, and confirms the two EventStore columns:
+
+```text
+ database_name | transaction_read_only | checked_at_utc
+---------------+-----------------------+---------------------------
+ memba         | on                    | <captured UTC timestamp>
+
+ column_name | data_type
+-------------+-----------
+ data        | bytea
+ metadata    | bytea
+```
+
+Each numbered check must then return exactly:
+
+```text
+ violation_count | violations
+-----------------+------------
+               0 | []
+```
+
+The checks report deliberately incomplete states as follows:
+
+- An active membership whose latest native Club lifecycle fact is not a
+  matching `MemberAdded` appears in check 1. When no native lifecycle exists,
+  its latest deterministic-Everyone fact must be a matching
+  `GroupMemberAdded`; a missing fact or a latest `GroupMemberRemoved` is a
+  violation.
+- An empty club does not appear in check 2; empty clubs are valid.
+- A populated club appears in check 2 unless at least one projected active
+  member has an active assignment of the deterministic Admin role and the
+  matching `MemberRoleAssigned` exists on that exact Club stream.
+- A role assignment for an inactive member, a non-deterministic role, a
+  mismatched person or membership, an assignment event on another stream, or a
+  latest matching `MemberRoleRemoved` does not satisfy check 2.
+
+## Cutover sequence
+
+### Immediately before the first iteration-059 deployment
+
+1. Record the delivery-candidate Git SHA and current production release in the
+   private operations log.
+2. Run the transaction above against production.
+3. Compare both result rows with the zero-violation result.
+4. If both checks pass, record the complete output and allow that exact
+   committed candidate to proceed through the normal CI/CD deployment.
+5. If either check reports a violation, or any statement fails, do not deploy.
+   Preserve the output and stop for human investigation and an explicitly
+   approved repair plan.
+
+Do not rerun an iteration-056 backfill or dispatch an Admin repair merely to
+make the output green. A violation may indicate projection lag, unexpected
+history, an identity mismatch, or a genuine invariant failure; the operator
+must determine which before any mutation.
+
+### Immediately after deployment
+
+1. Confirm Fly reports the intended Git SHA/release as deployed and healthy.
+2. Run the same transaction again, without altering the SQL.
+3. Record the output and compare both rows with the pre-deploy output.
+4. If both checks still report zero violations, mark the one-time cutover check
+   complete. Do not add it to later routine releases.
+5. If either check now reports a violation, declare the cutover unsuccessful
+   and stop further iteration-059 rollout activity. Preserve the output and
+   request an immediate human decision. Roll back the application release only
+   through the approved CI/CD/production process and only after checking
+   whether iteration-059 Club-stream membership facts have already been
+   appended; never delete or rewrite those events.
+
+An application rollback does not repair data and is not permission to mutate
+the event store or projections. Diagnosis and any auditable repair are separate,
+human-approved production operations.
