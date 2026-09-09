@@ -452,11 +452,25 @@ defmodule Memba.Membership.Club do
         {:error, :already_active_member}
 
       true ->
-        %MemberAdded{
+        member_added = %MemberAdded{
           club_id: command.club_id,
           membership_id: command.membership_id,
           person_id: command.person_id
         }
+
+        if map_size(club.active_memberships) == 0 do
+          [
+            member_added,
+            %MemberRoleAssigned{
+              club_id: command.club_id,
+              membership_id: command.membership_id,
+              person_id: command.person_id,
+              role_id: Roles.membership_administrator_role_id(command.club_id)
+            }
+          ]
+        else
+          member_added
+        end
     end
   end
 

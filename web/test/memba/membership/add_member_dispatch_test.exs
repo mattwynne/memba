@@ -9,6 +9,8 @@ defmodule Memba.Membership.AddMemberDispatchTest do
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned
+  alias Memba.Membership.Roles
 
   test "legacy membership-ID aggregate write model is not available" do
     refute Code.ensure_loaded?(Memba.Membership.Membership)
@@ -18,6 +20,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
 
     assert :ok =
              App.dispatch(
@@ -43,6 +46,12 @@ defmodule Memba.Membership.AddMemberDispatchTest do
                   membership_id: ^membership_id,
                   club_id: ^club_id,
                   person_id: ^person_id
+                },
+                %MemberRoleAssigned{
+                  membership_id: ^membership_id,
+                  club_id: ^club_id,
+                  person_id: ^person_id,
+                  role_id: ^admin_role_id
                 }
               ],
               aggregate_state: %Club{
