@@ -1,6 +1,9 @@
 defmodule Memba.Membership.Router do
   @moduledoc """
   Command router for Membership commands.
+
+  Membership activation and removal share the Club aggregate boundary with
+  club roles and their invariants. There is no membership-ID aggregate route.
   """
 
   use Commanded.Commands.Router

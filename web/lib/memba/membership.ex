@@ -253,9 +253,9 @@ defmodule Memba.Membership do
   @doc """
   Add a person as an active member of a club through the Membership context.
 
-  The caller supplies the membership aggregate identity as `:membership_id` or
-  `"membership_id"`. A second active membership for the same club/person pair is
-  rejected before dispatch.
+  The caller supplies the membership identity as `:membership_id` or
+  `"membership_id"`. The command is routed to the Club aggregate. A second
+  active membership for the same club/person pair is rejected before dispatch.
   """
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs),
@@ -332,8 +332,7 @@ defmodule Memba.Membership do
   This orchestration creates an ordinary active membership for the invited club
   and then marks the invitation accepted with the person and membership IDs. The
   caller supplies `:person_id` and may supply `:membership_id`; otherwise this
-  application service generates the membership aggregate identity before
-  dispatch.
+  application service generates the membership identity before dispatch.
   """
   def accept_club_member_invitation_for_existing_person(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do

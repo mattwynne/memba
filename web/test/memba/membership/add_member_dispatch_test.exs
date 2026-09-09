@@ -10,6 +10,10 @@ defmodule Memba.Membership.AddMemberDispatchTest do
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
 
+  test "legacy membership-ID aggregate write model is not available" do
+    refute Code.ensure_loaded?(Memba.Membership.Membership)
+  end
+
   test "Membership app routes member activation and removal to the Club aggregate" do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
