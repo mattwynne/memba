@@ -1,0 +1,8 @@
+{
+  "preferred_next_label": "needs_human",
+  "context_updates": {
+    "plan_ready": false,
+    "plan_needs_fix": false,
+    "plan_needs_human": true
+  }
+}
