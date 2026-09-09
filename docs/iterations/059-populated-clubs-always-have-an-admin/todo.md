@@ -1,0 +1,25 @@
+# Implementation TODO
+
+- [ ] 001 Implement the existing iteration-059 Gherkin steps and confirm unfinished steps remain excluded until executable. Keep the later-invitee ordinary example as regression coverage.
+- [ ] 002 Add Club replay tests for historic Everyone membership and role facts, active-Admin reconstruction, and delayed compatibility events after native membership events.
+- [ ] 003 Write `cutover-check.md` with exact one-time read-only production checks for source-fact compatibility and populated clubs without an active Admin, including pre/post-deploy expectations and stop instructions.
+- [ ] 004 Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
+- [ ] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+- [ ] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+- [ ] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+- [ ] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+- [ ] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+- [ ] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+- [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+- [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+- [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+- [ ] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
+- [ ] 015 Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.
+- [ ] 016 Treat exact same-ID person/member creation as successful retry continuation and use strong projections or a barrier before recovery queries after uncertain dispatch results.
+- [ ] 017 Accept the invitation with recovered identities and preserve its result contract. Add failure-injection retry tests after person creation and membership activation for both paths.
+- [ ] 018 Retain existing member/role events, projectors, and `SystemGroupMembership`; prove one activation yields queryable membership, permission, Everyone, and Admin-group state.
+- [ ] 019 Present the two confirmed removal errors on the existing Staff club page. Test blocked members remain visible and permitted removal retains its success path.
+- [ ] 020 Repair affected tests, development seeds, and smoke fixtures to use event-sourced clubs and deterministic first-member ordering, without projection-only write fixtures.
+- [ ] 021 Add pure Club tests for first/later activation, idempotency, duplicate and Club-known removed IDs, inactive-member role assignment, both removal floors, and replacement Admin removal.
+- [ ] 022 Add one same-stream append contract test and one concurrent two-invitation test proving both memberships succeed with exactly one automatic Admin.
+- [ ] 023 Run replay, projection, system-group, onboarding, invitation, Staff UI, member-list, messaging, seed, smoke, and Cucumber regressions. Remove runner-debt tags and run `dev check`.
