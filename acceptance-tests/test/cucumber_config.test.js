@@ -95,6 +95,33 @@ test("iteration 058 scenarios are no longer blocked from either acceptance runne
   );
 });
 
+test("unfinished iteration 059 scenarios remain excluded from the default browser runner", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "club_membership_administration.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-059")
+  );
+
+  assert.equal(iterationScenarios.length, 5);
+  assert.deepEqual(
+    iterationScenarios.filter((scenario) => matchesDefaultBrowserTags(scenario.tags)),
+    []
+  );
+});
+
+test("the later-invitee ordinary-member regression remains selected by the browser runner", () => {
+  const scenario = browserFeaturePathNamed("club_member_invitations.feature");
+  const invitationScenarios = featureScenarios(scenario);
+
+  assert.equal(
+    matchesDefaultBrowserTags(
+      invitationScenarios.get("Robin invites Dana to join West Coast Paddlers").tags
+    ),
+    true
+  );
+});
+
 function browserSelectedFeatureNames() {
   return browserFeatures()
     .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))
