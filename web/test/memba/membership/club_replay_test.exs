@@ -12,12 +12,9 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
-  # Tasks 004 and 005 implement the state and event application specified here.
-  # Keeping these executable contracts skipped until then lets this test-first
-  # checkpoint remain green without pulling that implementation into task 002.
-  @moduletag skip: "iteration 059 tasks 004 and 005 implement this replay contract"
-
   describe "historic Club stream replay" do
+    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
+
     test "hydrates the active roster from Everyone membership facts" do
       ids = replay_ids()
 
@@ -77,6 +74,8 @@ defmodule Memba.Membership.ClubReplayTest do
   end
 
   describe "mixed native and compatibility Club stream replay" do
+    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
+
     test "delayed Everyone facts cannot override native membership lifecycle facts" do
       ids = replay_ids()
 
@@ -125,6 +124,91 @@ defmodule Memba.Membership.ClubReplayTest do
           MapSet.new([ids.first_membership_id, ids.second_membership_id]),
         active_admin_membership_ids: MapSet.new()
       )
+    end
+  end
+
+  describe "native membership lifecycle replay" do
+    test "tracks the active roster and permanently marks IDs with native lifecycle facts" do
+      ids = replay_ids()
+
+      club =
+        replay(ids.club_id, [
+          member_added(ids, ids.first_membership_id, ids.first_person_id),
+          member_added(ids, ids.second_membership_id, ids.second_person_id),
+          member_removed(ids, ids.first_membership_id, ids.first_person_id)
+        ])
+
+      assert_replay_state(club,
+        active_memberships: %{ids.second_membership_id => ids.second_person_id},
+        native_membership_ids:
+          MapSet.new([ids.first_membership_id, ids.second_membership_id]),
+        active_admin_membership_ids: MapSet.new()
+      )
+    end
+
+    test "derives active Admins by intersecting the native roster with Admin assignments" do
+      ids = replay_ids()
+
+      assigned_before_activation =
+        replay(ids.club_id, [
+          admin_role_assigned(ids, ids.first_membership_id, ids.first_person_id)
+        ])
+
+      assert active_admin_membership_ids(assigned_before_activation) == MapSet.new()
+
+      active_admin =
+        Club.apply(
+          assigned_before_activation,
+          member_added(ids, ids.first_membership_id, ids.first_person_id)
+        )
+
+      assert active_admin_membership_ids(active_admin) ==
+               MapSet.new([ids.first_membership_id])
+
+      custom_role_id = Memba.ID.generate(:role)
+
+      with_non_admin_assignment =
+        active_admin
+        |> Club.apply(member_added(ids, ids.second_membership_id, ids.second_person_id))
+        |> Club.apply(%MemberRoleAssigned{
+          club_id: ids.club_id,
+          membership_id: ids.second_membership_id,
+          person_id: ids.second_person_id,
+          role_id: custom_role_id
+        })
+
+      assert active_admin_membership_ids(with_non_admin_assignment) ==
+               MapSet.new([ids.first_membership_id])
+
+      role_removed =
+        Club.apply(
+          with_non_admin_assignment,
+          admin_role_removed(ids, ids.first_membership_id, ids.first_person_id)
+        )
+
+      assert active_admin_membership_ids(role_removed) == MapSet.new()
+
+      reassigned_admin =
+        Club.apply(
+          role_removed,
+          admin_role_assigned(ids, ids.first_membership_id, ids.first_person_id)
+        )
+
+      assert active_admin_membership_ids(reassigned_admin) ==
+               MapSet.new([ids.first_membership_id])
+
+      inactive_admin =
+        Club.apply(
+          reassigned_admin,
+          member_removed(ids, ids.first_membership_id, ids.first_person_id)
+        )
+
+      assert active_admin_membership_ids(inactive_admin) == MapSet.new()
+
+      assert Map.has_key?(
+               inactive_admin.role_assignments,
+               {ids.first_membership_id, ids.admin_role_id}
+             )
     end
   end
 

@@ -23,6 +23,8 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
+  alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
@@ -36,10 +38,13 @@ defmodule Memba.Membership.Club do
     :club_id,
     :name,
     :slug,
+    active_admin_membership_ids: MapSet.new(),
+    active_memberships: %{},
     groups: %{},
     group_email_slugs: %{},
     group_keys: %{},
     group_memberships: %{},
+    native_membership_ids: MapSet.new(),
     roles: %{},
     role_keys: %{},
     role_permissions: %{},
@@ -313,20 +318,52 @@ defmodule Memba.Membership.Club do
     }
   end
 
+  def apply(%__MODULE__{} = club, %MemberAdded{} = event) do
+    club =
+      %__MODULE__{
+        club
+        | active_memberships:
+            Map.put(club.active_memberships, event.membership_id, event.person_id),
+          native_membership_ids: MapSet.put(club.native_membership_ids, event.membership_id)
+      }
+
+    derive_active_admin_membership_ids(club)
+  end
+
+  def apply(%__MODULE__{} = club, %MemberRemoved{} = event) do
+    club =
+      %__MODULE__{
+        club
+        | active_memberships: Map.delete(club.active_memberships, event.membership_id),
+          native_membership_ids: MapSet.put(club.native_membership_ids, event.membership_id)
+      }
+
+    derive_active_admin_membership_ids(club)
+  end
+
   def apply(%__MODULE__{} = club, %MemberRoleAssigned{} = event) do
     assignment = %{person_id: event.person_id}
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
-    %__MODULE__{
-      club
-      | role_assignments: Map.put(club.role_assignments, assignment_key, assignment)
-    }
+    club =
+      %__MODULE__{
+        club
+        | role_assignments: Map.put(club.role_assignments, assignment_key, assignment)
+      }
+
+    derive_active_admin_membership_ids(club)
   end
 
   def apply(%__MODULE__{} = club, %MemberRoleRemoved{} = event) do
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
-    %__MODULE__{club | role_assignments: Map.delete(club.role_assignments, assignment_key)}
+    club =
+      %__MODULE__{
+        club
+        | role_assignments: Map.delete(club.role_assignments, assignment_key)
+      }
+
+    derive_active_admin_membership_ids(club)
   end
 
   defp validate_club_id(club_id) do
@@ -624,6 +661,25 @@ defmodule Memba.Membership.Club do
 
   defp put_role_key(role_keys, nil, _role_id), do: role_keys
   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+
+  defp derive_active_admin_membership_ids(%__MODULE__{} = club) do
+    admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+
+    active_admin_membership_ids =
+      Enum.reduce(club.role_assignments, MapSet.new(), fn
+        {{membership_id, ^admin_role_id}, _assignment}, active_admin_membership_ids ->
+          if Map.has_key?(club.active_memberships, membership_id) do
+            MapSet.put(active_admin_membership_ids, membership_id)
+          else
+            active_admin_membership_ids
+          end
+
+        _role_assignment, active_admin_membership_ids ->
+          active_admin_membership_ids
+      end)
+
+    %__MODULE__{club | active_admin_membership_ids: active_admin_membership_ids}
+  end
 
   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
 
