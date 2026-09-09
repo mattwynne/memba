@@ -50,7 +50,8 @@ The agreed rules from Example Mapping are:
 - Allow removal of one Admin’s membership when another active Admin remains.
 - Use existing club-stream Everyone group-membership facts as the historic compatibility source for active-roster hydration, while native Club-stream `MemberAdded` / `MemberRemoved` facts become authoritative for each membership ID as soon as either appears. A delayed Everyone event must never reactivate or remove a membership that already has a native lifecycle fact.
 - Derive active Admins as the intersection of active roster memberships and active assignments of the deterministic Admin role. Historic Club role-assignment facts supply the assignment side; inactive memberships never count even when an old role assignment remains in history.
-- Prove historical and mixed-stream hydration from event streams. Add a read-only release audit immediately before the existing system-group backfill; missing source facts stop the release before any compatibility command or smoke-fixture mutation and require human judgement.
+- Reject assigning any role to an inactive membership inside the Club aggregate, preserving the existing application-level behaviour at the write boundary.
+- Prove historical and mixed-stream hydration from event streams. Document and run a one-time read-only production cutover check immediately before the first iteration-059 deployment and verify again afterward; missing compatibility facts or a populated zero-Admin club block that deployment for human judgement.
 - Preserve current membership, role, permission, group-membership, and member-list projections by retaining the existing domain event vocabulary.
 - Update onboarding conversion and both invitation-acceptance paths to use the same aggregate-owned membership activation decision.
 - Give Staff clear feedback on the existing club-detail surface when removal is blocked.
@@ -58,7 +59,7 @@ The agreed rules from Example Mapping are:
 
 ### Out of scope
 
-- Repeating the completed production Admin repair, directly editing production projections, or introducing an automatic production-data repair.
+- Repeating the completed production Admin repair, directly editing production projections, introducing an automatic production-data repair, or adding a permanent invariant check to every release.
 - Bulk member import, bulk invitation ordering, or deciding which imported person becomes the initial Admin. Club imports do not exist yet.
 - Club archive, closure, deletion, or any supported path for deliberately returning an established club to empty.
 - Making person creation, invitation acceptance bookkeeping, onboarding request state, and club membership one cross-stream transaction. Deterministic identity recovery and idempotent continuation are in scope; transactional coordination is not.
@@ -113,7 +114,9 @@ No design needed. This iteration adds no page, component, layout, or new action.
 - A later active member receives no Admin role unless an authorised person grants it explicitly.
 - If two distinct invitations for an empty club are accepted concurrently, both calls succeed, both memberships become active, and exactly one automatic Admin assignment exists: the one associated with the activation committed first in the Club stream.
 - No public or registered command path can activate or remove a membership through the old membership-ID write boundary and bypass the Club invariant.
-- Re-dispatching the same active `club_id` / `membership_id` / `person_id` activation is an idempotent success. A different membership ID for a person who is already active is rejected. A removed membership ID is never reused; a returning person receives a new membership ID.
+- Re-dispatching the same active `club_id` / `membership_id` / `person_id` activation is an idempotent success. A different membership ID for a person who is already active is rejected.
+- A membership ID recorded in the Club aggregate’s native or compatibility history is not reused after removal, and a returning person receives a newly generated membership ID. No all-history guarantee or tombstone backfill is required for pre-cutover inactive IDs absent from Club streams; production entry points generate deterministic or fresh opaque typed IDs rather than accepting operator-chosen identities.
+- Assigning any role to an inactive membership is rejected by the Club aggregate.
 - Direct removal of the sole Admin role remains blocked by the Club aggregate.
 - Whole-membership removal is blocked when the target is the sole active Admin, even if ordinary active members remain.
 - Whole-membership removal is allowed when another active Admin remains.
@@ -125,7 +128,7 @@ No design needed. This iteration adds no page, component, layout, or new action.
 - Historic Club streams containing iteration-056 Everyone group-membership facts and existing role facts rehydrate an accurate active roster and Admin set without rewriting history.
 - In mixed streams, native Club `MemberAdded` / `MemberRemoved` lifecycle facts take permanent precedence for that membership ID over later Everyone compatibility events. In particular, `MemberAdded(A)`, `MemberAdded(B)`, `MemberRemoved(A)`, then a delayed Everyone `GroupMemberAdded(A)` leaves A inactive.
 - Active Admin state is exactly active roster membership IDs intersected with active assignments of the deterministic Admin role; an inactive member’s retained historic role assignment never counts toward the Admin floor.
-- `Memba.Membership.AdminInvariant.Audit.run!/0` read-only checks every projected active membership has either a native Club membership lifecycle or the required historical Everyone fact, and every projected active Admin assignment has its Club role fact. `Memba.Release.migrate/0` runs it after source-projector barriers but before `run_system_groups_backfill` and production smoke fixtures. Missing facts fail the release before those event-store mutations.
+- `docs/iterations/059-populated-clubs-always-have-an-admin/cutover-check.md` gives exact read-only commands and expected zero-violation results for two checks: every projected active membership has a native Club lifecycle or historical Everyone fact, and every populated club has an active deterministic Admin assignment backed by a Club role fact. Run it immediately before the first production deployment and again afterward. Any violation blocks or rolls back that cutover for human judgement; it is not wired into every future release.
 - Existing onboarding conversion still creates a club, person when necessary, active membership, Admin authority, converted request state, and welcome email.
 - Existing accepted-invitation idempotency, sign-in, profile completion, duplicate-membership protection, and later-member ordinary status continue to work.
 - Invitation acceptance recovers partial progress deterministically: it reuses the one person found by the normalized invited email and the one matching active club membership when present; otherwise candidate person/membership IDs are deterministically derived from the invitation ID. Retrying after person creation or membership activation yields one person, one active membership, one accepted invitation, and no duplicate Admin assignment.
@@ -149,30 +152,29 @@ Confirmed decisions:
 
 ## Implementation Plan
 
-1. Add the approved iteration-059 Gherkin and confirm unfinished steps remain excluded by the planning tags. Keep the existing later-invitee ordinary example as regression coverage.
+1. Implement the existing iteration-059 Gherkin steps and confirm unfinished steps remain excluded until executable. Keep the later-invitee ordinary example as regression coverage.
 2. Add Club replay tests for historic Everyone membership and role facts, active-Admin reconstruction, and delayed compatibility events after native membership events.
-3. Implement `Memba.Membership.AdminInvariant.Audit.run!/0` as a read-only comparison between current Membership/RoleAssignment projections and required Club-stream facts.
-4. Run the audit after source-projector barriers and before system-group backfill in `Memba.Release.migrate/0`. Test that audit failure prevents backfill and smoke-fixture mutation.
-5. Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
-6. Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
-7. Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
-8. Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
-9. Make Club membership activation idempotent for an exact active identity, reject another active membership for the same person, and reject reuse of a removed membership ID.
-10. Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
-11. Enforce the active-Admin floor inside Club when handling direct `RemoveMemberRole`, using active roster intersected with active Admin assignments.
-12. Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
-13. Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
-14. Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
-15. Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
-16. Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.
-17. Treat exact same-ID person/member creation as successful retry continuation and use strong projections or a barrier before recovery queries after uncertain dispatch results.
-18. Accept the invitation with recovered identities and preserve its result contract. Add failure-injection retry tests after person creation and membership activation for both paths.
-19. Retain existing member/role events, projectors, and `SystemGroupMembership`; prove one activation yields queryable membership, permission, Everyone, and Admin-group state.
-20. Present the two confirmed removal errors on the existing Staff club page. Test blocked members remain visible and permitted removal retains its success path.
-21. Repair affected tests, development seeds, and smoke fixtures to use event-sourced clubs and deterministic first-member ordering, without projection-only write fixtures.
-22. Add pure Club decision tests covering first/later activation, idempotency, duplicate/reused IDs, both removal floors, and removal with a replacement Admin.
-23. Add one same-stream append contract test and one concurrent two-invitation test proving both memberships succeed with exactly one automatic Admin.
-24. Run replay, audit, release-order, projection, system-group, onboarding, invitation, Staff UI, member-list, messaging, seed, smoke, and Cucumber regressions. Remove runner-debt tags and run `dev check`.
+3. Write `cutover-check.md` with exact one-time read-only production checks for source-fact compatibility and populated clubs without an active Admin, including pre/post-deploy expectations and stop instructions.
+4. Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
+5. Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+6. Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+7. Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+8. Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+9. Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+10. Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+11. Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+12. Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+13. Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+14. Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
+15. Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.
+16. Treat exact same-ID person/member creation as successful retry continuation and use strong projections or a barrier before recovery queries after uncertain dispatch results.
+17. Accept the invitation with recovered identities and preserve its result contract. Add failure-injection retry tests after person creation and membership activation for both paths.
+18. Retain existing member/role events, projectors, and `SystemGroupMembership`; prove one activation yields queryable membership, permission, Everyone, and Admin-group state.
+19. Present the two confirmed removal errors on the existing Staff club page. Test blocked members remain visible and permitted removal retains its success path.
+20. Repair affected tests, development seeds, and smoke fixtures to use event-sourced clubs and deterministic first-member ordering, without projection-only write fixtures.
+21. Add pure Club tests for first/later activation, idempotency, duplicate and Club-known removed IDs, inactive-member role assignment, both removal floors, and replacement Admin removal.
+22. Add one same-stream append contract test and one concurrent two-invitation test proving both memberships succeed with exactly one automatic Admin.
+23. Run replay, projection, system-group, onboarding, invitation, Staff UI, member-list, messaging, seed, smoke, and Cucumber regressions. Remove runner-debt tags and run `dev check`.
 
 ## Technical Decisions
 
@@ -181,7 +183,9 @@ Confirmed decisions:
 - **Concurrency:** all membership additions for one club use the same aggregate identity. Commanded aggregate serialization and optimistic concurrency order competing decisions; after the first append, the second decision rehydrates/sees a populated club and emits no automatic Admin assignment. No custom lock or retry coordinator is introduced.
 - **Historical compatibility and precedence:** iteration 056 appended deterministic Everyone group-membership facts to Club streams for existing data. Those facts drive roster state only for membership IDs with no native Club membership lifecycle. The first native `MemberAdded` or `MemberRemoved` permanently marks that membership ID native; every later Everyone compatibility event still updates group state but cannot change roster state. Active Admins are active roster IDs intersected with active deterministic-Admin role assignments from Club role events.
 - **Invitation retry identity:** invitation IDs are the stable recovery key. Namespaced deterministic person/membership IDs are used when records do not yet exist; matching person-by-invited-email and active-membership-by-club/person queries recover committed partial progress. Exact matching command no-ops are success, while mismatched or ambiguous identities fail closed. This is idempotent application-service continuation, not a transaction coordinator.
-- **Release audit ordering:** `Memba.Membership.AdminInvariant.Audit.run!/0` is a read-only release step after projection barriers and before the existing mutating system-group backfill. Audit failure raises, preventing both that backfill and production smoke-fixture mutation until a human explicitly approves any repair.
+- **Proportionate cutover check:** this iteration adds no permanent release gate. A documented one-time read-only check runs immediately before the first iteration-059 production deployment and again afterward. It verifies both current zero-Admin state and compatibility facts; any violation pauses that cutover for human-approved repair.
+- **Membership identity scope:** Club rejects IDs present in its rehydrated lifecycle and production paths generate deterministic or fresh opaque IDs. Pre-cutover inactive IDs absent from Club streams are not imported solely to defend against a speculative opaque-ID collision.
+- **Inactive role assignments:** Club rejects assigning any role to an inactive membership. This existing application rule belongs beside the Admin-floor decision in the aggregate.
 - **Events and projections:** retain existing membership and role event types so current projectors and policies continue to build read models regardless of the stream that owns new events. Historic membership streams remain immutable.
 - **Error precedence:** reject final-member removal before sole-Admin removal. This keeps the two agreed rules visible and gives Staff the most specific recovery guidance.
 - **Infrastructure coverage:** aggregate tests carry the business proof. Add at most one thin EventStore contract test for same-stream append and one concurrency integration example; do not repeat transactional failure cases in stakeholder Gherkin.
@@ -195,7 +199,7 @@ Every ordinary path into or out of a club preserves a viable membership administ
 - Validate the new Gherkin with the repository’s feature parser and tag-configuration checks before implementing step support.
 - Run pure aggregate tests without a database to prove the event lists and rejection decisions for all first/later/add/remove examples.
 - Replay representative historical and mixed Club streams and compare aggregate decision state with current active membership and Admin projections. Include `MemberAdded(A)`, `MemberAdded(B)`, `MemberRemoved(A)`, then delayed Everyone `GroupMemberAdded(A)` and prove A remains inactive and cannot count as an Admin.
-- Test `Memba.Membership.AdminInvariant.Audit.run!/0` against complete and deliberately incomplete facts. Test release-step ordering and prove an audit failure prevents `run_system_groups_backfill` and production smoke fixtures. Treat a production audit failure as a blocker requiring explicit human judgement.
+- Review `cutover-check.md` against complete and deliberately incomplete examples. Immediately before the first production deployment, run its read-only current-invariant and compatibility checks; pause for human judgement on any violation, then repeat the checks after deployment.
 - Inspect the persisted Club stream in one focused integration test to confirm first membership and Admin assignment came from one dispatch and share one aggregate stream.
 - Exercise two distinct invitation acceptances concurrently through the application boundary and await strong projections before asserting both memberships and exactly one Admin.
 - Inject failures after person creation and after membership activation but before invitation acceptance; retry both invitation paths and prove stable identities, one person, one active membership, one accepted invitation, and no duplicate Admin.
@@ -208,7 +212,7 @@ Every ordinary path into or out of a club preserves a viable membership administ
 
 - Moving add/remove commands to the Club stream will invalidate projection-only tests and fixtures that never created an event-sourced club. Fix the fixtures rather than adding a fallback write path.
 - Existing tests and seeds may assume the first generic `add_member` call creates an ordinary member. Their setup order must make intended authority explicit.
-- Historical roster hydration depends on iteration-056 Everyone facts being complete wherever no native Club membership lifecycle exists. The audit/replay gate runs before the existing backfill, must fail visibly, and must not trigger an automatic production mutation.
+- Historical roster hydration depends on iteration-056 Everyone facts being complete wherever no native Club membership lifecycle exists. The one-time cutover check must fail visibly and must not trigger an automatic production mutation; a permanent deployment gate would add disproportionate release coupling after the aggregate owns the invariant.
 - Leaving onboarding’s explicit role assignment in place would turn a successful atomic activation into a misleading duplicate-assignment failure. Remove that follow-up and protect its retry paths.
 - Club streams will receive more membership lifecycle events and become a stronger serialization point. That contention is intentional for this immediate invariant and appropriate for current club sizes; monitor before optimizing.
 - The system-group handler remains downstream of the atomic domain decision. Admin authority comes from the role event in the append, not from eventual Admin-group projection timing.
