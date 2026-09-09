@@ -1,0 +1,436 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index 1d4cfa0..06cb59d 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+ - [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+ - [x] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+-- [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
++- [x] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+ - [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+ - [ ] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
+ - [ ] 015 Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 141de57..eb95396 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -254,12 +254,11 @@ defmodule Memba.Membership do
+   Add a person as an active member of a club through the Membership context.
+ 
+   The caller supplies the membership identity as `:membership_id` or
+-  `"membership_id"`. The command is routed to the Club aggregate. A second
+-  active membership for the same club/person pair is rejected before dispatch.
++  `"membership_id"`. The command is routed to the Club aggregate, which decides
++  first-member authority, idempotency, and duplicate active membership.
+   """
+   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+-    with {:ok, command} <- add_member_command(attrs),
+-         :ok <- prevent_duplicate_active_membership(command) do
++    with {:ok, command} <- add_member_command(attrs) do
+       dispatch_system_group_membership_command(command, dispatch_opts)
+     end
+   end
+@@ -345,7 +344,6 @@ defmodule Memba.Membership do
+          {:ok, membership_id} <- cast_membership_id(membership_id),
+          {:ok, add_member_command} <-
+            invitation_add_member_command(invitation, person_id, membership_id),
+-         :ok <- prevent_duplicate_active_membership(add_member_command),
+          {:ok, add_member_result} <-
+            dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
+          {:ok, accept_command} <-
+@@ -401,7 +399,7 @@ defmodule Memba.Membership do
+   The caller supplies `:membership_id` or `"membership_id"`. It may also supply
+   the matching club and person identities; otherwise the application service
+   resolves those routing fields from the membership projection before the Club
+-  aggregate validates them.
++  aggregate validates them and decides the Admin and member floors.
+   """
+   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- remove_member_command(attrs) do
+@@ -416,7 +414,8 @@ defmodule Memba.Membership do
+   and `:actor_person_id`. The actor must have the projected
+   `club.manage_members` permission. The target member must be active in the
+   club. The built-in role ID is derived from the club so callers cannot grant an
+-  arbitrary role through this Admin-specific entry point.
++  arbitrary role through this Admin-specific entry point. The Club aggregate
++  validates the target membership.
+   """
+   def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+@@ -432,8 +431,8 @@ defmodule Memba.Membership do
+   and `:actor_person_id`. The actor must have the projected
+   `club.manage_members` permission. The target member must be active in the
+   club. The built-in role ID is derived from the club so callers cannot remove an
+-  arbitrary role through this Admin-specific entry point. The removal is rejected
+-  when it would leave the club with no active Admins.
++  arbitrary role through this Admin-specific entry point. The Club aggregate
++  rejects removal when it would leave the club with no active Admins.
+   """
+   def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+@@ -448,8 +447,8 @@ defmodule Memba.Membership do
+   Unlike staff/system setup paths, this entry point requires `:actor_person_id`
+   (or `"actor_person_id"`) and authorizes the actor through the projected
+   `club.manage_members` permission before dispatching the role-assignment
+-  command. The target membership must be active and must match the submitted
+-  club/person IDs.
++  command. The Club aggregate validates that the target membership is active
++  and matches the submitted club/person IDs.
+   """
+   def assign_member_role_as_club_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+@@ -458,12 +457,6 @@ defmodule Memba.Membership do
+            Authorization.authorize_manage_members(
+              command.club_id,
+              command.assigned_by_person_id
+-           ),
+-         :ok <-
+-           ensure_active_membership(
+-             command.club_id,
+-             command.person_id,
+-             command.membership_id
+            ) do
+       dispatch_system_group_membership_command(command, dispatch_opts)
+     end
+@@ -475,8 +468,8 @@ defmodule Memba.Membership do
+   Staff/system setup paths remain separate. This entry point requires
+   `:actor_person_id` (or `"actor_person_id"`) and authorizes the actor through
+   the projected `club.manage_members` permission before dispatching the
+-  role-removal command. The target membership must be active and must match the
+-  submitted club/person IDs.
++  role-removal command. The Club aggregate validates the target membership,
++  role assignment, and Admin floor.
+   """
+   def remove_member_role_as_club_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+@@ -485,14 +478,7 @@ defmodule Memba.Membership do
+            Authorization.authorize_manage_members(
+              command.club_id,
+              command.removed_by_person_id
+-           ),
+-         :ok <-
+-           ensure_active_membership(
+-             command.club_id,
+-             command.person_id,
+-             command.membership_id
+-           ),
+-         :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
++           ) do
+       dispatch_system_group_membership_command(command, dispatch_opts)
+     end
+   end
+@@ -1707,14 +1693,6 @@ defmodule Memba.Membership do
+     end
+   end
+ 
+-  defp prevent_duplicate_active_membership(%AddMember{} = command) do
+-    if active_member_of_club?(command.club_id, command.person_id) do
+-      {:error, :already_active_member}
+-    else
+-      :ok
+-    end
+-  end
+-
+   defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
+     if active_member_of_club_by_email?(command.club_id, command.email) do
+       {:error, :already_active_member}
+@@ -1723,28 +1701,6 @@ defmodule Memba.Membership do
+     end
+   end
+ 
+-  defp ensure_active_membership(club_id, person_id, membership_id) do
+-    with {:ok, club_id} <- ID.cast(:club, club_id),
+-         {:ok, person_id} <- ID.cast(:person, person_id),
+-         {:ok, membership_id} <- ID.cast(:membership, membership_id) do
+-      active? =
+-        MembershipProjection
+-        |> where([membership], membership.membership_id == ^membership_id)
+-        |> where([membership], membership.club_id == ^club_id)
+-        |> where([membership], membership.person_id == ^person_id)
+-        |> where([membership], membership.active == true)
+-        |> Repo.exists?()
+-
+-      if active? do
+-        :ok
+-      else
+-        {:error, :member_not_active}
+-      end
+-    else
+-      :error -> {:error, :member_not_active}
+-    end
+-  end
+-
+   defp pending_invitation_for_resend(attrs) do
+     case fetch_optional(attrs, :invitation_id) do
+       {:ok, invitation_id} ->
+@@ -1898,48 +1854,6 @@ defmodule Memba.Membership do
+     end
+   end
+ 
+-  defp ensure_membership_administrator_removal_keeps_an_administrator(
+-         %RemoveMemberRole{} = command
+-       ) do
+-    with {:ok, club_id} <- ID.cast(:club, command.club_id),
+-         true <- command.role_id == Roles.membership_administrator_role_id(club_id),
+-         true <-
+-           active_role_assignment?(
+-             club_id,
+-             command.membership_id,
+-             command.person_id,
+-             command.role_id
+-           ) do
+-      if active_role_assignment_count(club_id, command.role_id) > 1 do
+-        :ok
+-      else
+-        {:error, :last_membership_administrator}
+-      end
+-    else
+-      _not_membership_administrator_removal -> :ok
+-    end
+-  end
+-
+-  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
+-    active_role_assignments_query(club_id, role_id)
+-    |> where([assignment], assignment.membership_id == ^membership_id)
+-    |> where([assignment], assignment.person_id == ^person_id)
+-    |> Repo.exists?()
+-  end
+-
+-  defp active_role_assignment_count(club_id, role_id) do
+-    club_id
+-    |> active_role_assignments_query(role_id)
+-    |> Repo.aggregate(:count, :membership_id)
+-  end
+-
+-  defp active_role_assignments_query(club_id, role_id) do
+-    RoleAssignment
+-    |> where([assignment], assignment.club_id == ^club_id)
+-    |> where([assignment], assignment.role_id == ^role_id)
+-    |> where([assignment], assignment.active == true)
+-  end
+-
+   defp prevent_duplicate_club_slug(%CreateClub{} = command) do
+     case Repo.get_by(Club, slug: command.slug) do
+       nil -> :ok
+diff --git a/web/test/memba/membership/write_api_test.exs b/web/test/memba/membership/write_api_test.exs
+new file mode 100644
+index 0000000..0ecd8ae
+--- /dev/null
++++ b/web/test/memba/membership/write_api_test.exs
+@@ -0,0 +1,215 @@
++defmodule Memba.Membership.WriteApiTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Commands.DefineClubRole
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Events.MemberRoleAssigned
++  alias Memba.Membership.Events.MemberRoleRemoved
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.RoleAssignment
++  alias Memba.Membership.Roles
++
++  test "add_member/2 delegates duplicate and first-member decisions to Club state" do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++    admin_role_id = Roles.membership_administrator_role_id(club_id)
++
++    create_club!(club_id)
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    attrs = %{club_id: club_id, membership_id: membership_id, person_id: person_id}
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %MemberAdded{
++                  club_id: ^club_id,
++                  membership_id: ^membership_id,
++                  person_id: ^person_id
++                },
++                %MemberRoleAssigned{
++                  club_id: ^club_id,
++                  membership_id: ^membership_id,
++                  person_id: ^person_id,
++                  role_id: ^admin_role_id
++                }
++              ]
++            }} =
++             Membership.add_member(attrs,
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok, %ExecutionResult{aggregate_uuid: ^club_id, events: []}} =
++             Membership.add_member(attrs,
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:error, :already_active_member} =
++             Membership.add_member(
++               %{attrs | membership_id: Memba.ID.generate(:membership)},
++               consistency: :strong
++             )
++  end
++
++  test "role assignment delegates target activity to Club state when its projection is absent" do
++    club_id = Memba.ID.generate(:club)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++    target_person_id = Memba.ID.generate(:person)
++    target_membership_id = Memba.ID.generate(:membership)
++    role_id = Memba.ID.generate(:role)
++
++    create_club!(club_id)
++    add_member!(club_id, actor_membership_id, actor_person_id)
++    add_member!(club_id, target_membership_id, target_person_id)
++    define_role!(club_id, role_id)
++
++    Repo.delete_all(
++      from membership in MembershipProjection,
++        where: membership.membership_id == ^target_membership_id
++    )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %MemberRoleAssigned{
++                  club_id: ^club_id,
++                  membership_id: ^target_membership_id,
++                  person_id: ^target_person_id,
++                  role_id: ^role_id,
++                  assigned_by_person_id: ^actor_person_id
++                }
++              ]
++            }} =
++             Membership.assign_member_role_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target_person_id,
++                 role_id: role_id,
++                 actor_person_id: actor_person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
++  test "Admin removal delegates the Admin floor to Club state when its projection is stale" do
++    club_id = Memba.ID.generate(:club)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++    target_person_id = Memba.ID.generate(:person)
++    target_membership_id = Memba.ID.generate(:membership)
++    admin_role_id = Roles.membership_administrator_role_id(club_id)
++
++    create_club!(club_id)
++    add_member!(club_id, actor_membership_id, actor_person_id)
++    add_member!(club_id, target_membership_id, target_person_id)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target_person_id,
++                 role_id: admin_role_id
++               },
++               consistency: :strong
++             )
++
++    Repo.delete_all(
++      from assignment in RoleAssignment,
++        where: assignment.membership_id == ^actor_membership_id,
++        where: assignment.role_id == ^admin_role_id
++    )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %MemberRoleRemoved{
++                  club_id: ^club_id,
++                  membership_id: ^target_membership_id,
++                  person_id: ^target_person_id,
++                  role_id: ^admin_role_id,
++                  removed_by_person_id: ^actor_person_id
++                }
++              ]
++            }} =
++             Membership.remove_membership_administrator_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target_person_id,
++                 actor_person_id: actor_person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
++  test "remove_member/2 uses explicit routing identity but delegates the member floor to Club state" do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++
++    create_club!(club_id)
++    add_member!(club_id, membership_id, person_id)
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club_id,
++      person_id: Memba.ID.generate(:person),
++      active: true
++    })
++
++    assert {:error, :last_active_member} =
++             Membership.remove_member(
++               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
++               consistency: :strong
++             )
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id),
++               consistency: :strong
++             )
++  end
++
++  defp add_member!(club_id, membership_id, person_id) do
++    assert :ok =
++             Membership.add_member(
++               %{club_id: club_id, membership_id: membership_id, person_id: person_id},
++               consistency: :strong
++             )
++  end
++
++  defp define_role!(club_id, role_id) do
++    assert :ok =
++             App.dispatch(
++               %DefineClubRole{
++                 club_id: club_id,
++                 role_id: role_id,
++                 name: "Roster Helper"
++               },
++               consistency: :strong
++             )
++  end
++end

@@ -1598,7 +1598,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-09T18:19:02.504009957Z",
-  "last_event_at": "2026-09-09T22:04:48.391328694Z",
+  "last_event_at": "2026-09-09T22:05:16.653097247Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -29253,9 +29253,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 5431,
       "checkpoint": {
-        "timestamp": "2026-09-09T22:05:12.459982091Z",
+        "timestamp": "2026-09-09T22:05:16.641208145Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -29348,6 +29348,394 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "task_retry_available": false,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.validate_task": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.todo_readable": 0,
+          "thread.sync_task_list.current_node": "todo_readable",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.all_tasks_done": 0,
+          "last_stage": "implement_next_task",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.start": 0,
+          "last_response": "Implemented task 012: “Thin `Memba.Membership` write APIs around Club decisions.”\n\n1. Selected task\n\n   Checked off [todo.md](/workspace/memba/docs/iterations/059-populated-clubs-always-have-an-ad",
+          "internal.run_id": "01M23P8GASTPS25GCXAZ8TF95X",
+          "internal.retry_count.sync_task_list": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "outcome": "succeeded",
+          "failure_signature": "",
+          "response.validate_task": "{\"preferred_next_label\":\"Valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"task_gate\"],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evidence\":[\"Checkpoint 5ae0903 changed exactly task 011 from unchecked to checked; its parent confirms task 011 was the first unchecked item. Tasks 012–023 remain intact and ordered.\",\"The checkpoint adds Club aggregate guards that reject final-member removal with :last_active_member before evaluating sole-Admin removal, reject removal of the sole active Admin with :last_membership_administrator, and preserve successful MemberRemoved application to both active roster and derived active-Admin state.\",\"Focused aggregate tests cover final-member precedence, sole-Admin protection, replacement-Admin removal, and post-removal decision state. Live validation passed: 55 tests, 0 failures across club_test.exs and club_replay_test.exs.\",\"The working tree is clean; git diff checks pass. The checkpoint modifies only todo.md, club.ex, and club_test.exs, with no acceptance feature changes.\",\"The implementation remains within the Club aggregate and Membership bounded context, retains existing MemberRemoved events and projection mechanisms, and is consistent with accepted ADRs 0002, 0007, 0008, 0009, and 0011.\"]}",
+          "thread.start.current_node": "verify_source_head",
+          "preferred_label": "Valid",
+          "internal.retry_count.task_gate": 0,
+          "response.implement_next_task": "Implemented task 012: “Thin `Memba.Membership` write APIs around Club decisions.”\n\n1. Selected task\n\n   Checked off [todo.md](/workspace/memba/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md:14):\n\n   `- [x] 012 Thin Memba.Membership write APIs around Club decisions...`\n\n2. Changes\n\n   - [membership.ex](/workspace/memba/web/lib/memba/membership.ex:253) now dispatches membership activation without consulting the membership projection for duplicate or first-member decisions.\n   - Invitation activation no longer performs the same projection-backed duplicate preflight.\n   - Role-assignment APIs retain projected actor authorization but delegate target activity checks to the Club aggregate.\n   - Role-removal APIs delegate role-assignment validity and the Admin floor to the Club aggregate.\n   - `remove_member/2` may still enrich omitted club/person routing fields from the membership projection, but the Club aggregate decides identity validity and membership/Admin floors.\n   - Removed the obsolete projection-backed duplicate, active-membership, and Admin-count helper functions.\n   - Added [write_api_test.exs](/workspace/memba/web/test/memba/membership/write_api_test.exs:1), with deliberately stale or absent projections proving that Club stream state decides:\n     - first membership and duplicate activation;\n     - exact activation idempotency;\n     - role-assignment target activity;\n     - the active-Admin floor;\n     - the final-member floor.\n\n3. Validation\n\n   - Red TDD run: `dev test test/memba/membership/write_api_test.exs`\n     - 4 tests, 3 expected failures from the old projection preflights.\n   - Green focused run: same command\n     - 4 tests, 0 failures.\n   - Aggregate regression run:\n     - `dev test test/memba/membership/write_api_test.exs test/memba/membership/club_test.exs test/memba/membership/club_replay_test.exs`\n     - 59 tests, 0 failures.\n   - `mix format` completed for both touched Elixir files.\n   - `git diff --check` passed.\n   - `dev check --quick` reached 1,194 tests and remains red with 74 downstream failures—the same failure count present before task 012, with four new passing tests. Those failures concern onboarding, invitation result expectations, projection/system-group fixtures, and first-member ordering assigned to tasks 013–023.\n\n4. Todo check-off\n\n   Only task 012 changed from unchecked to checked.\n\n5. Todo structure\n\n   No tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n   - ADR 0002: write invariants are now decided from the event-sourced Club aggregate.\n   - ADR 0007: all changes remain inside the Membership bounded context.\n   - ADRs 0008 and 0009: existing EventStore persistence and Ecto projections are retained; projections remain usable for queries, authorization, and routing enrichment.\n   - ADR 0011: caller-generated typed identities remain unchanged.\n   - ADR 0022: no projection synchronization is used to turn read models into write-authority checks.",
+          "thread.todo_readable.current_node": "all_tasks_done",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "failure_class": "",
+          "internal.retry_count.resume_gate": 0,
+          "thread.verify_source_head.current_node": "read_plan",
+          "thread.validate_task.current_node": "task_gate",
+          "graph.rankdir": "LR",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "command.output": "blob://sha256/3dc8a8bb0da89311f0b95daea65c384445b9240e06df435765e2dea5268b4e9a",
+          "internal.node_visit_count": 12,
+          "task_valid": true,
+          "current_node": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.verify_source_head": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.wip_gate": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.thread_id": "all_tasks_done",
+          "thread.task_gate.current_node": "sync_task_list"
+        },
+        "node_outcomes": {
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/309f4db0c3c9a0a737112b6b68913f6aae1c00927d02291625ab882b68ccc524"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c2d357eda399d2e8af7f1eab69fea12f11adf7e5b563874c3b2c840319f47705"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/757f83741b21c0ce15eebfed834d0823025bdd4ff206e9772989d4fa7541425c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/407553a11a6928485cab4960a368696ada9331b445879687110380f7820f3ade"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\npython3 .fabro/workflows/iteration-implementation/scripts/sync_task_list.py \"$PLAN_PATH\" \"$TODO_PATH\"\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,160p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a69ea896f641d5de3568adbb3dac56620272d8e4281d884424d3d448e4b99b3c"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 94863,
+              "active_time_ms": 94863
+            }
+          },
+          "verify_source_head": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a44a84ba212c80bb79916ff36730138298fa514355001e9cd637ab93a1c6e2c8"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-implementation/scripts/verify_source_head.sh '723a2f9671d874c65b32ef95e5d3e509a545c4f7'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "preferred_label": "Valid",
+            "suggested_next_ids": [
+              "task_gate"
+            ],
+            "context_updates": {
+              "last_response": "{\"preferred_next_label\":\"Valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"task_gate\"],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evid",
+              "response.validate_task": "{\"preferred_next_label\":\"Valid\",\"outcome\":\"succeeded\",\"failure_reason\":\"\",\"suggested_next_ids\":[\"task_gate\"],\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false},\"decision\":\"VALID\",\"evidence\":[\"Checkpoint 5ae0903 changed exactly task 011 from unchecked to checked; its parent confirms task 011 was the first unchecked item. Tasks 012–023 remain intact and ordered.\",\"The checkpoint adds Club aggregate guards that reject final-member removal with :last_active_member before evaluating sole-Admin removal, reject removal of the sole active Admin with :last_membership_administrator, and preserve successful MemberRemoved application to both active roster and derived active-Admin state.\",\"Focused aggregate tests cover final-member precedence, sole-Admin protection, replacement-Admin removal, and post-removal decision state. Live validation passed: 55 tests, 0 failures across club_test.exs and club_replay_test.exs.\",\"The working tree is clean; git diff checks pass. The checkpoint modifies only todo.md, club.ex, and club_test.exs, with no acceptance feature changes.\",\"The implementation remains within the Club aggregate and Membership bounded context, retains existing MemberRemoved events and projection mechanisms, and is consistent with accepted ADRs 0002, 0007, 0008, 0009, and 0011.\"]}",
+              "task_retry_available": false,
+              "task_valid": true,
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 154367,
+                    "output_tokens": 2070,
+                    "reasoning_tokens": 420,
+                    "cache_read_tokens": 444416,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1068743
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 108534,
+              "tool_time_ms": 8497,
+              "active_time_ms": 117031
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/233401a627c61ce4b6d633007dc32ee81b97180a712c002828138d606668b938"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1607,
+              "active_time_ms": 1607
+            }
+          },
+          "todo_readable": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/48ed53112c984c4208c57f6564e5f7557545f1a34f2012b70d76a8bfe3257096"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) TODO_PATH=${PLAN_PATH%/plan.md}/todo.md ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nif [ ! -r \"$TODO_PATH\" ] || [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: todo file missing, unreadable, or empty: $TODO_PATH\" >&2\n  exit 1\nfi\necho \"Todo file is present and readable: $TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 157,
+              "active_time_ms": 157
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3dc8a8bb0da89311f0b95daea65c384445b9240e06df435765e2dea5268b4e9a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\nif grep -Eq '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\"; then\n  echo \"UNCHECKED tasks remain in $TODO_PATH\"\n  grep -En '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | head -20\n  exit 0\nfi\necho \"COMPLETE: no unchecked tasks remain in $TODO_PATH\"\nexit 1",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 154,
+              "active_time_ms": 154
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented task 012: “Thin `Memba.Membership` write APIs around Club decisions.”\n\n1. Selected task\n\n   Checked off [todo.md](/workspace/memba/docs/iterations/059-populated-clubs-always-have-an-ad",
+              "response.implement_next_task": "Implemented task 012: “Thin `Memba.Membership` write APIs around Club decisions.”\n\n1. Selected task\n\n   Checked off [todo.md](/workspace/memba/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md:14):\n\n   `- [x] 012 Thin Memba.Membership write APIs around Club decisions...`\n\n2. Changes\n\n   - [membership.ex](/workspace/memba/web/lib/memba/membership.ex:253) now dispatches membership activation without consulting the membership projection for duplicate or first-member decisions.\n   - Invitation activation no longer performs the same projection-backed duplicate preflight.\n   - Role-assignment APIs retain projected actor authorization but delegate target activity checks to the Club aggregate.\n   - Role-removal APIs delegate role-assignment validity and the Admin floor to the Club aggregate.\n   - `remove_member/2` may still enrich omitted club/person routing fields from the membership projection, but the Club aggregate decides identity validity and membership/Admin floors.\n   - Removed the obsolete projection-backed duplicate, active-membership, and Admin-count helper functions.\n   - Added [write_api_test.exs](/workspace/memba/web/test/memba/membership/write_api_test.exs:1), with deliberately stale or absent projections proving that Club stream state decides:\n     - first membership and duplicate activation;\n     - exact activation idempotency;\n     - role-assignment target activity;\n     - the active-Admin floor;\n     - the final-member floor.\n\n3. Validation\n\n   - Red TDD run: `dev test test/memba/membership/write_api_test.exs`\n     - 4 tests, 3 expected failures from the old projection preflights.\n   - Green focused run: same command\n     - 4 tests, 0 failures.\n   - Aggregate regression run:\n     - `dev test test/memba/membership/write_api_test.exs test/memba/membership/club_test.exs test/memba/membership/club_replay_test.exs`\n     - 59 tests, 0 failures.\n   - `mix format` completed for both touched Elixir files.\n   - `git diff --check` passed.\n   - `dev check --quick` reached 1,194 tests and remains red with 74 downstream failures—the same failure count present before task 012, with four new passing tests. Those failures concern onboarding, invitation result expectations, projection/system-group fixtures, and first-member ordering assigned to tasks 013–023.\n\n4. Todo check-off\n\n   Only task 012 changed from unchecked to checked.\n\n5. Todo structure\n\n   No tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n   - ADR 0002: write invariants are now decided from the event-sourced Club aggregate.\n   - ADR 0007: all changes remain inside the Membership bounded context.\n   - ADRs 0008 and 0009: existing EventStore persistence and Ecto projections are retained; projections remain usable for queries, authorization, and routing enrichment.\n   - ADR 0011: caller-generated typed identities remain unchanged.\n   - ADR 0022: no projection synchronization is used to turn read models into write-authority checks."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 323007,
+                    "output_tokens": 9489,
+                    "reasoning_tokens": 5091,
+                    "cache_read_tokens": 4708992,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4406931
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 620495,
+              "tool_time_ms": 161950,
+              "active_time_ms": 782445
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "61a844686a546c1a237c9f668f14ea445ebb65e5",
+        "node_visits": {
+          "start": 1,
+          "pre_validate_snapshot": 11,
+          "read_plan": 1,
+          "sync_task_list": 12,
+          "todo_readable": 12,
+          "resume_gate": 1,
+          "validate_task": 11,
+          "task_gate": 11,
+          "implement_next_task": 12,
+          "verify_source_head": 1,
+          "all_tasks_done": 12,
+          "wip_gate": 1,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md\nindex 1d4cfa0..06cb59d 100644\n--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md\n+++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md\n@@ -11,7 +11,7 @@\n - [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.\n - [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.\n - [x] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.\n-- [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.\n+- [x] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.\n - [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.\n - [ ] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.\n - [ ] 015 Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.\ndiff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex 141de57..eb95396 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -254,12 +254,11 @@ defmodule Memba.Membership do\n   Add a person as an active member of a club through the Membership context.\n \n   The caller supplies the membership identity as `:membership_id` or\n-  `\"membership_id\"`. The command is routed to the Club aggregate. A second\n-  active membership for the same club/person pair is rejected before dispatch.\n+  `\"membership_id\"`. The command is routed to the Club aggregate, which decides\n+  first-member authority, idempotency, and duplicate active membership.\n   \"\"\"\n   def add_member(attrs, dispatch_opts \\\\ []) when is_map(attrs) and is_list(dispatch_opts) do\n-    with {:ok, command} <- add_member_command(attrs),\n-         :ok <- prevent_duplicate_active_membership(command) do\n+    with {:ok, command} <- add_member_command(attrs) do\n       dispatch_system_group_membership_command(command, dispatch_opts)\n     end\n   end\n@@ -345,7 +344,6 @@ defmodule Memba.Membership do\n          {:ok, membership_id} <- cast_membership_id(membership_id),\n          {:ok, add_member_command} <-\n            invitation_add_member_command(invitation, person_id, membership_id),\n-         :ok <- prevent_duplicate_active_membership(add_member_command),\n          {:ok, add_member_result} <-\n            dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),\n          {:ok, accept_command} <-\n@@ -401,7 +399,7 @@ defmodule Memba.Membership do\n   The caller supplies `:membership_id` or `\"membership_id\"`. It may also supply\n   the matching club and person identities; otherwise the application service\n   resolves those routing fields from the membership projection before the Club\n-  aggregate validates them.\n+  aggregate validates them and decides the Admin and member floors.\n   \"\"\"\n   def remove_member(attrs, dispatch_opts \\\\ []) when is_map(attrs) and is_list(dispatch_opts) do\n     with {:ok, command} <- remove_member_command(attrs) do\n@@ -416,7 +414,8 @@ defmodule Memba.Membership do\n   and `:actor_person_id`. The actor must have the projected\n   `club.manage_members` permission. The target member must be active in the\n   club. The built-in role ID is derived from the club so callers cannot grant an\n-  arbitrary role through this Admin-specific entry point.\n+  arbitrary role through this Admin-specific entry point. The Club aggregate\n+  validates the target membership.\n   \"\"\"\n   def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n@@ -432,8 +431,8 @@ defmodule Memba.Membership do\n   and `:actor_person_id`. The actor must have the projected\n   `club.manage_members` permission. The target member must be active in the\n   club. The built-in role ID is derived from the club so callers cannot remove an\n-  arbitrary role through this Admin-specific entry point. The removal is rejected\n-  when it would leave the club with no active Admins.\n+  arbitrary role through this Admin-specific entry point. The Club aggregate\n+  rejects removal when it would leave the club with no active Admins.\n   \"\"\"\n   def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n@@ -448,8 +447,8 @@ defmodule Memba.Membership do\n   Unlike staff/system setup paths, this entry point requires `:actor_person_id`\n   (or `\"actor_person_id\"`) and authorizes the actor through the projected\n   `club.manage_members` permission before dispatching the role-assignment\n-  command. The target membership must be active and must match the submitted\n-  club/person IDs.\n+  command. The Club aggregate validates that the target membership is active\n+  and matches the submitted club/person IDs.\n   \"\"\"\n   def assign_member_role_as_club_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n@@ -458,12 +457,6 @@ defmodule Memba.Membership do\n            Authorization.authorize_manage_members(\n              command.club_id,\n              command.assigned_by_person_id\n-           ),\n-         :ok <-\n-           ensure_active_membership(\n-             command.club_id,\n-             command.person_id,\n-             command.membership_id\n            ) do\n       dispatch_system_group_membership_command(command, dispatch_opts)\n     end\n@@ -475,8 +468,8 @@ defmodule Memba.Membership do\n   Staff/system setup paths remain separate. This entry point requires\n   `:actor_person_id` (or `\"actor_person_id\"`) and authorizes the actor through\n   the projected `club.manage_members` permission before dispatching the\n-  role-removal command. The target membership must be active and must match the\n-  submitted club/person IDs.\n+  role-removal command. The Club aggregate validates the target membership,\n+  role assignment, and Admin floor.\n   \"\"\"\n   def remove_member_role_as_club_member(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n@@ -485,14 +478,7 @@ defmodule Memba.Membership do\n            Authorization.authorize_manage_members(\n              command.club_id,\n              command.removed_by_person_id\n-           ),\n-         :ok <-\n-           ensure_active_membership(\n-             command.club_id,\n-             command.person_id,\n-             command.membership_id\n-           ),\n-         :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do\n+           ) do\n       dispatch_system_group_membership_command(command, dispatch_opts)\n     end\n   end\n@@ -1707,14 +1693,6 @@ defmodule Memba.Membership do\n     end\n   end\n \n-  defp prevent_duplicate_active_membership(%AddMember{} = command) do\n-    if active_member_of_club?(command.club_id, command.person_id) do\n-      {:error, :already_active_member}\n-    else\n-      :ok\n-    end\n-  end\n-\n   defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do\n     if active_member_of_club_by_email?(command.club_id, command.email) do\n       {:error, :already_active_member}\n@@ -1723,28 +1701,6 @@ defmodule Memba.Membership do\n     end\n   end\n \n-  defp ensure_active_membership(club_id, person_id, membership_id) do\n-    with {:ok, club_id} <- ID.cast(:club, club_id),\n-         {:ok, person_id} <- ID.cast(:person, person_id),\n-         {:ok, membership_id} <- ID.cast(:membership, membership_id) do\n-      active? =\n-        MembershipProjection\n-        |> where([membership], membership.membership_id == ^membership_id)\n-        |> where([membership], membership.club_id == ^club_id)\n-        |> where([membership], membership.person_id == ^person_id)\n-        |> where([membership], membership.active == true)\n-        |> Repo.exists?()\n-\n-      if active? do\n-        :ok\n-      else\n-        {:error, :member_not_active}\n-      end\n-    else\n-      :error -> {:error, :member_not_active}\n-    end\n-  end\n-\n   defp pending_invitation_for_resend(attrs) do\n     case fetch_optional(attrs, :invitation_id) do\n       {:ok, invitation_id} ->\n@@ -1898,48 +1854,6 @@ defmodule Memba.Membership do\n     end\n   end\n \n-  defp ensure_membership_administrator_removal_keeps_an_administrator(\n-         %RemoveMemberRole{} = command\n-       ) do\n-    with {:ok, club_id} <- ID.cast(:club, command.club_id),\n-         true <- command.role_id == Roles.membership_administrator_role_id(club_id),\n-         true <-\n-           active_role_assignment?(\n-             club_id,\n-             command.membership_id,\n-             command.person_id,\n-             command.role_id\n-           ) do\n-      if active_role_assignment_count(club_id, command.role_id) > 1 do\n-        :ok\n-      else\n-        {:error, :last_membership_administrator}\n-      end\n-    else\n-      _not_membership_administrator_removal -> :ok\n-    end\n-  end\n-\n-  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do\n-    active_role_assignments_query(club_id, role_id)\n-    |> where([assignment], assignment.membership_id == ^membership_id)\n-    |> where([assignment], assignment.person_id == ^person_id)\n-    |> Repo.exists?()\n-  end\n-\n-  defp active_role_assignment_count(club_id, role_id) do\n-    club_id\n-    |> active_role_assignments_query(role_id)\n-    |> Repo.aggregate(:count, :membership_id)\n-  end\n-\n-  defp active_role_assignments_query(club_id, role_id) do\n-    RoleAssignment\n-    |> where([assignment], assignment.club_id == ^club_id)\n-    |> where([assignment], assignment.role_id == ^role_id)\n-    |> where([assignment], assignment.active == true)\n-  end\n-\n   defp prevent_duplicate_club_slug(%CreateClub{} = command) do\n     case Repo.get_by(Club, slug: command.slug) do\n       nil -> :ok\ndiff --git a/web/test/memba/membership/write_api_test.exs b/web/test/memba/membership/write_api_test.exs\nnew file mode 100644\nindex 0000000..0ecd8ae\n--- /dev/null\n+++ b/web/test/memba/membership/write_api_test.exs\n@@ -0,0 +1,215 @@\n+defmodule Memba.Membership.WriteApiTest do\n+  use Memba.EventSourcedCase, async: false\n+\n+  alias Commanded.Commands.ExecutionResult\n+  alias Memba.Membership\n+  alias Memba.Membership.App\n+  alias Memba.Membership.Commands.AssignMemberRole\n+  alias Memba.Membership.Commands.DefineClubRole\n+  alias Memba.Membership.Events.MemberAdded\n+  alias Memba.Membership.Events.MemberRoleAssigned\n+  alias Memba.Membership.Events.MemberRoleRemoved\n+  alias Memba.Membership.Projections.Membership, as: MembershipProjection\n+  alias Memba.Membership.Projections.RoleAssignment\n+  alias Memba.Membership.Roles\n+\n+  test \"add_member/2 delegates duplicate and first-member decisions to Club state\" do\n+    club_id = Memba.ID.generate(:club)\n+    person_id = Memba.ID.generate(:person)\n+    membership_id = Memba.ID.generate(:membership)\n+    admin_role_id = Roles.membership_administrator_role_id(club_id)\n+\n+    create_club!(club_id)\n+\n+    Repo.insert!(%MembershipProjection{\n+      membership_id: Memba.ID.generate(:membership),\n+      club_id: club_id,\n+      person_id: person_id,\n+      active: true\n+    })\n+\n+    attrs = %{club_id: club_id, membership_id: membership_id, person_id: person_id}\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^club_id,\n+              events: [\n+                %MemberAdded{\n+                  club_id: ^club_id,\n+                  membership_id: ^membership_id,\n+                  person_id: ^person_id\n+                },\n+                %MemberRoleAssigned{\n+                  club_id: ^club_id,\n+                  membership_id: ^membership_id,\n+                  person_id: ^person_id,\n+                  role_id: ^admin_role_id\n+                }\n+              ]\n+            }} =\n+             Membership.add_member(attrs,\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert {:ok, %ExecutionResult{aggregate_uuid: ^club_id, events: []}} =\n+             Membership.add_member(attrs,\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+\n+    assert {:error, :already_active_member} =\n+             Membership.add_member(\n+               %{attrs | membership_id: Memba.ID.generate(:membership)},\n+               consistency: :strong\n+             )\n+  end\n+\n+  test \"role assignment delegates target activity to Club state when its projection is absent\" do\n+    club_id = Memba.ID.generate(:club)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+    role_id = Memba.ID.generate(:role)\n+\n+    create_club!(club_id)\n+    add_member!(club_id, actor_membership_id, actor_person_id)\n+    add_member!(club_id, target_membership_id, target_person_id)\n+    define_role!(club_id, role_id)\n+\n+    Repo.delete_all(\n+      from membership in MembershipProjection,\n+        where: membership.membership_id == ^target_membership_id\n+    )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^club_id,\n+              events: [\n+                %MemberRoleAssigned{\n+                  club_id: ^club_id,\n+                  membership_id: ^target_membership_id,\n+                  person_id: ^target_person_id,\n+                  role_id: ^role_id,\n+                  assigned_by_person_id: ^actor_person_id\n+                }\n+              ]\n+            }} =\n+             Membership.assign_member_role_as_club_member(\n+               %{\n+                 club_id: club_id,\n+                 membership_id: target_membership_id,\n+                 person_id: target_person_id,\n+                 role_id: role_id,\n+                 actor_person_id: actor_person_id\n+               },\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+  end\n+\n+  test \"Admin removal delegates the Admin floor to Club state when its projection is stale\" do\n+    club_id = Memba.ID.generate(:club)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+    admin_role_id = Roles.membership_administrator_role_id(club_id)\n+\n+    create_club!(club_id)\n+    add_member!(club_id, actor_membership_id, actor_person_id)\n+    add_member!(club_id, target_membership_id, target_person_id)\n+\n+    assert :ok =\n+             App.dispatch(\n+               %AssignMemberRole{\n+                 club_id: club_id,\n+                 membership_id: target_membership_id,\n+                 person_id: target_person_id,\n+                 role_id: admin_role_id\n+               },\n+               consistency: :strong\n+             )\n+\n+    Repo.delete_all(\n+      from assignment in RoleAssignment,\n+        where: assignment.membership_id == ^actor_membership_id,\n+        where: assignment.role_id == ^admin_role_id\n+    )\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              aggregate_uuid: ^club_id,\n+              events: [\n+                %MemberRoleRemoved{\n+                  club_id: ^club_id,\n+                  membership_id: ^target_membership_id,\n+                  person_id: ^target_person_id,\n+                  role_id: ^admin_role_id,\n+                  removed_by_person_id: ^actor_person_id\n+                }\n+              ]\n+            }} =\n+             Membership.remove_membership_administrator_as_club_member(\n+               %{\n+                 club_id: club_id,\n+                 membership_id: target_membership_id,\n+                 person_id: target_person_id,\n+                 actor_person_id: actor_person_id\n+               },\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+  end\n+\n+  test \"remove_member/2 uses explicit routing identity but delegates the member floor to Club state\" do\n+    club_id = Memba.ID.generate(:club)\n+    person_id = Memba.ID.generate(:person)\n+    membership_id = Memba.ID.generate(:membership)\n+\n+    create_club!(club_id)\n+    add_member!(club_id, membership_id, person_id)\n+\n+    Repo.insert!(%MembershipProjection{\n+      membership_id: Memba.ID.generate(:membership),\n+      club_id: club_id,\n+      person_id: Memba.ID.generate(:person),\n+      active: true\n+    })\n+\n+    assert {:error, :last_active_member} =\n+             Membership.remove_member(\n+               %{club_id: club_id, membership_id: membership_id, person_id: person_id},\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp create_club!(club_id) do\n+    assert :ok =\n+             Membership.create_club(\n+               membership_club_attrs(club_id: club_id),\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp add_member!(club_id, membership_id, person_id) do\n+    assert :ok =\n+             Membership.add_member(\n+               %{club_id: club_id, membership_id: membership_id, person_id: person_id},\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp define_role!(club_id, role_id) do\n+    assert :ok =\n+             App.dispatch(\n+               %DefineClubRole{\n+                 club_id: club_id,\n+                 role_id: role_id,\n+                 name: \"Roster Helper\"\n+               },\n+               consistency: :strong\n+             )\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 33,
+          "additions": 2435,
+          "deletions": 422
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-09T22:05:16.815884849Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "verify_source_head",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "todo_readable",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.resume_gate": 0,
           "thread.sync_task_list.current_node": "todo_readable",
           "internal.retry_count.wip_gate": 0,
@@ -29365,7 +29753,7 @@
           "preferred_label": "Valid",
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.sync_task_list": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.read_plan.current_node": "wip_gate",
           "response.implement_next_task": "Implemented task 012: “Thin `Memba.Membership` write APIs around Club decisions.”\n\n1. Selected task\n\n   Checked off [todo.md](/workspace/memba/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md:14):\n\n   `- [x] 012 Thin Memba.Membership write APIs around Club decisions...`\n\n2. Changes\n\n   - [membership.ex](/workspace/memba/web/lib/memba/membership.ex:253) now dispatches membership activation without consulting the membership projection for duplicate or first-member decisions.\n   - Invitation activation no longer performs the same projection-backed duplicate preflight.\n   - Role-assignment APIs retain projected actor authorization but delegate target activity checks to the Club aggregate.\n   - Role-removal APIs delegate role-assignment validity and the Admin floor to the Club aggregate.\n   - `remove_member/2` may still enrich omitted club/person routing fields from the membership projection, but the Club aggregate decides identity validity and membership/Admin floors.\n   - Removed the obsolete projection-backed duplicate, active-membership, and Admin-count helper functions.\n   - Added [write_api_test.exs](/workspace/memba/web/test/memba/membership/write_api_test.exs:1), with deliberately stale or absent projections proving that Club stream state decides:\n     - first membership and duplicate activation;\n     - exact activation idempotency;\n     - role-assignment target activity;\n     - the active-Admin floor;\n     - the final-member floor.\n\n3. Validation\n\n   - Red TDD run: `dev test test/memba/membership/write_api_test.exs`\n     - 4 tests, 3 expected failures from the old projection preflights.\n   - Green focused run: same command\n     - 4 tests, 0 failures.\n   - Aggregate regression run:\n     - `dev test test/memba/membership/write_api_test.exs test/memba/membership/club_test.exs test/memba/membership/club_replay_test.exs`\n     - 59 tests, 0 failures.\n   - `mix format` completed for both touched Elixir files.\n   - `git diff --check` passed.\n   - `dev check --quick` reached 1,194 tests and remains red with 74 downstream failures—the same failure count present before task 012, with four new passing tests. Those failures concern onboarding, invitation result expectations, projection/system-group fixtures, and first-member ordering assigned to tasks 013–023.\n\n4. Todo check-off\n\n   Only task 012 changed from unchecked to checked.\n\n5. Todo structure\n\n   No tasks were split, added, removed, or reordered.\n\n6. ADR conformance\n\n   - ADR 0002: write invariants are now decided from the event-sourced Club aggregate.\n   - ADR 0007: all changes remain inside the Membership bounded context.\n   - ADRs 0008 and 0009: existing EventStore persistence and Ecto projections are retained; projections remain usable for queries, authorization, and routing enrichment.\n   - ADR 0011: caller-generated typed identities remain unchanged.\n   - ADR 0022: no projection synchronization is used to turn read models into write-authority checks.",
           "thread.resume_gate.current_node": "sync_task_list",
@@ -29375,10 +29763,10 @@
           "internal.run_id": "01M23P8GASTPS25GCXAZ8TF95X",
           "internal.retry_count.todo_readable": 0,
           "internal.retry_count.implement_next_task": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { reasoning_effort: high; }\n            #validate_task { reasoning_effort: high; }\n            #fix_dev_check { reasoning_effort: high; }\n            #plan_conformance_gate { reasoning_effort: high; }\n            #fix_plan_conformance { reasoning_effort: high; }\n            #resolve_publish_conflict { reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "graph.default_fidelity": "summary:high",
-          "command.output": "blob://sha256/3dc8a8bb0da89311f0b95daea65c384445b9240e06df435765e2dea5268b4e9a",
+          "command.output": "blob://sha256/8e705b7c20c923750c7dc644406562c93af66d8107170b868b6e92974fdcc4f4",
           "failure_class": "",
           "thread.wip_gate.current_node": "preflight_sandbox",
           "internal.retry_count.all_tasks_done": 0,
@@ -29595,15 +29983,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/757f83741b21c0ce15eebfed834d0823025bdd4ff206e9772989d4fa7541425c"
+              "command.output": "blob://sha256/8e705b7c20c923750c7dc644406562c93af66d8107170b868b6e92974fdcc4f4"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 156,
-              "active_time_ms": 156
+              "tool_time_ms": 155,
+              "active_time_ms": 155
             }
           },
           "task_gate": {
@@ -29612,10 +30000,10 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "resume_gate": 1,
-          "pre_validate_snapshot": 11,
+          "pre_validate_snapshot": 12,
           "sync_task_list": 12,
           "start": 1,
           "verify_source_head": 1,
@@ -30371,6 +30759,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@12": {
+      "first_event_seq": 5434,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/059-populated-clubs-always-have-an-admin/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-09T22:05:16.650355023Z",
+      "handler": "command",
+      "graph_visit": 12,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     },
     "implement_next_task@3": {
       "first_event_seq": 1187,
@@ -34769,7 +35187,12 @@
       "first_event_seq": 5108,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-09-09T22:05:12.458954103Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -34784,16 +35207,20 @@
       "started_at": "2026-09-09T21:52:09.586412327Z",
       "handler": "agent",
       "graph_visit": 12,
-      "live_inference_ms": 576324,
-      "live_tool_ms": 161951,
+      "timing": {
+        "wall_time_ms": 782871,
+        "inference_time_ms": 620495,
+        "tool_time_ms": 161950,
+        "active_time_ms": 782445
+      },
       "usage": {
-        "input_tokens": 317700,
-        "output_tokens": 8827,
-        "total_tokens": 4886627,
-        "reasoning_tokens": 4580,
-        "cache_read_tokens": 4555520,
+        "input_tokens": 323007,
+        "output_tokens": 9489,
+        "total_tokens": 5046579,
+        "reasoning_tokens": 5091,
+        "cache_read_tokens": 4708992,
         "cache_write_tokens": 0,
-        "total_usd_micros": 4268470
+        "total_usd_micros": 4406931
       },
       "model": {
         "provider": "openai",
@@ -34914,22 +35341,22 @@
         "provider": "openai",
         "model": "gpt-5.6-sol",
         "context_window_tokens": 272000,
-        "input_tokens": 158320,
-        "usage_percent": 58.205882352941174,
+        "input_tokens": 158779,
+        "usage_percent": 58.37463235294118,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-09-09T22:04:28.178695959Z",
-        "event_seq": 5417,
+        "generated_at": "2026-09-09T22:05:12.454037086Z",
+        "event_seq": 5424,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 2877,
-            "usage_percent": 1.057720588235294
+            "tokens": 2875,
+            "usage_percent": 1.056985294117647
           },
           {
             "category": "tools",
-            "tokens": 882,
-            "usage_percent": 0.32426470588235295
+            "tokens": 881,
+            "usage_percent": 0.3238970588235294
           },
           {
             "category": "memory",
@@ -34938,8 +35365,8 @@
           },
           {
             "category": "conversation",
-            "tokens": 154156,
-            "usage_percent": 56.675
+            "tokens": 154618,
+            "usage_percent": 56.84485294117647
           },
           {
             "category": "other",
@@ -34949,19 +35376,8 @@
         ],
         "warnings": []
       },
-      "inference": {
-        "session_id": "5c7db164-8218-4357-8aba-335bab5eb898",
-        "started_at": "2026-09-09T22:04:28.342661123Z",
-        "requested_model": {
-          "provider": "openai",
-          "model_id": "gpt-5.6-sol"
-        },
-        "first_output_at": "2026-09-09T22:04:48.391328694Z",
-        "first_output_kind": "text",
-        "retries": 0
-      },
       "agent_control": "running",
-      "state": "running"
+      "state": "succeeded"
     },
     "sync_task_list@11": {
       "first_event_seq": 4697,
