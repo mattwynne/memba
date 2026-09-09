@@ -1,7 +1,7 @@
 # Populated clubs always have an Admin
 
 Date: 2026-09-08
-Status: validated
+Status: ready
 
 ## Goal
 
@@ -93,11 +93,11 @@ The existing “Robin invites Dana” example in [`acceptance-tests/features/clu
 
 The concurrent scenario is stakeholder-readable but tagged `@not-ui`: browser timing is not the business contract. Its real concurrency semantics belong in a focused dispatch/EventStore integration test, while aggregate decision tests prove the first-versus-later event lists without a database.
 
-New scenarios carry `@iteration-100` plus `@todo-domain` and, where the existing UI can demonstrate the rule, `@todo-ui`. Delivery removes or narrows those runner-debt tags only as the corresponding support becomes executable.
+New scenarios carry `@iteration-059` plus `@todo-domain` and, where the existing UI can demonstrate the rule, `@todo-ui`. Delivery removes or narrows those runner-debt tags only as the corresponding support becomes executable.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/club_membership_administration.feature`: add the approved first-member, concurrent-acceptance, sole-Admin-membership, replacement-Admin, and final-member examples; remove or narrow iteration-100 runner-debt tags as they become executable.
+- `acceptance-tests/features/club_membership_administration.feature`: add the approved first-member, concurrent-acceptance, sole-Admin-membership, replacement-Admin, and final-member examples; remove or narrow iteration-059 runner-debt tags as they become executable.
 
 Existing invitation, request-account, member-list, and membership-administration scenarios remain regression coverage. Do not rewrite their business meaning unless implementation exposes a direct contradiction with this plan.
 
@@ -149,7 +149,7 @@ Confirmed decisions:
 
 ## Implementation Plan
 
-1. Add the approved iteration-100 examples to `club_membership_administration.feature`. Confirm the planning tags exclude unfinished steps from the default runners, and keep the existing later-invitee ordinary example as regression coverage.
+1. Add the approved iteration-059 examples to `club_membership_administration.feature`. Confirm the planning tags exclude unfinished steps from the default runners, and keep the existing later-invitee ordinary example as regression coverage.
 2. Characterise the current write boundaries and legacy event shape with focused tests before moving commands:
    - replay representative pre-iteration Club streams containing Everyone `GroupMemberAdded` / `GroupMemberRemoved` and role-assignment facts;
    - prove the reconstructed active membership and active-Admin state needed for decisions;
@@ -182,7 +182,7 @@ Confirmed decisions:
     - a concurrent application/invitation test dispatching two distinct acceptances and proving both succeed with two active memberships and one automatic Admin;
     - historical stream replay, projection parity, system-group policy, onboarding, both invitation paths, Staff LiveView, member-list, messaging-recipient, seeds, and smoke-fixture regressions;
     - both affected Cucumber runners after implementing the new step support.
-13. Remove or narrow iteration-100 runner-debt tags only when their scenarios execute, then run `dev check` on the exact delivered state.
+13. Remove or narrow iteration-059 runner-debt tags only when their scenarios execute, then run `dev check` on the exact delivered state.
 
 ## Technical Decisions
 
