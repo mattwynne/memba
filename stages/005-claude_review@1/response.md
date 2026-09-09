@@ -1,0 +1,27 @@
+This is consistent with the plan's decisions on Cucumber runner tagging. My review is complete.
+
+## Report
+
+**Decision: READY**
+**Confidence: High**
+
+I read the complete plan file (218 lines) directly with `Read`, and cross-checked its technical claims against the actual codebase: `web/lib/memba/membership/club.ex`, `web/lib/memba/membership/membership.ex`, `web/lib/memba/membership/router.ex`, `web/lib/memba/membership.ex`, `web/lib/memba/release.ex`, `web/lib/memba/id.ex`, and the feature file `acceptance-tests/features/club_membership_administration.feature`, plus the Cucumber tag configuration. Every structural claim in the plan (separate `Membership`/`Club` aggregates identified by `membership_id`/`club_id`, `RemoveMemberRole` living in `Club`, projection-backed preflight checks for whole-member removal, `Memba.ID.deterministic/2`'s exact signature, the `Memba.Release.migrate/0` step ordering, and the `@not-ui`/`@todo-domain`/`@todo-ui` tag conventions) matches the real code exactly. The new Gherkin scenarios described in the plan are already present in the feature file with the correct planning tags, so the plan's own first implementation step is already partly satisfied and verifiably consistent.
+
+Git history shows this exact plan (status `ready`, same content) was previously promoted to `validated`, entered `implementing`, and was rolled back to `validated` after a failed implementation attempt (commit `4ba11ff`), then the implementation plan was subsequently tightened/re-sequenced into 24 more granular, ordered steps (`eb9a41a`) before being set back to `ready` for re-validation. That history is a point in favor of readiness, not against it: the plan has already survived one real implementation attempt and been refined based on that experience, and nothing in the current text shows unresolved business decisions or missing technical detail — the "Open Business Decisions" section is explicitly empty with a list of confirmed decisions, and the implementation plan is now a concrete, ordered 24-step sequence naming exact modules, functions, and test types.
+
+**Goal, scope, and acceptance criteria** are all clear: the goal states the invariant, the affected actor (Staff/members, populated clubs), and the business outcome (no populated club is left without an Admin). Scope is tightly bounded with an extensive, specific out-of-scope list (no archive/close, no bulk import, no saga/process-manager, no new roles). The 21 acceptance-criteria bullets are concrete and testable (idempotency, concurrency tie-breaking, removal precedence ordering, historical replay behavior, audit gating). The BDD classification is explicit ("Required") with named scenarios and a reasoned exception for why the concurrency example is `@not-ui`/domain-only.
+
+**Blocking gaps:** None found.
+
+**Non-blocking improvements:**
+1. The plan could explicitly cross-reference the prior failed `implementing` attempt (commit `4ba11ff`) and what was learned/changed as a result, so a future reader doesn't have to reconstruct that from git log.
+2. Step 8 ("Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up") could name the exact follow-up problem-note path up front rather than leaving it to be created mid-implementation.
+3. The audit module name `Memba.Membership.AdminInvariant.Audit` doesn't yet exist in the codebase (confirmed via search) — this is expected for a new module, but the plan could note this is greenfield rather than assume familiarity.
+
+**Smallest viable iteration:** The plan is already reasonably minimal given the invariant is genuinely cross-cutting (creation, removal, historical replay, and release-audit gating are all inseparable parts of "populated clubs always have an Admin"). If further slicing were desired, the historical-compatibility/replay-audit work (steps 2–4) could in principle ship as a preceding iteration that only adds the audit and replay tests without moving the write boundary — but the plan's own rationale (aggregate boundary must move to make the atomicity guarantee at all) makes that split of doubtful independent value, so I don't recommend it.
+
+**Required plan edits:** None required for readiness.
+
+**Validation plan:** The plan's own "Validation Plan" section is complete and directly executable: Gherkin/tag-config check → pure aggregate tests (no DB) → historical/mixed-stream replay comparison → audit tests (complete/incomplete facts + release-ordering) → one persisted-stream integration check for atomic append → concurrent-acceptance integration test with strong-consistency assertions → failure-injection retry tests for invitation paths → full regression sweep (Membership APIs, Club aggregate, projections, system groups, onboarding, invitation, Staff LiveView, member presentation, messaging, seeds, smoke fixtures) → Cucumber domain+browser runs for non-concurrent scenarios and domain-only for the concurrency scenario → manual demo script → `dev check` on the committed candidate. This is sufficiently concrete to prove success and gives a clear stop condition (`dev check` passing plus the new Cucumber examples green with runner-debt tags removed).
+
+{"context_updates":{"claude_review_decision":"READY","claude_review_confidence":"High","claude_review_blocking_gap_count":0,"claude_review_blocking_gaps":"None","claude_review_required_edits":"None"}}
