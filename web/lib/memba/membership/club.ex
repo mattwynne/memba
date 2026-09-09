@@ -122,6 +122,12 @@ defmodule Memba.Membership.Club do
              club,
              command.membership_id,
              command.person_id
+           ),
+         :ok <- ensure_member_removal_keeps_active_member(club),
+         :ok <-
+           ensure_member_removal_keeps_active_admin(
+             club,
+             command.membership_id
            ) do
       %MemberRemoved{
         club_id: command.club_id,
@@ -614,6 +620,23 @@ defmodule Memba.Membership.Club do
 
     if role_id == admin_role_id and
          MapSet.member?(club.active_admin_membership_ids, membership_id) and
+         MapSet.size(club.active_admin_membership_ids) == 1 do
+      {:error, :last_membership_administrator}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_member_removal_keeps_active_member(%__MODULE__{} = club) do
+    if map_size(club.active_memberships) == 1 do
+      {:error, :last_active_member}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_member_removal_keeps_active_admin(%__MODULE__{} = club, membership_id) do
+    if MapSet.member?(club.active_admin_membership_ids, membership_id) and
          MapSet.size(club.active_admin_membership_ids) == 1 do
       {:error, :last_membership_administrator}
     else

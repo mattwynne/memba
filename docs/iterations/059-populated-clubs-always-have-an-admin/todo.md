@@ -10,7 +10,7 @@
 - [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
 - [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
 - [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
-- [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+- [x] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
 - [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
 - [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
 - [ ] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
