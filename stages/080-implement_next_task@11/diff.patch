@@ -1,0 +1,171 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index 63035f8..1d4cfa0 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+ - [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+ - [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+-- [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
++- [x] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+ - [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+ - [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+ - [ ] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 5d2a884..d207ea3 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -122,6 +122,12 @@ defmodule Memba.Membership.Club do
+              club,
+              command.membership_id,
+              command.person_id
++           ),
++         :ok <- ensure_member_removal_keeps_active_member(club),
++         :ok <-
++           ensure_member_removal_keeps_active_admin(
++             club,
++             command.membership_id
+            ) do
+       %MemberRemoved{
+         club_id: command.club_id,
+@@ -621,6 +627,23 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp ensure_member_removal_keeps_active_member(%__MODULE__{} = club) do
++    if map_size(club.active_memberships) == 1 do
++      {:error, :last_active_member}
++    else
++      :ok
++    end
++  end
++
++  defp ensure_member_removal_keeps_active_admin(%__MODULE__{} = club, membership_id) do
++    if MapSet.member?(club.active_admin_membership_ids, membership_id) and
++         MapSet.size(club.active_admin_membership_ids) == 1 do
++      {:error, :last_membership_administrator}
++    else
++      :ok
++    end
++  end
++
+   defp create_group_decision(
+          %__MODULE__{} = club,
+          %CreateGroup{} = command,
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 79ea765..1414255 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -222,20 +222,7 @@ defmodule Memba.Membership.ClubTest do
+                  role_id: ^admin_role_id,
+                  assigned_by_person_id: nil
+                }
+-             ] = events = Club.execute(club, add_command)
+-
+-      club = Enum.reduce(events, club, &Club.apply(&2, &1))
+-
+-      assert %MemberRemoved{
+-               club_id: ^club_id,
+-               membership_id: ^membership_id,
+-               person_id: ^person_id
+-             } =
+-               Club.execute(club, %RemoveMember{
+-                 club_id: club_id,
+-                 membership_id: membership_id,
+-                 person_id: person_id
+-               })
++             ] = Club.execute(club, add_command)
+     end
+ 
+     test "emits only membership activation for a later member" do
+@@ -266,6 +253,90 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "rejects final-member removal before sole-Admin removal" do
++      club_id = Memba.ID.generate(:club)
++      admin_role_id = Roles.membership_administrator_role_id(club_id)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> activate_member(membership_id, person_id)
++        |> assign_member_role(membership_id, person_id, admin_role_id)
++
++      assert {:error, :last_active_member} =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++    end
++
++    test "rejects removing the sole active Admin while another member remains" do
++      club_id = Memba.ID.generate(:club)
++      admin_role_id = Roles.membership_administrator_role_id(club_id)
++      admin_membership_id = Memba.ID.generate(:membership)
++      admin_person_id = Memba.ID.generate(:person)
++      ordinary_membership_id = Memba.ID.generate(:membership)
++      ordinary_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> activate_member(admin_membership_id, admin_person_id)
++        |> assign_member_role(admin_membership_id, admin_person_id, admin_role_id)
++        |> activate_member(ordinary_membership_id, ordinary_person_id)
++
++      assert {:error, :last_membership_administrator} =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: admin_membership_id,
++                 person_id: admin_person_id
++               })
++    end
++
++    test "removes an Admin when a replacement remains and updates both decision-state sets" do
++      club_id = Memba.ID.generate(:club)
++      admin_role_id = Roles.membership_administrator_role_id(club_id)
++      first_membership_id = Memba.ID.generate(:membership)
++      first_person_id = Memba.ID.generate(:person)
++      replacement_membership_id = Memba.ID.generate(:membership)
++      replacement_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> activate_member(first_membership_id, first_person_id)
++        |> assign_member_role(first_membership_id, first_person_id, admin_role_id)
++        |> activate_member(replacement_membership_id, replacement_person_id)
++        |> assign_member_role(replacement_membership_id, replacement_person_id, admin_role_id)
++
++      assert %MemberRemoved{
++               club_id: ^club_id,
++               membership_id: ^first_membership_id,
++               person_id: ^first_person_id
++             } =
++               event =
++               Club.execute(club, %RemoveMember{
++                 club_id: club_id,
++                 membership_id: first_membership_id,
++                 person_id: first_person_id
++               })
++
++      club = Club.apply(club, event)
++
++      refute Map.has_key?(club.active_memberships, first_membership_id)
++
++      assert Map.get(club.active_memberships, replacement_membership_id) ==
++               replacement_person_id
++
++      assert MapSet.equal?(
++               club.active_admin_membership_ids,
++               MapSet.new([replacement_membership_id])
++             )
++    end
++
+     test "treats an exact active membership identity as an idempotent activation" do
+       club_id = Memba.ID.generate(:club)
+       membership_id = Memba.ID.generate(:membership)
