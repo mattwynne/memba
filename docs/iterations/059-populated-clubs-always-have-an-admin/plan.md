@@ -1,7 +1,7 @@
 # Populated clubs always have an Admin
 
 Date: 2026-09-08
-Status: ready
+Status: validated
 
 ## Goal
 
