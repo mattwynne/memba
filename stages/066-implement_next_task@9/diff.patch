@@ -1,0 +1,192 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index 103f307..f4650c9 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+ - [x] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+ - [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+-- [ ] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
++- [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+ - [ ] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+ - [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+ - [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 3176207..7b5dd85 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -452,11 +452,25 @@ defmodule Memba.Membership.Club do
+         {:error, :already_active_member}
+ 
+       true ->
+-        %MemberAdded{
++        member_added = %MemberAdded{
+           club_id: command.club_id,
+           membership_id: command.membership_id,
+           person_id: command.person_id
+         }
++
++        if map_size(club.active_memberships) == 0 do
++          [
++            member_added,
++            %MemberRoleAssigned{
++              club_id: command.club_id,
++              membership_id: command.membership_id,
++              person_id: command.person_id,
++              role_id: Roles.membership_administrator_role_id(command.club_id)
++            }
++          ]
++        else
++          member_added
++        end
+     end
+   end
+ 
+diff --git a/web/test/memba/membership/add_member_dispatch_test.exs b/web/test/memba/membership/add_member_dispatch_test.exs
+index 9694f59..9093a0b 100644
+--- a/web/test/memba/membership/add_member_dispatch_test.exs
++++ b/web/test/memba/membership/add_member_dispatch_test.exs
+@@ -9,6 +9,8 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+   alias Memba.Membership.Commands.RemoveMember
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.MemberRemoved
++  alias Memba.Membership.Events.MemberRoleAssigned
++  alias Memba.Membership.Roles
+ 
+   test "legacy membership-ID aggregate write model is not available" do
+     refute Code.ensure_loaded?(Memba.Membership.Membership)
+@@ -18,6 +20,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+     membership_id = Memba.ID.generate(:membership)
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
++    admin_role_id = Roles.membership_administrator_role_id(club_id)
+ 
+     assert :ok =
+              App.dispatch(
+@@ -43,6 +46,12 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+                   membership_id: ^membership_id,
+                   club_id: ^club_id,
+                   person_id: ^person_id
++                },
++                %MemberRoleAssigned{
++                  membership_id: ^membership_id,
++                  club_id: ^club_id,
++                  person_id: ^person_id,
++                  role_id: ^admin_role_id
+                 }
+               ],
+               aggregate_state: %Club{
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 3494f7b..2be1403 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -196,10 +196,11 @@ defmodule Memba.Membership.ClubTest do
+   end
+ 
+   describe "execute/2 AddMember and RemoveMember" do
+-    test "emits member lifecycle events with the Club-routed identities" do
++    test "emits membership and automatic Admin assignment together for the first activation" do
+       club_id = Memba.ID.generate(:club)
+       membership_id = Memba.ID.generate(:membership)
+       person_id = Memba.ID.generate(:person)
++      admin_role_id = Roles.membership_administrator_role_id(club_id)
+       club = created_club(club_id)
+ 
+       add_command = %AddMember{
+@@ -208,13 +209,22 @@ defmodule Memba.Membership.ClubTest do
+         person_id: person_id
+       }
+ 
+-      assert %MemberAdded{
+-               club_id: ^club_id,
+-               membership_id: ^membership_id,
+-               person_id: ^person_id
+-             } = add_event = Club.execute(club, add_command)
++      assert [
++               %MemberAdded{
++                 club_id: ^club_id,
++                 membership_id: ^membership_id,
++                 person_id: ^person_id
++               },
++               %MemberRoleAssigned{
++                 club_id: ^club_id,
++                 membership_id: ^membership_id,
++                 person_id: ^person_id,
++                 role_id: ^admin_role_id,
++                 assigned_by_person_id: nil
++               }
++             ] = events = Club.execute(club, add_command)
+ 
+-      club = Club.apply(club, add_event)
++      club = Enum.reduce(events, club, &Club.apply(&2, &1))
+ 
+       assert %MemberRemoved{
+                club_id: ^club_id,
+@@ -228,6 +238,34 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "emits only membership activation for a later member" do
++      club_id = Memba.ID.generate(:club)
++      first_membership_id = Memba.ID.generate(:membership)
++      later_membership_id = Memba.ID.generate(:membership)
++      first_person_id = Memba.ID.generate(:person)
++      later_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%MemberAdded{
++          club_id: club_id,
++          membership_id: first_membership_id,
++          person_id: first_person_id
++        })
++
++      assert %MemberAdded{
++               club_id: ^club_id,
++               membership_id: ^later_membership_id,
++               person_id: ^later_person_id
++             } =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: later_membership_id,
++                 person_id: later_person_id
++               })
++    end
++
+     test "treats an exact active membership identity as an idempotent activation" do
+       club_id = Memba.ID.generate(:club)
+       membership_id = Memba.ID.generate(:membership)
+@@ -311,6 +349,7 @@ defmodule Memba.Membership.ClubTest do
+       membership_id = Memba.ID.generate(:membership)
+       person_id = Memba.ID.generate(:person)
+       everyone_group_id = SystemGroups.everyone_group_id(club_id)
++      admin_role_id = Roles.membership_administrator_role_id(club_id)
+ 
+       club =
+         club_id
+@@ -337,11 +376,19 @@ defmodule Memba.Membership.ClubTest do
+ 
+       new_membership_id = Memba.ID.generate(:membership)
+ 
+-      assert %MemberAdded{
+-               club_id: ^club_id,
+-               membership_id: ^new_membership_id,
+-               person_id: ^person_id
+-             } =
++      assert [
++               %MemberAdded{
++                 club_id: ^club_id,
++                 membership_id: ^new_membership_id,
++                 person_id: ^person_id
++               },
++               %MemberRoleAssigned{
++                 club_id: ^club_id,
++                 membership_id: ^new_membership_id,
++                 person_id: ^person_id,
++                 role_id: ^admin_role_id
++               }
++             ] =
+                Club.execute(club, %AddMember{
+                  club_id: club_id,
+                  membership_id: new_membership_id,
