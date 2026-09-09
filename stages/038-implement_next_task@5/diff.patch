@@ -1,0 +1,145 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index 74a5708..43b89dd 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add Club replay tests for historic Everyone membership and role facts, active-Admin reconstruction, and delayed compatibility events after native membership events.
+ - [x] 003 Write `cutover-check.md` with exact one-time read-only production checks for source-fact compatibility and populated clubs without an active Admin, including pre/post-deploy expectations and stop instructions.
+ - [x] 004 Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
+-- [ ] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
++- [x] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+ - [ ] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+ - [ ] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+ - [ ] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index c5aaafe..56ffe92 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -302,20 +302,28 @@ defmodule Memba.Membership.Club do
+     group_membership = %{person_id: event.person_id, active: true}
+     group_membership_key = group_membership_key(event.group_id, event.membership_id)
+ 
+-    %__MODULE__{
+-      club
+-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
+-    }
++    club =
++      %__MODULE__{
++        club
++        | group_memberships:
++            Map.put(club.group_memberships, group_membership_key, group_membership)
++      }
++
++    apply_everyone_compatibility_membership(club, event, :activate)
+   end
+ 
+   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
+     group_membership = %{person_id: event.person_id, active: false}
+     group_membership_key = group_membership_key(event.group_id, event.membership_id)
+ 
+-    %__MODULE__{
+-      club
+-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
+-    }
++    club =
++      %__MODULE__{
++        club
++        | group_memberships:
++            Map.put(club.group_memberships, group_membership_key, group_membership)
++      }
++
++    apply_everyone_compatibility_membership(club, event, :deactivate)
+   end
+ 
+   def apply(%__MODULE__{} = club, %MemberAdded{} = event) do
+@@ -662,6 +670,35 @@ defmodule Memba.Membership.Club do
+   defp put_role_key(role_keys, nil, _role_id), do: role_keys
+   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+ 
++  defp apply_everyone_compatibility_membership(
++         %__MODULE__{club_id: club_id} = club,
++         event,
++         lifecycle
++       )
++       when is_binary(club_id) do
++    everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++    if event.group_id == everyone_group_id and
++         not MapSet.member?(club.native_membership_ids, event.membership_id) do
++      active_memberships =
++        case lifecycle do
++          :activate ->
++            Map.put(club.active_memberships, event.membership_id, event.person_id)
++
++          :deactivate ->
++            Map.delete(club.active_memberships, event.membership_id)
++        end
++
++      club = %__MODULE__{club | active_memberships: active_memberships}
++      derive_active_admin_membership_ids(club)
++    else
++      club
++    end
++  end
++
++  defp apply_everyone_compatibility_membership(%__MODULE__{} = club, _event, _lifecycle),
++    do: club
++
+   defp derive_active_admin_membership_ids(%__MODULE__{} = club) do
+     admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+ 
+diff --git a/web/test/memba/membership/club_replay_test.exs b/web/test/memba/membership/club_replay_test.exs
+index 9135fa1..155a312 100644
+--- a/web/test/memba/membership/club_replay_test.exs
++++ b/web/test/memba/membership/club_replay_test.exs
+@@ -13,8 +13,6 @@ defmodule Memba.Membership.ClubReplayTest do
+   alias Memba.Membership.SystemGroups
+ 
+   describe "historic Club stream replay" do
+-    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
+-
+     test "hydrates the active roster from Everyone membership facts" do
+       ids = replay_ids()
+ 
+@@ -71,11 +69,39 @@ defmodule Memba.Membership.ClubReplayTest do
+                {ids.first_membership_id, ids.admin_role_id}
+              )
+     end
++
++    test "keeps non-Everyone membership facts out of the active roster" do
++      ids = replay_ids()
++      custom_group_id = Memba.ID.generate(:group)
++      membership_id = ids.first_membership_id
++      person_id = ids.first_person_id
++
++      club =
++        replay(ids.club_id, [
++          %GroupMemberAdded{
++            club_id: ids.club_id,
++            group_id: custom_group_id,
++            membership_id: membership_id,
++            person_id: person_id
++          }
++        ])
++
++      assert_replay_state(club,
++        active_memberships: %{},
++        native_membership_ids: MapSet.new(),
++        active_admin_membership_ids: MapSet.new()
++      )
++
++      assert %{
++               {^custom_group_id, ^membership_id} => %{
++                 person_id: ^person_id,
++                 active: true
++               }
++             } = club.group_memberships
++    end
+   end
+ 
+   describe "mixed native and compatibility Club stream replay" do
+-    @describetag skip: "iteration 059 task 005 implements Everyone compatibility replay"
+-
+     test "delayed Everyone facts cannot override native membership lifecycle facts" do
+       ids = replay_ids()
+ 
