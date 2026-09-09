@@ -106,13 +106,8 @@ defmodule Memba.Membership.Club do
   def execute(%__MODULE__{} = club, %AddMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
-         :ok <- ensure_membership_id_available(club, command.membership_id) do
-      %MemberAdded{
-        club_id: command.club_id,
-        membership_id: command.membership_id,
-        person_id: command.person_id
-      }
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
+      add_member_decision(club, command)
     end
   end
 
@@ -435,12 +430,42 @@ defmodule Memba.Membership.Club do
     validate_id(type, value, error)
   end
 
-  defp ensure_membership_id_available(%__MODULE__{} = club, membership_id) do
-    if Map.has_key?(club.active_memberships, membership_id) do
-      {:error, :already_added}
-    else
-      :ok
+  defp add_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
+    case Map.fetch(club.active_memberships, command.membership_id) do
+      {:ok, person_id} when person_id == command.person_id ->
+        []
+
+      {:ok, _different_person_id} ->
+        {:error, :membership_id_already_used}
+
+      :error ->
+        add_inactive_member_decision(club, command)
     end
+  end
+
+  defp add_inactive_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
+    cond do
+      membership_id_recorded?(club, command.membership_id) ->
+        {:error, :membership_id_already_used}
+
+      command.person_id in Map.values(club.active_memberships) ->
+        {:error, :already_active_member}
+
+      true ->
+        %MemberAdded{
+          club_id: command.club_id,
+          membership_id: command.membership_id,
+          person_id: command.person_id
+        }
+    end
+  end
+
+  defp membership_id_recorded?(%__MODULE__{} = club, membership_id) do
+    MapSet.member?(club.native_membership_ids, membership_id) or
+      Map.has_key?(
+        club.group_memberships,
+        group_membership_key(SystemGroups.everyone_group_id(club.club_id), membership_id)
+      )
   end
 
   defp ensure_active_membership_identity(%__MODULE__{} = club, membership_id, person_id) do

@@ -228,6 +228,127 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
+    test "treats an exact active membership identity as an idempotent activation" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> Club.apply(%MemberAdded{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+
+      assert [] =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      assert {:error, :membership_id_already_used} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: Memba.ID.generate(:person)
+               })
+    end
+
+    test "rejects a different membership identity for an active person" do
+      club_id = Memba.ID.generate(:club)
+      active_membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> Club.apply(%MemberAdded{
+          club_id: club_id,
+          membership_id: active_membership_id,
+          person_id: person_id
+        })
+
+      assert {:error, :already_active_member} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: Memba.ID.generate(:membership),
+                 person_id: person_id
+               })
+    end
+
+    test "rejects membership IDs removed through the native lifecycle" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+
+      club =
+        club_id
+        |> created_club()
+        |> Club.apply(%MemberAdded{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+        |> Club.apply(%MemberRemoved{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+
+      assert {:error, :membership_id_already_used} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+    end
+
+    test "rejects membership IDs removed through historic Everyone compatibility facts" do
+      club_id = Memba.ID.generate(:club)
+      membership_id = Memba.ID.generate(:membership)
+      person_id = Memba.ID.generate(:person)
+      everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+      club =
+        club_id
+        |> created_club()
+        |> Club.apply(%GroupMemberAdded{
+          club_id: club_id,
+          group_id: everyone_group_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+        |> Club.apply(%GroupMemberRemoved{
+          club_id: club_id,
+          group_id: everyone_group_id,
+          membership_id: membership_id,
+          person_id: person_id
+        })
+
+      assert {:error, :membership_id_already_used} =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               })
+
+      new_membership_id = Memba.ID.generate(:membership)
+
+      assert %MemberAdded{
+               club_id: ^club_id,
+               membership_id: ^new_membership_id,
+               person_id: ^person_id
+             } =
+               Club.execute(club, %AddMember{
+                 club_id: club_id,
+                 membership_id: new_membership_id,
+                 person_id: person_id
+               })
+    end
+
     test "requires an existing Club and validates every command identity" do
       club_id = Memba.ID.generate(:club)
       membership_id = Memba.ID.generate(:membership)
