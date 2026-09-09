@@ -583,7 +583,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-09-09T14:08:07.591225380Z",
-  "last_event_at": "2026-09-09T14:10:46.901133739Z",
+  "last_event_at": "2026-09-09T14:10:53.002076225Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -625,9 +625,162 @@
       "diff": {}
     },
     {
-      "seq": 0,
+      "seq": 189,
       "checkpoint": {
-        "timestamp": "2026-09-09T14:10:49.048345569Z",
+        "timestamp": "2026-09-09T14:10:49.045025319Z",
+        "current_node": "review_fork",
+        "completed_nodes": [
+          "start",
+          "review_fork"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.thread_id": "start",
+          "graph.rankdir": "LR",
+          "parallel.results": [
+            {
+              "id": "gemini_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "gemini_review_blocking_gap_count": 0,
+                "gemini_review_blocking_gaps": "None",
+                "gemini_review_confidence": "High",
+                "gemini_review_decision": "READY",
+                "gemini_review_required_edits": "None",
+                "last_response": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It correctly identifies the boundary root cause of the invariant failure, defines a precise business rule, and outlines a comprehensive strategy for migrating write boundaries and handling legacy event hydration securely. \n\n### Blocking Gaps\n1. None\n\n### Non-blocking Improvements\n1. None. The considerations around hydration precedence, idempotent retries without transactions, and release gating demonstrate a high degree of operational maturity and completeness.\n\n### Smallest Viable Iteration\nThe planned slice is the smallest viable increment. It moves the exact write models needed for the invariant into a shared aggregate boundary without introducing a premature saga/process manager or attempting to rewrite historical event streams.\n\n### Required Plan Edits\n- None\n\n### Validation Plan\nThe plan's validation strategy is complete and robust. Success will be proven by:\n- Pure aggregate tests confirming the event list atomicity and invariant rejections without database dependencies.\n- A deterministic release-time audit that prevents mutation if required historic facts are missing.\n- End-to-end integration proving exactly one automatic Admin is assigned during concurrent invitation acceptance.\n- Cucumber BDD scenarios verifying the domain rules and error precedence for removal actions.\n- Failure-injection tests proving idempotent recovery during invitation retries. \n- A clean pass of the `dev check` suite on the delivered integration.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```"
+              }
+            },
+            {
+              "id": "claude_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "claude_review_blocking_gap_count": 0,
+                "claude_review_blocking_gaps": "None",
+                "claude_review_confidence": "High",
+                "claude_review_decision": "READY",
+                "claude_review_required_edits": "None",
+                "last_response": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to",
+                "last_stage": "claude_review",
+                "response.claude_review": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to produce the review.\n\n## Report: Iteration 059 — Populated clubs always have an Admin\n\n**Decision: READY**\n**Confidence: High**\n\nI read the full plan file (227 lines) directly and cross-checked its factual claims against the current codebase (`web/lib/memba/membership/club.ex`, `web/lib/memba/membership.ex`, `web/lib/memba/membership/router.ex`, `web/lib/memba/release.ex`, and `acceptance-tests/features/club_membership_administration.feature`). All architectural claims in the Background/Context and Technical Decisions sections match the current implementation exactly: `AddMember`/`RemoveMember` are routed to the `Membership` aggregate keyed by `membership_id` (not `Club`), the `Club` aggregate already owns `role_assignments` and emits `MemberRoleAssigned`/`MemberRoleRemoved`, the existing last-Admin guard in `remove_member_role_as_club_member/2` is a projection-backed preflight (`active_role_assignment_count`) with no equivalent guard for whole-member removal, and the release pipeline already has a `run_system_groups_backfill` step the plan proposes to gate. The plan's technical narrative is not speculative — it's an accurate diagnosis of real code.\n\n### 1. Goal clarity — clear\nThe goal names the invariant, the actor (Staff performing removals, invitees joining), the business outcome (no populated club is ever left without an Admin), and the mechanism boundary (aggregate-protected, atomic). This is unambiguous and outcome-focused, not just a task list.\n\n### 2. Scope focus — focused, single coherent outcome\nScope is one invariant enforced consistently across all activation/removal paths. The out-of-scope list is unusually disciplined (no archive/close, no bulk import, no saga/coordinator, no new roles, no UI redesign), which sharply bounds the work. It could not obviously be smaller while still closing the actual production gap, because the gap exists precisely in the paths (invitation acceptance, whole-member removal) that a narrower slice would have to leave unprotected.\n\n### 3. Acceptance criteria / BDD / business decisions — resolved\n- Iteration Type is explicitly classified as behaviour-facing, with reasoning.\n- The `## Acceptance Scenarios / Feature Files` section names the exact feature file and enumerates each new/changed scenario, including a deliberate, well-justified decision to keep the concurrency scenario `@not-ui`/domain-only rather than force browser-timing Gherkin.\n- 21 acceptance criteria are concrete and testable (idempotency semantics, error-precedence rule, audit gating, projection-preservation, etc.).\n- \"Open Business Decisions: None known\" is followed by seven previously-resolved decisions restated as confirmed, including the tie-break rule (final-member feedback takes precedence over sole-Admin feedback) — this is exactly the kind of ambiguous product-copy decision that often gets left open, and it's closed here.\n\n### 4. Implementation plan and technical decisions — resolved and specific\n13 ordered steps name concrete modules, files, and test locations (`Memba.Membership.Club`, `web/test/memba/membership/club_test.exs`, `Memba.Membership.AdminInvariant.Audit.run!/0`, `Memba.Release.migrate/0`). The historical-compatibility strategy (native lifecycle facts permanently override delayed Everyone events) is precisely specified with a worked example. The Technical Decisions section closes out every major open question I'd expect a reviewer to raise: consistency boundary, atomicity boundary (explicitly excluding person/invitation/email from the atomicity claim), concurrency handling (relying on Commanded's own aggregate serialization, no new lock), release-audit ordering, and error precedence.\n\n### 5. Expected capability and validation — clear\n\"New Capability\" states the concrete post-iteration guarantee in one paragraph. The Validation Plan lists 10 concrete checks (pure aggregate tests, stream-replay comparison against projections, audit failure blocking the backfill, concurrent-dispatch integration test, failure-injection retry test, manual demo script, `dev check`). This is proof-oriented, not just \"tests will pass.\"\n\n### Blocking gaps\nNone.\n\n### Non-blocking improvements\n1. Step 4 says \"remove the old aggregate module if it has no replay-only caller, otherwise mark it legacy/unregistered and create a named follow-up\" — the plan could optionally pre-name that follow-up doc now rather than leaving it to be created mid-implementation, but this is a minor process nit, not a readiness blocker.\n2. The plan doesn't state whether `Memba.Membership.Membership` (the old per-membership aggregate) has any other callers beyond `AddMember`/`RemoveMember` (e.g., is it also identified/dispatched for anything else in `router.ex`) — worth a quick grep at implementation start, but low risk since the plan already asks the implementer to verify this.\n3. Risks/Follow-ups section is thorough; two forward-looking follow-ups (archive/close design, bulk-import first-Admin rule) are correctly deferred rather than solved here.\n\n### Smallest viable iteration\nThe plan is already close to minimal. If it needed to shrink further, the smallest still-useful slice would be: move only `AddMember` (activation) to the Club aggregate with the atomic first-Admin assignment, covering onboarding conversion and both invitation-acceptance paths — deferring the whole-membership-removal invariant (final-member and sole-Admin-on-removal guards) to a follow-up iteration. That would fix the exact production defect (join paths missing Admin) but would leave the removal-side invariant gap open, which the plan's own Background explicitly identifies as an equally real boundary problem. I don't recommend this split — the plan's stated rationale for doing both together (one aggregate boundary now protects both directions of the same invariant, avoiding a second migration of the same commands later) is sound — but it is the direction to cut if timeline pressure forces a smaller slice.\n\n### Required plan edits\nNone required for readiness.\n\n### Validation plan (recap of what the plan itself specifies)\n- Pure `Club` aggregate unit tests (no DB) for first/later/idempotent/duplicate/removed-ID/removal-guard decisions.\n- Stream-replay tests comparing rehydrated aggregate state against current projections, including the native-vs-delayed-Everyone-event precedence example.\n- Audit (`AdminInvariant.Audit.run!/0`) tested against complete and deliberately incomplete fact sets, plus a release-ordering test proving a failing audit blocks `run_system_groups_backfill` and smoke fixtures.\n- One thin EventStore/dispatch integration test proving same-stream atomic append of `MemberAdded` + first `MemberRoleAssigned`.\n- Concurrent-dispatch integration test for two simultaneous invitation acceptances.\n- Failure-injection/retry tests for invitation acceptance idempotency.\n- Full regression sweep (onboarding, both invitation paths, Staff removal LiveView, member-list, messaging, seeds, smoke fixtures).\n- Cucumber runners exercised for all new/updated scenarios as runner-debt tags are removed.\n- `dev check` on the exact committed delivery candidate.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "codex_review_blocking_gap_count": 0,
+                "codex_review_blocking_gaps": "None",
+                "codex_review_confidence": "High",
+                "codex_review_decision": "READY",
+                "codex_review_required_edits": "None",
+                "last_response": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approv",
+                "last_stage": "codex_review",
+                "response.codex_review": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approved Staff-facing copy for final-member and sole-Admin removal failures.\",\n    \"Optionally name the likely source files for the release audit, command routing, invitation recovery, and Staff LiveView changes.\",\n    \"If replay-only usage prevents deleting the legacy membership aggregate, record its eventual deletion as a named follow-up.\"\n  ],\n  \"smallest_viable_iteration\": \"Move membership activation and removal to the Club aggregate; cover onboarding and both invitation paths; atomically grant the first Admin; enforce the Admin and active-member floors; preserve historical and mixed-stream hydration; run the pre-mutation release audit; retain current projections; and expose blocked-removal feedback on the existing Staff surface.\",\n  \"required_plan_edits\": [],\n  \"validation_plan\": [\n    \"Parse the updated Gherkin and verify unfinished scenarios remain excluded until their support is executable.\",\n    \"Use pure Club aggregate tests to prove first and later activation, idempotency, duplicate and removed-ID rejection, sole-Admin protection, final-member protection, and allowed removal with a replacement Admin.\",\n    \"Replay historical and mixed Club streams and prove roster and active-Admin state remain correct.\",\n    \"Prove MemberAdded and the first MemberRoleAssigned are appended atomically to the same Club stream.\",\n    \"Exercise concurrent invitation acceptances and prove both memberships activate while exactly one automatic Admin assignment is created.\",\n    \"Prove compatibility-audit failure prevents the system-group backfill and production smoke-fixture mutations.\",\n    \"Inject and recover from invitation failures without duplicate people, memberships, invitation acceptance, or Admin assignments.\",\n    \"Run the relevant projection, system-group, onboarding, invitation, LiveView, Cucumber, seed, and smoke-fixture regressions.\",\n    \"Complete the manual Staff workflow demonstration and run dev check on the exact delivery candidate.\"\n  ],\n  \"workflow_evidence\": \"The complete 227-line plan was read directly. It clearly states the business outcome and actors, maintains a coherent invariant-focused scope with explicit non-goals, classifies the work as behaviour-facing, names shared feature files and scenarios, resolves business and technical decisions, provides ordered implementation details, defines the new capability, and gives an objective stop condition. No files were edited and implementation was not started.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+              }
+            }
+          ],
+          "failure_class": "",
+          "thread.start.current_node": "review_fork",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.review_fork": 0,
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "graph.default_fidelity": "summary:high",
+          "internal.node_visit_count": 1,
+          "failure_signature": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "current_node": "review_fork",
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01M237YHJWT5YV4YQ7YCD5QFM7",
+          "outcome": "succeeded",
+          "parallel.branch_count": 3
+        },
+        "node_outcomes": {
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "gemini_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "gemini_review_blocking_gap_count": 0,
+                    "gemini_review_blocking_gaps": "None",
+                    "gemini_review_confidence": "High",
+                    "gemini_review_decision": "READY",
+                    "gemini_review_required_edits": "None",
+                    "last_response": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It correctly identifies the boundary root cause of the invariant failure, defines a precise business rule, and outlines a comprehensive strategy for migrating write boundaries and handling legacy event hydration securely. \n\n### Blocking Gaps\n1. None\n\n### Non-blocking Improvements\n1. None. The considerations around hydration precedence, idempotent retries without transactions, and release gating demonstrate a high degree of operational maturity and completeness.\n\n### Smallest Viable Iteration\nThe planned slice is the smallest viable increment. It moves the exact write models needed for the invariant into a shared aggregate boundary without introducing a premature saga/process manager or attempting to rewrite historical event streams.\n\n### Required Plan Edits\n- None\n\n### Validation Plan\nThe plan's validation strategy is complete and robust. Success will be proven by:\n- Pure aggregate tests confirming the event list atomicity and invariant rejections without database dependencies.\n- A deterministic release-time audit that prevents mutation if required historic facts are missing.\n- End-to-end integration proving exactly one automatic Admin is assigned during concurrent invitation acceptance.\n- Cucumber BDD scenarios verifying the domain rules and error precedence for removal actions.\n- Failure-injection tests proving idempotent recovery during invitation retries. \n- A clean pass of the `dev check` suite on the delivered integration.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```"
+                  }
+                },
+                {
+                  "id": "claude_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "claude_review_blocking_gap_count": 0,
+                    "claude_review_blocking_gaps": "None",
+                    "claude_review_confidence": "High",
+                    "claude_review_decision": "READY",
+                    "claude_review_required_edits": "None",
+                    "last_response": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to produce the review.\n\n## Report: Iteration 059 — Populated clubs always have an Admin\n\n**Decision: READY**\n**Confidence: High**\n\nI read the full plan file (227 lines) directly and cross-checked its factual claims against the current codebase (`web/lib/memba/membership/club.ex`, `web/lib/memba/membership.ex`, `web/lib/memba/membership/router.ex`, `web/lib/memba/release.ex`, and `acceptance-tests/features/club_membership_administration.feature`). All architectural claims in the Background/Context and Technical Decisions sections match the current implementation exactly: `AddMember`/`RemoveMember` are routed to the `Membership` aggregate keyed by `membership_id` (not `Club`), the `Club` aggregate already owns `role_assignments` and emits `MemberRoleAssigned`/`MemberRoleRemoved`, the existing last-Admin guard in `remove_member_role_as_club_member/2` is a projection-backed preflight (`active_role_assignment_count`) with no equivalent guard for whole-member removal, and the release pipeline already has a `run_system_groups_backfill` step the plan proposes to gate. The plan's technical narrative is not speculative — it's an accurate diagnosis of real code.\n\n### 1. Goal clarity — clear\nThe goal names the invariant, the actor (Staff performing removals, invitees joining), the business outcome (no populated club is ever left without an Admin), and the mechanism boundary (aggregate-protected, atomic). This is unambiguous and outcome-focused, not just a task list.\n\n### 2. Scope focus — focused, single coherent outcome\nScope is one invariant enforced consistently across all activation/removal paths. The out-of-scope list is unusually disciplined (no archive/close, no bulk import, no saga/coordinator, no new roles, no UI redesign), which sharply bounds the work. It could not obviously be smaller while still closing the actual production gap, because the gap exists precisely in the paths (invitation acceptance, whole-member removal) that a narrower slice would have to leave unprotected.\n\n### 3. Acceptance criteria / BDD / business decisions — resolved\n- Iteration Type is explicitly classified as behaviour-facing, with reasoning.\n- The `## Acceptance Scenarios / Feature Files` section names the exact feature file and enumerates each new/changed scenario, including a deliberate, well-justified decision to keep the concurrency scenario `@not-ui`/domain-only rather than force browser-timing Gherkin.\n- 21 acceptance criteria are concrete and testable (idempotency semantics, error-precedence rule, audit gating, projection-preservation, etc.).\n- \"Open Business Decisions: None known\" is followed by seven previously-resolved decisions restated as confirmed, including the tie-break rule (final-member feedback takes precedence over sole-Admin feedback) — this is exactly the kind of ambiguous product-copy decision that often gets left open, and it's closed here.\n\n### 4. Implementation plan and technical decisions — resolved and specific\n13 ordered steps name concrete modules, files, and test locations (`Memba.Membership.Club`, `web/test/memba/membership/club_test.exs`, `Memba.Membership.AdminInvariant.Audit.run!/0`, `Memba.Release.migrate/0`). The historical-compatibility strategy (native lifecycle facts permanently override delayed Everyone events) is precisely specified with a worked example. The Technical Decisions section closes out every major open question I'd expect a reviewer to raise: consistency boundary, atomicity boundary (explicitly excluding person/invitation/email from the atomicity claim), concurrency handling (relying on Commanded's own aggregate serialization, no new lock), release-audit ordering, and error precedence.\n\n### 5. Expected capability and validation — clear\n\"New Capability\" states the concrete post-iteration guarantee in one paragraph. The Validation Plan lists 10 concrete checks (pure aggregate tests, stream-replay comparison against projections, audit failure blocking the backfill, concurrent-dispatch integration test, failure-injection retry test, manual demo script, `dev check`). This is proof-oriented, not just \"tests will pass.\"\n\n### Blocking gaps\nNone.\n\n### Non-blocking improvements\n1. Step 4 says \"remove the old aggregate module if it has no replay-only caller, otherwise mark it legacy/unregistered and create a named follow-up\" — the plan could optionally pre-name that follow-up doc now rather than leaving it to be created mid-implementation, but this is a minor process nit, not a readiness blocker.\n2. The plan doesn't state whether `Memba.Membership.Membership` (the old per-membership aggregate) has any other callers beyond `AddMember`/`RemoveMember` (e.g., is it also identified/dispatched for anything else in `router.ex`) — worth a quick grep at implementation start, but low risk since the plan already asks the implementer to verify this.\n3. Risks/Follow-ups section is thorough; two forward-looking follow-ups (archive/close design, bulk-import first-Admin rule) are correctly deferred rather than solved here.\n\n### Smallest viable iteration\nThe plan is already close to minimal. If it needed to shrink further, the smallest still-useful slice would be: move only `AddMember` (activation) to the Club aggregate with the atomic first-Admin assignment, covering onboarding conversion and both invitation-acceptance paths — deferring the whole-membership-removal invariant (final-member and sole-Admin-on-removal guards) to a follow-up iteration. That would fix the exact production defect (join paths missing Admin) but would leave the removal-side invariant gap open, which the plan's own Background explicitly identifies as an equally real boundary problem. I don't recommend this split — the plan's stated rationale for doing both together (one aggregate boundary now protects both directions of the same invariant, avoiding a second migration of the same commands later) is sound — but it is the direction to cut if timeline pressure forces a smaller slice.\n\n### Required plan edits\nNone required for readiness.\n\n### Validation plan (recap of what the plan itself specifies)\n- Pure `Club` aggregate unit tests (no DB) for first/later/idempotent/duplicate/removed-ID/removal-guard decisions.\n- Stream-replay tests comparing rehydrated aggregate state against current projections, including the native-vs-delayed-Everyone-event precedence example.\n- Audit (`AdminInvariant.Audit.run!/0`) tested against complete and deliberately incomplete fact sets, plus a release-ordering test proving a failing audit blocks `run_system_groups_backfill` and smoke fixtures.\n- One thin EventStore/dispatch integration test proving same-stream atomic append of `MemberAdded` + first `MemberRoleAssigned`.\n- Concurrent-dispatch integration test for two simultaneous invitation acceptances.\n- Failure-injection/retry tests for invitation acceptance idempotency.\n- Full regression sweep (onboarding, both invitation paths, Staff removal LiveView, member-list, messaging, seeds, smoke fixtures).\n- Cucumber runners exercised for all new/updated scenarios as runner-debt tags are removed.\n- `dev check` on the exact committed delivery candidate.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "codex_review_blocking_gap_count": 0,
+                    "codex_review_blocking_gaps": "None",
+                    "codex_review_confidence": "High",
+                    "codex_review_decision": "READY",
+                    "codex_review_required_edits": "None",
+                    "last_response": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approv",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approved Staff-facing copy for final-member and sole-Admin removal failures.\",\n    \"Optionally name the likely source files for the release audit, command routing, invitation recovery, and Staff LiveView changes.\",\n    \"If replay-only usage prevents deleting the legacy membership aggregate, record its eventual deletion as a named follow-up.\"\n  ],\n  \"smallest_viable_iteration\": \"Move membership activation and removal to the Club aggregate; cover onboarding and both invitation paths; atomically grant the first Admin; enforce the Admin and active-member floors; preserve historical and mixed-stream hydration; run the pre-mutation release audit; retain current projections; and expose blocked-removal feedback on the existing Staff surface.\",\n  \"required_plan_edits\": [],\n  \"validation_plan\": [\n    \"Parse the updated Gherkin and verify unfinished scenarios remain excluded until their support is executable.\",\n    \"Use pure Club aggregate tests to prove first and later activation, idempotency, duplicate and removed-ID rejection, sole-Admin protection, final-member protection, and allowed removal with a replacement Admin.\",\n    \"Replay historical and mixed Club streams and prove roster and active-Admin state remain correct.\",\n    \"Prove MemberAdded and the first MemberRoleAssigned are appended atomically to the same Club stream.\",\n    \"Exercise concurrent invitation acceptances and prove both memberships activate while exactly one automatic Admin assignment is created.\",\n    \"Prove compatibility-audit failure prevents the system-group backfill and production smoke-fixture mutations.\",\n    \"Inject and recover from invitation failures without duplicate people, memberships, invitation acceptance, or Admin assignments.\",\n    \"Run the relevant projection, system-group, onboarding, invitation, LiveView, Cucumber, seed, and smoke-fixture regressions.\",\n    \"Complete the manual Staff workflow demonstration and run dev check on the exact delivery candidate.\"\n  ],\n  \"workflow_evidence\": \"The complete 227-line plan was read directly. It clearly states the business outcome and actors, maintains a coherent invariant-focused scope with explicit non-goals, classifies the work as behaviour-facing, names shared feature files and scenarios, resolves business and technical decisions, provides ordered implementation details, defines the new capability, and gives an objective stop condition. No files were edited and implementation was not started.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "review_merge",
+        "git_commit_sha": "8b1c62c68b1b7d2c34803f64bd8b71af5dc95004",
+        "node_visits": {
+          "start": 1,
+          "review_fork": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 197,
+      "checkpoint": {
+        "timestamp": "2026-09-09T14:10:52.990903041Z",
         "current_node": "review_merge",
         "completed_nodes": [
           "start",
@@ -636,8 +789,188 @@
         ],
         "node_retries": {},
         "context_values": {
+          "parallel.branch_count": 3,
+          "internal.retry_count.review_merge": 0,
+          "current_node": "review_merge",
+          "parallel.results": [
+            {
+              "id": "gemini_review",
+              "index": 0,
+              "status": "succeeded",
+              "context_updates": {
+                "gemini_review_blocking_gap_count": 0,
+                "gemini_review_blocking_gaps": "None",
+                "gemini_review_confidence": "High",
+                "gemini_review_decision": "READY",
+                "gemini_review_required_edits": "None",
+                "last_response": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It",
+                "last_stage": "gemini_review",
+                "response.gemini_review": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It correctly identifies the boundary root cause of the invariant failure, defines a precise business rule, and outlines a comprehensive strategy for migrating write boundaries and handling legacy event hydration securely. \n\n### Blocking Gaps\n1. None\n\n### Non-blocking Improvements\n1. None. The considerations around hydration precedence, idempotent retries without transactions, and release gating demonstrate a high degree of operational maturity and completeness.\n\n### Smallest Viable Iteration\nThe planned slice is the smallest viable increment. It moves the exact write models needed for the invariant into a shared aggregate boundary without introducing a premature saga/process manager or attempting to rewrite historical event streams.\n\n### Required Plan Edits\n- None\n\n### Validation Plan\nThe plan's validation strategy is complete and robust. Success will be proven by:\n- Pure aggregate tests confirming the event list atomicity and invariant rejections without database dependencies.\n- A deterministic release-time audit that prevents mutation if required historic facts are missing.\n- End-to-end integration proving exactly one automatic Admin is assigned during concurrent invitation acceptance.\n- Cucumber BDD scenarios verifying the domain rules and error precedence for removal actions.\n- Failure-injection tests proving idempotent recovery during invitation retries. \n- A clean pass of the `dev check` suite on the delivered integration.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```"
+              }
+            },
+            {
+              "id": "claude_review",
+              "index": 1,
+              "status": "succeeded",
+              "context_updates": {
+                "claude_review_blocking_gap_count": 0,
+                "claude_review_blocking_gaps": "None",
+                "claude_review_confidence": "High",
+                "claude_review_decision": "READY",
+                "claude_review_required_edits": "None",
+                "last_response": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to",
+                "last_stage": "claude_review",
+                "response.claude_review": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to produce the review.\n\n## Report: Iteration 059 — Populated clubs always have an Admin\n\n**Decision: READY**\n**Confidence: High**\n\nI read the full plan file (227 lines) directly and cross-checked its factual claims against the current codebase (`web/lib/memba/membership/club.ex`, `web/lib/memba/membership.ex`, `web/lib/memba/membership/router.ex`, `web/lib/memba/release.ex`, and `acceptance-tests/features/club_membership_administration.feature`). All architectural claims in the Background/Context and Technical Decisions sections match the current implementation exactly: `AddMember`/`RemoveMember` are routed to the `Membership` aggregate keyed by `membership_id` (not `Club`), the `Club` aggregate already owns `role_assignments` and emits `MemberRoleAssigned`/`MemberRoleRemoved`, the existing last-Admin guard in `remove_member_role_as_club_member/2` is a projection-backed preflight (`active_role_assignment_count`) with no equivalent guard for whole-member removal, and the release pipeline already has a `run_system_groups_backfill` step the plan proposes to gate. The plan's technical narrative is not speculative — it's an accurate diagnosis of real code.\n\n### 1. Goal clarity — clear\nThe goal names the invariant, the actor (Staff performing removals, invitees joining), the business outcome (no populated club is ever left without an Admin), and the mechanism boundary (aggregate-protected, atomic). This is unambiguous and outcome-focused, not just a task list.\n\n### 2. Scope focus — focused, single coherent outcome\nScope is one invariant enforced consistently across all activation/removal paths. The out-of-scope list is unusually disciplined (no archive/close, no bulk import, no saga/coordinator, no new roles, no UI redesign), which sharply bounds the work. It could not obviously be smaller while still closing the actual production gap, because the gap exists precisely in the paths (invitation acceptance, whole-member removal) that a narrower slice would have to leave unprotected.\n\n### 3. Acceptance criteria / BDD / business decisions — resolved\n- Iteration Type is explicitly classified as behaviour-facing, with reasoning.\n- The `## Acceptance Scenarios / Feature Files` section names the exact feature file and enumerates each new/changed scenario, including a deliberate, well-justified decision to keep the concurrency scenario `@not-ui`/domain-only rather than force browser-timing Gherkin.\n- 21 acceptance criteria are concrete and testable (idempotency semantics, error-precedence rule, audit gating, projection-preservation, etc.).\n- \"Open Business Decisions: None known\" is followed by seven previously-resolved decisions restated as confirmed, including the tie-break rule (final-member feedback takes precedence over sole-Admin feedback) — this is exactly the kind of ambiguous product-copy decision that often gets left open, and it's closed here.\n\n### 4. Implementation plan and technical decisions — resolved and specific\n13 ordered steps name concrete modules, files, and test locations (`Memba.Membership.Club`, `web/test/memba/membership/club_test.exs`, `Memba.Membership.AdminInvariant.Audit.run!/0`, `Memba.Release.migrate/0`). The historical-compatibility strategy (native lifecycle facts permanently override delayed Everyone events) is precisely specified with a worked example. The Technical Decisions section closes out every major open question I'd expect a reviewer to raise: consistency boundary, atomicity boundary (explicitly excluding person/invitation/email from the atomicity claim), concurrency handling (relying on Commanded's own aggregate serialization, no new lock), release-audit ordering, and error precedence.\n\n### 5. Expected capability and validation — clear\n\"New Capability\" states the concrete post-iteration guarantee in one paragraph. The Validation Plan lists 10 concrete checks (pure aggregate tests, stream-replay comparison against projections, audit failure blocking the backfill, concurrent-dispatch integration test, failure-injection retry test, manual demo script, `dev check`). This is proof-oriented, not just \"tests will pass.\"\n\n### Blocking gaps\nNone.\n\n### Non-blocking improvements\n1. Step 4 says \"remove the old aggregate module if it has no replay-only caller, otherwise mark it legacy/unregistered and create a named follow-up\" — the plan could optionally pre-name that follow-up doc now rather than leaving it to be created mid-implementation, but this is a minor process nit, not a readiness blocker.\n2. The plan doesn't state whether `Memba.Membership.Membership` (the old per-membership aggregate) has any other callers beyond `AddMember`/`RemoveMember` (e.g., is it also identified/dispatched for anything else in `router.ex`) — worth a quick grep at implementation start, but low risk since the plan already asks the implementer to verify this.\n3. Risks/Follow-ups section is thorough; two forward-looking follow-ups (archive/close design, bulk-import first-Admin rule) are correctly deferred rather than solved here.\n\n### Smallest viable iteration\nThe plan is already close to minimal. If it needed to shrink further, the smallest still-useful slice would be: move only `AddMember` (activation) to the Club aggregate with the atomic first-Admin assignment, covering onboarding conversion and both invitation-acceptance paths — deferring the whole-membership-removal invariant (final-member and sole-Admin-on-removal guards) to a follow-up iteration. That would fix the exact production defect (join paths missing Admin) but would leave the removal-side invariant gap open, which the plan's own Background explicitly identifies as an equally real boundary problem. I don't recommend this split — the plan's stated rationale for doing both together (one aggregate boundary now protects both directions of the same invariant, avoiding a second migration of the same commands later) is sound — but it is the direction to cut if timeline pressure forces a smaller slice.\n\n### Required plan edits\nNone required for readiness.\n\n### Validation plan (recap of what the plan itself specifies)\n- Pure `Club` aggregate unit tests (no DB) for first/later/idempotent/duplicate/removed-ID/removal-guard decisions.\n- Stream-replay tests comparing rehydrated aggregate state against current projections, including the native-vs-delayed-Everyone-event precedence example.\n- Audit (`AdminInvariant.Audit.run!/0`) tested against complete and deliberately incomplete fact sets, plus a release-ordering test proving a failing audit blocks `run_system_groups_backfill` and smoke fixtures.\n- One thin EventStore/dispatch integration test proving same-stream atomic append of `MemberAdded` + first `MemberRoleAssigned`.\n- Concurrent-dispatch integration test for two simultaneous invitation acceptances.\n- Failure-injection/retry tests for invitation acceptance idempotency.\n- Full regression sweep (onboarding, both invitation paths, Staff removal LiveView, member-list, messaging, seeds, smoke fixtures).\n- Cucumber runners exercised for all new/updated scenarios as runner-debt tags are removed.\n- `dev check` on the exact committed delivery candidate.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+              }
+            },
+            {
+              "id": "codex_review",
+              "index": 2,
+              "status": "succeeded",
+              "context_updates": {
+                "codex_review_blocking_gap_count": 0,
+                "codex_review_blocking_gaps": "None",
+                "codex_review_confidence": "High",
+                "codex_review_decision": "READY",
+                "codex_review_required_edits": "None",
+                "last_response": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approv",
+                "last_stage": "codex_review",
+                "response.codex_review": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approved Staff-facing copy for final-member and sole-Admin removal failures.\",\n    \"Optionally name the likely source files for the release audit, command routing, invitation recovery, and Staff LiveView changes.\",\n    \"If replay-only usage prevents deleting the legacy membership aggregate, record its eventual deletion as a named follow-up.\"\n  ],\n  \"smallest_viable_iteration\": \"Move membership activation and removal to the Club aggregate; cover onboarding and both invitation paths; atomically grant the first Admin; enforce the Admin and active-member floors; preserve historical and mixed-stream hydration; run the pre-mutation release audit; retain current projections; and expose blocked-removal feedback on the existing Staff surface.\",\n  \"required_plan_edits\": [],\n  \"validation_plan\": [\n    \"Parse the updated Gherkin and verify unfinished scenarios remain excluded until their support is executable.\",\n    \"Use pure Club aggregate tests to prove first and later activation, idempotency, duplicate and removed-ID rejection, sole-Admin protection, final-member protection, and allowed removal with a replacement Admin.\",\n    \"Replay historical and mixed Club streams and prove roster and active-Admin state remain correct.\",\n    \"Prove MemberAdded and the first MemberRoleAssigned are appended atomically to the same Club stream.\",\n    \"Exercise concurrent invitation acceptances and prove both memberships activate while exactly one automatic Admin assignment is created.\",\n    \"Prove compatibility-audit failure prevents the system-group backfill and production smoke-fixture mutations.\",\n    \"Inject and recover from invitation failures without duplicate people, memberships, invitation acceptance, or Admin assignments.\",\n    \"Run the relevant projection, system-group, onboarding, invitation, LiveView, Cucumber, seed, and smoke-fixture regressions.\",\n    \"Complete the manual Staff workflow demonstration and run dev check on the exact delivery candidate.\"\n  ],\n  \"workflow_evidence\": \"The complete 227-line plan was read directly. It clearly states the business outcome and actors, maintains a coherent invariant-focused scope with explicit non-goals, classifies the work as behaviour-facing, names shared feature files and scenarios, resolves business and technical decisions, provides ordered implementation details, defines the new capability, and gives an objective stop condition. No files were edited and implementation was not started.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+              }
+            }
+          ],
+          "internal.thread_id": "review_fork",
+          "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.work_dir": "/workspace/memba",
+          "graph.default_fidelity": "summary:high",
+          "failure_signature": "",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.review_fork": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "failure_class": "",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01M237YHJWT5YV4YQ7YCD5QFM7",
+          "outcome": "succeeded",
           "thread.start.current_node": "review_fork",
+          "graph.rankdir": "LR",
+          "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.start": 0
+        },
+        "node_outcomes": {
+          "review_merge": {
+            "status": "succeeded",
+            "notes": "Joined 3 parallel branches",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.results": [
+                {
+                  "id": "gemini_review",
+                  "index": 0,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "gemini_review_blocking_gap_count": 0,
+                    "gemini_review_blocking_gaps": "None",
+                    "gemini_review_confidence": "High",
+                    "gemini_review_decision": "READY",
+                    "gemini_review_required_edits": "None",
+                    "last_response": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It",
+                    "last_stage": "gemini_review",
+                    "response.gemini_review": "### Iteration Plan Review: 059-populated-clubs-always-have-an-admin\n\n**Decision:** READY\n**Confidence:** High\n\nThe iteration plan is exceptionally well-structured, clear, and thoroughly researched. It correctly identifies the boundary root cause of the invariant failure, defines a precise business rule, and outlines a comprehensive strategy for migrating write boundaries and handling legacy event hydration securely. \n\n### Blocking Gaps\n1. None\n\n### Non-blocking Improvements\n1. None. The considerations around hydration precedence, idempotent retries without transactions, and release gating demonstrate a high degree of operational maturity and completeness.\n\n### Smallest Viable Iteration\nThe planned slice is the smallest viable increment. It moves the exact write models needed for the invariant into a shared aggregate boundary without introducing a premature saga/process manager or attempting to rewrite historical event streams.\n\n### Required Plan Edits\n- None\n\n### Validation Plan\nThe plan's validation strategy is complete and robust. Success will be proven by:\n- Pure aggregate tests confirming the event list atomicity and invariant rejections without database dependencies.\n- A deterministic release-time audit that prevents mutation if required historic facts are missing.\n- End-to-end integration proving exactly one automatic Admin is assigned during concurrent invitation acceptance.\n- Cucumber BDD scenarios verifying the domain rules and error precedence for removal actions.\n- Failure-injection tests proving idempotent recovery during invitation retries. \n- A clean pass of the `dev check` suite on the delivered integration.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```"
+                  }
+                },
+                {
+                  "id": "claude_review",
+                  "index": 1,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "claude_review_blocking_gap_count": 0,
+                    "claude_review_blocking_gaps": "None",
+                    "claude_review_confidence": "High",
+                    "claude_review_decision": "READY",
+                    "claude_review_required_edits": "None",
+                    "last_response": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to",
+                    "last_stage": "claude_review",
+                    "response.claude_review": "This confirms the plan's description of the current implementation is accurate. Everything checks out — the plan's characterization of current code matches reality. Now I have sufficient evidence to produce the review.\n\n## Report: Iteration 059 — Populated clubs always have an Admin\n\n**Decision: READY**\n**Confidence: High**\n\nI read the full plan file (227 lines) directly and cross-checked its factual claims against the current codebase (`web/lib/memba/membership/club.ex`, `web/lib/memba/membership.ex`, `web/lib/memba/membership/router.ex`, `web/lib/memba/release.ex`, and `acceptance-tests/features/club_membership_administration.feature`). All architectural claims in the Background/Context and Technical Decisions sections match the current implementation exactly: `AddMember`/`RemoveMember` are routed to the `Membership` aggregate keyed by `membership_id` (not `Club`), the `Club` aggregate already owns `role_assignments` and emits `MemberRoleAssigned`/`MemberRoleRemoved`, the existing last-Admin guard in `remove_member_role_as_club_member/2` is a projection-backed preflight (`active_role_assignment_count`) with no equivalent guard for whole-member removal, and the release pipeline already has a `run_system_groups_backfill` step the plan proposes to gate. The plan's technical narrative is not speculative — it's an accurate diagnosis of real code.\n\n### 1. Goal clarity — clear\nThe goal names the invariant, the actor (Staff performing removals, invitees joining), the business outcome (no populated club is ever left without an Admin), and the mechanism boundary (aggregate-protected, atomic). This is unambiguous and outcome-focused, not just a task list.\n\n### 2. Scope focus — focused, single coherent outcome\nScope is one invariant enforced consistently across all activation/removal paths. The out-of-scope list is unusually disciplined (no archive/close, no bulk import, no saga/coordinator, no new roles, no UI redesign), which sharply bounds the work. It could not obviously be smaller while still closing the actual production gap, because the gap exists precisely in the paths (invitation acceptance, whole-member removal) that a narrower slice would have to leave unprotected.\n\n### 3. Acceptance criteria / BDD / business decisions — resolved\n- Iteration Type is explicitly classified as behaviour-facing, with reasoning.\n- The `## Acceptance Scenarios / Feature Files` section names the exact feature file and enumerates each new/changed scenario, including a deliberate, well-justified decision to keep the concurrency scenario `@not-ui`/domain-only rather than force browser-timing Gherkin.\n- 21 acceptance criteria are concrete and testable (idempotency semantics, error-precedence rule, audit gating, projection-preservation, etc.).\n- \"Open Business Decisions: None known\" is followed by seven previously-resolved decisions restated as confirmed, including the tie-break rule (final-member feedback takes precedence over sole-Admin feedback) — this is exactly the kind of ambiguous product-copy decision that often gets left open, and it's closed here.\n\n### 4. Implementation plan and technical decisions — resolved and specific\n13 ordered steps name concrete modules, files, and test locations (`Memba.Membership.Club`, `web/test/memba/membership/club_test.exs`, `Memba.Membership.AdminInvariant.Audit.run!/0`, `Memba.Release.migrate/0`). The historical-compatibility strategy (native lifecycle facts permanently override delayed Everyone events) is precisely specified with a worked example. The Technical Decisions section closes out every major open question I'd expect a reviewer to raise: consistency boundary, atomicity boundary (explicitly excluding person/invitation/email from the atomicity claim), concurrency handling (relying on Commanded's own aggregate serialization, no new lock), release-audit ordering, and error precedence.\n\n### 5. Expected capability and validation — clear\n\"New Capability\" states the concrete post-iteration guarantee in one paragraph. The Validation Plan lists 10 concrete checks (pure aggregate tests, stream-replay comparison against projections, audit failure blocking the backfill, concurrent-dispatch integration test, failure-injection retry test, manual demo script, `dev check`). This is proof-oriented, not just \"tests will pass.\"\n\n### Blocking gaps\nNone.\n\n### Non-blocking improvements\n1. Step 4 says \"remove the old aggregate module if it has no replay-only caller, otherwise mark it legacy/unregistered and create a named follow-up\" — the plan could optionally pre-name that follow-up doc now rather than leaving it to be created mid-implementation, but this is a minor process nit, not a readiness blocker.\n2. The plan doesn't state whether `Memba.Membership.Membership` (the old per-membership aggregate) has any other callers beyond `AddMember`/`RemoveMember` (e.g., is it also identified/dispatched for anything else in `router.ex`) — worth a quick grep at implementation start, but low risk since the plan already asks the implementer to verify this.\n3. Risks/Follow-ups section is thorough; two forward-looking follow-ups (archive/close design, bulk-import first-Admin rule) are correctly deferred rather than solved here.\n\n### Smallest viable iteration\nThe plan is already close to minimal. If it needed to shrink further, the smallest still-useful slice would be: move only `AddMember` (activation) to the Club aggregate with the atomic first-Admin assignment, covering onboarding conversion and both invitation-acceptance paths — deferring the whole-membership-removal invariant (final-member and sole-Admin-on-removal guards) to a follow-up iteration. That would fix the exact production defect (join paths missing Admin) but would leave the removal-side invariant gap open, which the plan's own Background explicitly identifies as an equally real boundary problem. I don't recommend this split — the plan's stated rationale for doing both together (one aggregate boundary now protects both directions of the same invariant, avoiding a second migration of the same commands later) is sound — but it is the direction to cut if timeline pressure forces a smaller slice.\n\n### Required plan edits\nNone required for readiness.\n\n### Validation plan (recap of what the plan itself specifies)\n- Pure `Club` aggregate unit tests (no DB) for first/later/idempotent/duplicate/removed-ID/removal-guard decisions.\n- Stream-replay tests comparing rehydrated aggregate state against current projections, including the native-vs-delayed-Everyone-event precedence example.\n- Audit (`AdminInvariant.Audit.run!/0`) tested against complete and deliberately incomplete fact sets, plus a release-ordering test proving a failing audit blocks `run_system_groups_backfill` and smoke fixtures.\n- One thin EventStore/dispatch integration test proving same-stream atomic append of `MemberAdded` + first `MemberRoleAssigned`.\n- Concurrent-dispatch integration test for two simultaneous invitation acceptances.\n- Failure-injection/retry tests for invitation acceptance idempotency.\n- Full regression sweep (onboarding, both invitation paths, Staff removal LiveView, member-list, messaging, seeds, smoke fixtures).\n- Cucumber runners exercised for all new/updated scenarios as runner-debt tags are removed.\n- `dev check` on the exact committed delivery candidate.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
+                  }
+                },
+                {
+                  "id": "codex_review",
+                  "index": 2,
+                  "status": "succeeded",
+                  "context_updates": {
+                    "codex_review_blocking_gap_count": 0,
+                    "codex_review_blocking_gaps": "None",
+                    "codex_review_confidence": "High",
+                    "codex_review_decision": "READY",
+                    "codex_review_required_edits": "None",
+                    "last_response": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approv",
+                    "last_stage": "codex_review",
+                    "response.codex_review": "{\n  \"outcome\": \"succeeded\",\n  \"decision\": \"READY\",\n  \"confidence\": \"High\",\n  \"blocking_gaps\": [],\n  \"non_blocking_improvements\": [\n    \"Optionally specify the exact domain error identifiers and approved Staff-facing copy for final-member and sole-Admin removal failures.\",\n    \"Optionally name the likely source files for the release audit, command routing, invitation recovery, and Staff LiveView changes.\",\n    \"If replay-only usage prevents deleting the legacy membership aggregate, record its eventual deletion as a named follow-up.\"\n  ],\n  \"smallest_viable_iteration\": \"Move membership activation and removal to the Club aggregate; cover onboarding and both invitation paths; atomically grant the first Admin; enforce the Admin and active-member floors; preserve historical and mixed-stream hydration; run the pre-mutation release audit; retain current projections; and expose blocked-removal feedback on the existing Staff surface.\",\n  \"required_plan_edits\": [],\n  \"validation_plan\": [\n    \"Parse the updated Gherkin and verify unfinished scenarios remain excluded until their support is executable.\",\n    \"Use pure Club aggregate tests to prove first and later activation, idempotency, duplicate and removed-ID rejection, sole-Admin protection, final-member protection, and allowed removal with a replacement Admin.\",\n    \"Replay historical and mixed Club streams and prove roster and active-Admin state remain correct.\",\n    \"Prove MemberAdded and the first MemberRoleAssigned are appended atomically to the same Club stream.\",\n    \"Exercise concurrent invitation acceptances and prove both memberships activate while exactly one automatic Admin assignment is created.\",\n    \"Prove compatibility-audit failure prevents the system-group backfill and production smoke-fixture mutations.\",\n    \"Inject and recover from invitation failures without duplicate people, memberships, invitation acceptance, or Admin assignments.\",\n    \"Run the relevant projection, system-group, onboarding, invitation, LiveView, Cucumber, seed, and smoke-fixture regressions.\",\n    \"Complete the manual Staff workflow demonstration and run dev check on the exact delivery candidate.\"\n  ],\n  \"workflow_evidence\": \"The complete 227-line plan was read directly. It clearly states the business outcome and actors, maintains a coherent invariant-focused scope with explicit non-goals, classifies the work as behaviour-facing, names shared feature files and scenarios, resolves business and technical decisions, provides ordered implementation details, defines the new capability, and gives an objective stop condition. No files were edited and implementation was not started.\",\n  \"context_updates\": {\n    \"codex_review_decision\": \"READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 0,\n    \"codex_review_blocking_gaps\": \"None\",\n    \"codex_review_required_edits\": \"None\"\n  }\n}"
+                  }
+                }
+              ],
+              "parallel.branch_count": 3
+            },
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          }
+        },
+        "next_node_id": "synthesize",
+        "git_commit_sha": "0f76782cdf17cee898c6fc8424b6a9b435c6163f",
+        "node_visits": {
+          "review_merge": 1,
+          "review_fork": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-09-09T14:11:09.547456143Z",
+        "current_node": "synthesize",
+        "completed_nodes": [
+          "start",
+          "review_fork",
+          "review_merge",
+          "synthesize"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "outcome": "succeeded",
+          "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "internal.fidelity": "summary:high",
+          "preferred_label": "validated",
+          "failure_signature": "",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.review_fork": 0,
+          "plan_needs_human": false,
+          "internal.thread_id": "review_merge",
+          "internal.work_dir": "/workspace/memba",
+          "current_node": "synthesize",
+          "graph.rankdir": "LR",
+          "parallel.branch_count": 3,
+          "last_stage": "synthesize",
+          "thread.start.current_node": "review_fork",
+          "internal.node_visit_count": 1,
+          "plan_needs_fix": false,
+          "internal.retry_count.synthesize": 0,
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "parallel.results": [
             {
@@ -686,22 +1019,14 @@
               }
             }
           ],
-          "parallel.branch_count": 3,
-          "thread.review_fork.current_node": "review_merge",
-          "failure_signature": "",
-          "graph.default_fidelity": "summary:high",
-          "internal.retry_count.start": 0,
-          "internal.retry_count.review_fork": 0,
+          "plan_ready": true,
+          "thread.review_merge.current_node": "synthesize",
           "internal.retry_count.review_merge": 0,
-          "internal.thread_id": "review_fork",
           "graph.model_stylesheet": "\n            * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #gemini_review { provider: openrouter; model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { provider: openrouter; model: claude-sonnet-5; reasoning_effort: high; }\n            #codex_review { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #synthesize { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #codex_update { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }\n            #terra_recheck { provider: openai; model: gpt-5.6-terra; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "internal.work_dir": "/workspace/memba",
-          "current_node": "review_merge",
-          "graph.rankdir": "LR",
+          "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
           "internal.run_id": "01M237YHJWT5YV4YQ7YCD5QFM7",
-          "internal.node_visit_count": 1,
-          "outcome": "succeeded",
-          "internal.fidelity": "summary:high"
+          "thread.review_fork.current_node": "review_merge",
+          "failure_class": ""
         },
         "node_outcomes": {
           "review_fork": {
@@ -768,10 +1093,51 @@
             "status": "succeeded",
             "notes": "Joined 3 parallel branches",
             "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "preferred_label": "validated",
+            "context_updates": {
+              "plan_needs_human": false,
+              "response.synthesize": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "last_response": "{\n  \"preferred_next_label\": \"validated\",\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "plan_ready": true,
+              "last_stage": "synthesize",
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.6-sol"
+                  },
+                  "tokens": {
+                    "input_tokens": 4940,
+                    "output_tokens": 54,
+                    "reasoning_tokens": 355,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 36970
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 16510,
+              "tool_time_ms": 0,
+              "active_time_ms": 16510
+            }
           }
         },
-        "next_node_id": "synthesize",
+        "next_node_id": "publish_ready",
         "node_visits": {
+          "synthesize": 1,
           "start": 1,
           "review_fork": 1,
           "review_merge": 1
@@ -806,6 +1172,42 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "review_merge@1": {
+      "first_event_seq": 192,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Joined 3 parallel branches",
+        "failure_reason": null,
+        "timestamp": "2026-09-09T14:10:49.048253160Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-09T14:10:49.047603076Z",
+      "handler": "parallel.fan_in",
+      "graph_visit": 1,
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "succeeded"
+    },
     "codex_review@1": {
       "first_event_seq": 28,
       "prompt": null,
@@ -1511,6 +1913,36 @@
       },
       "agent_control": "running",
       "state": "succeeded"
+    },
+    "synthesize@1": {
+      "first_event_seq": 200,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-09-09T14:10:52.992536137Z",
+      "handler": "prompt",
+      "graph_visit": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "agent_control": "running",
+      "state": "running"
     }
   }
 }
