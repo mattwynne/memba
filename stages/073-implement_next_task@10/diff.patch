@@ -1,0 +1,317 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index f4650c9..63035f8 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+ - [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+ - [x] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+-- [ ] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
++- [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+ - [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+ - [ ] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+ - [ ] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 7b5dd85..5d2a884 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -223,6 +223,12 @@ defmodule Memba.Membership.Club do
+            validate_optional_id(:person, command.assigned_by_person_id, :invalid_actor_person_id),
+          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
+          :ok <- ensure_role_exists(club, command.role_id),
++         :ok <-
++           ensure_active_role_assignment_target(
++             club,
++             command.membership_id,
++             command.person_id
++           ),
+          :ok <- ensure_role_assignment_available(club, command.membership_id, command.role_id) do
+       %MemberRoleAssigned{
+         club_id: command.club_id,
+@@ -250,6 +256,12 @@ defmodule Memba.Membership.Club do
+              command.membership_id,
+              command.person_id,
+              command.role_id
++           ),
++         :ok <-
++           ensure_admin_role_removal_keeps_active_admin(
++             club,
++             command.membership_id,
++             command.role_id
+            ) do
+       %MemberRoleRemoved{
+         club_id: command.club_id,
+@@ -575,6 +587,14 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp ensure_active_role_assignment_target(%__MODULE__{} = club, membership_id, person_id) do
++    if Map.get(club.active_memberships, membership_id) == person_id do
++      :ok
++    else
++      {:error, :member_not_active}
++    end
++  end
++
+   defp ensure_role_assignment_exists(%__MODULE__{} = club, membership_id, person_id, role_id) do
+     assignment_key = role_assignment_key(membership_id, role_id)
+ 
+@@ -585,6 +605,22 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp ensure_admin_role_removal_keeps_active_admin(
++         %__MODULE__{} = club,
++         membership_id,
++         role_id
++       ) do
++    admin_role_id = Roles.membership_administrator_role_id(club.club_id)
++
++    if role_id == admin_role_id and
++         MapSet.member?(club.active_admin_membership_ids, membership_id) and
++         MapSet.size(club.active_admin_membership_ids) == 1 do
++      {:error, :last_membership_administrator}
++    else
++      :ok
++    end
++  end
++
+   defp create_group_decision(
+          %__MODULE__{} = club,
+          %CreateGroup{} = command,
+diff --git a/web/lib/memba/membership/commands/assign_member_role.ex b/web/lib/memba/membership/commands/assign_member_role.ex
+index cefa97c..99a7698 100644
+--- a/web/lib/memba/membership/commands/assign_member_role.ex
++++ b/web/lib/memba/membership/commands/assign_member_role.ex
+@@ -2,9 +2,9 @@ defmodule Memba.Membership.Commands.AssignMemberRole do
+   @moduledoc """
+   Command to assign a club role to an active member.
+ 
+-  The caller supplies the club aggregate identity as `club_id`. Application
+-  services are responsible for checking that `membership_id` is currently active
+-  before dispatching.
++  The caller supplies the club aggregate identity as `club_id`. The Club
++  aggregate checks that `membership_id` and `person_id` identify an active
++  membership before assigning the role.
+   """
+ 
+   @enforce_keys [:club_id, :membership_id, :person_id, :role_id]
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 2be1403..79ea765 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -1022,7 +1022,7 @@ defmodule Memba.Membership.ClubTest do
+   describe "execute/2 AssignMemberRole and RemoveMemberRole" do
+     test "emits role assignment and role removal events for a member" do
+       club_id = Memba.ID.generate(:club)
+-      role_id = Roles.membership_administrator_role_id(club_id)
++      role_id = Memba.ID.generate(:role)
+       membership_id = Memba.ID.generate(:membership)
+       person_id = Memba.ID.generate(:person)
+       actor_person_id = Memba.ID.generate(:person)
+@@ -1030,8 +1030,9 @@ defmodule Memba.Membership.ClubTest do
+       club =
+         club_id
+         |> created_club()
+-        |> define_membership_administrator_role(role_id)
++        |> define_role(role_id, "treasurer", "Treasurer")
+         |> grant_manage_members_permission(role_id)
++        |> activate_member(membership_id, person_id)
+ 
+       assert %MemberRoleAssigned{
+                club_id: ^club_id,
+@@ -1076,6 +1077,7 @@ defmodule Memba.Membership.ClubTest do
+         club_id
+         |> created_club()
+         |> define_membership_administrator_role(role_id)
++        |> activate_member(membership_id, person_id)
+ 
+       assert {:error, :role_assignment_not_found} =
+                Club.execute(club, %RemoveMemberRole{
+@@ -1096,6 +1098,77 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "rejects assigning a role to an inactive membership" do
++      club_id = Memba.ID.generate(:club)
++      role_id = Memba.ID.generate(:role)
++
++      club =
++        club_id
++        |> created_club()
++        |> define_role(role_id, "treasurer", "Treasurer")
++
++      assert {:error, :member_not_active} =
++               Club.execute(club, %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: Memba.ID.generate(:membership),
++                 person_id: Memba.ID.generate(:person),
++                 role_id: role_id
++               })
++    end
++
++    test "rejects removing the sole active Admin assignment" do
++      club_id = Memba.ID.generate(:club)
++      role_id = Roles.membership_administrator_role_id(club_id)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> define_membership_administrator_role(role_id)
++        |> activate_member(membership_id, person_id)
++        |> assign_member_role(membership_id, person_id, role_id)
++
++      assert {:error, :last_membership_administrator} =
++               Club.execute(club, %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               })
++    end
++
++    test "allows removing an Admin assignment when another active Admin remains" do
++      club_id = Memba.ID.generate(:club)
++      role_id = Roles.membership_administrator_role_id(club_id)
++      first_membership_id = Memba.ID.generate(:membership)
++      first_person_id = Memba.ID.generate(:person)
++      second_membership_id = Memba.ID.generate(:membership)
++      second_person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> define_membership_administrator_role(role_id)
++        |> activate_member(first_membership_id, first_person_id)
++        |> activate_member(second_membership_id, second_person_id)
++        |> assign_member_role(first_membership_id, first_person_id, role_id)
++        |> assign_member_role(second_membership_id, second_person_id, role_id)
++
++      assert %MemberRoleRemoved{
++               club_id: ^club_id,
++               membership_id: ^first_membership_id,
++               person_id: ^first_person_id,
++               role_id: ^role_id
++             } =
++               Club.execute(club, %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: first_membership_id,
++                 person_id: first_person_id,
++                 role_id: role_id
++               })
++    end
++
+     test "rejects assigning a role that has not been defined" do
+       club_id = Memba.ID.generate(:club)
+ 
+@@ -1244,11 +1317,20 @@ defmodule Memba.Membership.ClubTest do
+   end
+ 
+   defp define_membership_administrator_role(%Club{} = club, role_id) do
++    define_role(
++      club,
++      role_id,
++      Roles.membership_administrator_key(),
++      Roles.membership_administrator_name()
++    )
++  end
++
++  defp define_role(%Club{} = club, role_id, role_key, name) do
+     Club.apply(club, %ClubRoleDefined{
+       club_id: club.club_id,
+       role_id: role_id,
+-      role_key: Roles.membership_administrator_key(),
+-      name: Roles.membership_administrator_name()
++      role_key: role_key,
++      name: name
+     })
+   end
+ 
+@@ -1260,6 +1342,14 @@ defmodule Memba.Membership.ClubTest do
+     })
+   end
+ 
++  defp activate_member(%Club{} = club, membership_id, person_id) do
++    Club.apply(club, %MemberAdded{
++      club_id: club.club_id,
++      membership_id: membership_id,
++      person_id: person_id
++    })
++  end
++
+   defp assign_member_role(%Club{} = club, membership_id, person_id, role_id) do
+     Club.apply(club, %MemberRoleAssigned{
+       club_id: club.club_id,
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index ae9d70b..68a1131 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+   alias Memba.Membership.App
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.AddGroupMember
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.AssignMemberRole
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreateGroup
+@@ -296,10 +297,20 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+                consistency: :strong
+              )
+ 
++    assert :ok =
++             App.dispatch(
++               %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 8,
++              aggregate_version: 12,
+               events: [
+                 %ClubRoleDefined{
+                   club_id: ^club_id,
+@@ -323,7 +334,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 9,
++              aggregate_version: 13,
+               events: [
+                 %ClubRolePermissionGranted{
+                   club_id: ^club_id,
+@@ -345,7 +356,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 10,
++              aggregate_version: 14,
+               events: [
+                 %MemberRoleAssigned{
+                   club_id: ^club_id,
+@@ -369,7 +380,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert {:ok,
+             %ExecutionResult{
+               aggregate_uuid: ^club_id,
+-              aggregate_version: 11,
++              aggregate_version: 15,
+               events: [
+                 %MemberRoleRemoved{
+                   club_id: ^club_id,
+@@ -380,8 +391,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+               ],
+               aggregate_state: %Club{
+                 club_id: ^club_id,
+-                roles: %{^role_id => %{role_key: "custom_membership_manager"}},
+-                role_assignments: %{}
++                roles: %{^role_id => %{role_key: "custom_membership_manager"}}
+               }
+             }} =
+              App.dispatch(
