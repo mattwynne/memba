@@ -1,0 +1,335 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index aa5c31a..ebf77c6 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Extend Club aggregate state with active roster entries, permanent native-lifecycle markers, and active Admins derived by intersecting active roster IDs with active Admin-role assignments.
+ - [x] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+ - [x] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+-- [ ] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
++- [x] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+ - [ ] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+ - [ ] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+ - [ ] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 867ddbb..141de57 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -253,9 +253,9 @@ defmodule Memba.Membership do
+   @doc """
+   Add a person as an active member of a club through the Membership context.
+ 
+-  The caller supplies the membership aggregate identity as `:membership_id` or
+-  `"membership_id"`. A second active membership for the same club/person pair is
+-  rejected before dispatch.
++  The caller supplies the membership identity as `:membership_id` or
++  `"membership_id"`. The command is routed to the Club aggregate. A second
++  active membership for the same club/person pair is rejected before dispatch.
+   """
+   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- add_member_command(attrs),
+@@ -332,8 +332,7 @@ defmodule Memba.Membership do
+   This orchestration creates an ordinary active membership for the invited club
+   and then marks the invitation accepted with the person and membership IDs. The
+   caller supplies `:person_id` and may supply `:membership_id`; otherwise this
+-  application service generates the membership aggregate identity before
+-  dispatch.
++  application service generates the membership identity before dispatch.
+   """
+   def accept_club_member_invitation_for_existing_person(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+diff --git a/web/lib/memba/membership/membership.ex b/web/lib/memba/membership/membership.ex
+deleted file mode 100644
+index 8227c3d..0000000
+--- a/web/lib/memba/membership/membership.ex
++++ /dev/null
+@@ -1,73 +0,0 @@
+-defmodule Memba.Membership.Membership do
+-  @moduledoc """
+-  Membership aggregate for the Membership bounded context.
+-  """
+-
+-  alias Commanded.Aggregates.Aggregate
+-  alias Memba.ID
+-  alias Memba.Membership.Commands.AddMember
+-  alias Memba.Membership.Commands.RemoveMember
+-  alias Memba.Membership.Events.MemberAdded
+-  alias Memba.Membership.Events.MemberRemoved
+-
+-  @behaviour Aggregate
+-
+-  defstruct [:membership_id, :club_id, :person_id, active: false]
+-
+-  @impl Aggregate
+-  def execute(%__MODULE__{membership_id: nil}, %AddMember{} = command) do
+-    with :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+-         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+-         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
+-      %MemberAdded{
+-        membership_id: command.membership_id,
+-        club_id: command.club_id,
+-        person_id: command.person_id
+-      }
+-    end
+-  end
+-
+-  def execute(%__MODULE__{}, %AddMember{}), do: {:error, :already_added}
+-
+-  def execute(%__MODULE__{membership_id: nil}, %RemoveMember{}), do: {:error, :not_found}
+-
+-  def execute(%__MODULE__{active: false}, %RemoveMember{}), do: {:error, :already_removed}
+-
+-  def execute(%__MODULE__{} = membership, %RemoveMember{} = command) do
+-    with :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+-         :ok <- validate_same_membership(membership.membership_id, command.membership_id) do
+-      %MemberRemoved{
+-        membership_id: command.membership_id,
+-        club_id: membership.club_id,
+-        person_id: membership.person_id
+-      }
+-    end
+-  end
+-
+-  @impl Aggregate
+-  def apply(%__MODULE__{} = membership, %MemberAdded{} = event) do
+-    %__MODULE__{
+-      membership
+-      | membership_id: event.membership_id,
+-        club_id: event.club_id,
+-        person_id: event.person_id,
+-        active: true
+-    }
+-  end
+-
+-  def apply(%__MODULE__{} = membership, %MemberRemoved{}) do
+-    %__MODULE__{membership | active: false}
+-  end
+-
+-  defp validate_same_membership(membership_id, membership_id), do: :ok
+-
+-  defp validate_same_membership(_membership_id, _command_membership_id),
+-    do: {:error, :membership_id_mismatch}
+-
+-  defp validate_id(type, value, error) do
+-    case ID.cast(type, value) do
+-      {:ok, ^value} -> :ok
+-      _other -> {:error, error}
+-    end
+-  end
+-end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index aa94ba3..f4f8bbc 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -1,6 +1,9 @@
+ defmodule Memba.Membership.Router do
+   @moduledoc """
+   Command router for Membership commands.
++
++  Membership activation and removal share the Club aggregate boundary with
++  club roles and their invariants. There is no membership-ID aggregate route.
+   """
+ 
+   use Commanded.Commands.Router
+diff --git a/web/test/memba/membership/add_member_dispatch_test.exs b/web/test/memba/membership/add_member_dispatch_test.exs
+index b9681d4..9694f59 100644
+--- a/web/test/memba/membership/add_member_dispatch_test.exs
++++ b/web/test/memba/membership/add_member_dispatch_test.exs
+@@ -10,6 +10,10 @@ defmodule Memba.Membership.AddMemberDispatchTest do
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.MemberRemoved
+ 
++  test "legacy membership-ID aggregate write model is not available" do
++    refute Code.ensure_loaded?(Memba.Membership.Membership)
++  end
++
+   test "Membership app routes member activation and removal to the Club aggregate" do
+     membership_id = Memba.ID.generate(:membership)
+     club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/membership/membership_test.exs b/web/test/memba/membership/membership_test.exs
+deleted file mode 100644
+index 28f976c..0000000
+--- a/web/test/memba/membership/membership_test.exs
++++ /dev/null
+@@ -1,181 +0,0 @@
+-defmodule Memba.Membership.MembershipTest do
+-  use ExUnit.Case, async: true
+-
+-  alias Memba.Membership.Commands.AddMember
+-  alias Memba.Membership.Commands.RemoveMember
+-  alias Memba.Membership.Events.MemberAdded
+-  alias Memba.Membership.Events.MemberRemoved
+-  alias Memba.Membership.Membership
+-
+-  describe "execute/2 AddMember" do
+-    test "emits MemberAdded using the caller-supplied UUID identity" do
+-      membership_id = Memba.ID.generate(:membership)
+-      club_id = Memba.ID.generate(:club)
+-      person_id = Memba.ID.generate(:person)
+-
+-      command = %AddMember{
+-        membership_id: membership_id,
+-        club_id: club_id,
+-        person_id: person_id
+-      }
+-
+-      assert %MemberAdded{
+-               membership_id: ^membership_id,
+-               club_id: ^club_id,
+-               person_id: ^person_id
+-             } = Membership.execute(%Membership{}, command)
+-    end
+-
+-    test "rejects missing or malformed membership UUIDs" do
+-      assert {:error, :invalid_membership_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: nil,
+-                 club_id: Memba.ID.generate(:club),
+-                 person_id: Memba.ID.generate(:person)
+-               })
+-
+-      assert {:error, :invalid_membership_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: "not-a-uuid",
+-                 club_id: Memba.ID.generate(:club),
+-                 person_id: Memba.ID.generate(:person)
+-               })
+-    end
+-
+-    test "rejects missing or malformed club UUIDs" do
+-      assert {:error, :invalid_club_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
+-                 club_id: nil,
+-                 person_id: Memba.ID.generate(:person)
+-               })
+-
+-      assert {:error, :invalid_club_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
+-                 club_id: "not-a-uuid",
+-                 person_id: Memba.ID.generate(:person)
+-               })
+-    end
+-
+-    test "rejects missing or malformed person UUIDs" do
+-      assert {:error, :invalid_person_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
+-                 club_id: Memba.ID.generate(:club),
+-                 person_id: nil
+-               })
+-
+-      assert {:error, :invalid_person_id} =
+-               Membership.execute(%Membership{}, %AddMember{
+-                 membership_id: Memba.ID.generate(:membership),
+-                 club_id: Memba.ID.generate(:club),
+-                 person_id: "not-a-uuid"
+-               })
+-    end
+-
+-    test "rejects adding the same membership aggregate twice" do
+-      membership_id = Memba.ID.generate(:membership)
+-      club_id = Memba.ID.generate(:club)
+-      person_id = Memba.ID.generate(:person)
+-
+-      membership =
+-        Membership.apply(%Membership{}, %MemberAdded{
+-          membership_id: membership_id,
+-          club_id: club_id,
+-          person_id: person_id
+-        })
+-
+-      assert {:error, :already_added} =
+-               Membership.execute(membership, %AddMember{
+-                 membership_id: membership_id,
+-                 club_id: club_id,
+-                 person_id: person_id
+-               })
+-    end
+-  end
+-
+-  describe "execute/2 RemoveMember" do
+-    test "emits MemberRemoved for an active membership" do
+-      membership_id = Memba.ID.generate(:membership)
+-      club_id = Memba.ID.generate(:club)
+-      person_id = Memba.ID.generate(:person)
+-
+-      membership = active_membership(membership_id, club_id, person_id)
+-
+-      assert %MemberRemoved{
+-               membership_id: ^membership_id,
+-               club_id: ^club_id,
+-               person_id: ^person_id
+-             } =
+-               Membership.execute(membership, %RemoveMember{
+-                 club_id: club_id,
+-                 membership_id: membership_id,
+-                 person_id: person_id
+-               })
+-    end
+-
+-    test "rejects removing a membership that has not been added" do
+-      assert {:error, :not_found} =
+-               Membership.execute(%Membership{}, %RemoveMember{
+-                 club_id: Memba.ID.generate(:club),
+-                 membership_id: Memba.ID.generate(:membership),
+-                 person_id: Memba.ID.generate(:person)
+-               })
+-    end
+-
+-    test "rejects removing a membership twice" do
+-      membership_id = Memba.ID.generate(:membership)
+-      club_id = Memba.ID.generate(:club)
+-      person_id = Memba.ID.generate(:person)
+-
+-      membership =
+-        membership_id
+-        |> active_membership(club_id, person_id)
+-        |> Membership.apply(%MemberRemoved{membership_id: membership_id})
+-
+-      assert {:error, :already_removed} =
+-               Membership.execute(membership, %RemoveMember{
+-                 club_id: club_id,
+-                 membership_id: membership_id,
+-                 person_id: person_id
+-               })
+-    end
+-  end
+-
+-  test "apply/2 records the active membership identity, club, and person" do
+-    membership_id = Memba.ID.generate(:membership)
+-    club_id = Memba.ID.generate(:club)
+-    person_id = Memba.ID.generate(:person)
+-
+-    assert %Membership{
+-             membership_id: ^membership_id,
+-             club_id: ^club_id,
+-             person_id: ^person_id,
+-             active: true
+-           } =
+-             Membership.apply(%Membership{}, %MemberAdded{
+-               membership_id: membership_id,
+-               club_id: club_id,
+-               person_id: person_id
+-             })
+-  end
+-
+-  test "apply/2 records a removed membership as inactive" do
+-    membership_id = Memba.ID.generate(:membership)
+-
+-    membership =
+-      active_membership(membership_id, Memba.ID.generate(:club), Memba.ID.generate(:person))
+-
+-    assert %Membership{active: false} =
+-             Membership.apply(membership, %MemberRemoved{membership_id: membership_id})
+-  end
+-
+-  defp active_membership(membership_id, club_id, person_id) do
+-    Membership.apply(%Membership{}, %MemberAdded{
+-      membership_id: membership_id,
+-      club_id: club_id,
+-      person_id: person_id
+-    })
+-  end
+-end
