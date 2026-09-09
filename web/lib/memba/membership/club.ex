@@ -223,6 +223,12 @@ defmodule Memba.Membership.Club do
            validate_optional_id(:person, command.assigned_by_person_id, :invalid_actor_person_id),
          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
          :ok <- ensure_role_exists(club, command.role_id),
+         :ok <-
+           ensure_active_role_assignment_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
          :ok <- ensure_role_assignment_available(club, command.membership_id, command.role_id) do
       %MemberRoleAssigned{
         club_id: command.club_id,
@@ -249,6 +255,12 @@ defmodule Memba.Membership.Club do
              club,
              command.membership_id,
              command.person_id,
+             command.role_id
+           ),
+         :ok <-
+           ensure_admin_role_removal_keeps_active_admin(
+             club,
+             command.membership_id,
              command.role_id
            ) do
       %MemberRoleRemoved{
@@ -575,6 +587,14 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp ensure_active_role_assignment_target(%__MODULE__{} = club, membership_id, person_id) do
+    if Map.get(club.active_memberships, membership_id) == person_id do
+      :ok
+    else
+      {:error, :member_not_active}
+    end
+  end
+
   defp ensure_role_assignment_exists(%__MODULE__{} = club, membership_id, person_id, role_id) do
     assignment_key = role_assignment_key(membership_id, role_id)
 
@@ -582,6 +602,22 @@ defmodule Memba.Membership.Club do
       {:ok, %{person_id: ^person_id}} -> :ok
       {:ok, %{}} -> {:error, :role_assignment_person_mismatch}
       :error -> {:error, :role_assignment_not_found}
+    end
+  end
+
+  defp ensure_admin_role_removal_keeps_active_admin(
+         %__MODULE__{} = club,
+         membership_id,
+         role_id
+       ) do
+    admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+
+    if role_id == admin_role_id and
+         MapSet.member?(club.active_admin_membership_ids, membership_id) and
+         MapSet.size(club.active_admin_membership_ids) == 1 do
+      {:error, :last_membership_administrator}
+    else
+      :ok
     end
   end
 
