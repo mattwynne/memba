@@ -1,0 +1,215 @@
+diff --git a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+index ebf77c6..103f307 100644
+--- a/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
++++ b/docs/iterations/059-populated-clubs-always-have-an-admin/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Apply historic Everyone events only where no native marker exists. Make native `MemberAdded` or `MemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+ - [x] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+ - [x] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+-- [ ] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
++- [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+ - [ ] 009 Emit `MemberAdded` plus the Admin `MemberRoleAssigned` event for the first activation in one decision. Emit only `MemberAdded` for later members.
+ - [ ] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveMemberRole`.
+ - [ ] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveMember`; apply success to both roster and active-Admin decision state.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 58b7ce7..3176207 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -106,13 +106,8 @@ defmodule Memba.Membership.Club do
+   def execute(%__MODULE__{} = club, %AddMember{} = command) do
+     with :ok <- validate_existing_club_id(club, command.club_id),
+          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+-         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+-         :ok <- ensure_membership_id_available(club, command.membership_id) do
+-      %MemberAdded{
+-        club_id: command.club_id,
+-        membership_id: command.membership_id,
+-        person_id: command.person_id
+-      }
++         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
++      add_member_decision(club, command)
+     end
+   end
+ 
+@@ -435,14 +430,44 @@ defmodule Memba.Membership.Club do
+     validate_id(type, value, error)
+   end
+ 
+-  defp ensure_membership_id_available(%__MODULE__{} = club, membership_id) do
+-    if Map.has_key?(club.active_memberships, membership_id) do
+-      {:error, :already_added}
+-    else
+-      :ok
++  defp add_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
++    case Map.fetch(club.active_memberships, command.membership_id) do
++      {:ok, person_id} when person_id == command.person_id ->
++        []
++
++      {:ok, _different_person_id} ->
++        {:error, :membership_id_already_used}
++
++      :error ->
++        add_inactive_member_decision(club, command)
+     end
+   end
+ 
++  defp add_inactive_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
++    cond do
++      membership_id_recorded?(club, command.membership_id) ->
++        {:error, :membership_id_already_used}
++
++      command.person_id in Map.values(club.active_memberships) ->
++        {:error, :already_active_member}
++
++      true ->
++        %MemberAdded{
++          club_id: command.club_id,
++          membership_id: command.membership_id,
++          person_id: command.person_id
++        }
++    end
++  end
++
++  defp membership_id_recorded?(%__MODULE__{} = club, membership_id) do
++    MapSet.member?(club.native_membership_ids, membership_id) or
++      Map.has_key?(
++        club.group_memberships,
++        group_membership_key(SystemGroups.everyone_group_id(club.club_id), membership_id)
++      )
++  end
++
+   defp ensure_active_membership_identity(%__MODULE__{} = club, membership_id, person_id) do
+     case Map.fetch(club.active_memberships, membership_id) do
+       {:ok, ^person_id} -> :ok
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index fcf0f8d..3494f7b 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -228,6 +228,127 @@ defmodule Memba.Membership.ClubTest do
+                })
+     end
+ 
++    test "treats an exact active membership identity as an idempotent activation" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%MemberAdded{
++          club_id: club_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++
++      assert [] =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      assert {:error, :membership_id_already_used} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: Memba.ID.generate(:person)
++               })
++    end
++
++    test "rejects a different membership identity for an active person" do
++      club_id = Memba.ID.generate(:club)
++      active_membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%MemberAdded{
++          club_id: club_id,
++          membership_id: active_membership_id,
++          person_id: person_id
++        })
++
++      assert {:error, :already_active_member} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: Memba.ID.generate(:membership),
++                 person_id: person_id
++               })
++    end
++
++    test "rejects membership IDs removed through the native lifecycle" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%MemberAdded{
++          club_id: club_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++        |> Club.apply(%MemberRemoved{
++          club_id: club_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++
++      assert {:error, :membership_id_already_used} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++    end
++
++    test "rejects membership IDs removed through historic Everyone compatibility facts" do
++      club_id = Memba.ID.generate(:club)
++      membership_id = Memba.ID.generate(:membership)
++      person_id = Memba.ID.generate(:person)
++      everyone_group_id = SystemGroups.everyone_group_id(club_id)
++
++      club =
++        club_id
++        |> created_club()
++        |> Club.apply(%GroupMemberAdded{
++          club_id: club_id,
++          group_id: everyone_group_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++        |> Club.apply(%GroupMemberRemoved{
++          club_id: club_id,
++          group_id: everyone_group_id,
++          membership_id: membership_id,
++          person_id: person_id
++        })
++
++      assert {:error, :membership_id_already_used} =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id
++               })
++
++      new_membership_id = Memba.ID.generate(:membership)
++
++      assert %MemberAdded{
++               club_id: ^club_id,
++               membership_id: ^new_membership_id,
++               person_id: ^person_id
++             } =
++               Club.execute(club, %AddMember{
++                 club_id: club_id,
++                 membership_id: new_membership_id,
++                 person_id: person_id
++               })
++    end
++
+     test "requires an existing Club and validates every command identity" do
+       club_id = Memba.ID.generate(:club)
+       membership_id = Memba.ID.generate(:membership)
