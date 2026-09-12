@@ -1,0 +1,111 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index 26a08dd..510768b 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
+ - [x] 004 Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+ - [x] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+-- [ ] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
++- [x] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+ - [ ] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+ - [ ] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+ - [ ] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 5c0177f..8dca4cb 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -507,13 +507,25 @@ defmodule MembaWeb.Layouts do
+     ~H"""
+     <div
+       id={@id}
+-      class="connection-status"
++      class={[
++        "connection-status inline-flex max-w-[calc(100vw-2rem)] items-center gap-2",
++        "rounded-full border border-sage-300 bg-paper/95 py-2.5 pr-3.5 pl-3",
++        "text-[13px] font-semibold leading-[1.2] text-ink-2",
++        "shadow-lg shadow-ink/10 backdrop-blur-sm"
++      ]}
+       role="status"
+       aria-live="polite"
+       aria-atomic="true"
+       {@rest}
+     >
+-      <span class="connection-status__spinner" aria-hidden="true"></span>
++      <span
++        class={[
++          "connection-status__spinner size-3.5 shrink-0 rounded-full",
++          "border-2 border-sage-100 border-t-sage-500"
++        ]}
++        aria-hidden="true"
++      >
++      </span>
+       <span>{@message}</span>
+     </div>
+     """
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 822760e..52901d2 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -366,6 +366,47 @@ defmodule MembaWeb.LayoutsTest do
+       assert_selector_count(html, "#server-error.connection-status", 1)
+     end
+ 
++    test "uses the approved compact responsive pill treatment for both states" do
++      html = render_flash_group()
++
++      expected_status_classes = ~w"""
++        connection-status
++        inline-flex
++        max-w-[calc(100vw-2rem)]
++        items-center
++        gap-2
++        rounded-full
++        border
++        border-sage-300
++        bg-paper/95
++        py-2.5
++        pr-3.5
++        pl-3
++        text-[13px]
++        font-semibold
++        leading-[1.2]
++        text-ink-2
++        shadow-lg
++        shadow-ink/10
++        backdrop-blur-sm
++      """
++
++      expected_spinner_classes = ~w"""
++        connection-status__spinner
++        size-3.5
++        shrink-0
++        rounded-full
++        border-2
++        border-sage-100
++        border-t-sage-500
++      """
++
++      for id <- ~w(client-error server-error) do
++        assert classes(html, "##{id}") == expected_status_classes
++        assert classes(html, "##{id} .connection-status__spinner") == expected_spinner_classes
++      end
++    end
++
+     test "renders a decorative connection-status spinner for each state" do
+       html = render_flash_group()
+ 
+@@ -612,6 +653,13 @@ defmodule MembaWeb.LayoutsTest do
+     |> LazyHTML.attribute(attribute)
+   end
+ 
++  defp classes(html, selector) do
++    html
++    |> attributes(selector, "class")
++    |> List.first("")
++    |> String.split()
++  end
++
+   defp restore_system_env(key, nil), do: System.delete_env(key)
+   defp restore_system_env(key, value), do: System.put_env(key, value)
+ end
