@@ -87,9 +87,20 @@ Then("{word} should see the Kootenay Mountaineering Club member dashboard", asyn
 });
 
 Then("the message should be addressed to Kootenay Mountaineering Club members", async function () {
-  await playwrightExpect(this.page.locator("#member-compose-selected-club")).toHaveText(kootenayClubName);
+  const club = this.clubs && this.clubs[kootenayClubName];
+  assert.ok(club, `Expected ${kootenayClubName} to be known in the scenario`);
+
+  const compose = this.page.locator("#member-message-compose");
+  await playwrightExpect(compose).toHaveAttribute("data-club-id", club.clubId);
+  await playwrightExpect(compose).toHaveAttribute("data-audience-group-name", "Everyone");
+  await playwrightExpect(this.page.locator("#member-compose-selected-club")).toHaveText(
+    `In ${kootenayClubName}`
+  );
+  await playwrightExpect(this.page.locator("#member-compose-recipient-summary")).toHaveAttribute(
+    "data-audience-group-name", "Everyone"
+  );
   await playwrightExpect(this.page.locator("#member-compose-recipient-summary")).toContainText(
-    `of ${kootenayClubName}`
+    "of Everyone"
   );
 });
 
