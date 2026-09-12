@@ -63,6 +63,76 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     |> assert_has("#add-person-email-address")
   end
 
+  test "person editor add, remove, and primary controls keep row state explicit", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+
+    {:ok, view, _html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}/people/new")
+
+    assert has_element?(view, "#person-email-row-0[data-primary='true']")
+    assert has_element?(view, "#person-primary-radio-0[checked]")
+    refute has_element?(view, "#remove-person-email-address-0")
+
+    view
+    |> element("#add-person-email-address")
+    |> render_click()
+
+    assert has_element?(view, "#person-email-row-0")
+    assert has_element?(view, "#person-email-row-1[data-primary='false']")
+    assert has_element?(view, "#remove-person-email-address-0")
+    assert has_element?(view, "#remove-person-email-address-1")
+
+    view
+    |> form("#person-form",
+      person: %{
+        name: "Alice Example",
+        primary_email_index: "1",
+        email_addresses: %{
+          "0" => %{email: "alice@example.com"},
+          "1" => %{email: "alice@work.example"}
+        }
+      }
+    )
+    |> render_change()
+
+    assert has_element?(view, "#person-email-row-0[data-primary='false']")
+    assert has_element?(view, "#person-email-row-1[data-primary='true']")
+    assert has_element?(view, "#person-primary-radio-1[checked]")
+
+    view
+    |> element("#remove-person-email-address-1")
+    |> render_click()
+
+    assert has_element?(view, "#person-email-row-0[data-primary='true']")
+    refute has_element?(view, "#person-email-row-1")
+    refute has_element?(view, "#remove-person-email-address-0")
+  end
+
+  test "person editor preserves create and edit form differences", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    {:ok, new_view, _html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}/people/new")
+
+    assert has_element?(new_view, "#person-form[aria-label='Create person'][phx-submit='create_person']")
+    assert has_element?(new_view, "#create-person-button", "Create person")
+    refute has_element?(new_view, "#person-name-input[readonly]")
+
+    {:ok, edit_view, _html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit")
+
+    assert has_element?(edit_view, "#person-form[aria-label='Edit person'][phx-submit='save_person']")
+    assert has_element?(edit_view, "#save-person-button", "Save person")
+    assert has_element?(edit_view, "#person-name-input[readonly]")
+  end
+
   test "staff creates a person with primary and alternate email rows", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
 

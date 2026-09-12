@@ -215,24 +215,19 @@ defmodule MembaWeb.MySettingsLive do
                 hidden={@active_tab != :profile}
                 class="settings-panel"
               >
-                <div id="my-settings-profile-card" class="settings-card">
-                  <div class="settings-card__head">
-                    <h2 class="settings-card__title">Profile</h2>
-                  </div>
-                  <div class="settings-card__body">
-                    <div class="flex items-center gap-3">
-                      <div
-                        id="my-settings-profile-avatar"
-                        class="grid size-10 shrink-0 place-items-center rounded-full bg-sage-400 text-sm font-bold text-white"
-                      >
-                        {person_initials(@current_person.name)}
-                      </div>
-                      <p id="my-settings-profile-name" class="text-xl font-bold text-ink">
-                        {@current_person.name}
-                      </p>
+                <.settings_card id="my-settings-profile-card" title="Profile">
+                  <div class="flex items-center gap-3">
+                    <div
+                      id="my-settings-profile-avatar"
+                      class="grid size-10 shrink-0 place-items-center rounded-full bg-sage-400 text-sm font-bold text-white"
+                    >
+                      {person_initials(@current_person.name)}
                     </div>
+                    <p id="my-settings-profile-name" class="text-xl font-bold text-ink">
+                      {@current_person.name}
+                    </p>
                   </div>
-                </div>
+                </.settings_card>
               </section>
 
               <section
@@ -242,31 +237,26 @@ defmodule MembaWeb.MySettingsLive do
                 hidden={@active_tab != :clubs}
                 class="settings-panel"
               >
-                <div id="my-settings-clubs-card" class="settings-card">
-                  <div class="settings-card__head">
-                    <h2 class="settings-card__title">Current clubs</h2>
-                  </div>
-                  <div class="settings-card__body">
-                    <div id="my-settings-club-chip-list" class="flex flex-wrap gap-2">
-                      <span
-                        :for={club <- @current_person_clubs}
-                        id={"my-settings-club-chip-#{club.club_id}"}
-                        class="inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-200 py-1.5 pr-3 pl-1.5"
-                      >
-                        <span class="grid size-[22px] place-items-center rounded-full bg-sage-200 text-[10px] font-bold text-sage-800">
-                          {club_initials(club.club_name)}
-                        </span>
-                        <span>
-                          <span class="text-sm font-semibold text-ink">{club.club_name}</span>
-                          <br />
-                          <span class="text-xs text-ink-3">
-                            Member since {format_month_year(club.member_since)}
-                          </span>
+                <.settings_card id="my-settings-clubs-card" title="Current clubs">
+                  <div id="my-settings-club-chip-list" class="flex flex-wrap gap-2">
+                    <span
+                      :for={club <- @current_person_clubs}
+                      id={"my-settings-club-chip-#{club.club_id}"}
+                      class="inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-200 py-1.5 pr-3 pl-1.5"
+                    >
+                      <span class="grid size-[22px] place-items-center rounded-full bg-sage-200 text-[10px] font-bold text-sage-800">
+                        {club_initials(club.club_name)}
+                      </span>
+                      <span>
+                        <span class="text-sm font-semibold text-ink">{club.club_name}</span>
+                        <br />
+                        <span class="text-xs text-ink-3">
+                          Member since {format_month_year(club.member_since)}
                         </span>
                       </span>
-                    </div>
+                    </span>
                   </div>
-                </div>
+                </.settings_card>
               </section>
 
               <section
@@ -276,116 +266,146 @@ defmodule MembaWeb.MySettingsLive do
                 hidden={@active_tab != :emails}
                 class="settings-panel"
               >
-                <div id="my-settings-email-addresses-card" class="settings-card">
-                  <div class="settings-card__head">
-                    <h2 class="settings-card__title">Email addresses</h2>
-                    <p class="mt-1 text-sm leading-5 text-ink-3">
-                      Your primary address is the one we'll send emails to. We'll accept incoming
-                      emails from your other verified addresses.
-                    </p>
+                <.settings_card
+                  id="my-settings-email-addresses-card"
+                  title="Email addresses"
+                  description="Your primary address is the one we'll send emails to. We'll accept incoming emails from your other verified addresses."
+                >
+                  <div id="my-settings-email-list" class="email-list">
+                    <.email_address_row
+                      :for={email_address <- @current_person_email_addresses}
+                      email_address={email_address}
+                      dom_id={email_dom_id(email_address)}
+                      state={email_state(email_address)}
+                      actions={email_address_actions(email_address)}
+                    />
                   </div>
-                  <div class="settings-card__body">
-                    <div id="my-settings-email-list" class="email-list">
-                      <div
-                        :for={email_address <- @current_person_email_addresses}
-                        id={"my-settings-email-row-#{email_dom_id(email_address)}"}
-                        class="email-row"
-                        data-testid="person-email-row"
-                        data-state={email_state(email_address)}
-                      >
-                        <div class="email-row__top">
-                          <div class="email-row__address-line">
-                            <span class="email-row__address">
-                              {email_address.email}
-                            </span>
-                            <span
-                              :if={email_address.primary?}
-                              class="my-settings-primary-badge badge badge-primary badge-soft"
-                            >
-                              Primary
-                            </span>
-                          </div>
-                          <.verified_badge :if={verified_email_address?(email_address)} />
-                          <.pending_badge :if={!verified_email_address?(email_address)} />
-                        </div>
 
-                        <div
-                          :if={!email_address.primary?}
-                          class="email-row__actions-cell"
-                        >
-                          <.button
-                            :if={verified_email_address?(email_address)}
-                            id={"my-settings-make-primary-#{email_dom_id(email_address)}"}
-                            type="button"
-                            phx-click="make_primary"
-                            phx-value-email={email_address.email}
-                            variant="secondary"
-                            size="sm"
-                          >
-                            Make primary
-                          </.button>
-                          <.button
-                            :if={!verified_email_address?(email_address)}
-                            id={"my-settings-resend-verification-#{email_dom_id(email_address)}"}
-                            type="button"
-                            phx-click="resend_verification"
-                            phx-value-email={email_address.email}
-                            variant="secondary"
-                            size="sm"
-                          >
-                            Resend verification
-                          </.button>
-                          <.button
-                            id={"my-settings-remove-email-#{email_dom_id(email_address)}"}
-                            type="button"
-                            phx-click="remove_email"
-                            phx-value-email={email_address.email}
-                            variant="ghost"
-                            size="sm"
-                          >
-                            Remove
-                          </.button>
-                        </div>
-                      </div>
+                  <.form
+                    for={@add_email_form}
+                    id="my-settings-add-email-form"
+                    class="mt-4 flex flex-wrap items-end gap-3"
+                    phx-submit="add_email_address"
+                  >
+                    <div class="min-w-60 flex-1">
+                      <.input
+                        id="settings-add-email-input"
+                        field={@add_email_form[:email]}
+                        type="email"
+                        label="Add an email address"
+                        placeholder="dana@example.com"
+                      />
                     </div>
+                    <div class="mb-1">
+                      <.button id="my-settings-add-email-button" type="submit" size="sm">
+                        Add email address
+                      </.button>
+                    </div>
+                  </.form>
 
-                    <.form
-                      for={@add_email_form}
-                      id="my-settings-add-email-form"
-                      class="mt-4 flex flex-wrap items-end gap-3"
-                      phx-submit="add_email_address"
-                    >
-                      <div class="min-w-60 flex-1">
-                        <.input
-                          id="settings-add-email-input"
-                          field={@add_email_form[:email]}
-                          type="email"
-                          label="Add an email address"
-                          placeholder="dana@example.com"
-                        />
-                      </div>
-                      <div class="mb-1">
-                        <.button id="my-settings-add-email-button" type="submit" size="sm">
-                          Add email address
-                        </.button>
-                      </div>
-                    </.form>
-
-                    <p
-                      :if={@add_email_error}
-                      id="my-settings-add-email-error"
-                      class="mt-2 text-sm font-semibold text-error"
-                    >
-                      {@add_email_error}
-                    </p>
-                  </div>
-                </div>
+                  <p
+                    :if={@add_email_error}
+                    id="my-settings-add-email-error"
+                    class="mt-2 text-sm font-semibold text-error"
+                  >
+                    {@add_email_error}
+                  </p>
+                </.settings_card>
               </section>
             </div>
           </div>
         </div>
       </main>
     </Layouts.club_site>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :description, :string, default: nil
+  slot :inner_block, required: true
+
+  defp settings_card(assigns) do
+    ~H"""
+    <div id={@id} class="settings-card">
+      <div class="settings-card__head">
+        <h2 class="settings-card__title">{@title}</h2>
+        <p :if={@description} class="mt-1 text-sm leading-5 text-ink-3">
+          {@description}
+        </p>
+      </div>
+      <div class="settings-card__body">
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  attr :email_address, :any, required: true
+  attr :dom_id, :string, required: true
+  attr :state, :string, required: true, values: ~w(primary verified pending)
+  attr :actions, :list, required: true
+
+  defp email_address_row(assigns) do
+    ~H"""
+    <div
+      id={"my-settings-email-row-#{@dom_id}"}
+      class="email-row"
+      data-testid="person-email-row"
+      data-state={@state}
+    >
+      <div class="email-row__top">
+        <div class="email-row__address-line">
+          <span class="email-row__address">
+            {@email_address.email}
+          </span>
+          <span
+            :if={@state == "primary"}
+            class="my-settings-primary-badge badge badge-primary badge-soft"
+          >
+            Primary
+          </span>
+        </div>
+        <.verified_badge :if={@state in ["primary", "verified"]} />
+        <.pending_badge :if={@state == "pending"} />
+      </div>
+
+      <div :if={@actions != []} class="email-row__actions-cell">
+        <.button
+          :if={:make_primary in @actions}
+          id={"my-settings-make-primary-#{@dom_id}"}
+          type="button"
+          phx-click="make_primary"
+          phx-value-email={@email_address.email}
+          variant="secondary"
+          size="sm"
+        >
+          Make primary
+        </.button>
+        <.button
+          :if={:resend_verification in @actions}
+          id={"my-settings-resend-verification-#{@dom_id}"}
+          type="button"
+          phx-click="resend_verification"
+          phx-value-email={@email_address.email}
+          variant="secondary"
+          size="sm"
+        >
+          Resend verification
+        </.button>
+        <.button
+          :if={:remove in @actions}
+          id={"my-settings-remove-email-#{@dom_id}"}
+          type="button"
+          phx-click="remove_email"
+          phx-value-email={@email_address.email}
+          variant="ghost"
+          size="sm"
+        >
+          Remove
+        </.button>
+      </div>
+    </div>
     """
   end
 
@@ -560,6 +580,16 @@ defmodule MembaWeb.MySettingsLive do
 
   defp email_state(email_address),
     do: if(verified_email_address?(email_address), do: "verified", else: "pending")
+
+  defp email_address_actions(%{primary?: true}), do: []
+
+  defp email_address_actions(email_address) do
+    if verified_email_address?(email_address) do
+      [:make_primary, :remove]
+    else
+      [:resend_verification, :remove]
+    end
+  end
 
   defp verified_email_address?(%{verified_at: nil}), do: false
   defp verified_email_address?(%{verified_at: _verified_at}), do: true
