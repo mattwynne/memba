@@ -480,29 +480,41 @@ defmodule MembaWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
-      <.flash
+      <.connection_status
         id="client-error"
-        kind={:error}
-        title={gettext("We can't find the internet")}
+        message={gettext("Connection paused — reconnecting…")}
         phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
-      >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      />
 
-      <.flash
+      <.connection_status
         id="server-error"
-        kind={:error}
-        title={gettext("Something went wrong!")}
+        message={gettext("Memba is temporarily unavailable — retrying…")}
         phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
-      >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      />
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :message, :string, required: true
+  attr :rest, :global
+
+  defp connection_status(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="connection-status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      {@rest}
+    >
+      <span class="connection-status__spinner" aria-hidden="true"></span>
+      <span>{@message}</span>
     </div>
     """
   end
