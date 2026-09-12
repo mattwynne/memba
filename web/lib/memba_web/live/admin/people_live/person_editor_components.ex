@@ -6,14 +6,14 @@ defmodule MembaWeb.Admin.PeopleLive.PersonEditorComponents do
   import MembaWeb.CoreComponents
 
   attr :mode, :atom, required: true, values: [:new, :edit]
-  attr :form, :any, required: true
+  attr :form, Phoenix.HTML.Form, required: true
   attr :form_errors, :map, required: true
   attr :email_rows, :list, required: true
   attr :validate_event, :string, required: true
   attr :submit_event, :string, required: true
   attr :add_email_event, :string, required: true
   attr :remove_email_event, :string, required: true
-  attr :cancel_href, :string, required: true
+  attr :cancel_to, :string, required: true, doc: "navigation target for the cancel link"
 
   def person_email_address_editor(assigns) do
     assigns = assign(assigns, editor_copy(assigns.mode))
@@ -145,7 +145,7 @@ defmodule MembaWeb.Admin.PeopleLive.PersonEditorComponents do
           <.button id={@submit_button_id} type="submit" aria-label={@submit_aria_label}>
             {@submit_label}
           </.button>
-          <.button id="cancel-person-link" navigate={@cancel_href} variant="secondary">
+          <.button id="cancel-person-link" navigate={@cancel_to} variant="secondary">
             Cancel
           </.button>
         </div>

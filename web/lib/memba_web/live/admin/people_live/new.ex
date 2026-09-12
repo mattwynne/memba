@@ -157,7 +157,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
               submit_event="create_person"
               add_email_event="add_email_address"
               remove_email_event="remove_email_address"
-              cancel_href={~p"/admin/clubs/#{@club_id}"}
+              cancel_to={~p"/admin/clubs/#{@club_id}"}
             />
 
             <aside

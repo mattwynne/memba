@@ -160,7 +160,7 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
               submit_event="save_person"
               add_email_event="add_email_address"
               remove_email_event="remove_email_address"
-              cancel_href={~p"/admin/clubs/#{@club_id}"}
+              cancel_to={~p"/admin/clubs/#{@club_id}"}
             />
 
             <aside

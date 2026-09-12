@@ -277,6 +277,7 @@ defmodule MembaWeb.MySettingsLive do
                       email_address={email_address}
                       dom_id={email_dom_id(email_address)}
                       state={email_state(email_address)}
+                      verified?={verified_email_address?(email_address)}
                       actions={email_address_actions(email_address)}
                     />
                   </div>
@@ -344,6 +345,7 @@ defmodule MembaWeb.MySettingsLive do
   attr :email_address, :any, required: true
   attr :dom_id, :string, required: true
   attr :state, :string, required: true, values: ~w(primary verified pending)
+  attr :verified?, :boolean, required: true
   attr :actions, :list, required: true
 
   defp email_address_row(assigns) do
@@ -366,8 +368,8 @@ defmodule MembaWeb.MySettingsLive do
             Primary
           </span>
         </div>
-        <.verified_badge :if={@state in ["primary", "verified"]} />
-        <.pending_badge :if={@state == "pending"} />
+        <.verified_badge :if={@verified?} />
+        <.pending_badge :if={!@verified?} />
       </div>
 
       <div :if={@actions != []} class="email-row__actions-cell">
