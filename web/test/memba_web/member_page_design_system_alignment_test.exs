@@ -12,6 +12,8 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
 
   @member_page_files [
     "lib/memba_web/controllers/page_html/club.html.heex",
+    "lib/memba_web/components/member_components.ex",
+    "lib/memba_web/components/member_dashboard_group_tabs.ex",
     "lib/memba_web/controllers/page_html/message.html.heex",
     "lib/memba_web/live/member_invitation_live/new.ex",
     "lib/memba_web/live/member_message_live/new.ex",
@@ -24,7 +26,8 @@ defmodule MembaWeb.MemberPageDesignSystemAlignmentTest do
 
   @expected_component_usage [
     {"club home template", "lib/memba_web/controllers/page_html/club.html.heex",
-     ["<.button", "<.avatar"]},
+     ["<.button", "<.conversation_list", "<.member_list", "<MemberDashboardGroupTabs.group_tabs"]},
+    {"member list components", "lib/memba_web/components/member_components.ex", ["<.avatar"]},
     {"message detail template", "lib/memba_web/controllers/page_html/message.html.heex",
      ["<.button"]},
     {"member invitation LiveView", "lib/memba_web/live/member_invitation_live/new.ex",

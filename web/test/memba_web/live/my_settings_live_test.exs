@@ -95,7 +95,7 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(view, "#my-settings-panel-emails[hidden]")
   end
 
-  test "avatar menu contains Account settings, a separator, and Sign out", %{conn: conn} do
+  test "avatar disclosure contains Account settings, a visual divider, and Sign out", %{conn: conn} do
     club = insert_membership_club!(name: "Avatar Settings Club", slug: "avatar-settings")
     member = create_active_member(club, email: "avatar.settings@example.com", name: "Avatar Menu")
 
@@ -107,15 +107,14 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(
              view,
              "#club-site-identity-menu " <>
-               "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']",
+               "a#club-site-account-settings-link.app-menu__item[href='/my/settings']",
              "Account settings"
            )
 
     assert has_element?(
              view,
              "#club-site-account-settings-link + " <>
-               "#club-site-identity-menu-divider.app-menu__divider[role='separator']" <>
-               "[aria-orientation='horizontal'] + " <>
+               "#club-site-identity-menu-divider.app-menu__divider[aria-hidden='true'] + " <>
                "form#club-site-sign-out-form"
            )
 
@@ -124,7 +123,9 @@ defmodule MembaWeb.MySettingsLiveTest do
              "#club-site-sign-out-form[action='/auth'] input[name='_method'][value='delete']"
            )
 
-    assert has_element?(view, "#club-site-sign-out-button[role='menuitem']", "Sign out")
+    assert has_element?(view, "#club-site-sign-out-button[type='submit']", "Sign out")
+    refute has_element?(view, "#club-site-identity-menu[role='menu']")
+    refute has_element?(view, "#club-site-identity-menu [role='menuitem']")
   end
 
   test "renders club chips and grouped email-address rows from the selected design", %{conn: conn} do
