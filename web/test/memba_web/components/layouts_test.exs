@@ -115,6 +115,48 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout")
   end
 
+  test "public, member, and Staff layouts each render one shared connection-state group" do
+    assigns = %{flash: %{}}
+
+    public_html =
+      rendered_to_string(~H"""
+      <Layouts.app flash={@flash}>
+        <section id="public-connection-status-layout-slot">Public page content</section>
+      </Layouts.app>
+      """)
+
+    member_html =
+      rendered_to_string(~H"""
+      <Layouts.club_site flash={@flash}>
+        <section id="member-connection-status-layout-slot">Member page content</section>
+      </Layouts.club_site>
+      """)
+
+    staff_html =
+      rendered_to_string(~H"""
+      <Layouts.admin flash={@flash}>
+        <section id="staff-connection-status-layout-slot">Staff page content</section>
+      </Layouts.admin>
+      """)
+
+    for {html, slot_selector} <- [
+          {public_html, "#public-connection-status-layout-slot"},
+          {member_html, "#member-connection-status-layout-slot"},
+          {staff_html, "#staff-connection-status-layout-slot"}
+        ] do
+      assert_selector_count(html, slot_selector, 1)
+      assert_selector_count(html, "#flash-group", 1)
+      assert_selector_count(html, "#flash-group > #client-error.connection-status", 1)
+      assert_selector_count(html, "#flash-group > #server-error.connection-status", 1)
+
+      assert_selector_count(
+        html,
+        "#client-error.connection-status, #server-error.connection-status",
+        2
+      )
+    end
+  end
+
   test "club-site layout uses canonical Memba theme without white-label custom properties" do
     assigns = %{
       flash: %{},

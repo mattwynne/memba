@@ -7,6 +7,6 @@
 - [x] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
 - [x] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
 - [x] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
-- [ ] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+- [x] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
 - [ ] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
 - [ ] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
