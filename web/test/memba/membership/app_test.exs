@@ -6,10 +6,10 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddPersonEmailAddress
   alias Memba.Membership.Commands.AssignGroupEmailSlug
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
@@ -18,8 +18,8 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
@@ -96,10 +96,10 @@ defmodule Memba.Membership.AppTest do
       MapSet.new([
         AcceptClubMemberInvitation,
         AddGroupMember,
-        AddMember,
+        AddClubMember,
         AddPersonEmailAddress,
         AssignGroupEmailSlug,
-        AssignMemberRole,
+        AssignClubRoleToMember,
         CreateClub,
         CreateGroup,
         CreatePerson,
@@ -108,8 +108,8 @@ defmodule Memba.Membership.AppTest do
         InviteClubMember,
         MakePersonEmailAddressPrimary,
         RemoveGroupMember,
-        RemoveMember,
-        RemoveMemberRole,
+        RemoveClubMember,
+        RemoveClubRoleFromMember,
         RemovePersonEmailAddress,
         ReplacePersonEmailAddresses,
         ResendClubMemberInvitation,

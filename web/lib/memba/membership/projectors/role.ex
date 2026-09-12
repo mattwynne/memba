@@ -13,9 +13,12 @@ defmodule Memba.Membership.Projectors.Role do
 
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Projections.MemberPermission, as: MemberPermissionProjection
   alias Memba.Membership.Projections.Role, as: RoleProjection
   alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
@@ -80,7 +83,31 @@ defmodule Memba.Membership.Projectors.Role do
     end)
   end)
 
-  project(%MemberRoleAssigned{} = event, fn multi ->
+  project(%ClubRoleAssignedToMember{} = event, fn multi ->
+    project_role_assigned_to_member(multi, event)
+  end)
+
+  project(%LegacyMemberRoleAssigned{} = event, fn multi ->
+    project_role_assigned_to_member(multi, event)
+  end)
+
+  project(%ClubRoleRemovedFromMember{} = event, fn multi ->
+    project_role_removed_from_member(multi, event)
+  end)
+
+  project(%LegacyMemberRoleRemoved{} = event, fn multi ->
+    project_role_removed_from_member(multi, event)
+  end)
+
+  project(%ClubMemberRemoved{} = event, fn multi ->
+    project_member_removed(multi, event)
+  end)
+
+  project(%LegacyMemberRemoved{} = event, fn multi ->
+    project_member_removed(multi, event)
+  end)
+
+  defp project_role_assigned_to_member(multi, event) do
     now = DateTime.utc_now(:microsecond)
 
     multi
@@ -122,9 +149,9 @@ defmodule Memba.Membership.Projectors.Role do
 
       {:ok, permissions}
     end)
-  end)
+  end
 
-  project(%MemberRoleRemoved{} = event, fn multi ->
+  defp project_role_removed_from_member(multi, event) do
     now = DateTime.utc_now(:microsecond)
 
     multi
@@ -143,9 +170,9 @@ defmodule Memba.Membership.Projectors.Role do
 
       {:ok, permissions}
     end)
-  end)
+  end
 
-  project(%MemberRemoved{} = event, fn multi ->
+  defp project_member_removed(multi, event) do
     now = DateTime.utc_now(:microsecond)
 
     multi
@@ -158,7 +185,7 @@ defmodule Memba.Membership.Projectors.Role do
       :membership_member_permissions,
       member_permissions_by_membership_query(event.membership_id)
     )
-  end)
+  end
 
   defp role_permissions(repo, role_id) do
     repo.all(

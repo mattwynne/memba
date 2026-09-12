@@ -756,6 +756,7 @@ test("member failed-send flow stays on compose failure state with support guidan
   assert.deepEqual(page.actions, [
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
     ["click", "locator", "#member-section-action-new-message"],
+    ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
     ["click", "button", { name: "Send to all current members" }]

@@ -6,12 +6,12 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
@@ -421,7 +421,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
 
     assert :ok =
              MembershipApp.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -494,7 +494,7 @@ defmodule Memba.Messaging.PostMessageReplyTest do
   defp remove_member(club_id, membership_id, person_id) do
     assert :ok =
              MembershipApp.dispatch(
-               %RemoveMember{
+               %RemoveClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id

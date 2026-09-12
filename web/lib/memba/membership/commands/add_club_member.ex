@@ -1,4 +1,4 @@
-defmodule Memba.Membership.Commands.AddMember do
+defmodule Memba.Membership.Commands.AddClubMember do
   @moduledoc """
   Command to add a person as an active member of a club.
 

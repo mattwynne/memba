@@ -9,27 +9,45 @@ defmodule Memba.Membership.Projectors.Membership do
     name: "Memba.Membership.Projectors.Membership",
     consistency: :strong
 
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
-  project(%MemberAdded{} = event, fn multi ->
+  project(%ClubMemberAdded{} = event, fn multi ->
+    project_member_added(multi, event)
+  end)
+
+  project(%LegacyMemberAdded{} = event, fn multi ->
+    project_member_added(multi, event)
+  end)
+
+  project(%ClubMemberRemoved{} = event, fn multi ->
+    project_member_removed(multi, event)
+  end)
+
+  project(%LegacyMemberRemoved{} = event, fn multi ->
+    project_member_removed(multi, event)
+  end)
+
+  defp project_member_added(multi, event) do
     Ecto.Multi.insert(multi, :membership_membership, %MembershipProjection{
       membership_id: event.membership_id,
       club_id: event.club_id,
       person_id: event.person_id,
       active: true
     })
-  end)
+  end
 
-  project(%MemberRemoved{} = event, fn multi ->
+  defp project_member_removed(multi, event) do
     Ecto.Multi.update_all(
       multi,
       :membership_membership,
       membership_query(event.membership_id),
       set: [active: false]
     )
-  end)
+  end
 
   defp membership_query(membership_id) do
     import Ecto.Query

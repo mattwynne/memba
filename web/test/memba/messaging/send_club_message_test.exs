@@ -4,13 +4,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -189,7 +189,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert :ok =
              MembershipApp.dispatch(
-               %RemoveMember{
+               %RemoveClubMember{
                  club_id: club_id,
                  membership_id: dana_membership_id,
                  person_id: dana.person_id
@@ -696,7 +696,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert :ok =
              MembershipApp.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -751,16 +751,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp assign_admin_role(club_id, membership_id, person_id) do
-    assert :ok =
-             MembershipApp.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: Roles.membership_administrator_role_id(club_id)
-               },
-               consistency: :strong
-             )
+    assert MembershipApp.dispatch(
+             %AssignClubRoleToMember{
+               club_id: club_id,
+               membership_id: membership_id,
+               person_id: person_id,
+               role_id: Roles.membership_administrator_role_id(club_id)
+             },
+             consistency: :strong
+           ) in [:ok, {:error, :role_already_assigned}]
   end
 
   defp ensure_club(club_id) do

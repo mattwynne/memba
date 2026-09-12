@@ -4,7 +4,16 @@ Date: 2026-05-26
 
 ## Status
 
-accepted
+partially superseded by [ADR 0024](0024-use-club-as-membership-admin-consistency-boundary.md)
+
+## Partial supersession
+
+ADR 0024 supersedes this record's membership-specific aggregate-routing and
+projection-preflight decisions. It preserves the broader decision to use
+caller-generated UUID identities, including `membership_id` as the stable
+identity of a club membership.
+
+The original decision below is retained as historical context.
 
 ## Related reference guidance
 

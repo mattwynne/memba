@@ -4,8 +4,8 @@ defmodule Memba.Membership.PublicApiTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AssignMemberRole
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubMemberInvitationAccepted
   alias Memba.Membership.Events.ClubMemberInvitationResent
@@ -15,8 +15,9 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
   alias Memba.Membership.Events.PersonEmailAddressAdded
   alias Memba.Membership.Events.PersonEmailAddressRemoved
   alias Memba.Membership.Events.PersonEmailAddressVerified
@@ -1083,7 +1084,7 @@ defmodule Memba.Membership.PublicApiTest do
              )
   end
 
-  test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
+  test "add_member/2 dispatches AddClubMember and prevents duplicate active club memberships" do
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
@@ -1108,10 +1109,16 @@ defmodule Memba.Membership.PublicApiTest do
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberAdded{
+                %ClubMemberAdded{
                   membership_id: ^membership_id,
                   club_id: ^club_id,
                   person_id: ^person_id
+                },
+                %ClubRoleAssignedToMember{
+                  membership_id: ^membership_id,
+                  club_id: ^club_id,
+                  person_id: ^person_id,
+                  assignment_source: "automatic_first_club_member"
                 }
               ]
             }} =
@@ -1136,10 +1143,40 @@ defmodule Memba.Membership.PublicApiTest do
     assert [%{id: ^person_id, membership_id: ^membership_id}] =
              Membership.list_active_members_of_club(club_id)
 
+    replacement_person_id = Memba.ID.generate(:person)
+    replacement_membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: replacement_person_id, name: "Bob", email: "bob@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: replacement_membership_id,
+                 club_id: club_id,
+                 person_id: replacement_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %AssignClubRoleToMember{
+                 club_id: club_id,
+                 membership_id: replacement_membership_id,
+                 person_id: replacement_person_id,
+                 role_id: Roles.membership_administrator_role_id(club_id)
+               },
+               consistency: :strong
+             )
+
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              events: [%MemberRemoved{membership_id: ^membership_id}]
+              events: [%ClubMemberRemoved{membership_id: ^membership_id}]
             }} =
              Membership.remove_member(%{membership_id: membership_id},
                returning: :execution_result,
@@ -1147,7 +1184,9 @@ defmodule Memba.Membership.PublicApiTest do
              )
 
     refute Membership.active_member_of_club?(club_id, person_id)
-    assert [] = Membership.list_active_members_of_club(club_id)
+
+    assert [%{id: ^replacement_person_id, membership_id: ^replacement_membership_id}] =
+             Membership.list_active_members_of_club(club_id)
   end
 
   test "member and Admin role APIs wait for system group membership projection by default" do
@@ -1158,7 +1197,6 @@ defmodule Memba.Membership.PublicApiTest do
     target_membership_id = Memba.ID.generate(:membership)
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
     admin_group_id = SystemGroups.admin_group_id(club_id)
-    admin_role_id = Roles.membership_administrator_role_id(club_id)
 
     assert :ok =
              Membership.create_club(
@@ -1207,17 +1245,6 @@ defmodule Memba.Membership.PublicApiTest do
              membership_id: ^target_membership_id,
              person_id: ^target_person_id
            } = group_membership(everyone_group_id, target_membership_id)
-
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: actor_membership_id,
-                 person_id: actor_person_id,
-                 role_id: admin_role_id
-               },
-               consistency: :strong
-             )
 
     assert :ok =
              Membership.assign_membership_administrator_as_club_member(%{
@@ -1486,10 +1513,16 @@ defmodule Memba.Membership.PublicApiTest do
               membership_execution_result: %ExecutionResult{
                 aggregate_uuid: ^club_id,
                 events: [
-                  %MemberAdded{
+                  %ClubMemberAdded{
                     membership_id: ^membership_id,
                     club_id: ^club_id,
                     person_id: ^person_id
+                  },
+                  %ClubRoleAssignedToMember{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id,
+                    assignment_source: "automatic_first_club_member"
                   }
                 ]
               },
@@ -1565,10 +1598,16 @@ defmodule Memba.Membership.PublicApiTest do
               membership_execution_result: %ExecutionResult{
                 aggregate_uuid: ^club_id,
                 events: [
-                  %MemberAdded{
+                  %ClubMemberAdded{
                     membership_id: ^membership_id,
                     club_id: ^club_id,
                     person_id: ^person_id
+                  },
+                  %ClubRoleAssignedToMember{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id,
+                    assignment_source: "automatic_first_club_member"
                   }
                 ]
               },
@@ -1619,6 +1658,8 @@ defmodule Memba.Membership.PublicApiTest do
 
   test "person_has_club_permission?/3 checks backend projected member permissions" do
     club_id = Memba.ID.generate(:club)
+    bootstrap_person_id = Memba.ID.generate(:person)
+    bootstrap_membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
     role_id = Roles.membership_administrator_role_id(club_id)
@@ -1627,6 +1668,26 @@ defmodule Memba.Membership.PublicApiTest do
     assert :ok =
              Membership.create_club(
                membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: bootstrap_person_id,
+                 name: "Bootstrap",
+                 email: "bootstrap@example.com"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: bootstrap_membership_id,
+                 club_id: club_id,
+                 person_id: bootstrap_person_id
+               },
                consistency: :strong
              )
 
@@ -1646,7 +1707,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1662,7 +1723,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,

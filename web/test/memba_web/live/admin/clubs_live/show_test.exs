@@ -365,7 +365,9 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "staff can remove a member from a club", %{conn: conn} do
     club = create_membership_club!(name: "Kootenay Mountaineering Club")
     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+    bob = insert_membership_person!(name: "Bob Example", email: "bob@example.com")
     membership_id = Memba.ID.generate(:membership)
+    bob_membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
              Membership.add_member(
@@ -373,6 +375,27 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
                  membership_id: membership_id,
                  club_id: club.club_id,
                  person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: bob_membership_id,
+                 club_id: club.club_id,
+                 person_id: bob.person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Memba.Membership.App.dispatch(
+               %Memba.Membership.Commands.AssignClubRoleToMember{
+                 club_id: club.club_id,
+                 membership_id: bob_membership_id,
+                 person_id: bob.person_id,
+                 role_id: Memba.Membership.Roles.membership_administrator_role_id(club.club_id)
                },
                consistency: :strong
              )

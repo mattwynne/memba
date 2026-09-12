@@ -4,8 +4,8 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   alias Commanded.Event.Mapper
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
@@ -389,14 +389,21 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
 
     assert :ok =
              MembershipApp.dispatch(
-               %AddMember{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               %AddClubMember{
+                 membership_id: membership_id,
+                 club_id: club_id,
+                 person_id: person_id
+               },
                consistency: :strong
              )
 
     %{membership_id: membership_id, person_id: person_id}
   end
 
-  defp append_historic_system_groups!(club_id, expected_version \\ 3) do
+  defp append_historic_system_groups!(club_id, expected_version \\ nil) do
+    current_version = current_stream_version(club_id)
+    expected_version = max(expected_version || current_version, current_version)
+
     events =
       [
         %GroupCreated{
@@ -427,16 +434,21 @@ defmodule Memba.Membership.SystemGroupsBackfillTest do
   end
 
   defp assign_admin_role!(club_id, member) do
-    assert :ok =
-             MembershipApp.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: member.membership_id,
-                 person_id: member.person_id,
-                 role_id: Roles.membership_administrator_role_id(club_id)
-               },
-               consistency: :strong
-             )
+    assert MembershipApp.dispatch(
+             %AssignClubRoleToMember{
+               club_id: club_id,
+               membership_id: member.membership_id,
+               person_id: member.person_id,
+               role_id: Roles.membership_administrator_role_id(club_id)
+             },
+             consistency: :strong
+           ) in [:ok, {:error, :role_already_assigned}]
+  end
+
+  defp current_stream_version(club_id) do
+    MembershipApp
+    |> Commanded.EventStore.stream_forward(club_id)
+    |> Enum.count()
   end
 
   defp send_historic_root_conversation!(club_id, sender_id) do

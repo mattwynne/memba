@@ -20,7 +20,7 @@ const {
   inviteEmailToClub,
   invitePersonToClub,
   leaveWithoutEnteringName,
-  openAddMemberFlow,
+  openAddClubMemberFlow,
   tryInviteEmailToClub,
   tryInvitePersonToClub
 } = require("../support/club_member_invitations");
@@ -109,7 +109,7 @@ When("{word} leaves without entering their name", async function (_personName) {
 });
 
 When("{word} wants to add a new member to {word} {word} {word}", async function (actorName, word1, word2, word3) {
-  await openAddMemberFlow(this, actorName, clubName(word1, word2, word3));
+  await openAddClubMemberFlow(this, actorName, clubName(word1, word2, word3));
 });
 
 When(/^(\w+) tries to invite (\w+) to join (\w+) (\w+) (\w+)$/, async function (actorName, personName, word1, word2, word3) {

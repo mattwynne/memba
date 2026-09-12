@@ -8,14 +8,14 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
@@ -25,8 +25,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Roles
@@ -299,7 +299,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
 
     assert :ok =
              App.dispatch(
-               %AddMember{
+               %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
@@ -358,7 +358,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               aggregate_uuid: ^club_id,
               aggregate_version: 14,
               events: [
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   club_id: ^club_id,
                   membership_id: ^membership_id,
                   person_id: ^person_id,
@@ -367,7 +367,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               ]
             }} =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -382,7 +382,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               aggregate_uuid: ^club_id,
               aggregate_version: 15,
               events: [
-                %MemberRoleRemoved{
+                %ClubRoleRemovedFromMember{
                   club_id: ^club_id,
                   membership_id: ^membership_id,
                   person_id: ^person_id,
@@ -395,7 +395,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               }
             }} =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,

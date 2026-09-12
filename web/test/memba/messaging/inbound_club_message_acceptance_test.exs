@@ -3,7 +3,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -239,8 +239,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     alice = create_person!(name: "Alice Member", email: "alice@example.com")
     bob = create_person!(name: "Bob Admin", email: "bob@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
     bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, alice.person_id)
     assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
 
     admin_group_id = SystemGroups.admin_group_id(kmc.club_id)
@@ -390,8 +390,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     bob = create_person!(name: "Bob Admin", email: "bob@example.com")
     carol = create_person!(name: "Carol Admin", email: "carol@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
     bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, alice.person_id)
     carol_membership_id = add_member!(kmc.club_id, carol.person_id)
     assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
     assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)
@@ -468,8 +468,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     bob = create_person!(name: "Bob Admin", email: "bob@example.com")
     carol = create_person!(name: "Carol Admin", email: "carol@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
     bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, alice.person_id)
     carol_membership_id = add_member!(kmc.club_id, carol.person_id)
     assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
     assign_admin_role!(kmc.club_id, carol_membership_id, carol.person_id)
@@ -1052,8 +1052,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     alice = create_person!(name: "Alice Member", email: "alice@example.com")
     bob = create_person!(name: "Bob Admin", email: "bob@example.com")
 
-    add_member!(kmc.club_id, alice.person_id)
     bob_membership_id = add_member!(kmc.club_id, bob.person_id)
+    add_member!(kmc.club_id, alice.person_id)
     assign_admin_role!(kmc.club_id, bob_membership_id, bob.person_id)
 
     inbound_attrs = %{
@@ -2045,16 +2045,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   end
 
   defp assign_admin_role!(club_id, membership_id, person_id) do
-    assert :ok =
-             MembershipApp.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: Roles.membership_administrator_role_id(club_id)
-               },
-               consistency: :strong
-             )
+    assert MembershipApp.dispatch(
+             %AssignClubRoleToMember{
+               club_id: club_id,
+               membership_id: membership_id,
+               person_id: person_id,
+               role_id: Roles.membership_administrator_role_id(club_id)
+             },
+             consistency: :strong
+           ) in [:ok, {:error, :role_already_assigned}]
   end
 
   defp send_club_message!(attrs) do

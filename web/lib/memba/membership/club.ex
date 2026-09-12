@@ -6,16 +6,16 @@ defmodule Memba.Membership.Club do
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
@@ -25,10 +25,14 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
@@ -101,9 +105,9 @@ defmodule Memba.Membership.Club do
 
   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
 
-  def execute(%__MODULE__{club_id: nil}, %AddMember{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %AddClubMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %AddMember{} = command) do
+  def execute(%__MODULE__{} = club, %AddClubMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
@@ -111,9 +115,9 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %RemoveMember{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %RemoveClubMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %RemoveMember{} = command) do
+  def execute(%__MODULE__{} = club, %RemoveClubMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
@@ -129,7 +133,7 @@ defmodule Memba.Membership.Club do
              club,
              command.membership_id
            ) do
-      %MemberRemoved{
+      %ClubMemberRemoved{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id
@@ -219,9 +223,9 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %AssignMemberRole{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %AssignClubRoleToMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %AssignMemberRole{} = command) do
+  def execute(%__MODULE__{} = club, %AssignClubRoleToMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
@@ -236,19 +240,20 @@ defmodule Memba.Membership.Club do
              command.person_id
            ),
          :ok <- ensure_role_assignment_available(club, command.membership_id, command.role_id) do
-      %MemberRoleAssigned{
+      %ClubRoleAssignedToMember{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id,
         role_id: command.role_id,
-        assigned_by_person_id: command.assigned_by_person_id
+        assigned_by_person_id: command.assigned_by_person_id,
+        assignment_source: "explicit_command"
       }
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %RemoveMemberRole{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %RemoveClubRoleFromMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %RemoveMemberRole{} = command) do
+  def execute(%__MODULE__{} = club, %RemoveClubRoleFromMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
@@ -256,6 +261,12 @@ defmodule Memba.Membership.Club do
            validate_optional_id(:person, command.removed_by_person_id, :invalid_actor_person_id),
          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
          :ok <- ensure_role_exists(club, command.role_id),
+         :ok <-
+           ensure_active_role_assignment_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
          :ok <-
            ensure_role_assignment_exists(
              club,
@@ -269,7 +280,7 @@ defmodule Memba.Membership.Club do
              command.membership_id,
              command.role_id
            ) do
-      %MemberRoleRemoved{
+      %ClubRoleRemovedFromMember{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id,
@@ -376,7 +387,39 @@ defmodule Memba.Membership.Club do
     apply_everyone_compatibility_membership(club, event, :deactivate)
   end
 
-  def apply(%__MODULE__{} = club, %MemberAdded{} = event) do
+  def apply(%__MODULE__{} = club, %ClubMemberAdded{} = event) do
+    apply_club_member_added(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberAdded{} = event) do
+    apply_club_member_added(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubMemberRemoved{} = event) do
+    apply_club_member_removed(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRemoved{} = event) do
+    apply_club_member_removed(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubRoleAssignedToMember{} = event) do
+    apply_club_role_assigned_to_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRoleAssigned{} = event) do
+    apply_club_role_assigned_to_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubRoleRemovedFromMember{} = event) do
+    apply_club_role_removed_from_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRoleRemoved{} = event) do
+    apply_club_role_removed_from_member(club, event)
+  end
+
+  defp apply_club_member_added(%__MODULE__{} = club, event) do
     club =
       %__MODULE__{
         club
@@ -388,7 +431,7 @@ defmodule Memba.Membership.Club do
     derive_active_admin_membership_ids(club)
   end
 
-  def apply(%__MODULE__{} = club, %MemberRemoved{} = event) do
+  defp apply_club_member_removed(%__MODULE__{} = club, event) do
     club =
       %__MODULE__{
         club
@@ -399,7 +442,7 @@ defmodule Memba.Membership.Club do
     derive_active_admin_membership_ids(club)
   end
 
-  def apply(%__MODULE__{} = club, %MemberRoleAssigned{} = event) do
+  defp apply_club_role_assigned_to_member(%__MODULE__{} = club, event) do
     assignment = %{person_id: event.person_id}
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
@@ -412,7 +455,7 @@ defmodule Memba.Membership.Club do
     derive_active_admin_membership_ids(club)
   end
 
-  def apply(%__MODULE__{} = club, %MemberRoleRemoved{} = event) do
+  defp apply_club_role_removed_from_member(%__MODULE__{} = club, event) do
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
     club =
@@ -448,7 +491,7 @@ defmodule Memba.Membership.Club do
     validate_id(type, value, error)
   end
 
-  defp add_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
+  defp add_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
     case Map.fetch(club.active_memberships, command.membership_id) do
       {:ok, person_id} when person_id == command.person_id ->
         []
@@ -461,7 +504,7 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp add_inactive_member_decision(%__MODULE__{} = club, %AddMember{} = command) do
+  defp add_inactive_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
     cond do
       membership_id_recorded?(club, command.membership_id) ->
         {:error, :membership_id_already_used}
@@ -470,7 +513,7 @@ defmodule Memba.Membership.Club do
         {:error, :already_active_member}
 
       true ->
-        member_added = %MemberAdded{
+        club_member_added = %ClubMemberAdded{
           club_id: command.club_id,
           membership_id: command.membership_id,
           person_id: command.person_id
@@ -478,16 +521,17 @@ defmodule Memba.Membership.Club do
 
         if map_size(club.active_memberships) == 0 do
           [
-            member_added,
-            %MemberRoleAssigned{
+            club_member_added,
+            %ClubRoleAssignedToMember{
               club_id: command.club_id,
               membership_id: command.membership_id,
               person_id: command.person_id,
-              role_id: Roles.membership_administrator_role_id(command.club_id)
+              role_id: Roles.membership_administrator_role_id(command.club_id),
+              assignment_source: "automatic_first_club_member"
             }
           ]
         else
-          member_added
+          club_member_added
         end
     end
   end

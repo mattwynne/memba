@@ -20,7 +20,7 @@ defmodule Memba.DevSeeds do
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.ClubMemberInvitationEmail
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Roles
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Local, as: LocalDeliveryProvider
@@ -328,7 +328,7 @@ defmodule Memba.DevSeeds do
 
     result =
       MembershipApp.dispatch(
-        %AssignMemberRole{
+        %AssignClubRoleToMember{
           club_id: club.club_id,
           membership_id: member.membership_id,
           person_id: member.person_id,

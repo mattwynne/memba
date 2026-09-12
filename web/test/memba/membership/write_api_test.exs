@@ -4,11 +4,11 @@ defmodule Memba.Membership.WriteApiTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.DefineClubRole
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.Roles
@@ -34,12 +34,12 @@ defmodule Memba.Membership.WriteApiTest do
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberAdded{
+                %ClubMemberAdded{
                   club_id: ^club_id,
                   membership_id: ^membership_id,
                   person_id: ^person_id
                 },
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   club_id: ^club_id,
                   membership_id: ^membership_id,
                   person_id: ^person_id,
@@ -87,7 +87,7 @@ defmodule Memba.Membership.WriteApiTest do
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,
@@ -123,7 +123,7 @@ defmodule Memba.Membership.WriteApiTest do
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: target_membership_id,
                  person_id: target_person_id,
@@ -142,7 +142,7 @@ defmodule Memba.Membership.WriteApiTest do
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberRoleRemoved{
+                %ClubRoleRemovedFromMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,

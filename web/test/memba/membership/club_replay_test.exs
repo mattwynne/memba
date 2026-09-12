@@ -5,15 +5,19 @@ defmodule Memba.Membership.ClubReplayTest do
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
   describe "historic Club stream replay" do
-    test "hydrates the active roster from Everyone membership facts" do
+    test "hydrates the active club memberships from Everyone membership facts" do
       ids = replay_ids()
 
       club =
@@ -30,7 +34,7 @@ defmodule Memba.Membership.ClubReplayTest do
       )
     end
 
-    test "reconstructs active Admins from active roster and historic role facts" do
+    test "reconstructs active Admins from active club memberships and historic role facts" do
       ids = replay_ids()
 
       assigned_before_membership =
@@ -70,7 +74,7 @@ defmodule Memba.Membership.ClubReplayTest do
              )
     end
 
-    test "keeps non-Everyone membership facts out of the active roster" do
+    test "keeps non-Everyone membership facts out of the active club memberships" do
       ids = replay_ids()
       custom_group_id = Memba.ID.generate(:group)
       membership_id = ids.first_membership_id
@@ -101,24 +105,61 @@ defmodule Memba.Membership.ClubReplayTest do
     end
   end
 
+  describe "legacy Club member event replay" do
+    test "supports historic MemberAdded, MemberRemoved, MemberRoleAssigned, and MemberRoleRemoved facts" do
+      ids = replay_ids()
+
+      club =
+        replay(ids.club_id, [
+          %LegacyMemberAdded{
+            club_id: ids.club_id,
+            membership_id: ids.first_membership_id,
+            person_id: ids.first_person_id
+          },
+          %LegacyMemberRoleAssigned{
+            club_id: ids.club_id,
+            membership_id: ids.first_membership_id,
+            person_id: ids.first_person_id,
+            role_id: ids.admin_role_id
+          },
+          %LegacyMemberRoleRemoved{
+            club_id: ids.club_id,
+            membership_id: ids.first_membership_id,
+            person_id: ids.first_person_id,
+            role_id: ids.admin_role_id
+          },
+          %LegacyMemberRemoved{
+            club_id: ids.club_id,
+            membership_id: ids.first_membership_id,
+            person_id: ids.first_person_id
+          }
+        ])
+
+      assert_replay_state(club,
+        active_memberships: %{},
+        native_membership_ids: MapSet.new([ids.first_membership_id]),
+        active_admin_membership_ids: MapSet.new()
+      )
+    end
+  end
+
   describe "mixed native and compatibility Club stream replay" do
     test "delayed Everyone facts cannot override native membership lifecycle facts" do
       ids = replay_ids()
 
       club =
         replay(ids.club_id, [
-          member_added(ids, ids.first_membership_id, ids.first_person_id),
-          member_added(ids, ids.second_membership_id, ids.second_person_id),
+          club_member_added(ids, ids.first_membership_id, ids.first_person_id),
+          club_member_added(ids, ids.second_membership_id, ids.second_person_id),
           admin_role_assigned(ids, ids.first_membership_id, ids.first_person_id),
-          member_removed(ids, ids.first_membership_id, ids.first_person_id),
+          club_member_removed(ids, ids.first_membership_id, ids.first_person_id),
           group_member_added(ids, ids.first_membership_id, ids.first_person_id),
           group_member_removed(ids, ids.second_membership_id, ids.second_person_id)
         ])
 
       assert_replay_state(club,
         active_memberships: %{ids.second_membership_id => ids.second_person_id},
-        native_membership_ids:
-          MapSet.new([ids.first_membership_id, ids.second_membership_id]),
+        native_membership_ids: MapSet.new([ids.first_membership_id, ids.second_membership_id]),
         active_admin_membership_ids: MapSet.new()
       )
 
@@ -137,42 +178,40 @@ defmodule Memba.Membership.ClubReplayTest do
       club =
         replay(ids.club_id, [
           group_member_added(ids, ids.first_membership_id, ids.first_person_id),
-          member_removed(ids, ids.first_membership_id, ids.first_person_id),
+          club_member_removed(ids, ids.first_membership_id, ids.first_person_id),
           group_member_added(ids, ids.first_membership_id, ids.first_person_id),
           group_member_removed(ids, ids.second_membership_id, ids.second_person_id),
-          member_added(ids, ids.second_membership_id, ids.second_person_id),
+          club_member_added(ids, ids.second_membership_id, ids.second_person_id),
           group_member_removed(ids, ids.second_membership_id, ids.second_person_id)
         ])
 
       assert_replay_state(club,
         active_memberships: %{ids.second_membership_id => ids.second_person_id},
-        native_membership_ids:
-          MapSet.new([ids.first_membership_id, ids.second_membership_id]),
+        native_membership_ids: MapSet.new([ids.first_membership_id, ids.second_membership_id]),
         active_admin_membership_ids: MapSet.new()
       )
     end
   end
 
   describe "native membership lifecycle replay" do
-    test "tracks the active roster and permanently marks IDs with native lifecycle facts" do
+    test "tracks the active club memberships and permanently marks IDs with native lifecycle facts" do
       ids = replay_ids()
 
       club =
         replay(ids.club_id, [
-          member_added(ids, ids.first_membership_id, ids.first_person_id),
-          member_added(ids, ids.second_membership_id, ids.second_person_id),
-          member_removed(ids, ids.first_membership_id, ids.first_person_id)
+          club_member_added(ids, ids.first_membership_id, ids.first_person_id),
+          club_member_added(ids, ids.second_membership_id, ids.second_person_id),
+          club_member_removed(ids, ids.first_membership_id, ids.first_person_id)
         ])
 
       assert_replay_state(club,
         active_memberships: %{ids.second_membership_id => ids.second_person_id},
-        native_membership_ids:
-          MapSet.new([ids.first_membership_id, ids.second_membership_id]),
+        native_membership_ids: MapSet.new([ids.first_membership_id, ids.second_membership_id]),
         active_admin_membership_ids: MapSet.new()
       )
     end
 
-    test "derives active Admins by intersecting the native roster with Admin assignments" do
+    test "derives active Admins by intersecting the native active club memberships with Admin assignments" do
       ids = replay_ids()
 
       assigned_before_activation =
@@ -185,7 +224,7 @@ defmodule Memba.Membership.ClubReplayTest do
       active_admin =
         Club.apply(
           assigned_before_activation,
-          member_added(ids, ids.first_membership_id, ids.first_person_id)
+          club_member_added(ids, ids.first_membership_id, ids.first_person_id)
         )
 
       assert active_admin_membership_ids(active_admin) ==
@@ -195,8 +234,8 @@ defmodule Memba.Membership.ClubReplayTest do
 
       with_non_admin_assignment =
         active_admin
-        |> Club.apply(member_added(ids, ids.second_membership_id, ids.second_person_id))
-        |> Club.apply(%MemberRoleAssigned{
+        |> Club.apply(club_member_added(ids, ids.second_membership_id, ids.second_person_id))
+        |> Club.apply(%ClubRoleAssignedToMember{
           club_id: ids.club_id,
           membership_id: ids.second_membership_id,
           person_id: ids.second_person_id,
@@ -226,7 +265,7 @@ defmodule Memba.Membership.ClubReplayTest do
       inactive_admin =
         Club.apply(
           reassigned_admin,
-          member_removed(ids, ids.first_membership_id, ids.first_person_id)
+          club_member_removed(ids, ids.first_membership_id, ids.first_person_id)
         )
 
       assert active_admin_membership_ids(inactive_admin) == MapSet.new()
@@ -284,16 +323,16 @@ defmodule Memba.Membership.ClubReplayTest do
     }
   end
 
-  defp member_added(ids, membership_id, person_id) do
-    %MemberAdded{
+  defp club_member_added(ids, membership_id, person_id) do
+    %ClubMemberAdded{
       club_id: ids.club_id,
       membership_id: membership_id,
       person_id: person_id
     }
   end
 
-  defp member_removed(ids, membership_id, person_id) do
-    %MemberRemoved{
+  defp club_member_removed(ids, membership_id, person_id) do
+    %ClubMemberRemoved{
       club_id: ids.club_id,
       membership_id: membership_id,
       person_id: person_id
@@ -301,7 +340,7 @@ defmodule Memba.Membership.ClubReplayTest do
   end
 
   defp admin_role_assigned(ids, membership_id, person_id) do
-    %MemberRoleAssigned{
+    %ClubRoleAssignedToMember{
       club_id: ids.club_id,
       membership_id: membership_id,
       person_id: person_id,
@@ -310,7 +349,7 @@ defmodule Memba.Membership.ClubReplayTest do
   end
 
   defp admin_role_removed(ids, membership_id, person_id) do
-    %MemberRoleRemoved{
+    %ClubRoleRemovedFromMember{
       club_id: ids.club_id,
       membership_id: membership_id,
       person_id: person_id,

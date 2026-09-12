@@ -35,7 +35,7 @@ already_assigned? =
 unless already_assigned? do
   :ok =
     Memba.Membership.App.dispatch(
-      %Memba.Membership.Commands.AssignMemberRole{
+      %Memba.Membership.Commands.AssignClubRoleToMember{
         club_id: club_id,
         membership_id: membership_id,
         person_id: person_id,
@@ -67,6 +67,54 @@ function ensureMembershipAdministrators(world, personNames, clubName) {
   }
 }
 
+function ensureAdminGroupMembers(world, personNames, clubName) {
+  ensureMembershipAdministrators(world, personNames, clubName);
+
+  const result = serverCommands.runCommand(
+    `
+import Ecto.Query
+
+club_name = Map.fetch!(payload, "clubName")
+admin_names = MapSet.new(Map.fetch!(payload, "personNames"))
+club =
+  Memba.Membership.Projections.Club
+  |> where([club], club.name == ^club_name)
+  |> order_by([club], desc: club.inserted_at)
+  |> limit(1)
+  |> Memba.Repo.one!()
+
+role_id = Memba.Membership.Roles.membership_administrator_role_id(club.club_id)
+
+Memba.Membership.Projections.RoleAssignment
+|> where([assignment], assignment.club_id == ^club.club_id)
+|> where([assignment], assignment.role_id == ^role_id)
+|> where([assignment], assignment.active == true)
+|> Memba.Repo.all()
+|> Enum.each(fn assignment ->
+  person = Memba.Membership.get_person(assignment.person_id)
+
+  unless MapSet.member?(admin_names, person.name) do
+    :ok =
+      Memba.Membership.App.dispatch(
+        %Memba.Membership.Commands.RemoveClubRoleFromMember{
+          club_id: club.club_id,
+          membership_id: assignment.membership_id,
+          person_id: assignment.person_id,
+          role_id: role_id
+        },
+        consistency: :strong
+      )
+  end
+end)
+
+%{status: "ok"}
+`,
+    { clubName, personNames }
+  );
+
+  assert.deepEqual(result, { status: "ok" });
+}
+
 async function ensureClubHasNoActiveMembers(world, clubName) {
   ensureState(world);
 
@@ -95,7 +143,40 @@ function assertOnlyActiveMember(world, personName, clubName) {
 }
 
 function ensureOrdinaryMember(world, personName, clubName) {
-  ensureMember(world, personName, clubName);
+  const member = ensureMember(world, personName, clubName);
+
+  if (memberStatus(world, personName, clubName).membershipAdministrator) {
+    ensureMembershipAdministrator(world, "Fixture Admin", clubName);
+
+    const roleIdResult = serverCommands.runCommand(
+      `
+club_id = Map.fetch!(payload, "clubId")
+%{roleId: Memba.Membership.Roles.membership_administrator_role_id(club_id)}
+`,
+      { clubId: member.clubId }
+    );
+
+    const result = serverCommands.runCommand(
+      `
+:ok =
+  Memba.Membership.App.dispatch(
+    %Memba.Membership.Commands.RemoveClubRoleFromMember{
+      club_id: Map.fetch!(payload, "clubId"),
+      membership_id: Map.fetch!(payload, "membershipId"),
+      person_id: Map.fetch!(payload, "personId"),
+      role_id: Map.fetch!(payload, "roleId")
+    },
+    consistency: :strong
+  )
+
+%{status: "ok"}
+`,
+      { ...member, roleId: roleIdResult.roleId }
+    );
+
+    assert.deepEqual(result, { status: "ok" });
+  }
+
   assertNotMembershipAdministrator(world, personName, clubName);
 }
 
@@ -133,7 +214,7 @@ function tryMakeMembershipAdministrator(world, actorName, targetName, clubName) 
   world.lastMembershipAdministrationResult = result;
 }
 
-function tryRemoveMembershipAdministrator(world, actorName, targetName, clubName) {
+function tryRemoveClubMembershipAdministrator(world, actorName, targetName, clubName) {
   const actor = memberStatus(world, actorName, clubName);
   const target = memberStatus(world, targetName, clubName);
 
@@ -302,7 +383,10 @@ permission? =
   personName: if(person, do: person.name)
 }
 `,
-    { clubName, email: emailFor(personName) }
+    {
+      clubName,
+      email: world.people[personName]?.email || emailFor(personName)
+    }
   );
 
   if (status.activeMember) {
@@ -432,6 +516,7 @@ module.exports = {
   assertNotMembershipAdministrator,
   assertOnlyActiveMember,
   ensureClubHasNoActiveMembers,
+  ensureAdminGroupMembers,
   ensureMembershipAdministrator,
   ensureMembershipAdministrators,
   ensureOnlyMembershipAdministrator,
@@ -439,5 +524,5 @@ module.exports = {
   makeMembershipAdministrator,
   removeMemberAsStaff,
   tryMakeMembershipAdministrator,
-  tryRemoveMembershipAdministrator
+  tryRemoveClubMembershipAdministrator
 };

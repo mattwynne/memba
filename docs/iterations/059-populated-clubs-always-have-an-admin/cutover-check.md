@@ -11,8 +11,8 @@ Club stream. It answers two questions:
    membership lifecycle fact or the iteration-056 Everyone membership fact
    needed for historical Club replay?
 2. Does every populated club have an active assignment of its deterministic
-   Admin role to an active member, backed by `MemberRoleAssigned` on that
-   Club's stream?
+   Admin role to an active member, backed by `ClubRoleAssignedToMember` or the
+   historic `MemberRoleAssigned` event on that Club's stream?
 
 Both results must report `violation_count = 0` and `violations = []`.
 
@@ -116,6 +116,8 @@ club_events AS (
     ON stream.stream_id = stream_event.stream_id
   WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
     AND event.event_type IN (
+      'Elixir.Memba.Membership.Events.ClubMemberAdded',
+      'Elixir.Memba.Membership.Events.ClubMemberRemoved',
       'Elixir.Memba.Membership.Events.MemberAdded',
       'Elixir.Memba.Membership.Events.MemberRemoved',
       'Elixir.Memba.Membership.Events.GroupMemberAdded',
@@ -133,8 +135,10 @@ source_fact_violations AS (
     (
       SELECT
         (
-          event.event_type =
+          event.event_type IN (
+            'Elixir.Memba.Membership.Events.ClubMemberAdded',
             'Elixir.Memba.Membership.Events.MemberAdded'
+          )
           AND event.event_data ->> 'club_id' = membership.club_id
           AND event.event_data ->> 'person_id' = membership.person_id
         ) IS TRUE
@@ -143,6 +147,8 @@ source_fact_violations AS (
         AND event.event_data ->> 'membership_id' =
           membership.membership_id
         AND event.event_type IN (
+          'Elixir.Memba.Membership.Events.ClubMemberAdded',
+          'Elixir.Memba.Membership.Events.ClubMemberRemoved',
           'Elixir.Memba.Membership.Events.MemberAdded',
           'Elixir.Memba.Membership.Events.MemberRemoved'
         )
@@ -234,6 +240,8 @@ club_admin_assignment_facts AS (
     ON stream.stream_id = stream_event.stream_id
   WHERE stream.stream_uuid LIKE 'clb\_%' ESCAPE '\'
     AND event.event_type IN (
+      'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
+      'Elixir.Memba.Membership.Events.ClubRoleRemovedFromMember',
       'Elixir.Memba.Membership.Events.MemberRoleAssigned',
       'Elixir.Memba.Membership.Events.MemberRoleRemoved'
     )
@@ -259,8 +267,10 @@ admin_invariant_violations AS (
         (
           SELECT
             (
-              fact.event_type =
+              fact.event_type IN (
+                'Elixir.Memba.Membership.Events.ClubRoleAssignedToMember',
                 'Elixir.Memba.Membership.Events.MemberRoleAssigned'
+              )
               AND fact.event_data ->> 'club_id' = club.club_id
               AND fact.event_data ->> 'person_id' =
                 assignment.person_id
@@ -323,17 +333,19 @@ Each numbered check must then return exactly:
 The checks report deliberately incomplete states as follows:
 
 - An active membership whose latest native Club lifecycle fact is not a
-  matching `MemberAdded` appears in check 1. When no native lifecycle exists,
-  its latest deterministic-Everyone fact must be a matching
-  `GroupMemberAdded`; a missing fact or a latest `GroupMemberRemoved` is a
-  violation.
+  matching `ClubMemberAdded` or historic `MemberAdded` appears in check 1. When
+  no native lifecycle exists, its latest deterministic-Everyone fact must be a
+  matching `GroupMemberAdded`; a missing fact or a latest `GroupMemberRemoved`
+  is a violation.
 - An empty club does not appear in check 2; empty clubs are valid.
 - A populated club appears in check 2 unless at least one projected active
   member has an active assignment of the deterministic Admin role and the
-  matching `MemberRoleAssigned` exists on that exact Club stream.
+  matching `ClubRoleAssignedToMember` or historic `MemberRoleAssigned` exists
+  on that exact Club stream.
 - A role assignment for an inactive member, a non-deterministic role, a
   mismatched person or membership, an assignment event on another stream, or a
-  latest matching `MemberRoleRemoved` does not satisfy check 2.
+  latest matching `ClubRoleRemovedFromMember` or historic `MemberRoleRemoved`
+  does not satisfy check 2.
 
 ## Cutover sequence
 

@@ -5,6 +5,7 @@ const {
   assertMembershipAdministrator,
   assertNotMembershipAdministrator,
   assertOnlyActiveMember,
+  ensureAdminGroupMembers,
   ensureClubHasNoActiveMembers,
   ensureMembershipAdministrator,
   ensureMembershipAdministrators,
@@ -13,7 +14,7 @@ const {
   makeMembershipAdministrator,
   removeMemberAsStaff,
   tryMakeMembershipAdministrator,
-  tryRemoveMembershipAdministrator
+  tryRemoveClubMembershipAdministrator
 } = require("../support/membership_administration");
 const {
   assertActiveMember,
@@ -25,9 +26,7 @@ Given(/^(\w+) is an Admin of (.+)$/, function (personName, clubName) {
 });
 
 Given(/^(.+) are members of the (.+) Admin group$/, function (personNamesText, clubName) {
-  for (const personName of parsePersonList(personNamesText)) {
-    ensureMembershipAdministrator(this, personName, clubName);
-  }
+  ensureAdminGroupMembers(this, parsePersonList(personNamesText), clubName);
 });
 
 Given(/^(\w+) is the only Admin of (.+)$/, function (personName, clubName) {
@@ -61,7 +60,7 @@ When(/^(\w+) tries to make (\w+) an Admin of (.+)$/, function (actorName, target
 When(
   /^(\w+) tries to remove (\w+) as an Admin of (.+)$/,
   function (actorName, targetName, clubName) {
-    tryRemoveMembershipAdministrator(this, actorName, targetName, clubName);
+    tryRemoveClubMembershipAdministrator(this, actorName, targetName, clubName);
   }
 );
 

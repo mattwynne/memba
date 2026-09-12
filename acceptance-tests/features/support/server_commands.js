@@ -283,7 +283,7 @@ ensure_assignment = fn role ->
   if is_nil(active_assignment) do
     :ok =
       Memba.Membership.App.dispatch(
-        %Memba.Membership.Commands.AssignMemberRole{
+        %Memba.Membership.Commands.AssignClubRoleToMember{
           club_id: club_id,
           membership_id: membership_id,
           person_id: person_id,

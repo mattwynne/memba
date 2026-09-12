@@ -15,8 +15,10 @@ defmodule Memba.Membership.Projectors.Club do
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.GroupCreated
   alias Memba.Membership.Events.GroupEmailSlugAssigned
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Slug
 
@@ -49,9 +51,13 @@ defmodule Memba.Membership.Projectors.Club do
 
   project(%GroupEmailSlugAssigned{}, fn multi -> multi end)
 
-  project(%MemberRoleAssigned{}, fn multi -> multi end)
+  project(%ClubRoleAssignedToMember{}, fn multi -> multi end)
 
-  project(%MemberRoleRemoved{}, fn multi -> multi end)
+  project(%LegacyMemberRoleAssigned{}, fn multi -> multi end)
+
+  project(%ClubRoleRemovedFromMember{}, fn multi -> multi end)
+
+  project(%LegacyMemberRoleRemoved{}, fn multi -> multi end)
 
   defp projected_slug(%ClubCreated{} = event) do
     case Slug.validate(event.slug) do

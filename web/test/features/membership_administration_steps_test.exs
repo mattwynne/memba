@@ -18,7 +18,7 @@ defmodule Memba.MembershipAdministrationStepsTest do
     "Pat cannot remove the club's only member"
   ]
 
-  for scenario_name <- @scenario_names do
+  for scenario_name <- @scenario_names ++ @iteration_059_scenario_names do
     test "domain step definitions execute #{scenario_name}" do
       scenario_name = unquote(scenario_name)
       discovery = DomainCucumberRunner.discover()
@@ -32,7 +32,7 @@ defmodule Memba.MembershipAdministrationStepsTest do
     end
   end
 
-  test "every iteration-059 step has domain executable plumbing" do
+  test "every iteration-059 step has exactly one domain definition" do
     discovery = DomainCucumberRunner.discover()
     feature = feature!(discovery, @feature_basename)
 

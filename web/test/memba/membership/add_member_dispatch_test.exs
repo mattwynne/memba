@@ -1,15 +1,17 @@
-defmodule Memba.Membership.AddMemberDispatchTest do
+defmodule Memba.Membership.AddClubMemberDispatchTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.Commands.ExecutionResult
+  alias Commanded.EventStore
   alias Memba.Membership.App
   alias Memba.Membership.Club
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
   alias Memba.Membership.Roles
 
   test "legacy membership-ID aggregate write model is not available" do
@@ -20,6 +22,8 @@ defmodule Memba.Membership.AddMemberDispatchTest do
     membership_id = Memba.ID.generate(:membership)
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
+    replacement_person_id = Memba.ID.generate(:person)
+    replacement_membership_id = Memba.ID.generate(:membership)
     admin_role_id = Roles.membership_administrator_role_id(club_id)
 
     assert :ok =
@@ -32,7 +36,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
                consistency: :strong
              )
 
-    command = %AddMember{
+    command = %AddClubMember{
       membership_id: membership_id,
       club_id: club_id,
       person_id: person_id
@@ -42,12 +46,12 @@ defmodule Memba.Membership.AddMemberDispatchTest do
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberAdded{
+                %ClubMemberAdded{
                   membership_id: ^membership_id,
                   club_id: ^club_id,
                   person_id: ^person_id
                 },
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   membership_id: ^membership_id,
                   club_id: ^club_id,
                   person_id: ^person_id,
@@ -60,20 +64,59 @@ defmodule Memba.Membership.AddMemberDispatchTest do
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
 
+    assert [
+             %{stream_version: 8, data: %ClubMemberAdded{membership_id: ^membership_id}},
+             %{
+               stream_version: 9,
+               data: %ClubRoleAssignedToMember{
+                 membership_id: ^membership_id,
+                 role_id: ^admin_role_id,
+                 assignment_source: "automatic_first_club_member"
+               }
+             }
+           ] =
+             App
+             |> EventStore.stream_forward(club_id)
+             |> Enum.slice(7, 2)
+
+    assert :ok =
+             App.dispatch(
+               %AddClubMember{
+                 membership_id: replacement_membership_id,
+                 club_id: club_id,
+                 person_id: replacement_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %AssignClubRoleToMember{
+                 club_id: club_id,
+                 membership_id: replacement_membership_id,
+                 person_id: replacement_person_id,
+                 role_id: admin_role_id
+               },
+               consistency: :strong
+             )
+
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
               events: [
-                %MemberRemoved{
+                %ClubMemberRemoved{
                   membership_id: ^membership_id,
                   club_id: ^club_id,
                   person_id: ^person_id
                 }
               ],
-              aggregate_state: %Club{club_id: ^club_id, active_memberships: %{}}
+              aggregate_state: %Club{
+                club_id: ^club_id,
+                active_memberships: %{^replacement_membership_id => ^replacement_person_id}
+              }
             }} =
              App.dispatch(
-               %RemoveMember{
+               %RemoveClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -84,7 +127,7 @@ defmodule Memba.Membership.AddMemberDispatchTest do
   end
 
   test "Membership app requires the routed Club aggregate to exist" do
-    command = %AddMember{
+    command = %AddClubMember{
       membership_id: Memba.ID.generate(:membership),
       club_id: Memba.ID.generate(:club),
       person_id: Memba.ID.generate(:person)

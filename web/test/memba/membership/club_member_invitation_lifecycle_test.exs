@@ -8,6 +8,8 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Projections.RoleAssignment
+  alias Memba.Membership.Roles
 
   describe "club member invitation lifecycle application API" do
     test "pending invitation creation stores only the invitation before profile completion" do
@@ -144,7 +146,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                )
     end
 
-    test "existing complete person accepts an invitation and becomes an ordinary active member" do
+    test "existing complete person accepts the first invitation and becomes Admin" do
       club_id = Memba.ID.generate(:club)
       invitation_id = Memba.ID.generate(:club_invitation)
       person_id = Memba.ID.generate(:person)
@@ -186,13 +188,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                Membership.list_active_members_of_club(club_id)
 
-      refute Membership.person_has_club_permission?(
+      assert Membership.person_has_club_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
              )
 
-      refute member_permission?(
+      assert member_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
@@ -205,7 +207,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              } = Membership.get_club_member_invitation(invitation_id)
     end
 
-    test "unknown invitee profile completion creates the person, membership, and acceptance" do
+    test "unknown first invitee profile completion creates the person, Admin membership, and acceptance" do
       club_id = Memba.ID.generate(:club)
       invitation_id = Memba.ID.generate(:club_invitation)
       person_id = Memba.ID.generate(:person)
@@ -257,13 +259,13 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                Membership.list_active_members_of_club(club_id)
 
-      refute Membership.person_has_club_permission?(
+      assert Membership.person_has_club_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
              )
 
-      refute member_permission?(
+      assert member_permission?(
                club_id,
                person_id,
                Permissions.club_manage_members()
@@ -328,6 +330,196 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              } = Membership.get_club_member_invitation_by_token(invitation_token)
     end
 
+    test "profile completion retries after person creation with deterministic identities" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = deterministic_invitation_person_id(invitation_id)
+      membership_id = deterministic_invitation_membership_id(invitation_id)
+
+      create_club!(club_id)
+
+      assert {:ok, %{invitation_token: _invitation_token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
+                 consistency: :strong
+               )
+
+      assert {:error, :simulated_after_person_created} =
+               Membership.complete_invited_club_member_profile(
+                 %{invitation_id: invitation_id, name: "Robin"},
+                 after_invitation_person_created: fn ->
+                   {:error, :simulated_after_person_created}
+                 end
+               )
+
+      assert %PersonProjection{person_id: ^person_id, name: "Robin"} =
+               Membership.get_person_by_email("robin@example.com")
+
+      assert is_nil(Repo.get(MembershipProjection, membership_id))
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.complete_invited_club_member_profile(%{
+                 invitation_id: invitation_id,
+                 name: "Robin"
+               })
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+      assert admin_assignment_count(club_id, membership_id) == 1
+    end
+
+    test "profile completion retries after membership activation" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = deterministic_invitation_person_id(invitation_id)
+      membership_id = deterministic_invitation_membership_id(invitation_id)
+
+      create_club!(club_id)
+
+      assert {:ok, %{invitation_token: _invitation_token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "Robin@Example.COM"},
+                 consistency: :strong
+               )
+
+      assert {:error, :simulated_after_membership_added} =
+               Membership.complete_invited_club_member_profile(
+                 %{invitation_id: invitation_id, name: "Robin"},
+                 consistency: :strong,
+                 after_invitation_membership_added: fn ->
+                   {:error, :simulated_after_membership_added}
+                 end
+               )
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+
+      assert %Memba.Membership.Projections.ClubInvitation{status: "pending"} =
+               Membership.get_club_member_invitation(invitation_id)
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.complete_invited_club_member_profile(
+                 %{invitation_id: invitation_id, name: "Robin"},
+                 consistency: :strong
+               )
+
+      assert admin_assignment_count(club_id, membership_id) == 1
+    end
+
+    test "invitation acceptance retries after membership activation for existing people" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = Memba.ID.generate(:person)
+      membership_id = deterministic_invitation_membership_id(invitation_id)
+
+      create_club!(club_id)
+
+      assert :ok =
+               Membership.create_person(
+                 %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:ok, %{invitation_token: _invitation_token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "alice@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:error, :simulated_after_membership_added} =
+               Membership.accept_club_member_invitation_for_existing_person(
+                 %{invitation_id: invitation_id, person_id: person_id},
+                 after_invitation_membership_added: fn ->
+                   {:error, :simulated_after_membership_added}
+                 end
+               )
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+
+      assert %Memba.Membership.Projections.ClubInvitation{status: "pending"} =
+               Membership.get_club_member_invitation(invitation_id)
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.accept_club_member_invitation_for_existing_person(%{
+                 invitation_id: invitation_id,
+                 person_id: person_id
+               })
+
+      assert admin_assignment_count(club_id, membership_id) == 1
+
+      assert %Memba.Membership.Projections.ClubInvitation{status: "accepted"} =
+               Membership.get_club_member_invitation(invitation_id)
+    end
+
+    test "profile completion recovers pre-existing non-deterministic person and membership IDs" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = Memba.ID.generate(:person)
+      membership_id = Memba.ID.generate(:membership)
+
+      create_club!(club_id)
+
+      assert {:ok, %{invitation_token: _invitation_token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Membership.create_person(
+                 %{person_id: person_id, name: "Robin", email: "robin@example.com"},
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Membership.add_member(
+                 %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+                 consistency: :strong
+               )
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.complete_invited_club_member_profile(%{
+                 invitation_id: invitation_id,
+                 name: "Robin"
+               })
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+      assert admin_assignment_count(club_id, membership_id) == 1
+    end
+
+    test "existing-person acceptance recovers a pre-existing non-deterministic membership ID" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      person_id = Memba.ID.generate(:person)
+      membership_id = Memba.ID.generate(:membership)
+
+      create_club!(club_id)
+
+      assert :ok =
+               Membership.create_person(
+                 %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+                 consistency: :strong
+               )
+
+      assert {:ok, %{invitation_token: _invitation_token}} =
+               Membership.invite_club_member(
+                 %{invitation_id: invitation_id, club_id: club_id, email: "alice@example.com"},
+                 consistency: :strong
+               )
+
+      assert :ok =
+               Membership.add_member(
+                 %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+                 consistency: :strong
+               )
+
+      assert {:ok, %{person_id: ^person_id, membership_id: ^membership_id}} =
+               Membership.accept_club_member_invitation_for_existing_person(%{
+                 invitation_id: invitation_id,
+                 person_id: person_id
+               })
+
+      assert one_active_membership!(club_id, person_id).membership_id == membership_id
+    end
+
     test "accepted invitation token can be reused for lookup without duplicate membership creation" do
       club_id = Memba.ID.generate(:club)
       invitation_id = Memba.ID.generate(:club_invitation)
@@ -390,6 +582,39 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert is_nil(Membership.get_person(duplicate_person_id))
       assert is_nil(Repo.get(MembershipProjection, duplicate_membership_id))
     end
+  end
+
+  defp deterministic_invitation_person_id(invitation_id) do
+    Memba.ID.deterministic(:person, ["club_member_invitation_person", invitation_id])
+  end
+
+  defp deterministic_invitation_membership_id(invitation_id) do
+    Memba.ID.deterministic(:membership, ["club_member_invitation_membership", invitation_id])
+  end
+
+  defp one_active_membership!(club_id, person_id) do
+    assert [membership] =
+             Repo.all(
+               from(membership in MembershipProjection,
+                 where: membership.club_id == ^club_id,
+                 where: membership.person_id == ^person_id,
+                 where: membership.active == true
+               )
+             )
+
+    membership
+  end
+
+  defp admin_assignment_count(club_id, membership_id) do
+    Repo.aggregate(
+      from(assignment in RoleAssignment,
+        where: assignment.club_id == ^club_id,
+        where: assignment.membership_id == ^membership_id,
+        where: assignment.role_id == ^Roles.membership_administrator_role_id(club_id),
+        where: assignment.active == true
+      ),
+      :count
+    )
   end
 
   defp create_club!(club_id) do

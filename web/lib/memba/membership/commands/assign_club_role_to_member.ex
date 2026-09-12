@@ -1,4 +1,4 @@
-defmodule Memba.Membership.Commands.AssignMemberRole do
+defmodule Memba.Membership.Commands.AssignClubRoleToMember do
   @moduledoc """
   Command to assign a club role to an active member.
 

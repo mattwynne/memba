@@ -3,16 +3,16 @@ defmodule Memba.Membership.ClubTest do
 
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
@@ -22,10 +22,10 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
@@ -195,7 +195,7 @@ defmodule Memba.Membership.ClubTest do
     end
   end
 
-  describe "execute/2 AddMember and RemoveMember" do
+  describe "execute/2 AddClubMember and RemoveClubMember" do
     test "emits membership and automatic Admin assignment together for the first activation" do
       club_id = Memba.ID.generate(:club)
       membership_id = Memba.ID.generate(:membership)
@@ -203,19 +203,19 @@ defmodule Memba.Membership.ClubTest do
       admin_role_id = Roles.membership_administrator_role_id(club_id)
       club = created_club(club_id)
 
-      add_command = %AddMember{
+      add_command = %AddClubMember{
         club_id: club_id,
         membership_id: membership_id,
         person_id: person_id
       }
 
       assert [
-               %MemberAdded{
+               %ClubMemberAdded{
                  club_id: ^club_id,
                  membership_id: ^membership_id,
                  person_id: ^person_id
                },
-               %MemberRoleAssigned{
+               %ClubRoleAssignedToMember{
                  club_id: ^club_id,
                  membership_id: ^membership_id,
                  person_id: ^person_id,
@@ -235,18 +235,18 @@ defmodule Memba.Membership.ClubTest do
       club =
         club_id
         |> created_club()
-        |> Club.apply(%MemberAdded{
+        |> Club.apply(%ClubMemberAdded{
           club_id: club_id,
           membership_id: first_membership_id,
           person_id: first_person_id
         })
 
-      assert %MemberAdded{
+      assert %ClubMemberAdded{
                club_id: ^club_id,
                membership_id: ^later_membership_id,
                person_id: ^later_person_id
              } =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: later_membership_id,
                  person_id: later_person_id
@@ -266,7 +266,7 @@ defmodule Memba.Membership.ClubTest do
         |> assign_member_role(membership_id, person_id, admin_role_id)
 
       assert {:error, :last_active_member} =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
@@ -289,7 +289,7 @@ defmodule Memba.Membership.ClubTest do
         |> activate_member(ordinary_membership_id, ordinary_person_id)
 
       assert {:error, :last_membership_administrator} =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: club_id,
                  membership_id: admin_membership_id,
                  person_id: admin_person_id
@@ -312,13 +312,13 @@ defmodule Memba.Membership.ClubTest do
         |> activate_member(replacement_membership_id, replacement_person_id)
         |> assign_member_role(replacement_membership_id, replacement_person_id, admin_role_id)
 
-      assert %MemberRemoved{
+      assert %ClubMemberRemoved{
                club_id: ^club_id,
                membership_id: ^first_membership_id,
                person_id: ^first_person_id
              } =
                event =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: club_id,
                  membership_id: first_membership_id,
                  person_id: first_person_id
@@ -345,21 +345,21 @@ defmodule Memba.Membership.ClubTest do
       club =
         club_id
         |> created_club()
-        |> Club.apply(%MemberAdded{
+        |> Club.apply(%ClubMemberAdded{
           club_id: club_id,
           membership_id: membership_id,
           person_id: person_id
         })
 
       assert [] =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
                })
 
       assert {:error, :membership_id_already_used} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: Memba.ID.generate(:person)
@@ -374,14 +374,14 @@ defmodule Memba.Membership.ClubTest do
       club =
         club_id
         |> created_club()
-        |> Club.apply(%MemberAdded{
+        |> Club.apply(%ClubMemberAdded{
           club_id: club_id,
           membership_id: active_membership_id,
           person_id: person_id
         })
 
       assert {:error, :already_active_member} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: Memba.ID.generate(:membership),
                  person_id: person_id
@@ -396,19 +396,19 @@ defmodule Memba.Membership.ClubTest do
       club =
         club_id
         |> created_club()
-        |> Club.apply(%MemberAdded{
+        |> Club.apply(%ClubMemberAdded{
           club_id: club_id,
           membership_id: membership_id,
           person_id: person_id
         })
-        |> Club.apply(%MemberRemoved{
+        |> Club.apply(%ClubMemberRemoved{
           club_id: club_id,
           membership_id: membership_id,
           person_id: person_id
         })
 
       assert {:error, :membership_id_already_used} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
@@ -439,7 +439,7 @@ defmodule Memba.Membership.ClubTest do
         })
 
       assert {:error, :membership_id_already_used} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
@@ -448,19 +448,19 @@ defmodule Memba.Membership.ClubTest do
       new_membership_id = Memba.ID.generate(:membership)
 
       assert [
-               %MemberAdded{
+               %ClubMemberAdded{
                  club_id: ^club_id,
                  membership_id: ^new_membership_id,
                  person_id: ^person_id
                },
-               %MemberRoleAssigned{
+               %ClubRoleAssignedToMember{
                  club_id: ^club_id,
                  membership_id: ^new_membership_id,
                  person_id: ^person_id,
                  role_id: ^admin_role_id
                }
              ] =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: new_membership_id,
                  person_id: person_id
@@ -473,7 +473,7 @@ defmodule Memba.Membership.ClubTest do
       person_id = Memba.ID.generate(:person)
 
       assert {:error, :not_created} =
-               Club.execute(%Club{}, %AddMember{
+               Club.execute(%Club{}, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id
@@ -482,21 +482,21 @@ defmodule Memba.Membership.ClubTest do
       club = created_club(club_id)
 
       assert {:error, :invalid_club_id} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: Memba.ID.generate(:club),
                  membership_id: membership_id,
                  person_id: person_id
                })
 
       assert {:error, :invalid_membership_id} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: "not-a-uuid",
                  person_id: person_id
                })
 
       assert {:error, :invalid_person_id} =
-               Club.execute(club, %AddMember{
+               Club.execute(club, %AddClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: "not-a-uuid"
@@ -511,28 +511,28 @@ defmodule Memba.Membership.ClubTest do
       club =
         club_id
         |> created_club()
-        |> Club.apply(%MemberAdded{
+        |> Club.apply(%ClubMemberAdded{
           club_id: club_id,
           membership_id: membership_id,
           person_id: person_id
         })
 
       assert {:error, :invalid_club_id} =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: Memba.ID.generate(:club),
                  membership_id: membership_id,
                  person_id: person_id
                })
 
       assert {:error, :membership_person_mismatch} =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: Memba.ID.generate(:person)
                })
 
       assert {:error, :not_found} =
-               Club.execute(club, %RemoveMember{
+               Club.execute(club, %RemoveClubMember{
                  club_id: club_id,
                  membership_id: Memba.ID.generate(:membership),
                  person_id: person_id
@@ -1090,7 +1090,7 @@ defmodule Memba.Membership.ClubTest do
     end
   end
 
-  describe "execute/2 AssignMemberRole and RemoveMemberRole" do
+  describe "execute/2 AssignClubRoleToMember and RemoveClubRoleFromMember" do
     test "emits role assignment and role removal events for a member" do
       club_id = Memba.ID.generate(:club)
       role_id = Memba.ID.generate(:role)
@@ -1105,14 +1105,14 @@ defmodule Memba.Membership.ClubTest do
         |> grant_manage_members_permission(role_id)
         |> activate_member(membership_id, person_id)
 
-      assert %MemberRoleAssigned{
+      assert %ClubRoleAssignedToMember{
                club_id: ^club_id,
                membership_id: ^membership_id,
                person_id: ^person_id,
                role_id: ^role_id,
                assigned_by_person_id: ^actor_person_id
              } =
-               Club.execute(club, %AssignMemberRole{
+               Club.execute(club, %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1122,14 +1122,14 @@ defmodule Memba.Membership.ClubTest do
 
       club = assign_member_role(club, membership_id, person_id, role_id)
 
-      assert %MemberRoleRemoved{
+      assert %ClubRoleRemovedFromMember{
                club_id: ^club_id,
                membership_id: ^membership_id,
                person_id: ^person_id,
                role_id: ^role_id,
                removed_by_person_id: ^actor_person_id
              } =
-               Club.execute(club, %RemoveMemberRole{
+               Club.execute(club, %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1151,7 +1151,7 @@ defmodule Memba.Membership.ClubTest do
         |> activate_member(membership_id, person_id)
 
       assert {:error, :role_assignment_not_found} =
-               Club.execute(club, %RemoveMemberRole{
+               Club.execute(club, %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1161,7 +1161,7 @@ defmodule Memba.Membership.ClubTest do
       club = assign_member_role(club, membership_id, person_id, role_id)
 
       assert {:error, :role_already_assigned} =
-               Club.execute(club, %AssignMemberRole{
+               Club.execute(club, %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1179,7 +1179,7 @@ defmodule Memba.Membership.ClubTest do
         |> define_role(role_id, "treasurer", "Treasurer")
 
       assert {:error, :member_not_active} =
-               Club.execute(club, %AssignMemberRole{
+               Club.execute(club, %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: Memba.ID.generate(:membership),
                  person_id: Memba.ID.generate(:person),
@@ -1201,7 +1201,7 @@ defmodule Memba.Membership.ClubTest do
         |> assign_member_role(membership_id, person_id, role_id)
 
       assert {:error, :last_membership_administrator} =
-               Club.execute(club, %RemoveMemberRole{
+               Club.execute(club, %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -1226,13 +1226,13 @@ defmodule Memba.Membership.ClubTest do
         |> assign_member_role(first_membership_id, first_person_id, role_id)
         |> assign_member_role(second_membership_id, second_person_id, role_id)
 
-      assert %MemberRoleRemoved{
+      assert %ClubRoleRemovedFromMember{
                club_id: ^club_id,
                membership_id: ^first_membership_id,
                person_id: ^first_person_id,
                role_id: ^role_id
              } =
-               Club.execute(club, %RemoveMemberRole{
+               Club.execute(club, %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: first_membership_id,
                  person_id: first_person_id,
@@ -1244,7 +1244,7 @@ defmodule Memba.Membership.ClubTest do
       club_id = Memba.ID.generate(:club)
 
       assert {:error, :role_not_defined} =
-               Club.execute(created_club(club_id), %AssignMemberRole{
+               Club.execute(created_club(club_id), %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: Memba.ID.generate(:membership),
                  person_id: Memba.ID.generate(:person),
@@ -1320,7 +1320,7 @@ defmodule Memba.Membership.ClubTest do
     assert %{{^membership_id, ^role_id} => %{person_id: ^person_id}} = club.role_assignments
 
     assert %Club{role_assignments: %{}} =
-             Club.apply(club, %MemberRoleRemoved{
+             Club.apply(club, %ClubRoleRemovedFromMember{
                club_id: club_id,
                membership_id: membership_id,
                person_id: person_id,
@@ -1414,7 +1414,7 @@ defmodule Memba.Membership.ClubTest do
   end
 
   defp activate_member(%Club{} = club, membership_id, person_id) do
-    Club.apply(club, %MemberAdded{
+    Club.apply(club, %ClubMemberAdded{
       club_id: club.club_id,
       membership_id: membership_id,
       person_id: person_id
@@ -1422,7 +1422,7 @@ defmodule Memba.Membership.ClubTest do
   end
 
   defp assign_member_role(%Club{} = club, membership_id, person_id, role_id) do
-    Club.apply(club, %MemberRoleAssigned{
+    Club.apply(club, %ClubRoleAssignedToMember{
       club_id: club.club_id,
       membership_id: membership_id,
       person_id: person_id,

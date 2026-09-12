@@ -4,14 +4,14 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Group, as: GroupProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -238,7 +238,7 @@ defmodule Memba.Membership.QueryTest do
                  membership_id: ^alice_membership_id,
                  id: alice_person_id,
                  name: "Alice",
-                 roles: ["Chair", "Secretary"]
+                 roles: ["Admin", "Chair", "Secretary"]
                },
                %{
                  membership_id: ^bob_membership_id,
@@ -269,7 +269,7 @@ defmodule Memba.Membership.QueryTest do
                  membership_id: ^active_membership_id,
                  id: active_person_id,
                  name: "Active Alice",
-                 roles: []
+                 roles: ["Admin"]
                }
              ] = Membership.list_active_members_of_club(club.club_id)
 
@@ -440,11 +440,21 @@ defmodule Memba.Membership.QueryTest do
         alice.person_id
       )
 
+      admin_group_id = SystemGroups.admin_group_id(club.club_id)
       everyone_group_id = SystemGroups.everyone_group_id(club.club_id)
       club_id = club.club_id
       groups = Membership.list_active_groups_for_member(club.club_id, alice.person_id)
 
       assert [
+               %{
+                 club_id: ^club_id,
+                 group_id: ^admin_group_id,
+                 email_slug: "admin",
+                 email_address: "admin@kmc.clubs.memba.io",
+                 group_key: "admin",
+                 name: "Admin",
+                 active_member_count: 1
+               },
                %{
                  club_id: ^club_id,
                  group_id: ^alpine_group_id,
@@ -696,13 +706,8 @@ defmodule Memba.Membership.QueryTest do
       admin_group_id = SystemGroups.admin_group_id(club.club_id)
 
       assert Membership.active_member_of_group?(everyone_group_id, alice.person_id)
-      refute Membership.active_member_of_group?(admin_group_id, alice.person_id)
-      refute Membership.active_member_of_group?(everyone_group_id, pat.person_id)
-
-      admin_role_id = Roles.membership_administrator_role_id(club.club_id)
-      assign_role(club.club_id, membership_id, alice.person_id, admin_role_id)
-
       assert Membership.active_member_of_group?(admin_group_id, alice.person_id)
+      refute Membership.active_member_of_group?(everyone_group_id, pat.person_id)
 
       remove_member(membership_id)
 
@@ -892,7 +897,7 @@ defmodule Memba.Membership.QueryTest do
 
     assert :ok =
              App.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -965,29 +970,60 @@ defmodule Memba.Membership.QueryTest do
   end
 
   defp assign_role(club_id, membership_id, person_id, role_id) do
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: role_id
-               },
-               consistency: :strong
-             )
+    case App.dispatch(
+           %AssignClubRoleToMember{
+             club_id: club_id,
+             membership_id: membership_id,
+             person_id: person_id,
+             role_id: role_id
+           },
+           consistency: :strong
+         ) do
+      :ok -> :ok
+      {:error, :role_already_assigned} -> :ok
+      other -> flunk("expected role assignment to succeed, got #{inspect(other)}")
+    end
   end
 
   defp remove_member(membership_id) do
     membership = Repo.get!(MembershipProjection, membership_id)
 
-    assert :ok =
-             App.dispatch(
-               %RemoveMember{
-                 club_id: membership.club_id,
-                 membership_id: membership_id,
-                 person_id: membership.person_id
-               },
-               consistency: :strong
-             )
+    remove_command = %RemoveClubMember{
+      club_id: membership.club_id,
+      membership_id: membership_id,
+      person_id: membership.person_id
+    }
+
+    case App.dispatch(remove_command, consistency: :strong) do
+      :ok ->
+        :ok
+
+      {:error, reason} when reason in [:last_active_member, :last_membership_administrator] ->
+        replacement_membership_id = Memba.ID.generate(:membership)
+        replacement_person_id = Memba.ID.generate(:person)
+
+        assert :ok =
+                 App.dispatch(
+                   %AddClubMember{
+                     club_id: membership.club_id,
+                     membership_id: replacement_membership_id,
+                     person_id: replacement_person_id
+                   },
+                   consistency: :strong
+                 )
+
+        assert :ok =
+                 App.dispatch(
+                   %AssignClubRoleToMember{
+                     club_id: membership.club_id,
+                     membership_id: replacement_membership_id,
+                     person_id: replacement_person_id,
+                     role_id: Roles.membership_administrator_role_id(membership.club_id)
+                   },
+                   consistency: :strong
+                 )
+
+        assert :ok = App.dispatch(remove_command, consistency: :strong)
+    end
   end
 end

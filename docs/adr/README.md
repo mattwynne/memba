@@ -14,7 +14,7 @@ This directory contains Memba's architecture decision records (ADRs).
 | [0008. Use PostgreSQL EventStore schema with Commanded](0008-use-postgres-eventstore-schema-with-commanded.md) | Store Commanded events with `commanded_eventstore_adapter` and the `eventstore` package. | accepted |
 | [0009. Use Commanded Ecto Projections](0009-use-commanded-ecto-projections.md) | Use `commanded_ecto_projections` for Ecto-backed read models. | accepted |
 | [0010. Use shared feature files with Elixir Cucumber](0010-use-shared-feature-files-with-elixir-cucumber.md) | Use the Elixir Cucumber package to share feature files across test layers. | accepted |
-| [0011. Use caller-generated UUID aggregate identities](0011-use-caller-generated-uuid-aggregate-identities.md) | Generate UUID aggregate identities at the caller before dispatching commands. | accepted |
+| [0011. Use caller-generated UUID aggregate identities](0011-use-caller-generated-uuid-aggregate-identities.md) | Generate UUID aggregate identities at the caller before dispatching commands. | partially superseded by [0024](0024-use-club-as-membership-admin-consistency-boundary.md) |
 | [0012. Track whether a message delivery was opened](0012-track-whether-message-delivery-was-opened.md) | Track whether each delivery has been opened at least once. | accepted |
 | [0013. Use PhoenixTest for feature-style web tests](0013-use-phoenix-test-for-feature-style-web-tests.md) | Use `phoenix_test` for feature-style Phoenix web tests. | accepted |
 | [0014. Use Fly.io for production hosting](0014-use-fly-io-for-production-hosting.md) | Use Fly.io as Memba's initial production hosting platform. | accepted |
@@ -27,3 +27,4 @@ This directory contains Memba's architecture decision records (ADRs).
 | [0021. Publish committed read-model changes](0021-publish-committed-read-model-changes.md) | Publish committed read-model changes on the application PubSub bus. | accepted |
 | [0022. Use projection barriers for read-your-writes checks](0022-use-projection-barriers-for-read-your-writes.md) | Use projection barriers for read-your-writes synchronization and negative acceptance assertions. | accepted |
 | [0023. Use URL-addressable LiveView state](0023-use-url-addressable-liveview-state.md) | Reflect visible member-page state changes in the URL whenever practical. | accepted |
+| [0024. Use Club as the membership and Admin consistency boundary](0024-use-club-as-membership-admin-consistency-boundary.md) | Route active club membership and Admin-continuity decisions through Club. | accepted |

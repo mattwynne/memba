@@ -95,19 +95,24 @@ test("iteration 058 scenarios are no longer blocked from either acceptance runne
   );
 });
 
-test("unfinished iteration 059 scenarios remain excluded from the default browser runner", () => {
+test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
   const feature = browserFeatures().find(
     ({ name }) => name === "club_membership_administration.feature"
   );
   const iterationScenarios = feature.scenarios.filter((scenario) =>
     scenario.tags.includes("@iteration-059")
   );
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
 
   assert.equal(iterationScenarios.length, 5);
-  assert.deepEqual(
-    iterationScenarios.filter((scenario) => matchesDefaultBrowserTags(scenario.tags)),
-    []
-  );
+  assert.deepEqual(browserScenarioNames, [
+    "Robin accepts the first invitation to an empty club",
+    "Pat cannot remove Robin while Robin is the only Admin",
+    "Pat removes Robin after Alice becomes an Admin",
+    "Pat cannot remove the club's only member"
+  ]);
 });
 
 test("the later-invitee ordinary-member regression remains selected by the browser runner", () => {
