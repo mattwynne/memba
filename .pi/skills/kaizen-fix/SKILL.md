@@ -46,6 +46,8 @@ Before asking Matt to choose from multiple unresolved notes, run targeted `git l
 
 ## Investigation Workflow
 
+Use [A3 problem-solving](a3-problem-solving.md) to frame the improvement from observed problem through tested countermeasure and follow-up. Scale the detail to the problem; a small fix does not need a separate A3 document.
+
 1. **Protect unrelated work**
    - Run `git status --short --branch`.
    - If there are unrelated uncommitted changes, avoid touching those files. If the fix would overlap them, stop and ask Matt how to proceed.
@@ -57,6 +59,8 @@ Before asking Matt to choose from multiple unresolved notes, run targeted `git l
    - Use `/systematic-debugging` as the default investigation method for failures, surprising behaviour, or unclear causes. Load and follow that skill before proposing or applying fixes.
    - Keep evidence factual. Separate observations from hypotheses.
 4. **Find the root cause**
+   - Use [Five Whys](five-whys.md) to trace evidence-supported causes, branching where needed rather than forcing five answers or a single root cause.
+   - Investigate both why the defect occurred and why it escaped detection. Distinguish correction, detection/containment, and prevention when choosing countermeasures.
    - State the smallest causal mechanism that explains the observation.
    - Identify whether the problem is in code, prompt instructions, workflow graph, handoff metadata, environment/sandbox setup, documentation, or operator procedure.
 5. **Choose the action**
@@ -71,6 +75,7 @@ Before asking Matt to choose from multiple unresolved notes, run targeted `git l
    - Append or update a resolution section in the original note.
    - Preserve the original observation text.
    - Include the date, root cause, applied fix or options, files changed, validation performed, and remaining follow-up.
+   - Follow the [A3 check-and-act loop](a3-problem-solving.md#check-results-and-sustain-the-improvement): record expected versus observed results, and any owner/review point for later effectiveness checks. Distinguish a fix being applied from recurrence prevention being demonstrated.
 8. **Commit the completed kaizen fix**
    - Review `git status --short` and `git diff --stat`.
    - Commit only the kaizen fix, its resolution-note update, and directly supporting workflow/skill/doc changes.
