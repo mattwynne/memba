@@ -860,15 +860,19 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       assert has_element?(
                view,
                "#member-conversation-entry-#{entry_message.message_id} " <>
-                 "#member-conversation-entry-menu-#{entry_message.message_id}.context-menu"
+                 "details#member-conversation-entry-menu-#{entry_message.message_id}.context-menu"
              )
 
       assert has_element?(
                view,
                "#member-conversation-entry-#{entry_message.message_id} " <>
-                 "#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
-                 ".context-menu__button[aria-label='Message options']"
+                 "summary#member-conversation-entry-menu-button-#{entry_message.message_id}" <>
+                 ".context-menu__button[aria-label='Message options']" <>
+                 "[aria-controls='member-conversation-entry-menu-#{entry_message.message_id}-content']"
              )
+
+      refute has_element?(view, "#member-conversation-entry-menu-#{entry_message.message_id} [role='menu']")
+      refute has_element?(view, "#member-conversation-entry-menu-#{entry_message.message_id} [role='menuitem']")
 
       assert has_element?(
                view,

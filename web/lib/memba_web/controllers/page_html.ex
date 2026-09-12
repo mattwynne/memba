@@ -55,7 +55,6 @@ defmodule MembaWeb.PageHTML do
                   @group_id
                 )
               }
-              role="menuitem"
             >
               <.icon name="hero-envelope" /> Delivery details
             </.link>

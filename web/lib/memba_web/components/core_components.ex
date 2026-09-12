@@ -124,7 +124,7 @@ defmodule MembaWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value type disabled)
+  attr :rest, :global, include: ~w(href navigate patch method download form name value type disabled)
   attr :class, :any, default: nil
   attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: nil, values: [nil, "sm", "lg"]
@@ -158,18 +158,29 @@ defmodule MembaWeb.CoreComponents do
 
     rest = assigns.rest
 
-    if rest[:href] || rest[:navigate] || rest[:patch] do
-      ~H"""
-      <.link class={@button_class} {@rest}>
-        {render_slot(@inner_block)}
-      </.link>
-      """
-    else
-      ~H"""
-      <button class={@button_class} disabled={@disabled} {@rest}>
-        {render_slot(@inner_block)}
-      </button>
-      """
+    cond do
+      link_action?(rest) and assigns.disabled ->
+        assigns = assign(assigns, :rest, disabled_link_action_rest(rest))
+
+        ~H"""
+        <span class={@button_class} aria-disabled="true" {@rest}>
+          {render_slot(@inner_block)}
+        </span>
+        """
+
+      link_action?(rest) ->
+        ~H"""
+        <.link class={@button_class} {@rest}>
+          {render_slot(@inner_block)}
+        </.link>
+        """
+
+      true ->
+        ~H"""
+        <button class={@button_class} disabled={@disabled} {@rest}>
+          {render_slot(@inner_block)}
+        </button>
+        """
     end
   end
 
@@ -187,24 +198,37 @@ defmodule MembaWeb.CoreComponents do
       |> assign(:content_id, assigns.content_id || "#{assigns.id}-content")
 
     ~H"""
-    <div id={@id} class="context-menu dropdown dropdown-end" {@rest}>
-      <button
+    <details id={@id} class="context-menu dropdown dropdown-end" {@rest}>
+      <summary
         id={@button_id}
-        type="button"
-        tabindex="0"
-        role="button"
-        aria-haspopup="menu"
         aria-controls={@content_id}
         aria-label={@label}
         class="context-menu__button"
       >
         <.icon name="hero-ellipsis-vertical" />
-      </button>
-      <div id={@content_id} tabindex="0" role="menu" class="dropdown-content context-menu__content">
+      </summary>
+      <div id={@content_id} class="dropdown-content context-menu__content">
         {render_slot(@inner_block)}
       </div>
-    </div>
+    </details>
     """
+  end
+
+  defp link_action?(rest) do
+    rest_attribute(rest, "href") || rest_attribute(rest, "navigate") || rest_attribute(rest, "patch")
+  end
+
+  defp disabled_link_action_rest(rest) do
+    rest
+    |> Enum.reject(fn {key, _value} -> disabled_link_action_attribute?(key) end)
+    |> Map.new()
+  end
+
+  defp disabled_link_action_attribute?(key) do
+    key = to_string(key)
+
+    key in ~w(href navigate patch method download form type name value disabled role tabindex target rel aria-disabled) or
+      String.starts_with?(key, "phx-")
   end
 
   defp size_w(:sm), do: "w-7"
@@ -309,9 +333,11 @@ defmodule MembaWeb.CoreComponents do
 
   def input(%{type: "checkbox"} = assigns) do
     assigns =
-      assign_new(assigns, :checked, fn ->
+      assigns
+      |> assign_new(:checked, fn ->
         Phoenix.HTML.Form.normalize_value("checkbox", assigns[:value])
       end)
+      |> assign_input_accessibility()
 
     ~H"""
     <div class="fieldset mb-2">
@@ -331,16 +357,20 @@ defmodule MembaWeb.CoreComponents do
             value="true"
             checked={@checked}
             class={@class || "checkbox checkbox-sm"}
+            aria-describedby={@aria_describedby}
+            aria-invalid={@aria_invalid}
             {@rest}
           />{@label}
         </span>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   def input(%{type: "select"} = assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -350,18 +380,22 @@ defmodule MembaWeb.CoreComponents do
           name={@name}
           class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
           {Phoenix.HTML.Form.options_for_select(@options, @value)}
         </select>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   def input(%{type: "textarea"} = assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -373,16 +407,20 @@ defmodule MembaWeb.CoreComponents do
             @class || "w-full textarea",
             @errors != [] && (@error_class || "textarea-error")
           ]}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
+    assigns = assign_input_accessibility(assigns)
+
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
@@ -396,18 +434,85 @@ defmodule MembaWeb.CoreComponents do
             @class || "w-full input",
             @errors != [] && (@error_class || "input-error")
           ]}
+          aria-describedby={@aria_describedby}
+          aria-invalid={@aria_invalid}
           {@rest}
         />
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <.error :for={{msg, error_id} <- @errors_with_ids} id={error_id}>{msg}</.error>
     </div>
     """
   end
 
+  defp assign_input_accessibility(assigns) do
+    rest = assigns[:rest] || %{}
+    errors = assigns[:errors] || []
+    supplied_describedby = rest_attribute(rest, "aria-describedby")
+    supplied_aria_invalid = rest_attribute(rest, "aria-invalid")
+
+    errors_with_ids =
+      errors
+      |> Enum.with_index(1)
+      |> Enum.map(fn {msg, index} -> {msg, input_error_id(assigns[:id], index)} end)
+
+    error_ids =
+      errors_with_ids
+      |> Enum.map(fn {_msg, id} -> id end)
+      |> Enum.reject(&is_nil/1)
+
+    assigns
+    |> assign(:rest, drop_rest_attributes(rest, ["aria-describedby", "aria-invalid"]))
+    |> assign(:errors, errors)
+    |> assign(:errors_with_ids, errors_with_ids)
+    |> assign(:aria_describedby, aria_describedby(supplied_describedby, error_ids))
+    |> assign(:aria_invalid, aria_invalid(supplied_aria_invalid, errors))
+  end
+
+  defp input_error_id(nil, _index), do: nil
+  defp input_error_id("", _index), do: nil
+  defp input_error_id(id, index), do: "#{id}-error-#{index}"
+
+  defp rest_attribute(rest, name) do
+    rest
+    |> Enum.find_value(fn {key, value} -> if to_string(key) == name, do: value end)
+  end
+
+  defp drop_rest_attributes(rest, names) do
+    Map.reject(rest, fn {key, _value} -> to_string(key) in names end)
+  end
+
+  defp aria_describedby(supplied_describedby, error_ids) do
+    supplied_describedby
+    |> describedby_tokens()
+    |> Kernel.++(error_ids)
+    |> Enum.uniq()
+    |> Enum.join(" ")
+    |> blank_to_nil()
+  end
+
+  defp describedby_tokens(nil), do: []
+
+  defp describedby_tokens(tokens) when is_binary(tokens) do
+    tokens
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp describedby_tokens(tokens), do: describedby_tokens(to_string(tokens))
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  defp aria_invalid(_supplied_aria_invalid, [_error | _errors]), do: "true"
+  defp aria_invalid(supplied_aria_invalid, _errors), do: supplied_aria_invalid
+
   # Helper used by inputs to generate form errors
+  attr :id, :string, default: nil
+  slot :inner_block, required: true
+
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
+    <p id={@id} class="mt-1.5 flex gap-2 items-center text-sm text-error">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>

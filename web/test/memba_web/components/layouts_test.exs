@@ -222,8 +222,10 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id[role='menu']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id"
     )
+
+    refute_selector(html, "#club-site-identity-menu[role='menu']")
 
     assert_text(
       html,
@@ -240,15 +242,17 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(
       html,
       "#club-site-identity-menu .app-menu__who + " <>
-        "div.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "div.app-menu__divider[aria-hidden='true'] + " <>
         "a#club-site-account-settings-link"
     )
 
     assert_selector(
       html,
       "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
-        "a#club-site-account-settings-link.app-menu__item[href='/my/settings'][role='menuitem']"
+        "a#club-site-account-settings-link.app-menu__item[href='/my/settings']"
     )
+
+    refute_selector(html, "#club-site-account-settings-link[role='menuitem']")
 
     assert_text(html, "#club-site-account-settings-link", "Account settings")
 
@@ -256,7 +260,7 @@ defmodule MembaWeb.LayoutsTest do
       html,
       "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id " <>
         "a#club-site-account-settings-link + " <>
-        "div#club-site-identity-menu-divider.app-menu__divider[role='separator'][aria-orientation='horizontal'] + " <>
+        "div#club-site-identity-menu-divider.app-menu__divider[aria-hidden='true'] + " <>
         "form#club-site-sign-out-form"
     )
 
@@ -281,8 +285,10 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit'][role='menuitem']"
+      "#club-site-global-bar .global-bar__id .dropdown-content.app-menu.app-menu--id button#club-site-sign-out-button.app-menu__signout[type='submit']"
     )
+
+    refute_selector(html, "#club-site-sign-out-button[role='menuitem']")
 
     assert_text(html, "#club-site-sign-out-button", "Sign out")
 

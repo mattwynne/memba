@@ -369,7 +369,6 @@ defmodule MembaWeb.Layouts do
 
             <div
               id="club-site-identity-menu"
-              role="menu"
               class="dropdown-content app-menu app-menu--id"
             >
               <div class="app-menu__who">
@@ -378,11 +377,10 @@ defmodule MembaWeb.Layouts do
                 </div>
                 <div class="app-menu__who-email">{club_identity_email(@current_identity)}</div>
               </div>
-              <div class="app-menu__divider" role="separator" aria-orientation="horizontal" />
+              <div class="app-menu__divider" aria-hidden="true" />
               <.link
                 navigate={~p"/my/settings"}
                 id="club-site-account-settings-link"
-                role="menuitem"
                 class="app-menu__item"
               >
                 Account settings
@@ -390,14 +388,12 @@ defmodule MembaWeb.Layouts do
               <div
                 id="club-site-identity-menu-divider"
                 class="app-menu__divider"
-                role="separator"
-                aria-orientation="horizontal"
+                aria-hidden="true"
               />
               <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
                 <.button
                   id="club-site-sign-out-button"
                   type="submit"
-                  role="menuitem"
                   variant="ghost"
                   class="app-menu__signout"
                 >
