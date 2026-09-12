@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memba reconnect indicator prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cream: #f6f5ea;
+      --paper: #fffef9;
+      --sage-100: #dde3cf;
+      --sage-300: #98ab80;
+      --sage-500: #5a7050;
+      --sage-700: #36462f;
+      --ink: #25291d;
+      --ink-2: #555a47;
+      --ink-3: #878b76;
+      --line: #e8e6d4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--cream);
+      color: var(--ink);
+      font-family: "Figtree", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font: inherit; }
+
+    .prototype-tools {
+      position: fixed;
+      z-index: 20;
+      top: 16px;
+      right: 16px;
+      width: min(330px, calc(100vw - 32px));
+      padding: 14px;
+      border: 1px solid #d9d6bf;
+      border-radius: 12px;
+      background: rgba(255, 254, 249, 0.96);
+      box-shadow: 0 8px 28px rgba(37, 41, 29, 0.12);
+      backdrop-filter: blur(8px);
+    }
+
+    .prototype-tools h1 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      letter-spacing: -0.01em;
+    }
+
+    .prototype-tools p {
+      margin: 0 0 10px;
+      color: var(--ink-2);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .prototype-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .prototype-actions button {
+      cursor: pointer;
+      padding: 7px 10px;
+      border: 1px solid #d9d6bf;
+      border-radius: 7px;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .prototype-actions button:hover { border-color: var(--sage-300); }
+
+    #simulation-status {
+      min-height: 17px;
+      margin-top: 9px;
+      margin-bottom: 0;
+      color: var(--sage-700);
+      font-weight: 600;
+    }
+
+    .global-bar {
+      height: 56px;
+      background: var(--sage-700);
+      color: var(--cream);
+    }
+
+    .global-bar__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(100% - 32px, 860px);
+      height: 100%;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 19px;
+      font-weight: 700;
+    }
+
+    .sprig {
+      position: relative;
+      width: 20px;
+      height: 25px;
+    }
+
+    .sprig::before {
+      content: "";
+      position: absolute;
+      left: 9px;
+      bottom: 2px;
+      width: 3px;
+      height: 21px;
+      border-radius: 4px;
+      background: var(--cream);
+      transform: rotate(-4deg);
+    }
+
+    .sprig::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 5px;
+      width: 13px;
+      height: 10px;
+      border-radius: 12px 1px 12px 1px;
+      background: var(--cream);
+      transform: rotate(-12deg);
+    }
+
+    .avatar {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 1px solid rgba(246, 245, 234, 0.45);
+      border-radius: 50%;
+      background: rgba(246, 245, 234, 0.12);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .app-card {
+      width: min(100% - 32px, 860px);
+      margin: 24px auto 80px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--paper);
+      box-shadow: 0 2px 10px rgba(37, 41, 29, 0.06);
+    }
+
+    .club-head { padding: 22px 24px 18px; }
+    .club-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.025em; }
+
+    .tabs {
+      display: flex;
+      gap: 24px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      padding: 11px 0 10px;
+      border-bottom: 2px solid transparent;
+      color: var(--ink-2);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .tab.active { border-color: var(--sage-500); color: var(--ink); }
+    .conversations { display: grid; gap: 9px; padding: 18px; }
+
+    .conversation {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--paper);
+    }
+
+    .conversation__avatar {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--sage-100);
+      color: var(--sage-700);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .conversation strong { display: block; margin-bottom: 4px; font-size: 14px; }
+    .conversation span { color: var(--ink-3); font-size: 13px; }
+
+    /* Proposed production state: deliberately not an alert or toast. */
+    .connection-status {
+      position: fixed;
+      z-index: 50;
+      left: 50%;
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      max-width: calc(100vw - 32px);
+      padding: 9px 13px 9px 11px;
+      border: 1px solid var(--sage-300);
+      border-radius: 999px;
+      background: rgba(255, 254, 249, 0.97);
+      color: var(--ink-2);
+      box-shadow: 0 5px 18px rgba(37, 41, 29, 0.13);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.2;
+      transform: translate(-50%, 16px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease, transform 160ms ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .connection-status.visible {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
+    .connection-status__spinner {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      border: 2px solid var(--sage-100);
+      border-top-color: var(--sage-500);
+      border-radius: 50%;
+      animation: spin 850ms linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .connection-status { transition: none; }
+      .connection-status__spinner { animation: none; border-color: var(--sage-500); }
+    }
+
+    @media (max-width: 620px) {
+      .prototype-tools { position: static; width: calc(100% - 24px); margin: 12px; }
+      .global-bar__inner, .app-card { width: calc(100% - 24px); }
+      .app-card { margin-top: 12px; border-radius: 14px; }
+      .club-head { padding: 18px; }
+      .tabs { gap: 20px; padding: 0 18px; }
+      .conversations { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="prototype-tools">
+    <h1>Reconnect prototype controls</h1>
+    <p>The production indicator waits 1.5 seconds. A routine tab wake should recover before anything appears.</p>
+    <div class="prototype-actions">
+      <button type="button" data-simulate="brief">Brief reconnect</button>
+      <button type="button" data-simulate="slow">Slow reconnect</button>
+      <button type="button" data-simulate="offline">Stay disconnected</button>
+      <button type="button" data-simulate="server">Server unavailable</button>
+      <button type="button" data-simulate="connected">Reconnect now</button>
+    </div>
+    <p id="simulation-status" aria-live="polite">Connected</p>
+  </aside>
+
+  <header class="global-bar">
+    <div class="global-bar__inner">
+      <div class="brand"><span class="sprig" aria-hidden="true"></span>Memba</div>
+      <div class="avatar">LT</div>
+    </div>
+  </header>
+
+  <main class="app-card">
+    <div class="club-head"><h2>Kootenay Alpine Club</h2></div>
+    <nav class="tabs" aria-label="Club sections">
+      <span class="tab active">Conversations</span>
+      <span class="tab">Members</span>
+      <span class="tab">About</span>
+    </nav>
+    <section class="conversations">
+      <article class="conversation">
+        <div class="conversation__avatar">MW</div>
+        <div><strong>Goodsir traverse — approach road update</strong><span>11 replies · last reply 20m ago</span></div>
+      </article>
+      <article class="conversation">
+        <div class="conversation__avatar">ES</div>
+        <div><strong>AGM confirmed — Saturday 14th</strong><span>6 replies · last reply 2h ago</span></div>
+      </article>
+      <article class="conversation">
+        <div class="conversation__avatar">PD</div>
+        <div><strong>Gear swap is back on</strong><span>2 replies · last reply 4d ago</span></div>
+      </article>
+    </section>
+  </main>
+
+  <div id="connection-status" class="connection-status" role="status" aria-live="polite" aria-atomic="true">
+    <span class="connection-status__spinner" aria-hidden="true"></span>
+    <span id="connection-status-message">Connection paused — reconnecting…</span>
+  </div>
+
+  <script>
+    const indicator = document.querySelector("#connection-status")
+    const indicatorMessage = document.querySelector("#connection-status-message")
+    const simulationStatus = document.querySelector("#simulation-status")
+    let showTimer
+    let reconnectTimer
+
+    function resetTimers() {
+      window.clearTimeout(showTimer)
+      window.clearTimeout(reconnectTimer)
+    }
+
+    function connect(message = "Connected") {
+      resetTimers()
+      indicator.classList.remove("visible")
+      simulationStatus.textContent = message
+    }
+
+    function disconnect(reconnectAfter, kind = "client") {
+      resetTimers()
+      indicator.classList.remove("visible")
+      indicatorMessage.textContent = kind === "server"
+        ? "Memba is temporarily unavailable — retrying…"
+        : "Connection paused — reconnecting…"
+      simulationStatus.textContent = "Disconnected; indicator is waiting…"
+
+      showTimer = window.setTimeout(() => {
+        indicator.classList.add("visible")
+        simulationStatus.textContent = `${kind === "server" ? "Server" : "Connection"} indicator shown after 1.5 seconds`
+      }, 1500)
+
+      if (reconnectAfter) {
+        reconnectTimer = window.setTimeout(() => {
+          connect(
+            reconnectAfter < 1500
+              ? `Recovered in ${reconnectAfter / 1000}s — indicator stayed hidden`
+              : `Recovered in ${reconnectAfter / 1000}s — indicator dismissed automatically`
+          )
+        }, reconnectAfter)
+      }
+    }
+
+    document.querySelectorAll("[data-simulate]").forEach(button => {
+      button.addEventListener("click", () => {
+        const simulation = button.dataset.simulate
+        if (simulation === "brief") disconnect(900)
+        if (simulation === "slow") disconnect(4000)
+        if (simulation === "offline") disconnect(null)
+        if (simulation === "server") disconnect(null, "server")
+        if (simulation === "connected") connect()
+      })
+    })
+  </script>
+</body>
+</html>
