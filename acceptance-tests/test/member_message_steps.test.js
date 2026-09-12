@@ -265,7 +265,7 @@ class FakePage {
       this.rows.clubMessages.push(messageRow);
     }
 
-    if (role === "button" && name === "Send to all current members") {
+    if (role === "button" && name === "Send message") {
       const subject = this.fields["Subject"];
       const messageId = idFor("message", subject, this.rows.messages.length + 1);
 
@@ -713,7 +713,7 @@ test("member send flow opens compose from club home and stores the new message",
     ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all current members" }],
+    ["click", "button", { name: "Send message" }],
     ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]
   ]);
   assert.equal(
@@ -759,7 +759,7 @@ test("member failed-send flow stays on compose failure state with support guidan
     ["waitForLiveViewConnected"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
-    ["click", "button", { name: "Send to all current members" }]
+    ["click", "button", { name: "Send message" }]
   ]);
   assert.ok(
     expectations.some(

@@ -1126,7 +1126,7 @@ async function sendMemberMessageToKootenayMembers(
   await browserInteraction(`submit member compose form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Subject").fill(subject);
     await world.page.getByLabel("Message").fill(body);
-    await world.page.getByRole("button", { name: "Send to all current members" }).click();
+    await world.page.getByRole("button", { name: "Send message" }).click();
   });
 
   const sentState = world.page.locator("#member-message-compose[data-compose-state=\"sent\"]");
@@ -1369,7 +1369,7 @@ async function trySendBlankMemberMessageToKootenayMembers(
   await browserInteraction(`submit blank member compose form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Subject").fill(subject);
     await world.page.getByLabel("Message").fill("   \n\t  ");
-    await world.page.getByRole("button", { name: "Send to all current members" }).click();
+    await world.page.getByRole("button", { name: "Send message" }).click();
   });
 
   await waitForProjectedVisible(
@@ -1401,7 +1401,7 @@ async function trySendMemberMessageToKootenayMembers(
   await browserInteraction(`submit unavailable member compose form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Subject").fill(subject);
     await world.page.getByLabel("Message").fill(body);
-    await world.page.getByRole("button", { name: "Send to all current members" }).click();
+    await world.page.getByRole("button", { name: "Send message" }).click();
   });
 
   await waitForProjectedVisible(

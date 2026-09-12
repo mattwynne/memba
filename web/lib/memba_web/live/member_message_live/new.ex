@@ -419,7 +419,8 @@ defmodule MembaWeb.MemberMessageLive.New do
         {:error, :not_found}
 
       audience_group ->
-        active_member_count = audience_group.active_member_count
+        members = Membership.list_active_members_of_group(audience_group.group_id)
+        active_member_count = Enum.count(members)
 
         {:ok,
          %{

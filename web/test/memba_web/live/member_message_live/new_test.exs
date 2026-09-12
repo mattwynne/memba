@@ -7,6 +7,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   alias Memba.Membership.Projections.Group
   alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
   alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
@@ -290,6 +291,42 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute render(view) =~ "Send to all current members"
   end
 
+  test "recipient count follows members with primary email addresses", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    _unreachable_member =
+      create_active_member_without_primary_email(
+        club_id: alice.club_id,
+        email: "unreachable@example.com",
+        name: "Unreachable Member"
+      )
+
+    [everyone_group] =
+      Memba.Membership.list_active_groups_for_member(alice.club_id, alice.person_id)
+
+    assert everyone_group.active_member_count == 2
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new")
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-audience-group-id='#{everyone_group.group_id}']" <>
+               "[data-active-member-count='1']"
+           )
+
+    assert has_element?(view, "#member-compose-recipient-summary", "1 member")
+    refute has_element?(view, "#member-compose-recipient-summary", "2 members")
+  end
+
   test "routed compose screen renders the focused member message form affordances", %{
     conn: conn
   } do
@@ -527,10 +564,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
 
-    Repo.get(Club, club_id) ||
-      attrs
-      |> club_attrs(club_id)
-      |> insert_membership_club!()
+    ensure_membership_club!(attrs, club_id)
 
     person =
       insert_membership_person!(
@@ -541,18 +575,49 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     membership_id = Memba.ID.generate(:membership)
 
-    Repo.insert!(%Membership{
-      membership_id: membership_id,
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    insert_active_membership!(club_id, membership_id, person.person_id)
 
     if Keyword.get(attrs, :everyone_group?, true) do
       insert_everyone_group_membership!(club_id, membership_id, person.person_id)
     end
 
     %{club_id: club_id, membership_id: membership_id, person_id: person.person_id}
+  end
+
+  defp create_active_member_without_primary_email(attrs) do
+    club_id = Keyword.fetch!(attrs, :club_id)
+    person_id = Memba.ID.generate(:person)
+
+    ensure_membership_club!(attrs, club_id)
+
+    Repo.insert!(%Person{
+      person_id: person_id,
+      name: Keyword.fetch!(attrs, :name),
+      email: Keyword.fetch!(attrs, :email)
+    })
+
+    membership_id = Memba.ID.generate(:membership)
+
+    insert_active_membership!(club_id, membership_id, person_id)
+    insert_everyone_group_membership!(club_id, membership_id, person_id)
+
+    %{club_id: club_id, membership_id: membership_id, person_id: person_id}
+  end
+
+  defp ensure_membership_club!(attrs, club_id) do
+    Repo.get(Club, club_id) ||
+      attrs
+      |> club_attrs(club_id)
+      |> insert_membership_club!()
+  end
+
+  defp insert_active_membership!(club_id, membership_id, person_id) do
+    Repo.insert!(%Membership{
+      membership_id: membership_id,
+      club_id: club_id,
+      person_id: person_id,
+      active: true
+    })
   end
 
   defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
