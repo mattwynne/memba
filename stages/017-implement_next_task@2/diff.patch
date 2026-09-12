@@ -1,0 +1,83 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index ba4b5e4..c3a63bc 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add focused failing layout coverage for stable client/server connection-status IDs, exact copy, `role="status"`, polite live-region behaviour, hidden initial state, and absence of close controls.
+-- [ ] 002 Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
++- [x] 002 Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
+ - [ ] 003 Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
+ - [ ] 004 Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+ - [ ] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 88d946e..822760e 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -330,6 +330,52 @@ defmodule MembaWeb.LayoutsTest do
+ 
+       assert_selector_count(html, "#client-error button, #server-error button", 0)
+     end
++
++    test "targets each interruption status from its distinct LiveView error state" do
++      html = render_flash_group()
++
++      assert [
++               ["show", %{"to" => ".phx-client-error #client-error"}],
++               ["remove_attr", %{"attr" => "hidden"}]
++             ] = js_commands(html, "#client-error", "phx-disconnected")
++
++      assert [
++               ["show", %{"to" => ".phx-server-error #server-error"}],
++               ["remove_attr", %{"attr" => "hidden"}]
++             ] = js_commands(html, "#server-error", "phx-disconnected")
++    end
++
++    test "dismisses and restores hidden state when LiveView reconnects" do
++      html = render_flash_group()
++
++      assert [
++               ["hide", %{"to" => "#client-error"}],
++               ["set_attr", %{"attr" => ["hidden", ""]}]
++             ] = js_commands(html, "#client-error", "phx-connected")
++
++      assert [
++               ["hide", %{"to" => "#server-error"}],
++               ["set_attr", %{"attr" => ["hidden", ""]}]
++             ] = js_commands(html, "#server-error", "phx-connected")
++    end
++
++    test "uses the shared connection-status presentation" do
++      html = render_flash_group()
++
++      assert_selector_count(html, "#client-error.connection-status", 1)
++      assert_selector_count(html, "#server-error.connection-status", 1)
++    end
++
++    test "renders a decorative connection-status spinner for each state" do
++      html = render_flash_group()
++
++      assert_selector_count(
++        html,
++        "#client-error .connection-status__spinner[aria-hidden='true'], " <>
++          "#server-error .connection-status__spinner[aria-hidden='true']",
++        2
++      )
++    end
+   end
+ 
+   test "club-site layout gates the member identity dropdown when signed out" do
+@@ -553,6 +599,12 @@ defmodule MembaWeb.LayoutsTest do
+     value
+   end
+ 
++  defp js_commands(html, selector, attribute) do
++    html
++    |> only_attribute(selector, attribute)
++    |> Jason.decode!()
++  end
++
+   defp attributes(html, selector, attribute) do
+     html
+     |> LazyHTML.from_fragment()
