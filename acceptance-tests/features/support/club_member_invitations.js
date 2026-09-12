@@ -276,7 +276,7 @@ async function leaveWithoutEnteringName(world) {
   await world.page.goto(appUrl(world.baseUrl, "/"));
 }
 
-async function openAddMemberFlow(world, actorName, clubName) {
+async function openAddClubMemberFlow(world, actorName, clubName) {
   const club = await ensureClub(world, clubName);
   await ensureStaffSignedIn(world, actorName);
 
@@ -665,7 +665,7 @@ module.exports = {
   inviteEmailToClub,
   invitePersonToClub,
   leaveWithoutEnteringName,
-  openAddMemberFlow,
+  openAddClubMemberFlow,
   tryInviteEmailToClub,
   tryInvitePersonToClub
 };

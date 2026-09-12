@@ -14,6 +14,7 @@ const {
 Given(
   /^Alice, Bob, and Carol are active members of (.+)$/,
   async function (clubName) {
+    ensureActiveMembers(this, ["Fixture Admin"], clubName);
     ensureActiveMembers(this, ["Alice", "Bob", "Carol"], clubName);
   }
 );

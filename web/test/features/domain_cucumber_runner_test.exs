@@ -33,4 +33,17 @@ defmodule Memba.DomainCucumberRunnerTest do
              "Expected #{feature.name} / #{scenario.name} not to include excluded tags; got #{inspect(tags)}"
     end)
   end
+
+  test "iteration 059 scenarios and the later-invitee regression run at the domain layer" do
+    selected_names =
+      DomainCucumberRunner.selected_scenarios()
+      |> Enum.map(& &1.scenario.name)
+
+    assert "Robin accepts the first invitation to an empty club" in selected_names
+    assert "Robin and Alice accept invitations at the same time" in selected_names
+    assert "Pat cannot remove Robin while Robin is the only Admin" in selected_names
+    assert "Pat removes Robin after Alice becomes an Admin" in selected_names
+    assert "Pat cannot remove the club's only member" in selected_names
+    assert "Robin invites Dana to join West Coast Paddlers" in selected_names
+  end
 end

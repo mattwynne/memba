@@ -9,16 +9,16 @@ defmodule Memba.Membership do
   alias Memba.ID
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddPersonEmailAddress
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.RemovePersonEmailAddress
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.ResendClubMemberInvitation
@@ -253,13 +253,12 @@ defmodule Memba.Membership do
   @doc """
   Add a person as an active member of a club through the Membership context.
 
-  The caller supplies the membership aggregate identity as `:membership_id` or
-  `"membership_id"`. A second active membership for the same club/person pair is
-  rejected before dispatch.
+  The caller supplies the membership identity as `:membership_id` or
+  `"membership_id"`. The command is routed to the Club aggregate, which decides
+  first-member authority, idempotency, and duplicate active membership.
   """
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- add_member_command(attrs),
-         :ok <- prevent_duplicate_active_membership(command) do
+    with {:ok, command} <- add_member_command(attrs) do
       dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
@@ -332,23 +331,25 @@ defmodule Memba.Membership do
   This orchestration creates an ordinary active membership for the invited club
   and then marks the invitation accepted with the person and membership IDs. The
   caller supplies `:person_id` and may supply `:membership_id`; otherwise this
-  application service generates the membership aggregate identity before
-  dispatch.
+  application service generates the membership identity before dispatch.
   """
   def accept_club_member_invitation_for_existing_person(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
+    {hooks, dispatch_opts} = invitation_acceptance_hooks(dispatch_opts)
+    dispatch_opts = invitation_acceptance_dispatch_opts(dispatch_opts)
+
     with {:ok, invitation} <- pending_invitation_for_acceptance(attrs),
          {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, person_id} <- cast_person_id(person_id),
          {:ok, _person} <- fetch_existing_person(person_id),
          :ok <- ensure_person_has_invitation_email(person_id, invitation),
-         {:ok, membership_id} <- invitation_membership_id(attrs),
-         {:ok, membership_id} <- cast_membership_id(membership_id),
+         :ok <- ensure_invitation_email_recovers_person(invitation, person_id),
+         {:ok, membership_id} <- recovered_invitation_membership_id(invitation, attrs, person_id),
          {:ok, add_member_command} <-
            invitation_add_member_command(invitation, person_id, membership_id),
-         :ok <- prevent_duplicate_active_membership(add_member_command),
          {:ok, add_member_result} <-
            dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
+         :ok <- run_invitation_acceptance_hook(hooks, :after_membership_added),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -368,24 +369,29 @@ defmodule Memba.Membership do
   """
   def complete_invited_club_member_profile(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
+    {hooks, dispatch_opts} = invitation_acceptance_hooks(dispatch_opts)
+    dispatch_opts = invitation_acceptance_dispatch_opts(dispatch_opts)
+
     with {:ok, invitation} <- pending_invitation_for_acceptance(attrs),
          {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, person_id} <- invitation_person_id(attrs),
-         {:ok, person_id} <- cast_person_id(person_id),
-         {:ok, membership_id} <- invitation_membership_id(attrs),
-         {:ok, membership_id} <- cast_membership_id(membership_id),
-         :ok <-
-           prevent_duplicate_person_email_addresses(person_id, [
-             %{normalized_email: invitation.normalized_email}
-           ]),
-         {:ok, create_person_command} <-
-           invitation_create_person_command(invitation, person_id, name),
+         {:ok, normalized_name} <- normalize_name(name),
+         {:ok, person_id, person_step} <-
+           recovered_invitation_person(invitation, attrs, normalized_name),
+         {:ok, membership_id} <- recovered_invitation_membership_id(invitation, attrs, person_id),
+         {:ok, create_person_result} <-
+           create_recovered_invitation_person(
+             invitation,
+             person_id,
+             normalized_name,
+             person_step,
+             dispatch_opts
+           ),
+         :ok <- run_invitation_acceptance_hook(hooks, :after_person_created),
          {:ok, add_member_command} <-
            invitation_add_member_command(invitation, person_id, membership_id),
-         {:ok, create_person_result} <-
-           dispatch_acceptance_command(create_person_command, dispatch_opts),
          {:ok, add_member_result} <-
            dispatch_system_group_membership_acceptance_command(add_member_command, dispatch_opts),
+         :ok <- run_invitation_acceptance_hook(hooks, :after_membership_added),
          {:ok, accept_command} <-
            accept_club_member_invitation_command(invitation, person_id, membership_id),
          {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
@@ -399,8 +405,10 @@ defmodule Memba.Membership do
   @doc """
   Remove a person from active club membership through the Membership context.
 
-  The caller supplies the membership aggregate identity as `:membership_id` or
-  `"membership_id"`.
+  The caller supplies `:membership_id` or `"membership_id"`. It may also supply
+  the matching club and person identities; otherwise the application service
+  resolves those routing fields from the membership projection before the Club
+  aggregate validates them and decides the Admin and member floors.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
@@ -415,7 +423,8 @@ defmodule Memba.Membership do
   and `:actor_person_id`. The actor must have the projected
   `club.manage_members` permission. The target member must be active in the
   club. The built-in role ID is derived from the club so callers cannot grant an
-  arbitrary role through this Admin-specific entry point.
+  arbitrary role through this Admin-specific entry point. The Club aggregate
+  validates the target membership.
   """
   def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -431,8 +440,8 @@ defmodule Memba.Membership do
   and `:actor_person_id`. The actor must have the projected
   `club.manage_members` permission. The target member must be active in the
   club. The built-in role ID is derived from the club so callers cannot remove an
-  arbitrary role through this Admin-specific entry point. The removal is rejected
-  when it would leave the club with no active Admins.
+  arbitrary role through this Admin-specific entry point. The Club aggregate
+  rejects removal when it would leave the club with no active Admins.
   """
   def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -447,8 +456,8 @@ defmodule Memba.Membership do
   Unlike staff/system setup paths, this entry point requires `:actor_person_id`
   (or `"actor_person_id"`) and authorizes the actor through the projected
   `club.manage_members` permission before dispatching the role-assignment
-  command. The target membership must be active and must match the submitted
-  club/person IDs.
+  command. The Club aggregate validates that the target membership is active
+  and matches the submitted club/person IDs.
   """
   def assign_member_role_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -457,12 +466,6 @@ defmodule Memba.Membership do
            Authorization.authorize_manage_members(
              command.club_id,
              command.assigned_by_person_id
-           ),
-         :ok <-
-           ensure_active_membership(
-             command.club_id,
-             command.person_id,
-             command.membership_id
            ) do
       dispatch_system_group_membership_command(command, dispatch_opts)
     end
@@ -474,8 +477,8 @@ defmodule Memba.Membership do
   Staff/system setup paths remain separate. This entry point requires
   `:actor_person_id` (or `"actor_person_id"`) and authorizes the actor through
   the projected `club.manage_members` permission before dispatching the
-  role-removal command. The target membership must be active and must match the
-  submitted club/person IDs.
+  role-removal command. The Club aggregate validates the target membership,
+  role assignment, and Admin floor.
   """
   def remove_member_role_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -484,14 +487,7 @@ defmodule Memba.Membership do
            Authorization.authorize_manage_members(
              command.club_id,
              command.removed_by_person_id
-           ),
-         :ok <-
-           ensure_active_membership(
-             command.club_id,
-             command.person_id,
-             command.membership_id
-           ),
-         :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
+           ) do
       dispatch_system_group_membership_command(command, dispatch_opts)
     end
   end
@@ -1570,7 +1566,7 @@ defmodule Memba.Membership do
     with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
          {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, person_id} <- fetch_required(attrs, :person_id) do
-      {:ok, %AddMember{membership_id: membership_id, club_id: club_id, person_id: person_id}}
+      {:ok, %AddClubMember{membership_id: membership_id, club_id: club_id, person_id: person_id}}
     end
   end
 
@@ -1611,7 +1607,7 @@ defmodule Memba.Membership do
 
   defp invitation_add_member_command(%ClubInvitation{} = invitation, person_id, membership_id) do
     {:ok,
-     %AddMember{
+     %AddClubMember{
        membership_id: membership_id,
        club_id: invitation.club_id,
        person_id: person_id
@@ -1632,8 +1628,36 @@ defmodule Memba.Membership do
   end
 
   defp remove_member_command(attrs) do
-    with {:ok, membership_id} <- fetch_required(attrs, :membership_id) do
-      {:ok, %RemoveMember{membership_id: membership_id}}
+    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, club_id, person_id} <- removal_identity(attrs, membership_id) do
+      {:ok,
+       %RemoveClubMember{
+         club_id: club_id,
+         membership_id: membership_id,
+         person_id: person_id
+       }}
+    end
+  end
+
+  defp removal_identity(attrs, membership_id) do
+    case {fetch_optional(attrs, :club_id), fetch_optional(attrs, :person_id)} do
+      {{:ok, club_id}, {:ok, person_id}} ->
+        {:ok, club_id, person_id}
+
+      {:error, :error} ->
+        case Repo.get(MembershipProjection, membership_id) do
+          %MembershipProjection{club_id: club_id, person_id: person_id} ->
+            {:ok, club_id, person_id}
+
+          nil ->
+            {:error, :not_found}
+        end
+
+      {:error, {:ok, _person_id}} ->
+        {:error, {:missing_required_attribute, :club_id}}
+
+      {{:ok, _club_id}, :error} ->
+        {:error, {:missing_required_attribute, :person_id}}
     end
   end
 
@@ -1644,7 +1668,7 @@ defmodule Memba.Membership do
          {:ok, role_id} <- fetch_required(attrs, :role_id),
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
       {:ok,
-       %AssignMemberRole{
+       %AssignClubRoleToMember{
          club_id: club_id,
          membership_id: membership_id,
          person_id: person_id,
@@ -1661,7 +1685,7 @@ defmodule Memba.Membership do
          {:ok, role_id} <- fetch_required(attrs, :role_id),
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
       {:ok,
-       %RemoveMemberRole{
+       %RemoveClubRoleFromMember{
          club_id: club_id,
          membership_id: membership_id,
          person_id: person_id,
@@ -1678,41 +1702,11 @@ defmodule Memba.Membership do
     end
   end
 
-  defp prevent_duplicate_active_membership(%AddMember{} = command) do
-    if active_member_of_club?(command.club_id, command.person_id) do
-      {:error, :already_active_member}
-    else
-      :ok
-    end
-  end
-
   defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
     if active_member_of_club_by_email?(command.club_id, command.email) do
       {:error, :already_active_member}
     else
       :ok
-    end
-  end
-
-  defp ensure_active_membership(club_id, person_id, membership_id) do
-    with {:ok, club_id} <- ID.cast(:club, club_id),
-         {:ok, person_id} <- ID.cast(:person, person_id),
-         {:ok, membership_id} <- ID.cast(:membership, membership_id) do
-      active? =
-        MembershipProjection
-        |> where([membership], membership.membership_id == ^membership_id)
-        |> where([membership], membership.club_id == ^club_id)
-        |> where([membership], membership.person_id == ^person_id)
-        |> where([membership], membership.active == true)
-        |> Repo.exists?()
-
-      if active? do
-        :ok
-      else
-        {:error, :member_not_active}
-      end
-    else
-      :error -> {:error, :member_not_active}
     end
   end
 
@@ -1748,6 +1742,206 @@ defmodule Memba.Membership do
 
   defp ensure_pending_invitation(%ClubInvitation{status: "accepted"}),
     do: {:error, :already_accepted}
+
+  defp recovered_invitation_person(%ClubInvitation{} = invitation, attrs, normalized_name) do
+    with {:ok, recovered_person_id} <- recover_person_id_by_invitation_email(invitation),
+         {:ok, person_id} <- invitation_person_id(invitation, attrs, recovered_person_id),
+         {:ok, step} <-
+           recovered_person_step(person_id, recovered_person_id, normalized_name, invitation) do
+      {:ok, person_id, step}
+    end
+  end
+
+  defp ensure_invitation_email_recovers_person(%ClubInvitation{} = invitation, person_id) do
+    with {:ok, recovered_person_id} <- recover_person_id_by_invitation_email(invitation) do
+      case recovered_person_id do
+        ^person_id -> :ok
+        nil -> {:error, :person_not_found}
+        _different_person_id -> {:error, :invitation_email_mismatch}
+      end
+    end
+  end
+
+  defp recovered_invitation_membership_id(%ClubInvitation{} = invitation, attrs, person_id) do
+    with {:ok, recovered_membership_id} <-
+           recover_active_membership_id(invitation.club_id, person_id) do
+      invitation_membership_id(invitation, attrs, recovered_membership_id)
+    end
+  end
+
+  defp invitation_person_id(%ClubInvitation{} = invitation, attrs, recovered_person_id) do
+    case fetch_optional(attrs, :person_id) do
+      {:ok, person_id} ->
+        with {:ok, person_id} <- cast_person_id(person_id),
+             :ok <-
+               explicit_identity_matches(
+                 person_id,
+                 recovered_person_id,
+                 :invitation_person_mismatch
+               ) do
+          {:ok, person_id}
+        end
+
+      :error ->
+        {:ok, recovered_person_id || deterministic_invitation_person_id(invitation.invitation_id)}
+    end
+  end
+
+  defp invitation_membership_id(
+         %ClubInvitation{} = invitation,
+         attrs,
+         recovered_membership_id
+       ) do
+    case fetch_optional(attrs, :membership_id) do
+      {:ok, membership_id} ->
+        with {:ok, membership_id} <- cast_membership_id(membership_id),
+             :ok <-
+               explicit_identity_matches(
+                 membership_id,
+                 recovered_membership_id,
+                 :invitation_membership_mismatch
+               ) do
+          {:ok, membership_id}
+        end
+
+      :error ->
+        {:ok,
+         recovered_membership_id ||
+           deterministic_invitation_membership_id(invitation.invitation_id)}
+    end
+  end
+
+  defp deterministic_invitation_person_id(invitation_id) do
+    ID.deterministic(:person, ["club_member_invitation_person", invitation_id])
+  end
+
+  defp deterministic_invitation_membership_id(invitation_id) do
+    ID.deterministic(:membership, ["club_member_invitation_membership", invitation_id])
+  end
+
+  defp recover_person_id_by_invitation_email(%ClubInvitation{} = invitation) do
+    PersonEmailAddress
+    |> where([email_address], email_address.normalized_email == ^invitation.normalized_email)
+    |> distinct([email_address], email_address.person_id)
+    |> select([email_address], email_address.person_id)
+    |> limit(2)
+    |> Repo.all()
+    |> case do
+      [] -> {:ok, nil}
+      [person_id] -> {:ok, person_id}
+      [_first, _second | _rest] -> {:error, :ambiguous_invitation_person}
+    end
+  end
+
+  defp recover_active_membership_id(club_id, person_id) do
+    MembershipProjection
+    |> where([membership], membership.club_id == ^club_id)
+    |> where([membership], membership.person_id == ^person_id)
+    |> where([membership], membership.active == true)
+    |> select([membership], membership.membership_id)
+    |> limit(2)
+    |> Repo.all()
+    |> case do
+      [] -> {:ok, nil}
+      [membership_id] -> {:ok, membership_id}
+      [_first, _second | _rest] -> {:error, :ambiguous_active_membership}
+    end
+  end
+
+  defp explicit_identity_matches(_candidate_id, nil, _error), do: :ok
+  defp explicit_identity_matches(identity, identity, _error), do: :ok
+  defp explicit_identity_matches(_candidate_id, _recovered_id, error), do: {:error, error}
+
+  defp recovered_person_step(person_id, nil, _normalized_name, _invitation) do
+    case get_person(person_id) do
+      nil -> {:ok, :create}
+      %Person{} -> {:error, :invitation_person_mismatch}
+    end
+  end
+
+  defp recovered_person_step(
+         person_id,
+         person_id,
+         normalized_name,
+         %ClubInvitation{} = invitation
+       ) do
+    case get_person(person_id) do
+      %Person{name: ^normalized_name} = person ->
+        if person_has_email?(person.person_id, invitation.normalized_email) do
+          {:ok, :recovered}
+        else
+          {:error, :invitation_email_mismatch}
+        end
+
+      %Person{} ->
+        {:error, :invitation_person_content_mismatch}
+
+      nil ->
+        {:error, :person_not_found}
+    end
+  end
+
+  defp create_recovered_invitation_person(
+         %ClubInvitation{} = invitation,
+         person_id,
+         normalized_name,
+         :create,
+         dispatch_opts
+       ) do
+    with :ok <-
+           prevent_duplicate_person_email_addresses(person_id, [
+             %{normalized_email: invitation.normalized_email}
+           ]),
+         {:ok, create_person_command} <-
+           invitation_create_person_command(invitation, person_id, normalized_name) do
+      dispatch_acceptance_command(create_person_command, dispatch_opts)
+    end
+  end
+
+  defp create_recovered_invitation_person(_invitation, _person_id, _name, :recovered, _opts) do
+    {:ok, :ok}
+  end
+
+  defp person_has_email?(person_id, normalized_email) do
+    PersonEmailAddress
+    |> where([email_address], email_address.person_id == ^person_id)
+    |> where([email_address], email_address.normalized_email == ^normalized_email)
+    |> Repo.exists?()
+  end
+
+  defp invitation_acceptance_hooks(dispatch_opts) do
+    {after_person_created, dispatch_opts} =
+      Keyword.pop(dispatch_opts, :after_invitation_person_created)
+
+    {after_membership_added, dispatch_opts} =
+      Keyword.pop(dispatch_opts, :after_invitation_membership_added)
+
+    {%{
+       after_person_created: after_person_created,
+       after_membership_added: after_membership_added
+     }, dispatch_opts}
+  end
+
+  defp invitation_acceptance_dispatch_opts(dispatch_opts) do
+    Keyword.put(dispatch_opts, :consistency, :strong)
+  end
+
+  defp run_invitation_acceptance_hook(hooks, name) do
+    case Map.get(hooks, name) do
+      nil -> :ok
+      hook when is_function(hook, 0) -> hook.()
+      _invalid_hook -> {:error, :invalid_invitation_acceptance_hook}
+    end
+  end
+
+  defp normalize_name(name) when is_binary(name) do
+    case String.trim(name) do
+      "" -> {:error, :invalid_name}
+      trimmed_name -> {:ok, trimmed_name}
+    end
+  end
+
+  defp normalize_name(_name), do: {:error, :invalid_name}
 
   defp resend_pending_club_member_invitation(%ClubInvitation{} = invitation, dispatch_opts) do
     with {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
@@ -1867,48 +2061,6 @@ defmodule Memba.Membership do
     else
       _invalid -> []
     end
-  end
-
-  defp ensure_membership_administrator_removal_keeps_an_administrator(
-         %RemoveMemberRole{} = command
-       ) do
-    with {:ok, club_id} <- ID.cast(:club, command.club_id),
-         true <- command.role_id == Roles.membership_administrator_role_id(club_id),
-         true <-
-           active_role_assignment?(
-             club_id,
-             command.membership_id,
-             command.person_id,
-             command.role_id
-           ) do
-      if active_role_assignment_count(club_id, command.role_id) > 1 do
-        :ok
-      else
-        {:error, :last_membership_administrator}
-      end
-    else
-      _not_membership_administrator_removal -> :ok
-    end
-  end
-
-  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
-    active_role_assignments_query(club_id, role_id)
-    |> where([assignment], assignment.membership_id == ^membership_id)
-    |> where([assignment], assignment.person_id == ^person_id)
-    |> Repo.exists?()
-  end
-
-  defp active_role_assignment_count(club_id, role_id) do
-    club_id
-    |> active_role_assignments_query(role_id)
-    |> Repo.aggregate(:count, :membership_id)
-  end
-
-  defp active_role_assignments_query(club_id, role_id) do
-    RoleAssignment
-    |> where([assignment], assignment.club_id == ^club_id)
-    |> where([assignment], assignment.role_id == ^role_id)
-    |> where([assignment], assignment.active == true)
   end
 
   defp prevent_duplicate_club_slug(%CreateClub{} = command) do
@@ -2168,20 +2320,6 @@ defmodule Memba.Membership do
     case fetch_optional(attrs, :invitation_id) do
       {:ok, invitation_id} -> {:ok, invitation_id}
       :error -> {:ok, ID.generate(:club_invitation)}
-    end
-  end
-
-  defp invitation_person_id(attrs) do
-    case fetch_optional(attrs, :person_id) do
-      {:ok, person_id} -> {:ok, person_id}
-      :error -> {:ok, ID.generate(:person)}
-    end
-  end
-
-  defp invitation_membership_id(attrs) do
-    case fetch_optional(attrs, :membership_id) do
-      {:ok, membership_id} -> {:ok, membership_id}
-      :error -> {:ok, ID.generate(:membership)}
     end
   end
 

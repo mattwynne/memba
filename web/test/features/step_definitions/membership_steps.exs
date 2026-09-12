@@ -6,16 +6,18 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   alias Memba.Membership
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Projections.Role, as: RoleProjection
   alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
+  alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -50,14 +52,17 @@ defmodule Memba.Cucumber.MembershipSteps do
   step "Alice, Bob, and Carol are active members of Kootenay Mountaineering Club", context do
     context
     |> create_club("Kootenay Mountaineering Club")
-    |> create_people(["Alice", "Bob", "Carol"])
-    |> add_members(["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
+    |> create_people(["Fixture Admin", "Alice", "Bob", "Carol"])
+    |> add_members(["Fixture Admin", "Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
   end
 
   step "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", context do
-    context
-    |> create_people(["Alice", "Bob", "Carol", "Dana"])
-    |> add_members(["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
+    context =
+      context
+      |> create_people(["Alice", "Bob", "Carol", "Dana"])
+      |> add_members(["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
+
+    make_only_membership_admin(context, "Bob", "Kootenay Mountaineering Club")
   end
 
   step "Alice and Bob are members of Kootenay Mountaineering Club", context do
@@ -323,7 +328,7 @@ defmodule Memba.Cucumber.MembershipSteps do
 
     assert :ok =
              App.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -337,6 +342,47 @@ defmodule Memba.Cucumber.MembershipSteps do
              Enum.find(Membership.list_active_members_of_club(club_id), &(&1.id == person_id))
 
     update_context_map(context, :memberships, {club_name, person_name}, membership_id)
+  end
+
+  defp make_only_membership_admin(context, person_name, club_name) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    person_id = person_id_from_context!(context, person_name)
+    membership_id = active_membership_id!(context, person_name, club_name)
+    role_id = Roles.membership_administrator_role_id(club_id)
+
+    unless active_role_assignment?(club_id, membership_id, person_id, role_id) do
+      assert :ok =
+               App.dispatch(
+                 %AssignClubRoleToMember{
+                   club_id: club_id,
+                   membership_id: membership_id,
+                   person_id: person_id,
+                   role_id: role_id
+                 },
+                 consistency: :strong
+               )
+    end
+
+    RoleAssignmentProjection
+    |> where([assignment], assignment.club_id == ^club_id)
+    |> where([assignment], assignment.role_id == ^role_id)
+    |> where([assignment], assignment.active == true)
+    |> where([assignment], assignment.membership_id != ^membership_id)
+    |> Repo.all()
+    |> Enum.each(fn assignment ->
+      assert :ok =
+               App.dispatch(
+                 %RemoveClubRoleFromMember{
+                   club_id: club_id,
+                   membership_id: assignment.membership_id,
+                   person_id: assignment.person_id,
+                   role_id: role_id
+                 },
+                 consistency: :strong
+               )
+    end)
+
+    context
   end
 
   defp assign_roles(context, person_name, role_names, club_name) do
@@ -354,7 +400,7 @@ defmodule Memba.Cucumber.MembershipSteps do
     unless active_role_assignment?(club_id, membership_id, person_id, role_id) do
       assert :ok =
                App.dispatch(
-                 %AssignMemberRole{
+                 %AssignClubRoleToMember{
                    club_id: club_id,
                    membership_id: membership_id,
                    person_id: person_id,

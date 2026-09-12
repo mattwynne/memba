@@ -8,7 +8,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -538,7 +538,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     unless active_role_assignment?(club_id, membership_id, person.person_id, role_id) do
       assert :ok =
                App.dispatch(
-                 %AssignMemberRole{
+                 %AssignClubRoleToMember{
                    club_id: club_id,
                    membership_id: membership_id,
                    person_id: person.person_id,

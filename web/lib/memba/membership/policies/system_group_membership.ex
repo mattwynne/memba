@@ -17,32 +17,73 @@ defmodule Memba.Membership.Policies.SystemGroupMembership do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Projectors.GroupMembership
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
   @impl Commanded.Event.Handler
-  def handle(%MemberAdded{} = event, _metadata) do
-    dispatch(add_group_member(event, SystemGroups.everyone_group_id(event.club_id)))
+  def handle(%ClubMemberAdded{} = event, _metadata) do
+    handle_member_added(event)
   end
 
-  def handle(%MemberRemoved{club_id: club_id, person_id: person_id}, _metadata)
+  def handle(%LegacyMemberAdded{} = event, _metadata) do
+    handle_member_added(event)
+  end
+
+  def handle(%ClubMemberRemoved{club_id: club_id, person_id: person_id}, _metadata)
       when not is_binary(club_id) or not is_binary(person_id) do
     :ok
   end
 
-  def handle(%MemberRemoved{} = event, _metadata) do
+  def handle(%LegacyMemberRemoved{club_id: club_id, person_id: person_id}, _metadata)
+      when not is_binary(club_id) or not is_binary(person_id) do
+    :ok
+  end
+
+  def handle(%ClubMemberRemoved{} = event, _metadata) do
+    handle_member_removed(event)
+  end
+
+  def handle(%LegacyMemberRemoved{} = event, _metadata) do
+    handle_member_removed(event)
+  end
+
+  def handle(%ClubRoleAssignedToMember{} = event, _metadata) do
+    handle_role_assigned(event)
+  end
+
+  def handle(%LegacyMemberRoleAssigned{} = event, _metadata) do
+    handle_role_assigned(event)
+  end
+
+  def handle(%ClubRoleRemovedFromMember{} = event, _metadata) do
+    handle_role_removed(event)
+  end
+
+  def handle(%LegacyMemberRoleRemoved{} = event, _metadata) do
+    handle_role_removed(event)
+  end
+
+  defp handle_member_added(event) do
+    dispatch(add_group_member(event, SystemGroups.everyone_group_id(event.club_id)))
+  end
+
+  defp handle_member_removed(event) do
     dispatch_all([
       remove_group_member(event, SystemGroups.everyone_group_id(event.club_id)),
       remove_group_member(event, SystemGroups.admin_group_id(event.club_id))
     ])
   end
 
-  def handle(%MemberRoleAssigned{} = event, _metadata) do
+  defp handle_role_assigned(event) do
     if admin_role?(event.club_id, event.role_id) do
       dispatch(add_group_member(event, SystemGroups.admin_group_id(event.club_id)))
     else
@@ -50,7 +91,7 @@ defmodule Memba.Membership.Policies.SystemGroupMembership do
     end
   end
 
-  def handle(%MemberRoleRemoved{} = event, _metadata) do
+  defp handle_role_removed(event) do
     if admin_role?(event.club_id, event.role_id) do
       dispatch(remove_group_member(event, SystemGroups.admin_group_id(event.club_id)))
     else

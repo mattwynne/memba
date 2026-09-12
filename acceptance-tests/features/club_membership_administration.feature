@@ -12,7 +12,7 @@ Rule: The first active member of a club becomes an Admin
       Then Robin should be an active member of West Coast Paddlers
       And Robin should be an Admin of West Coast Paddlers
 
-    @iteration-059 @todo-domain @todo-ui
+    @iteration-059
     Scenario: Robin accepts the first invitation to an empty club
       Given West Coast Paddlers exists as a club with no active members
       And Pat has invited "robin@example.com" to join West Coast Paddlers
@@ -20,7 +20,7 @@ Rule: The first active member of a club becomes an Admin
       Then Robin should be an active member of West Coast Paddlers
       And Robin should be an Admin of West Coast Paddlers
 
-    @iteration-059 @todo-domain @not-ui
+    @iteration-059 @not-ui
     Scenario: Robin and Alice accept invitations at the same time
       Given West Coast Paddlers exists as a club with no active members
       And Pat has invited "robin@example.com" to join West Coast Paddlers
@@ -52,7 +52,7 @@ Rule: A populated club always has at least one Admin
       When Robin tries to remove Robin as an Admin of West Coast Paddlers
       Then Robin should still be an Admin of West Coast Paddlers
 
-    @iteration-059 @todo-domain @todo-ui
+    @iteration-059
     Scenario: Pat cannot remove Robin while Robin is the only Admin
       Given Robin is the only Admin of West Coast Paddlers
       And Alice is an ordinary member of West Coast Paddlers
@@ -62,7 +62,7 @@ Rule: A populated club always has at least one Admin
       And Robin should still be an active member of West Coast Paddlers
       And Robin should still be an Admin of West Coast Paddlers
 
-    @iteration-059 @todo-domain @todo-ui
+    @iteration-059
     Scenario: Pat removes Robin after Alice becomes an Admin
       Given Robin and Alice are Admins of West Coast Paddlers
       And Pat is signed in as Memba staff
@@ -72,7 +72,7 @@ Rule: A populated club always has at least one Admin
 
 Rule: An established club cannot be emptied by member removal
 
-    @iteration-059 @todo-domain @todo-ui
+    @iteration-059
     Scenario: Pat cannot remove the club's only member
       Given Robin is the only active member of West Coast Paddlers
       And Robin is an Admin of West Coast Paddlers

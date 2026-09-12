@@ -2,13 +2,13 @@ defmodule Memba.Membership.RoleProjectionTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.MemberPermission, as: MemberPermissionProjection
   alias Memba.Membership.Projections.Role, as: RoleProjection
@@ -55,17 +55,6 @@ defmodule Memba.Membership.RoleProjectionTest do
     create_club!(club_id)
     add_member!(membership_id, club_id, person_id)
 
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: role_id
-               },
-               consistency: :strong
-             )
-
     assert %RoleAssignmentProjection{
              club_id: ^club_id,
              membership_id: ^membership_id,
@@ -92,10 +81,13 @@ defmodule Memba.Membership.RoleProjectionTest do
   test "granting a permission projects flattened member permissions for active assignments" do
     club_id = Memba.ID.generate(:club)
     role_id = Memba.ID.generate(:role)
+    bootstrap_membership_id = Memba.ID.generate(:membership)
+    bootstrap_person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
 
     create_club!(club_id)
+    add_member!(bootstrap_membership_id, club_id, bootstrap_person_id)
     add_member!(membership_id, club_id, person_id)
     define_role!(club_id, role_id)
     assign_role!(club_id, membership_id, person_id, role_id)
@@ -130,13 +122,17 @@ defmodule Memba.Membership.RoleProjectionTest do
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
 
+    replacement_membership_id = Memba.ID.generate(:membership)
+    replacement_person_id = Memba.ID.generate(:person)
+
     create_club!(club_id)
     add_member!(membership_id, club_id, person_id)
-    assign_role!(club_id, membership_id, person_id, role_id)
+    add_member!(replacement_membership_id, club_id, replacement_person_id)
+    assign_role!(club_id, replacement_membership_id, replacement_person_id, role_id)
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -159,7 +155,6 @@ defmodule Memba.Membership.RoleProjectionTest do
 
   test "flattened member permissions keep a grant count across multiple assigned roles" do
     club_id = Memba.ID.generate(:club)
-    default_role_id = Roles.membership_administrator_role_id(club_id)
     custom_role_id = Memba.ID.generate(:role)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
@@ -169,7 +164,6 @@ defmodule Memba.Membership.RoleProjectionTest do
     define_role!(club_id, custom_role_id)
     grant_manage_members!(club_id, custom_role_id)
 
-    assign_role!(club_id, membership_id, person_id, default_role_id)
     assign_role!(club_id, membership_id, person_id, custom_role_id)
 
     assert %MemberPermissionProjection{grant_count: 2} =
@@ -182,7 +176,7 @@ defmodule Memba.Membership.RoleProjectionTest do
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -209,11 +203,23 @@ defmodule Memba.Membership.RoleProjectionTest do
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
 
+    replacement_membership_id = Memba.ID.generate(:membership)
+    replacement_person_id = Memba.ID.generate(:person)
+
     create_club!(club_id)
     add_member!(membership_id, club_id, person_id)
-    assign_role!(club_id, membership_id, person_id, role_id)
+    add_member!(replacement_membership_id, club_id, replacement_person_id)
+    assign_role!(club_id, replacement_membership_id, replacement_person_id, role_id)
 
-    assert :ok = App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+    assert :ok =
+             App.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert %RoleAssignmentProjection{active: false} = role_assignment(membership_id, role_id)
 
@@ -242,7 +248,7 @@ defmodule Memba.Membership.RoleProjectionTest do
   defp add_member!(membership_id, club_id, person_id) do
     assert :ok =
              App.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: membership_id,
                  club_id: club_id,
                  person_id: person_id
@@ -277,16 +283,19 @@ defmodule Memba.Membership.RoleProjectionTest do
   end
 
   defp assign_role!(club_id, membership_id, person_id, role_id) do
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: role_id
-               },
-               consistency: :strong
-             )
+    case App.dispatch(
+           %AssignClubRoleToMember{
+             club_id: club_id,
+             membership_id: membership_id,
+             person_id: person_id,
+             role_id: role_id
+           },
+           consistency: :strong
+         ) do
+      :ok -> :ok
+      {:error, :role_already_assigned} -> :ok
+      other -> flunk("expected role assignment to succeed, got #{inspect(other)}")
+    end
   end
 
   defp role_permission(role_id, permission) do

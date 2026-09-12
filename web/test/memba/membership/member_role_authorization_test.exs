@@ -4,11 +4,11 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
 
@@ -30,7 +30,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assert {:ok,
             %ExecutionResult{
               events: [
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,
@@ -76,7 +76,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assert {:ok,
             %ExecutionResult{
               events: [
-                %MemberRoleRemoved{
+                %ClubRoleRemovedFromMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,
@@ -146,15 +146,14 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     custom_role_id = Memba.ID.generate(:role)
 
     create_club!(club_id)
-    create_person!(actor_person_id, "Alice", "alice@example.com")
-    add_member!(actor_membership_id, club_id, actor_person_id)
     create_person!(target_person_id, "Robin", "robin@example.com")
     add_member!(target_membership_id, club_id, target_person_id)
+    create_person!(actor_person_id, "Alice", "alice@example.com")
+    add_member!(actor_membership_id, club_id, actor_person_id)
 
     define_role!(club_id, custom_role_id)
     grant_manage_members!(club_id, custom_role_id)
     assign_role_by_system!(club_id, actor_membership_id, actor_person_id, custom_role_id)
-    assign_membership_administrator!(club_id, target_membership_id, target_person_id)
 
     assert Membership.person_has_club_permission?(
              club_id,
@@ -285,7 +284,12 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     target_membership_id = Memba.ID.generate(:membership)
     role_id = Memba.ID.generate(:role)
 
+    administrator_person_id = Memba.ID.generate(:person)
+    administrator_membership_id = Memba.ID.generate(:membership)
+
     create_club!(club_id)
+    create_person!(administrator_person_id, "Admin", "admin@example.com")
+    add_member!(administrator_membership_id, club_id, administrator_person_id)
     create_person!(actor_person_id, "Robin", "robin@example.com")
     add_member!(actor_membership_id, club_id, actor_person_id)
     create_person!(target_person_id, "Alice", "alice@example.com")
@@ -308,7 +312,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assert {:ok,
             %ExecutionResult{
               events: [
-                %MemberRoleAssigned{
+                %ClubRoleAssignedToMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,
@@ -332,7 +336,12 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     target_membership_id = Memba.ID.generate(:membership)
     role_id = Memba.ID.generate(:role)
 
+    administrator_person_id = Memba.ID.generate(:person)
+    administrator_membership_id = Memba.ID.generate(:membership)
+
     create_club!(club_id)
+    create_person!(administrator_person_id, "Admin", "admin@example.com")
+    add_member!(administrator_membership_id, club_id, administrator_person_id)
     create_person!(actor_person_id, "Robin", "robin@example.com")
     add_member!(actor_membership_id, club_id, actor_person_id)
     create_person!(target_person_id, "Alice", "alice@example.com")
@@ -356,7 +365,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assert {:ok,
             %ExecutionResult{
               events: [
-                %MemberRoleRemoved{
+                %ClubRoleRemovedFromMember{
                   club_id: ^club_id,
                   membership_id: ^target_membership_id,
                   person_id: ^target_person_id,
@@ -465,15 +474,18 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
   end
 
   defp assign_role_by_system!(club_id, membership_id, person_id, role_id) do
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: role_id
-               },
-               consistency: :strong
-             )
+    case App.dispatch(
+           %AssignClubRoleToMember{
+             club_id: club_id,
+             membership_id: membership_id,
+             person_id: person_id,
+             role_id: role_id
+           },
+           consistency: :strong
+         ) do
+      :ok -> :ok
+      {:error, :role_already_assigned} -> :ok
+      other -> flunk("expected role assignment to succeed, got #{inspect(other)}")
+    end
   end
 end

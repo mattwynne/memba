@@ -95,6 +95,38 @@ test("iteration 058 scenarios are no longer blocked from either acceptance runne
   );
 });
 
+test("iteration 059 UI scenarios run while its concurrency scenario remains domain-only", () => {
+  const feature = browserFeatures().find(
+    ({ name }) => name === "club_membership_administration.feature"
+  );
+  const iterationScenarios = feature.scenarios.filter((scenario) =>
+    scenario.tags.includes("@iteration-059")
+  );
+  const browserScenarioNames = iterationScenarios
+    .filter((scenario) => matchesDefaultBrowserTags(scenario.tags))
+    .map((scenario) => scenario.name);
+
+  assert.equal(iterationScenarios.length, 5);
+  assert.deepEqual(browserScenarioNames, [
+    "Robin accepts the first invitation to an empty club",
+    "Pat cannot remove Robin while Robin is the only Admin",
+    "Pat removes Robin after Alice becomes an Admin",
+    "Pat cannot remove the club's only member"
+  ]);
+});
+
+test("the later-invitee ordinary-member regression remains selected by the browser runner", () => {
+  const scenario = browserFeaturePathNamed("club_member_invitations.feature");
+  const invitationScenarios = featureScenarios(scenario);
+
+  assert.equal(
+    matchesDefaultBrowserTags(
+      invitationScenarios.get("Robin invites Dana to join West Coast Paddlers").tags
+    ),
+    true
+  );
+});
+
 function browserSelectedFeatureNames() {
   return browserFeatures()
     .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))

@@ -76,6 +76,7 @@ const {
   trySendMemberMessageToKootenayMembers,
   unfollowConversation
 } = require("../support/member_message");
+const { ensureAdminGroupMembers } = require("../support/membership_administration");
 const {
   memberBrowserAction,
   signInMember,
@@ -110,6 +111,7 @@ Given("Alice, Bob, and Carol are members of Kootenay Mountaineering Club", async
 
 Given("Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", async function () {
   ensureMembersState(this, ["Alice", "Bob", "Carol", "Dana"], kootenayClubName);
+  ensureAdminGroupMembers(this, ["Bob"], kootenayClubName);
 });
 
 Given("Pat is a member of Nelson Paddling Club", async function () {

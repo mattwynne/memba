@@ -626,5 +626,11 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp initials(_name), do: "?"
 
+  defp format_reason(:last_active_member),
+    do: "An established club must retain an active member."
+
+  defp format_reason(:last_membership_administrator),
+    do: "Make another member an Admin before removing this member."
+
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 end

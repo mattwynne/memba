@@ -1,0 +1,25 @@
+# Implementation TODO
+
+- [x] 001 Implement the existing iteration-059 Gherkin steps and confirm unfinished steps remain excluded until executable. Keep the later-invitee ordinary example as regression coverage.
+- [x] 002 Add Club replay tests for historic Everyone membership and role facts, active-Admin reconstruction, and delayed compatibility events after native membership events.
+- [x] 003 Write `cutover-check.md` with exact one-time read-only production checks for source-fact compatibility and populated clubs without an active Admin, including pre/post-deploy expectations and stop instructions.
+- [x] 004 Extend Club aggregate state with active club memberships, permanent native-lifecycle markers, and active Admins derived by intersecting active club membership IDs with active Admin-role assignments.
+- [x] 005 Apply historic Everyone events only where no native marker exists. Make native `ClubMemberAdded` or `ClubMemberRemoved` permanently authoritative for that membership while preserving ordinary group state.
+- [x] 006 Add club/person identity to member commands, validate it against Club state, route add/remove by `club_id`, and de-register the membership-ID write route.
+- [x] 007 Remove the legacy Membership aggregate if unused; otherwise mark it unregistered legacy replay code and create a named deletion follow-up. Never expose a second write path.
+- [x] 008 Make activation idempotent for an exact active identity and reject another active membership for the same person. Reject removed IDs known to Club without importing absent pre-cutover tombstones.
+- [x] 009 Emit `ClubMemberAdded` plus the Admin `ClubRoleAssignedToMember` event for the first activation in one decision. Emit only `ClubMemberAdded` for later members.
+- [x] 010 Reject role assignment to an inactive membership inside Club and enforce the active-Admin floor when handling direct `RemoveClubRoleFromMember`.
+- [x] 011 Enforce final-member precedence and sole-Admin protection in Club’s `RemoveClubMember`; apply success to both active club memberships and active-Admin decision state.
+- [x] 012 Thin `Memba.Membership` write APIs around Club decisions. Projection lookups may enrich routing identity but must not decide duplicate, first-member, Admin-floor, or member-floor rules.
+- [x] 013 Route onboarding conversion through Club activation and remove its separate Admin assignment. Route both invitation-acceptance paths through the same activation command.
+- [x] 014 Derive new invitation person/membership candidates from the invitation ID with namespaced `Memba.ID.deterministic/2`; require explicit caller IDs to be reused.
+- [x] 015 Recover zero-or-one person by invited email and zero-or-one active membership by club/person. Reuse matches and fail closed on ambiguous or mismatched identities.
+- [x] 016 Treat exact same-ID person/member creation as successful retry continuation and use strong projections or a barrier before recovery queries after uncertain dispatch results.
+- [x] 017 Accept the invitation with recovered identities and preserve its result contract. Add failure-injection retry tests after person creation and membership activation for both paths.
+- [x] 018 Retain historic member/role events for replay, update projectors and `SystemGroupMembership` for the explicit new events, and prove one activation yields queryable membership, permission, Everyone, and Admin-group state.
+- [x] 019 Present the two confirmed removal errors on the existing Staff club page. Test blocked members remain visible and permitted removal retains its success path.
+- [x] 020 Repair affected tests, development seeds, and smoke fixtures to use event-sourced clubs and deterministic first-member ordering, without projection-only write fixtures.
+- [x] 021 Add pure Club tests for first/later activation, idempotency, duplicate and Club-known removed IDs, inactive-member role assignment and removal, both removal floors, and replacement Admin removal.
+- [x] 022 Add one same-stream append contract test and one concurrent two-invitation test proving both memberships succeed with exactly one automatic Admin.
+- [x] 023 Run replay, projection, system-group, onboarding, invitation, Staff UI, member-list, messaging, seed, smoke, and Cucumber regressions. Remove runner-debt tags and run `dev check`.

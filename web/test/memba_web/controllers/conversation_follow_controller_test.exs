@@ -2,7 +2,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   use MembaWeb.ConnCase, async: false
 
   alias Memba.Membership.App, as: MembershipApp
-  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Messaging
@@ -109,7 +109,7 @@ defmodule MembaWeb.ConversationFollowControllerTest do
   defp add_member!(club_id, person_id) do
     assert :ok =
              MembershipApp.dispatch(
-               %AddMember{
+               %AddClubMember{
                  membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id

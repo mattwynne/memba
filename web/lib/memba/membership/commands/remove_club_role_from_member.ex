@@ -1,4 +1,4 @@
-defmodule Memba.Membership.Commands.RemoveMemberRole do
+defmodule Memba.Membership.Commands.RemoveClubRoleFromMember do
   @moduledoc """
   Command to remove a club role assignment from a member.
 

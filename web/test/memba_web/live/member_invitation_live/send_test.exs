@@ -9,11 +9,8 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
   alias Memba.Membership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.ClubInvitation
-  alias Memba.Membership.Projections.Group
-  alias Memba.Membership.Projections.GroupMembership
   alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
-  alias Memba.Membership.SystemGroups
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -235,60 +232,43 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
                )
     end
 
-    person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: Keyword.fetch!(attrs, :name),
-        email: Keyword.fetch!(attrs, :email)
-      )
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
 
-    membership =
-      Repo.insert!(%MembershipProjection{
-        membership_id: Memba.ID.generate(:membership),
-        club_id: club_id,
-        person_id: person.person_id,
-        active: true
-      })
+    membership_id = Memba.ID.generate(:membership)
 
-    insert_everyone_group_membership!(club_id, membership.membership_id, person.person_id)
+    assert :ok =
+             Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
 
     %{
       club_id: club_id,
-      membership_id: membership.membership_id,
-      person_id: person.person_id
+      membership_id: membership_id,
+      person_id: person_id
     }
   end
 
-  defp insert_everyone_group_membership!(club_id, membership_id, person_id) do
-    group_id = SystemGroups.everyone_group_id(club_id)
-
-    Repo.insert!(
-      %Group{
-        club_id: club_id,
-        group_id: group_id,
-        group_key: SystemGroups.everyone_key(),
-        name: SystemGroups.everyone_name()
-      },
-      on_conflict: :nothing
-    )
-
-    Repo.insert!(%GroupMembership{
-      club_id: club_id,
-      group_id: group_id,
-      membership_id: membership_id,
-      person_id: person_id,
-      active: true
-    })
-  end
-
   defp grant_manage_members!(member) do
-    Repo.insert!(%MemberPermission{
-      club_id: member.club_id,
-      membership_id: member.membership_id,
-      person_id: member.person_id,
-      permission: Permissions.club_manage_members(),
-      grant_count: 1
-    })
+    Repo.insert!(
+      %MemberPermission{
+        club_id: member.club_id,
+        membership_id: member.membership_id,
+        person_id: member.person_id,
+        permission: Permissions.club_manage_members(),
+        grant_count: 1
+      },
+      on_conflict: :nothing,
+      conflict_target: [:club_id, :person_id, :membership_id, :permission]
+    )
   end
 
   defp active_membership(club_id, person_id) do

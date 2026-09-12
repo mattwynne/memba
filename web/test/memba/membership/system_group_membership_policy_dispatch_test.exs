@@ -4,39 +4,44 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   alias Commanded.EventStore
   alias Memba.Membership.App
   alias Memba.Membership.Club
-  alias Memba.Membership.Commands.AddMember
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AddClubMember
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.DefineClubRole
-  alias Memba.Membership.Commands.RemoveMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberAdded
-  alias Memba.Membership.Events.MemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Roles
   alias Memba.Membership.SystemGroups
 
-  test "MemberAdded and MemberRemoved dispatch idempotent Everyone membership commands" do
+  test "ClubMemberAdded and ClubMemberRemoved dispatch idempotent Everyone membership commands" do
     club_id = Memba.ID.generate(:club)
+    bootstrap_membership_id = Memba.ID.generate(:membership)
+    bootstrap_person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
 
     create_club(club_id)
-
-    assert :ok =
-             App.dispatch(
-               %AddMember{club_id: club_id, membership_id: membership_id, person_id: person_id},
-               consistency: :strong
-             )
+    add_member(club_id, bootstrap_membership_id, bootstrap_person_id)
+    add_member(club_id, membership_id, person_id)
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
 
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
   end
@@ -48,12 +53,16 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     admin_role_id = Roles.membership_administrator_role_id(club_id)
     admin_group_id = SystemGroups.admin_group_id(club_id)
 
+    bootstrap_membership_id = Memba.ID.generate(:membership)
+    bootstrap_person_id = Memba.ID.generate(:person)
+
     create_club(club_id)
+    add_member(club_id, bootstrap_membership_id, bootstrap_person_id)
     add_member(club_id, membership_id, person_id)
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -66,7 +75,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -78,7 +87,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
   end
 
-  test "MemberRemoved dispatches removals for both Everyone and Admin system groups" do
+  test "ClubMemberRemoved dispatches removals for both Everyone and Admin system groups" do
     club_id = Memba.ID.generate(:club)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
@@ -86,15 +95,19 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     everyone_group_id = SystemGroups.everyone_group_id(club_id)
     admin_group_id = SystemGroups.admin_group_id(club_id)
 
+    replacement_membership_id = Memba.ID.generate(:membership)
+    replacement_person_id = Memba.ID.generate(:person)
+
     create_club(club_id)
     add_member(club_id, membership_id, person_id)
+    add_member(club_id, replacement_membership_id, replacement_person_id)
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
+                 membership_id: replacement_membership_id,
+                 person_id: replacement_person_id,
                  role_id: admin_role_id
                },
                consistency: :strong
@@ -104,7 +117,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
 
     assert :ok =
-             App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
+             App.dispatch(
+               %RemoveClubMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
@@ -120,16 +140,16 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     create_club(club_id)
 
-    member_added = %MemberAdded{
+    club_member_added = %ClubMemberAdded{
       club_id: club_id,
       membership_id: membership_id,
       person_id: person_id
     }
 
-    assert :ok = SystemGroupMembership.handle(member_added, %{})
-    assert :ok = SystemGroupMembership.handle(member_added, %{})
+    assert :ok = SystemGroupMembership.handle(club_member_added, %{})
+    assert :ok = SystemGroupMembership.handle(club_member_added, %{})
 
-    admin_role_assigned = %MemberRoleAssigned{
+    admin_role_assigned = %ClubRoleAssignedToMember{
       club_id: club_id,
       membership_id: membership_id,
       person_id: person_id,
@@ -142,14 +162,14 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, true)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, true)
 
-    member_removed = %MemberRemoved{
+    club_member_removed = %ClubMemberRemoved{
       club_id: club_id,
       membership_id: membership_id,
       person_id: person_id
     }
 
-    assert :ok = SystemGroupMembership.handle(member_removed, %{})
-    assert :ok = SystemGroupMembership.handle(member_removed, %{})
+    assert :ok = SystemGroupMembership.handle(club_member_removed, %{})
+    assert :ok = SystemGroupMembership.handle(club_member_removed, %{})
 
     assert_group_membership(club_id, everyone_group_id, membership_id, person_id, false)
     assert_group_membership(club_id, admin_group_id, membership_id, person_id, false)
@@ -169,12 +189,15 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
   test "non-Admin role lifecycle events do not alter Admin group membership" do
     club_id = Memba.ID.generate(:club)
+    bootstrap_membership_id = Memba.ID.generate(:membership)
+    bootstrap_person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
     custom_role_id = Memba.ID.generate(:role)
     admin_group_id = SystemGroups.admin_group_id(club_id)
 
     create_club(club_id)
+    add_member(club_id, bootstrap_membership_id, bootstrap_person_id)
     add_member(club_id, membership_id, person_id)
 
     assert :ok =
@@ -190,7 +213,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -203,7 +226,7 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -230,7 +253,11 @@ defmodule Memba.Membership.SystemGroupMembershipPolicyDispatchTest do
   defp add_member(club_id, membership_id, person_id) do
     assert :ok =
              App.dispatch(
-               %AddMember{club_id: club_id, membership_id: membership_id, person_id: person_id},
+               %AddClubMember{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id
+               },
                consistency: :strong
              )
 

@@ -55,7 +55,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
 
     test "accepts a pending invitation for an existing person, signs in, and lands in the club",
          %{conn: conn} do
-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
       person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
       {invitation, token} = invite_member!(club, "ALICE@EXAMPLE.COM")
 
@@ -80,7 +80,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
 
     test "reopening an accepted invitation link signs in and does not create duplicate membership",
          %{conn: conn} do
-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
       person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
       {_invitation, token} = invite_member!(club, "alice@example.com")
 
@@ -183,7 +183,7 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
 
     test "creates the invitee profile, activates ordinary membership, and clears journey state",
          %{conn: conn} do
-      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+      club = create_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
       {invitation, token} = invite_member!(club, "robin@example.com")
 
       conn = get(conn, ~p"/invitations/club-members/#{token}")
@@ -211,6 +211,13 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
       assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
       assert membership_count(club.club_id, person_id) == 1
     end
+  end
+
+  defp create_membership_club!(attrs) do
+    club_attrs = membership_club_attrs(attrs)
+
+    assert :ok = Membership.create_club(club_attrs, consistency: :strong)
+    Membership.get_club(club_attrs.club_id)
   end
 
   defp invite_member!(club, email) do

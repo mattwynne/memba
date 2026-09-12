@@ -4,8 +4,8 @@ defmodule Memba.Membership.AuthorizationTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
-  alias Memba.Membership.Commands.AssignMemberRole
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
 
@@ -24,11 +24,6 @@ defmodule Memba.Membership.AuthorizationTest do
     create_person!(ordinary_person_id, "Alice", "alice@example.com")
     add_member!(ordinary_membership_id, club_id, ordinary_person_id)
 
-    assert {:error, :unauthorized} =
-             Authorization.authorize_manage_members(club_id, admin_person_id)
-
-    assign_membership_administrator!(club_id, admin_membership_id, admin_person_id)
-
     assert :ok = Authorization.authorize_manage_members(club_id, admin_person_id)
 
     assert {:error, :unauthorized} =
@@ -40,12 +35,16 @@ defmodule Memba.Membership.AuthorizationTest do
 
   test "has_permission?/3 reads the internal flattened member-permission projection" do
     club_id = Memba.ID.generate(:club)
+    bootstrap_person_id = Memba.ID.generate(:person)
+    bootstrap_membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
     membership_id = Memba.ID.generate(:membership)
     role_id = Roles.membership_administrator_role_id(club_id)
     permission = Permissions.club_manage_members()
 
     create_club!(club_id)
+    create_person!(bootstrap_person_id, "Bootstrap", "bootstrap@example.com")
+    add_member!(bootstrap_membership_id, club_id, bootstrap_person_id)
     create_person!(person_id)
     add_member!(membership_id, club_id, person_id)
 
@@ -53,7 +52,7 @@ defmodule Memba.Membership.AuthorizationTest do
 
     assert :ok =
              App.dispatch(
-               %AssignMemberRole{
+               %AssignClubRoleToMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -69,7 +68,7 @@ defmodule Memba.Membership.AuthorizationTest do
 
     assert :ok =
              App.dispatch(
-               %RemoveMemberRole{
+               %RemoveClubRoleFromMember{
                  club_id: club_id,
                  membership_id: membership_id,
                  person_id: person_id,
@@ -101,19 +100,6 @@ defmodule Memba.Membership.AuthorizationTest do
     assert :ok =
              Membership.add_member(
                %{membership_id: membership_id, club_id: club_id, person_id: person_id},
-               consistency: :strong
-             )
-  end
-
-  defp assign_membership_administrator!(club_id, membership_id, person_id) do
-    assert :ok =
-             App.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: membership_id,
-                 person_id: person_id,
-                 role_id: Roles.membership_administrator_role_id(club_id)
-               },
                consistency: :strong
              )
   end

@@ -4,7 +4,7 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   alias Commanded.Event.Mapper
   alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
@@ -173,16 +173,15 @@ defmodule Memba.Membership.SystemGroupsReplayParityTest do
   end
 
   defp assign_admin_role_directly!(club_id, member) do
-    assert :ok =
-             MembershipApp.dispatch(
-               %AssignMemberRole{
-                 club_id: club_id,
-                 membership_id: member.membership_id,
-                 person_id: member.person_id,
-                 role_id: Roles.membership_administrator_role_id(club_id)
-               },
-               consistency: :strong
-             )
+    assert MembershipApp.dispatch(
+             %AssignClubRoleToMember{
+               club_id: club_id,
+               membership_id: member.membership_id,
+               person_id: member.person_id,
+               role_id: Roles.membership_administrator_role_id(club_id)
+             },
+             consistency: :strong
+           ) in [:ok, {:error, :role_already_assigned}]
   end
 
   defp assign_admin_role_as_member!(club_id, target_member, actor_member) do

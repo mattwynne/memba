@@ -6,7 +6,8 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
 
   alias Memba.Membership
   alias Memba.Membership.App
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -19,18 +20,19 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
 
   step ~r/^(.+) are members of the (.+) Admin group$/,
        %{args: [person_names_text, club_name]} = context do
+    admin_names = parse_person_list(person_names_text)
+
     context =
-      person_names_text
-      |> parse_person_list()
+      admin_names
       |> Enum.reduce(context, fn person_name, context ->
         ensure_membership_administrator(context, person_name, club_name)
       end)
+      |> remove_admins_not_named(club_name, admin_names)
 
     club_id = fetch_club_id!(context, club_name)
     admin_group_id = SystemGroups.admin_group_id(club_id)
 
-    person_names_text
-    |> parse_person_list()
+    admin_names
     |> Enum.each(fn person_name ->
       person = fetch_person!(context, person_name)
       assert Membership.active_member_of_group?(admin_group_id, person.person_id)
@@ -59,10 +61,40 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     context
   end
 
-  step "{word} is an ordinary member of {word} {word} {word}",
+  step ~r/^(.+) are Admins of (.+)$/,
+       %{args: [person_names_text, club_name]} = context do
+    person_names_text
+    |> parse_person_list()
+    |> Enum.reduce(context, fn person_name, context ->
+      ensure_membership_administrator(context, person_name, club_name)
+    end)
+  end
+
+  step "{word} {word} {word} exists as a club with no active members",
+       %{args: [club_word_1, club_word_2, club_word_3]} = context do
+    club_name = club_name(club_word_1, club_word_2, club_word_3)
+    context = ensure_club(context, club_name)
+    club_id = fetch_club_id!(context, club_name)
+
+    assert active_membership_count(club_id) == 0
+    context
+  end
+
+  step "{word} is the only active member of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
     {context, _membership_id} = ensure_active_member(context, person_name, club_name)
+    club_id = fetch_club_id!(context, club_name)
+
+    assert active_membership_count(club_id) == 1
+    context
+  end
+
+  step "{word} is an ordinary member of {word} {word} {word}",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
+    club_name = club_name(club_word_1, club_word_2, club_word_3)
+    {context, membership_id} = ensure_active_member(context, person_name, club_name)
+    context = ensure_not_membership_administrator(context, person_name, club_name, membership_id)
 
     refute membership_administrator?(context, person_name, club_name)
     context
@@ -136,6 +168,73 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     Map.put(context, :last_membership_administration_result, result)
   end
 
+  step ~r/^(.+) accept their invitations at the same time$/,
+       %{args: [person_names_text]} = context do
+    acceptances =
+      person_names_text
+      |> parse_person_list()
+      |> Task.async_stream(
+        fn person_name ->
+          email = email_for_person(context, person_name)
+          invitation = fetch_invitation!(context, email)
+
+          result =
+            Membership.complete_invited_club_member_profile(
+              %{invitation_id: invitation.invitation_id, name: "#{person_name} Example"},
+              consistency: :strong
+            )
+
+          {person_name, email, result}
+        end,
+        ordered: false,
+        timeout: :infinity
+      )
+      |> Enum.map(fn
+        {:ok, {person_name, email, {:ok, acceptance}}} ->
+          {person_name, email, acceptance}
+
+        {:ok, {_person_name, _email, {:error, reason}}} ->
+          flunk("Expected concurrent invitation acceptance to succeed, got #{inspect(reason)}")
+
+        {:exit, reason} ->
+          flunk("Concurrent invitation acceptance exited: #{inspect(reason)}")
+      end)
+
+    Enum.reduce(acceptances, context, fn {person_name, email, acceptance}, context ->
+      context
+      |> update_context_map(:people, person_name, %{
+        person_id: acceptance.person_id,
+        name: "#{person_name} Example",
+        email: email
+      })
+      |> update_context_map(
+        :memberships,
+        {fetch_invitation_club_name!(context, email), person_name},
+        acceptance.membership_id
+      )
+    end)
+  end
+
+  step ~r/^(\w+) tries to remove (\w+) from (\w+) (\w+) (\w+)$/,
+       %{
+         args: [_actor_name, target_name, club_word_1, club_word_2, club_word_3]
+       } = context do
+    club_name = club_name(club_word_1, club_word_2, club_word_3)
+    result = remove_member(context, target_name, club_name)
+
+    Map.put(context, :last_member_removal_result, result)
+  end
+
+  step ~r/^(\w+) removes (\w+) from (\w+) (\w+) (\w+)$/,
+       %{
+         args: [_actor_name, target_name, club_word_1, club_word_2, club_word_3]
+       } = context do
+    club_name = club_name(club_word_1, club_word_2, club_word_3)
+
+    assert :ok = remove_member(context, target_name, club_name)
+    Map.put(context, :last_member_removal_result, :ok)
+  end
+
   step "{word} should be an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     assert_membership_administrator(
@@ -162,6 +261,74 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     context
   end
 
+  step ~r/^(.+) should be active members of (.+)$/,
+       %{args: [person_names_text, club_name]} = context do
+    person_names_text
+    |> parse_person_list()
+    |> Enum.each(fn person_name ->
+      assert active_member?(context, person_name, club_name)
+    end)
+
+    context
+  end
+
+  step ~r/^exactly one of (.+) should be an Admin of (.+)$/,
+       %{args: [person_names_text, club_name]} = context do
+    person_names = parse_person_list(person_names_text)
+
+    assert Enum.count(person_names, &membership_administrator?(context, &1, club_name)) == 1
+
+    Map.put(context, :automatic_admin_candidates, person_names)
+  end
+
+  step "the other should be an ordinary member of {word} {word} {word}",
+       %{args: [club_word_1, club_word_2, club_word_3]} = context do
+    club_name = club_name(club_word_1, club_word_2, club_word_3)
+    person_names = Map.fetch!(context, :automatic_admin_candidates)
+
+    assert Enum.count(person_names, &membership_administrator?(context, &1, club_name)) == 1
+
+    ordinary_member =
+      Enum.find(person_names, &(not membership_administrator?(context, &1, club_name)))
+
+    assert active_member?(context, ordinary_member, club_name)
+    context
+  end
+
+  step "{word} should be told to make another member an Admin first", context do
+    assert {:error, :last_membership_administrator} =
+             Map.fetch!(context, :last_member_removal_result)
+
+    context
+  end
+
+  step "{word} should be told that an established club must retain an active member", context do
+    assert {:error, :last_active_member} = Map.fetch!(context, :last_member_removal_result)
+    context
+  end
+
+  step "{word} should still be an active member of {word} {word} {word}",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
+    assert active_member?(
+             context,
+             person_name,
+             club_name(club_word_1, club_word_2, club_word_3)
+           )
+
+    context
+  end
+
+  step "{word} should no longer be an active member of {word} {word} {word}",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
+    refute active_member?(
+             context,
+             person_name,
+             club_name(club_word_1, club_word_2, club_word_3)
+           )
+
+    context
+  end
+
   defp ensure_membership_administrator(context, person_name, club_name) do
     {context, membership_id} = ensure_active_member(context, person_name, club_name)
     club_id = fetch_club_id!(context, club_name)
@@ -171,7 +338,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     unless active_role_assignment?(club_id, membership_id, person.person_id, role_id) do
       assert :ok =
                App.dispatch(
-                 %AssignMemberRole{
+                 %AssignClubRoleToMember{
                    club_id: club_id,
                    membership_id: membership_id,
                    person_id: person.person_id,
@@ -182,6 +349,36 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     end
 
     assert_membership_administrator(context, person_name, club_name)
+  end
+
+  defp remove_admins_not_named(context, club_name, admin_names) do
+    club_id = fetch_club_id!(context, club_name)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+    admin_name_set = MapSet.new(admin_names)
+
+    RoleAssignmentProjection
+    |> where([assignment], assignment.club_id == ^club_id)
+    |> where([assignment], assignment.role_id == ^admin_role_id)
+    |> where([assignment], assignment.active == true)
+    |> Repo.all()
+    |> Enum.each(fn assignment ->
+      person = Repo.get!(PersonProjection, assignment.person_id)
+
+      unless MapSet.member?(admin_name_set, person.name) do
+        assert :ok =
+                 App.dispatch(
+                   %RemoveClubRoleFromMember{
+                     club_id: club_id,
+                     membership_id: assignment.membership_id,
+                     person_id: assignment.person_id,
+                     role_id: admin_role_id
+                   },
+                   consistency: :strong
+                 )
+      end
+    end)
+
+    context
   end
 
   defp assert_membership_administrator(context, person_name, club_name) do
@@ -201,6 +398,47 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
         person.person_id,
         Permissions.club_manage_members()
       )
+  end
+
+  defp ensure_not_membership_administrator(context, person_name, club_name, membership_id) do
+    club_id = fetch_club_id!(context, club_name)
+    person = fetch_person!(context, person_name)
+    role_id = Roles.membership_administrator_role_id(club_id)
+
+    if active_role_assignment?(club_id, membership_id, person.person_id, role_id) do
+      {context, fixture_membership_id} =
+        ensure_active_member(context, "Fixture Admin", club_name)
+
+      fixture = fetch_person!(context, "Fixture Admin")
+
+      unless active_role_assignment?(club_id, fixture_membership_id, fixture.person_id, role_id) do
+        assert :ok =
+                 App.dispatch(
+                   %AssignClubRoleToMember{
+                     club_id: club_id,
+                     membership_id: fixture_membership_id,
+                     person_id: fixture.person_id,
+                     role_id: role_id
+                   },
+                   consistency: :strong
+                 )
+      end
+
+      assert :ok =
+               App.dispatch(
+                 %RemoveClubRoleFromMember{
+                   club_id: club_id,
+                   membership_id: membership_id,
+                   person_id: person.person_id,
+                   role_id: role_id
+                 },
+                 consistency: :strong
+               )
+
+      context
+    else
+      context
+    end
   end
 
   defp ensure_active_member(context, person_name, club_name) do
@@ -350,6 +588,30 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     |> Repo.one()
   end
 
+  defp active_membership_count(club_id) do
+    MembershipProjection
+    |> where([membership], membership.club_id == ^club_id)
+    |> where([membership], membership.active == true)
+    |> Repo.aggregate(:count, :membership_id)
+  end
+
+  defp active_member?(context, person_name, club_name) do
+    club_id = fetch_club_id!(context, club_name)
+    person = fetch_person!(context, person_name)
+    not is_nil(active_membership_id(club_id, person.person_id))
+  end
+
+  defp remove_member(context, person_name, club_name) do
+    club_id = fetch_club_id!(context, club_name)
+    person = fetch_person!(context, person_name)
+    membership_id = active_membership_id!(club_id, person.person_id)
+
+    Membership.remove_member(
+      %{club_id: club_id, membership_id: membership_id, person_id: person.person_id},
+      consistency: :strong
+    )
+  end
+
   defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
     RoleAssignmentProjection
     |> where([assignment], assignment.club_id == ^club_id)
@@ -383,6 +645,39 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     text
     |> String.replace(~r/,?\s+and\s+/, ", ")
     |> String.split(~r/\s*,\s*/, trim: true)
+  end
+
+  defp email_for_person(context, person_name) do
+    case get_in(context, [:people, person_name, :email]) do
+      email when is_binary(email) -> email
+      _missing -> default_email_for(context, person_name)
+    end
+  end
+
+  defp fetch_invitation!(context, email) do
+    context
+    |> Map.get(:club_member_invitations, %{})
+    |> Enum.find_value(fn
+      {{_club_name, ^email}, invitation} -> invitation
+      _other -> nil
+    end)
+    |> case do
+      nil -> flunk("Expected an invitation for #{email}")
+      invitation -> invitation
+    end
+  end
+
+  defp fetch_invitation_club_name!(context, email) do
+    context
+    |> Map.get(:club_member_invitations, %{})
+    |> Enum.find_value(fn
+      {{club_name, ^email}, _invitation} -> club_name
+      _other -> nil
+    end)
+    |> case do
+      nil -> flunk("Expected an invitation club for #{email}")
+      club_name -> club_name
+    end
   end
 
   defp scenario_slug(context, club_name) do

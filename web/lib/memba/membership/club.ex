@@ -6,14 +6,16 @@ defmodule Memba.Membership.Club do
   alias Commanded.Aggregates.Aggregate
   alias Memba.ID
   alias Memba.Membership.Commands.AddGroupMember
+  alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AssignGroupEmailSlug
-  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.AssignClubRoleToMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreateGroup
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveGroupMember
-  alias Memba.Membership.Commands.RemoveMemberRole
+  alias Memba.Membership.Commands.RemoveClubMember
+  alias Memba.Membership.Commands.RemoveClubRoleFromMember
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubRoleDefined
@@ -23,8 +25,14 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.GroupEmailSlugAssigned
   alias Memba.Membership.Events.GroupMemberAdded
   alias Memba.Membership.Events.GroupMemberRemoved
-  alias Memba.Membership.Events.MemberRoleAssigned
-  alias Memba.Membership.Events.MemberRoleRemoved
+  alias Memba.Membership.Events.ClubMemberAdded
+  alias Memba.Membership.Events.ClubMemberRemoved
+  alias Memba.Membership.Events.ClubRoleAssignedToMember
+  alias Memba.Membership.Events.ClubRoleRemovedFromMember
+  alias Memba.Membership.Events.MemberAdded, as: LegacyMemberAdded
+  alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
+  alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
@@ -36,10 +44,13 @@ defmodule Memba.Membership.Club do
     :club_id,
     :name,
     :slug,
+    active_admin_membership_ids: MapSet.new(),
+    active_memberships: %{},
     groups: %{},
     group_email_slugs: %{},
     group_keys: %{},
     group_memberships: %{},
+    native_membership_ids: MapSet.new(),
     roles: %{},
     role_keys: %{},
     role_permissions: %{},
@@ -93,6 +104,42 @@ defmodule Memba.Membership.Club do
   end
 
   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+
+  def execute(%__MODULE__{club_id: nil}, %AddClubMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %AddClubMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id) do
+      add_member_decision(club, command)
+    end
+  end
+
+  def execute(%__MODULE__{club_id: nil}, %RemoveClubMember{}), do: {:error, :not_created}
+
+  def execute(%__MODULE__{} = club, %RemoveClubMember{} = command) do
+    with :ok <- validate_existing_club_id(club, command.club_id),
+         :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
+         :ok <- validate_id(:person, command.person_id, :invalid_person_id),
+         :ok <-
+           ensure_active_membership_identity(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
+         :ok <- ensure_member_removal_keeps_active_member(club),
+         :ok <-
+           ensure_member_removal_keeps_active_admin(
+             club,
+             command.membership_id
+           ) do
+      %ClubMemberRemoved{
+        club_id: command.club_id,
+        membership_id: command.membership_id,
+        person_id: command.person_id
+      }
+    end
+  end
 
   def execute(%__MODULE__{club_id: nil}, %DefineClubRole{}), do: {:error, :not_created}
 
@@ -176,9 +223,9 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %AssignMemberRole{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %AssignClubRoleToMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %AssignMemberRole{} = command) do
+  def execute(%__MODULE__{} = club, %AssignClubRoleToMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
@@ -186,20 +233,27 @@ defmodule Memba.Membership.Club do
            validate_optional_id(:person, command.assigned_by_person_id, :invalid_actor_person_id),
          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
          :ok <- ensure_role_exists(club, command.role_id),
+         :ok <-
+           ensure_active_role_assignment_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
          :ok <- ensure_role_assignment_available(club, command.membership_id, command.role_id) do
-      %MemberRoleAssigned{
+      %ClubRoleAssignedToMember{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id,
         role_id: command.role_id,
-        assigned_by_person_id: command.assigned_by_person_id
+        assigned_by_person_id: command.assigned_by_person_id,
+        assignment_source: "explicit_command"
       }
     end
   end
 
-  def execute(%__MODULE__{club_id: nil}, %RemoveMemberRole{}), do: {:error, :not_created}
+  def execute(%__MODULE__{club_id: nil}, %RemoveClubRoleFromMember{}), do: {:error, :not_created}
 
-  def execute(%__MODULE__{} = club, %RemoveMemberRole{} = command) do
+  def execute(%__MODULE__{} = club, %RemoveClubRoleFromMember{} = command) do
     with :ok <- validate_existing_club_id(club, command.club_id),
          :ok <- validate_id(:membership, command.membership_id, :invalid_membership_id),
          :ok <- validate_id(:person, command.person_id, :invalid_person_id),
@@ -208,13 +262,25 @@ defmodule Memba.Membership.Club do
          :ok <- validate_id(:role, command.role_id, :invalid_role_id),
          :ok <- ensure_role_exists(club, command.role_id),
          :ok <-
+           ensure_active_role_assignment_target(
+             club,
+             command.membership_id,
+             command.person_id
+           ),
+         :ok <-
            ensure_role_assignment_exists(
              club,
              command.membership_id,
              command.person_id,
              command.role_id
+           ),
+         :ok <-
+           ensure_admin_role_removal_keeps_active_admin(
+             club,
+             command.membership_id,
+             command.role_id
            ) do
-      %MemberRoleRemoved{
+      %ClubRoleRemovedFromMember{
         club_id: command.club_id,
         membership_id: command.membership_id,
         person_id: command.person_id,
@@ -297,36 +363,108 @@ defmodule Memba.Membership.Club do
     group_membership = %{person_id: event.person_id, active: true}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
-    %__MODULE__{
-      club
-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
-    }
+    club =
+      %__MODULE__{
+        club
+        | group_memberships:
+            Map.put(club.group_memberships, group_membership_key, group_membership)
+      }
+
+    apply_everyone_compatibility_membership(club, event, :activate)
   end
 
   def apply(%__MODULE__{} = club, %GroupMemberRemoved{} = event) do
     group_membership = %{person_id: event.person_id, active: false}
     group_membership_key = group_membership_key(event.group_id, event.membership_id)
 
-    %__MODULE__{
-      club
-      | group_memberships: Map.put(club.group_memberships, group_membership_key, group_membership)
-    }
+    club =
+      %__MODULE__{
+        club
+        | group_memberships:
+            Map.put(club.group_memberships, group_membership_key, group_membership)
+      }
+
+    apply_everyone_compatibility_membership(club, event, :deactivate)
   end
 
-  def apply(%__MODULE__{} = club, %MemberRoleAssigned{} = event) do
+  def apply(%__MODULE__{} = club, %ClubMemberAdded{} = event) do
+    apply_club_member_added(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberAdded{} = event) do
+    apply_club_member_added(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubMemberRemoved{} = event) do
+    apply_club_member_removed(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRemoved{} = event) do
+    apply_club_member_removed(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubRoleAssignedToMember{} = event) do
+    apply_club_role_assigned_to_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRoleAssigned{} = event) do
+    apply_club_role_assigned_to_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %ClubRoleRemovedFromMember{} = event) do
+    apply_club_role_removed_from_member(club, event)
+  end
+
+  def apply(%__MODULE__{} = club, %LegacyMemberRoleRemoved{} = event) do
+    apply_club_role_removed_from_member(club, event)
+  end
+
+  defp apply_club_member_added(%__MODULE__{} = club, event) do
+    club =
+      %__MODULE__{
+        club
+        | active_memberships:
+            Map.put(club.active_memberships, event.membership_id, event.person_id),
+          native_membership_ids: MapSet.put(club.native_membership_ids, event.membership_id)
+      }
+
+    derive_active_admin_membership_ids(club)
+  end
+
+  defp apply_club_member_removed(%__MODULE__{} = club, event) do
+    club =
+      %__MODULE__{
+        club
+        | active_memberships: Map.delete(club.active_memberships, event.membership_id),
+          native_membership_ids: MapSet.put(club.native_membership_ids, event.membership_id)
+      }
+
+    derive_active_admin_membership_ids(club)
+  end
+
+  defp apply_club_role_assigned_to_member(%__MODULE__{} = club, event) do
     assignment = %{person_id: event.person_id}
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
-    %__MODULE__{
-      club
-      | role_assignments: Map.put(club.role_assignments, assignment_key, assignment)
-    }
+    club =
+      %__MODULE__{
+        club
+        | role_assignments: Map.put(club.role_assignments, assignment_key, assignment)
+      }
+
+    derive_active_admin_membership_ids(club)
   end
 
-  def apply(%__MODULE__{} = club, %MemberRoleRemoved{} = event) do
+  defp apply_club_role_removed_from_member(%__MODULE__{} = club, event) do
     assignment_key = role_assignment_key(event.membership_id, event.role_id)
 
-    %__MODULE__{club | role_assignments: Map.delete(club.role_assignments, assignment_key)}
+    club =
+      %__MODULE__{
+        club
+        | role_assignments: Map.delete(club.role_assignments, assignment_key)
+      }
+
+    derive_active_admin_membership_ids(club)
   end
 
   defp validate_club_id(club_id) do
@@ -351,6 +489,67 @@ defmodule Memba.Membership.Club do
 
   defp validate_optional_id(type, value, error) do
     validate_id(type, value, error)
+  end
+
+  defp add_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
+    case Map.fetch(club.active_memberships, command.membership_id) do
+      {:ok, person_id} when person_id == command.person_id ->
+        []
+
+      {:ok, _different_person_id} ->
+        {:error, :membership_id_already_used}
+
+      :error ->
+        add_inactive_member_decision(club, command)
+    end
+  end
+
+  defp add_inactive_member_decision(%__MODULE__{} = club, %AddClubMember{} = command) do
+    cond do
+      membership_id_recorded?(club, command.membership_id) ->
+        {:error, :membership_id_already_used}
+
+      command.person_id in Map.values(club.active_memberships) ->
+        {:error, :already_active_member}
+
+      true ->
+        club_member_added = %ClubMemberAdded{
+          club_id: command.club_id,
+          membership_id: command.membership_id,
+          person_id: command.person_id
+        }
+
+        if map_size(club.active_memberships) == 0 do
+          [
+            club_member_added,
+            %ClubRoleAssignedToMember{
+              club_id: command.club_id,
+              membership_id: command.membership_id,
+              person_id: command.person_id,
+              role_id: Roles.membership_administrator_role_id(command.club_id),
+              assignment_source: "automatic_first_club_member"
+            }
+          ]
+        else
+          club_member_added
+        end
+    end
+  end
+
+  defp membership_id_recorded?(%__MODULE__{} = club, membership_id) do
+    MapSet.member?(club.native_membership_ids, membership_id) or
+      Map.has_key?(
+        club.group_memberships,
+        group_membership_key(SystemGroups.everyone_group_id(club.club_id), membership_id)
+      )
+  end
+
+  defp ensure_active_membership_identity(%__MODULE__{} = club, membership_id, person_id) do
+    case Map.fetch(club.active_memberships, membership_id) do
+      {:ok, ^person_id} -> :ok
+      {:ok, _different_person_id} -> {:error, :membership_person_mismatch}
+      :error -> {:error, :not_found}
+    end
   end
 
   defp normalize_name(name) when is_binary(name) do
@@ -438,6 +637,14 @@ defmodule Memba.Membership.Club do
     end
   end
 
+  defp ensure_active_role_assignment_target(%__MODULE__{} = club, membership_id, person_id) do
+    if Map.get(club.active_memberships, membership_id) == person_id do
+      :ok
+    else
+      {:error, :member_not_active}
+    end
+  end
+
   defp ensure_role_assignment_exists(%__MODULE__{} = club, membership_id, person_id, role_id) do
     assignment_key = role_assignment_key(membership_id, role_id)
 
@@ -445,6 +652,39 @@ defmodule Memba.Membership.Club do
       {:ok, %{person_id: ^person_id}} -> :ok
       {:ok, %{}} -> {:error, :role_assignment_person_mismatch}
       :error -> {:error, :role_assignment_not_found}
+    end
+  end
+
+  defp ensure_admin_role_removal_keeps_active_admin(
+         %__MODULE__{} = club,
+         membership_id,
+         role_id
+       ) do
+    admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+
+    if role_id == admin_role_id and
+         MapSet.member?(club.active_admin_membership_ids, membership_id) and
+         MapSet.size(club.active_admin_membership_ids) == 1 do
+      {:error, :last_membership_administrator}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_member_removal_keeps_active_member(%__MODULE__{} = club) do
+    if map_size(club.active_memberships) == 1 do
+      {:error, :last_active_member}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_member_removal_keeps_active_admin(%__MODULE__{} = club, membership_id) do
+    if MapSet.member?(club.active_admin_membership_ids, membership_id) and
+         MapSet.size(club.active_admin_membership_ids) == 1 do
+      {:error, :last_membership_administrator}
+    else
+      :ok
     end
   end
 
@@ -624,6 +864,54 @@ defmodule Memba.Membership.Club do
 
   defp put_role_key(role_keys, nil, _role_id), do: role_keys
   defp put_role_key(role_keys, role_key, role_id), do: Map.put(role_keys, role_key, role_id)
+
+  defp apply_everyone_compatibility_membership(
+         %__MODULE__{club_id: club_id} = club,
+         event,
+         lifecycle
+       )
+       when is_binary(club_id) do
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    if event.group_id == everyone_group_id and
+         not MapSet.member?(club.native_membership_ids, event.membership_id) do
+      active_memberships =
+        case lifecycle do
+          :activate ->
+            Map.put(club.active_memberships, event.membership_id, event.person_id)
+
+          :deactivate ->
+            Map.delete(club.active_memberships, event.membership_id)
+        end
+
+      club = %__MODULE__{club | active_memberships: active_memberships}
+      derive_active_admin_membership_ids(club)
+    else
+      club
+    end
+  end
+
+  defp apply_everyone_compatibility_membership(%__MODULE__{} = club, _event, _lifecycle),
+    do: club
+
+  defp derive_active_admin_membership_ids(%__MODULE__{} = club) do
+    admin_role_id = Roles.membership_administrator_role_id(club.club_id)
+
+    active_admin_membership_ids =
+      Enum.reduce(club.role_assignments, MapSet.new(), fn
+        {{membership_id, ^admin_role_id}, _assignment}, active_admin_membership_ids ->
+          if Map.has_key?(club.active_memberships, membership_id) do
+            MapSet.put(active_admin_membership_ids, membership_id)
+          else
+            active_admin_membership_ids
+          end
+
+        _role_assignment, active_admin_membership_ids ->
+          active_admin_membership_ids
+      end)
+
+    %__MODULE__{club | active_admin_membership_ids: active_admin_membership_ids}
+  end
 
   defp role_assignment_key(membership_id, role_id), do: {membership_id, role_id}
 
