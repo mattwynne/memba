@@ -1,0 +1,109 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index 510768b..53ba7e5 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+ - [x] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+ - [x] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+-- [ ] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
++- [x] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+ - [ ] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+ - [ ] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+ - [ ] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
+diff --git a/web/assets/css/app.css b/web/assets/css/app.css
+index 526d094..40a5e49 100644
+--- a/web/assets/css/app.css
++++ b/web/assets/css/app.css
+@@ -133,6 +133,43 @@ h1, h2, h3, h4 {
+   letter-spacing: -0.02em;
+ }
+ 
++/* ============================================================
++   LiveView connection status.
++
++   This is a global viewport state rather than layout content. Keep it above
++   every app surface, clear of bottom safe areas, and transparent to pointer
++   input so the current page remains usable while LiveView reconnects.
++   ============================================================ */
++.connection-status {
++  position: fixed;
++  z-index: 50;
++  left: 50%;
++  bottom: max(18px, env(safe-area-inset-bottom));
++  transform: translateX(-50%);
++  pointer-events: none;
++}
++
++.connection-status__spinner {
++  animation: connection-status-spin 850ms linear infinite;
++}
++
++@keyframes connection-status-spin {
++  to {
++    transform: rotate(360deg);
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .connection-status {
++    transition: none;
++  }
++
++  .connection-status__spinner {
++    animation: none;
++    border-color: var(--color-sage-500);
++  }
++}
++
+ /* ============================================================
+    Account settings page.
+ 
+diff --git a/web/test/memba_web/app_css_test.exs b/web/test/memba_web/app_css_test.exs
+index 6787a7c..76a9177 100644
+--- a/web/test/memba_web/app_css_test.exs
++++ b/web/test/memba_web/app_css_test.exs
+@@ -143,4 +143,43 @@ defmodule MembaWeb.AppCssTest do
+     assert css =~ ".deliv-tint-snd {"
+     assert css =~ ".deliv-tint-bad {"
+   end
++
++  test "connection status is globally positioned without blocking the page" do
++    css = File.read!(@app_css_path)
++    declarations = css_rule!(css, ".connection-status")
++
++    assert declarations =~ "position: fixed;"
++    assert declarations =~ "z-index: 50;"
++    assert declarations =~ "left: 50%;"
++    assert declarations =~ "bottom: max(18px, env(safe-area-inset-bottom));"
++    assert declarations =~ "transform: translateX(-50%);"
++    assert declarations =~ "pointer-events: none;"
++  end
++
++  test "connection status motion has a reduced-motion fallback" do
++    css = File.read!(@app_css_path)
++
++    assert css_rule!(css, ".connection-status__spinner") =~
++             "animation: connection-status-spin 850ms linear infinite;"
++
++    assert css =~
++             ~r/@keyframes connection-status-spin\s*\{\s*to\s*\{\s*transform: rotate\(360deg\);\s*\}\s*\}/
++
++    [_, reduced_motion_css] =
++      String.split(css, "@media (prefers-reduced-motion: reduce)", parts: 2)
++
++    assert css_rule!(reduced_motion_css, ".connection-status") =~ "transition: none;"
++
++    reduced_spinner = css_rule!(reduced_motion_css, ".connection-status__spinner")
++    assert reduced_spinner =~ "animation: none;"
++    assert reduced_spinner =~ "border-color: var(--color-sage-500);"
++  end
++
++  defp css_rule!(css, selector) do
++    pattern = ~r/#{Regex.escape(selector)}\s*\{(?<declarations>[^}]*)\}/
++
++    css
++    |> then(&Regex.named_captures(pattern, &1))
++    |> Map.fetch!("declarations")
++  end
+ end
