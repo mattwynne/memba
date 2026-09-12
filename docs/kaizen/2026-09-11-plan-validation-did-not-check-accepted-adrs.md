@@ -104,3 +104,29 @@ ADRs are useful only if plans and implementations treat them as current constrai
 - Restore a hard ADR coherence gate in the implementation workflow before substantial task execution, or add a deterministic pre-implementation ADR gate immediately after reading the plan.
 - Strengthen per-task validation so a plan/ADR conflict always means human input; a validated plan cannot be described as a “newer decision” that silently overrides an accepted ADR.
 - Update the iteration-planning skill to inspect `docs/adr/README.md` whenever a proposed plan changes aggregate boundaries, command routing, persistence ownership, or projection authority.
+
+## Resolution
+
+Date: 2026-09-11
+
+Root cause: Plan validation never required an ADR-index/relevant-ADR comparison, while its routing schema could reduce the requested Markdown reviews to bare decision fields that synthesis explicitly accepted as sufficient evidence. Separately, commit `1b1d6d928` removed the implementation ADR gate along with the review nodes when review was split into another workflow; later work restored plan conformance but neither restored the ADR gate nor added a routing regression that required it.
+
+Fix applied:
+
+- `.fabro/workflows/plan-validation/prompts/{gemini_review,claude_review,codex_review}.md`: require each reviewer to read the ADR index and relevant accepted ADRs in full, compare binding decisions with exact plan evidence, and return substantive review plus ADR evidence inside routing context fields.
+- `.fabro/workflows/plan-validation/prompts/{synthesize,recheck,apply_fixes}.md`: fail closed on missing substantive/ADR evidence, perform an independent ADR comparison, and route accepted-ADR conflicts to Matt rather than automatic repair.
+- `.fabro/workflows/plan-validation/test.sh` and `test/fixtures/accepted-adr-conflict/plan.md`: add a static ADR-contract check and a remote model regression whose internally complete plan directly contradicts ADR 0011 and must fail validation.
+- `.fabro/workflows/iteration-implementation/workflow.fabro` and supporting prompts/tests: add a pre-implementation plan/ADR gate before the WIP slot, restore the final ADR coherence/repair/human-input gate before plan conformance and publication, require task validation and the final summary to report clause-level ADR evidence, and add routing coverage proving an ADR conflict cannot reach implementation or publication.
+- `.pi/skills/iteration-planning/SKILL.md`: require planners to read the ADR index, include an `ADRs Considered` section, and resolve conflicts explicitly before publishing a plan.
+
+Validation:
+
+- `PLAN_VALIDATION_STATIC_ONLY=true bash .fabro/workflows/plan-validation/test.sh` — passed; workflow validation and ADR prompt/evidence contracts are present.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_workflow_routing.sh` — passed, including the ADR-blocked path.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with the existing non-blocking goal-gate retry warning.
+- `dev check` — attempted repeatedly on the final diff but did not pass reliably because of unrelated existing test instability: one run passed all 1,176 ExUnit tests then had two browser scenarios enter `send_failed`; one run lost `Memba.Supervisor` during domain acceptance setup; after `dev down`, a fresh run had 129/130 browser scenarios pass but `Bob starts an Admin conversation in the web app` entered `send_failed`. No failing stack trace referenced the changed workflow, prompt, skill, fixture, or test-contract files.
+
+Remaining follow-up:
+
+- Run `bash .fabro/workflows/plan-validation/test.sh` from a pushed branch when the Fabro service is reachable. The full remote eval could not run during this repair because `fabro.home.wynne.family` did not resolve; the suite now includes the accepted-ADR-conflict fixture and expects it to finish NOT READY.
+- Investigate the existing `dev check` instability separately; this kaizen repair deliberately did not change product/acceptance-test code to mask unrelated application lifecycle and message-send failures.

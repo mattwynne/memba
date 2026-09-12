@@ -6,7 +6,7 @@ Important workflow contract: Fabro checkpoints after every node. Therefore, at v
 
 Validate the task evidence, not a single storage mechanism. Prefer live working-tree diff/status when present; when the working tree is clean, corroborate the task using recent checkpoint commits and their diffs. Do not infer infrastructure faults unless live repository evidence proves the expected files or diffs are genuinely absent.
 
-Do not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, relevant ADRs, current repository diff/status, recent checkpoint diffs, test evidence, and the preceding implementation summary. Identify the completed task by the `todo.md` diff from the working tree or latest/recent checkpoint: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.
+Do not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, `docs/adr/README.md`, relevant accepted ADRs, current repository diff/status, recent checkpoint diffs, test evidence, and the preceding implementation summary. Read each relevant ADR completely, including Decision and Consequences; do not infer conformance from its title or a generalized "intent." Identify the completed task by the `todo.md` diff from the working tree or latest/recent checkpoint: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.
 
 ## Validate
 
@@ -18,7 +18,7 @@ Accept the task only if all are true:
 - The work stays within the approved plan and preserves plan-required scope.
 - Any todo changes split/add/reorder only to satisfy the plan; no plan-required work was deleted, weakened, or silently deferred.
 - Relevant automated tests were added/updated and focused tests were run, or a justified blocker was reported.
-- Accepted ADR constraints relevant to this task are respected.
+- Accepted ADR constraints relevant to this task are respected clause by clause. A validated plan cannot silently supersede an accepted ADR; any plan/ADR contradiction requires HUMAN_INPUT even when the implementation follows the plan and focused tests pass.
 - Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change; any permitted edit stays within that explicit permission and preserves/validates the coverage promised by the plan.
 - The task is small enough to stand independently with a useful Fabro checkpoint evidence trail.
 
@@ -35,7 +35,7 @@ One of: **VALID**, **RETRY**, or **HUMAN_INPUT**
 - Completed todo/check-off evidence found.
 - Implementation artifacts found.
 - Tests run/results found.
-- ADR/plan conformance notes.
+- ADR/plan conformance notes naming each relevant accepted ADR, its binding decision/consequence, exact plan/task evidence, and PASS/CONFLICT result.
 
 ### Retry brief
 Only if RETRY: exact reason the attempt was rejected from live repository evidence, plus concise guidance for the next clean attempt. The workflow will snapshot the failed working tree before resetting and trying again.

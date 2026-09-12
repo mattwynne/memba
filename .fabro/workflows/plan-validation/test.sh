@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$ROOT/../../.." && pwd)"
 WORKFLOW=".fabro/workflows/plan-validation/workflow.toml"
 PASS_PLAN=".fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md"
 FAIL_PLAN=".fabro/workflows/plan-validation/test/fixtures/definite-fail/plan.md"
+ADR_CONFLICT_PLAN=".fabro/workflows/plan-validation/test/fixtures/accepted-adr-conflict/plan.md"
 VISIBLE_PATHS=(
   ".fabro/workflows/plan-validation/workflow.toml"
   ".fabro/workflows/plan-validation/workflow.fabro"
@@ -20,6 +21,7 @@ VISIBLE_PATHS=(
   ".fabro/workflows/scripts/git_identity.sh"
   "$PASS_PLAN"
   "$FAIL_PLAN"
+  "$ADR_CONFLICT_PLAN"
 )
 
 fail() {
@@ -65,6 +67,49 @@ require_parallel_fan_in() {
 
   grep -Fq 'parallel.results' "$synthesis_prompt" || \
     fail "synthesis prompt does not instruct the model to inspect merged branch evidence"
+}
+
+require_adr_conformance_contract() {
+  local workflow_dir="$REPO_ROOT/.fabro/workflows/plan-validation"
+  local synthesis_prompt="$workflow_dir/prompts/synthesize.md"
+  local recheck_prompt="$workflow_dir/prompts/recheck.md"
+  local reviewer key
+
+  for reviewer in gemini claude codex; do
+    local prompt="$workflow_dir/prompts/${reviewer}_review.md"
+    for expected in \
+      'docs/adr/README.md' \
+      'accepted ADRs' \
+      'binding decision' \
+      "${reviewer}_review_adrs_considered" \
+      "${reviewer}_review_adr_conflict_count" \
+      "${reviewer}_review_adr_conflicts" \
+      "${reviewer}_review_adr_evidence" \
+      "${reviewer}_review_report"; do
+      grep -Fq "$expected" "$prompt" || \
+        fail "${reviewer} reviewer is missing ADR contract text: $expected"
+    done
+  done
+
+  for expected in \
+    'docs/adr/README.md' \
+    'routing fields alone are not sufficient reviewer evidence' \
+    'review_adrs_considered' \
+    'review_adr_conflict_count' \
+    'review_adr_conflicts' \
+    'review_adr_evidence' \
+    'review_report'; do
+    grep -Fq "$expected" "$synthesis_prompt" || \
+      fail "synthesis is missing ADR fail-closed text: $expected"
+  done
+
+  for expected in 'docs/adr/README.md' 'accepted ADR' 'NEEDS MATT'; do
+    grep -Fq "$expected" "$recheck_prompt" || \
+      fail "recheck is missing ADR conformance text: $expected"
+  done
+
+  grep -Fq 'run_eval "accepted-adr-conflict" "$ADR_CONFLICT_PLAN" failure' "$REPO_ROOT/.fabro/workflows/plan-validation/test.sh" || \
+    fail 'plan-validation suite does not execute the accepted ADR conflict regression'
 }
 
 require_fabro_visible_inputs() {
@@ -148,9 +193,17 @@ command -v fabro >/dev/null 2>&1 || fail "fabro CLI not found"
 cd "$REPO_ROOT"
 fabro validate "$WORKFLOW" --no-upgrade-check
 require_parallel_fan_in
+require_adr_conformance_contract
+
+if [[ "${PLAN_VALIDATION_STATIC_ONLY:-false}" == "true" ]]; then
+  echo "plan-validation static contract suite: OK"
+  exit 0
+fi
+
 require_fabro_visible_inputs
 
 run_eval "unanimous-pass" "$PASS_PLAN" success
 run_eval "definite-fail" "$FAIL_PLAN" failure
+run_eval "accepted-adr-conflict" "$ADR_CONFLICT_PLAN" failure
 
 echo "plan-validation eval suite: OK"

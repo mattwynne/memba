@@ -4,6 +4,15 @@ Use your file-reading tools to read the complete plan file directly from `{{ inp
 
 If you cannot read the plan file completely with tools, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.
 
+Before assessing readiness, perform an architecture-conformance review against relevant accepted ADRs:
+
+1. Read `docs/adr/README.md` completely and use it as the status/index source.
+2. Identify architecture areas touched by the plan, including aggregate identity, command routing, consistency boundaries, persistence ownership, projections/read models, framework choices, integrations, and runtime/deployment boundaries.
+3. Read every accepted ADR cited by the plan and every accepted ADR from the index that is relevant to those areas. Read each relevant ADR completely, including its Decision and Consequences; do not infer conformance from its title or general intent.
+4. Compare each binding decision with exact plan evidence. A validated plan cannot silently supersede an accepted ADR.
+5. Report NOT READY when the plan contradicts an accepted ADR, asks implementation to reinterpret one, or omits a required supersession decision. Such a conflict requires Matt to revise the plan, retain the ADR, or write/accept a successor ADR; it is not an obvious editorial repair.
+6. If no accepted ADR is relevant, record that conclusion and the architecture areas/index entries checked. Do not write only `None`.
+
 Review the plan against these readiness questions:
 
 1. Goal clarity
@@ -34,28 +43,23 @@ Review the plan against these readiness questions:
    - How will we prove success?
    - Is there a clear stop condition?
 
-Return a Markdown report with:
+Return exactly one JSON object for workflow routing, with no Markdown outside the object and no code fence. The workflow's routing schema may discard free-form prose, so the JSON context fields themselves must carry the substantive review evidence.
 
-- Decision: READY or NOT READY
-- Confidence: High, Medium, or Low
-- Blocking gaps: numbered list
-- Non-blocking improvements: numbered list
-- Smallest viable iteration: your recommended smallest useful slice
-- Required plan edits: concrete edits the author should make
-- Validation plan: how to prove the iteration succeeded
-
-At the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.
-
-Use these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:
+Use these keys exactly so synthesis can fail closed:
 
 - `claude_review_decision`: `READY` or `NOT READY`
 - `claude_review_confidence`: `High`, `Medium`, or `Low`
 - `claude_review_blocking_gap_count`: integer count of blocking gaps
 - `claude_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`
 - `claude_review_required_edits`: concise semicolon-separated required edits, or `None`
+- `claude_review_adrs_considered`: semicolon-separated accepted ADR file paths/numbers read, or a reasoned `None relevant — ...` statement naming the architecture areas checked
+- `claude_review_adr_conflict_count`: integer count of accepted-ADR conflicts
+- `claude_review_adr_conflicts`: concise semicolon-separated conflicts naming the ADR and contradictory plan decision, or `None`
+- `claude_review_adr_evidence`: concise semicolon-separated comparisons of each relevant ADR's binding decision with exact plan evidence
+- `claude_review_report`: a substantive Markdown report encoded as a JSON string, containing Decision, Confidence, Blocking gaps, Non-blocking improvements, Smallest viable iteration, Required plan edits, Validation plan, and an ADR conformance table with ADR, binding decision, plan evidence, and result
 
-Examples:
+A READY result requires `claude_review_adr_conflict_count` to be `0` and non-empty, repository-specific ADR evidence. Do not return a bare READY vote.
 
-{"context_updates":{"claude_review_decision":"READY","claude_review_confidence":"High","claude_review_blocking_gap_count":0,"claude_review_blocking_gaps":"None","claude_review_required_edits":"None"}}
+Example shape:
 
-{"context_updates":{"claude_review_decision":"NOT READY","claude_review_confidence":"High","claude_review_blocking_gap_count":2,"claude_review_blocking_gaps":"Ordering is not decided; Acceptance criteria omit visible table columns","claude_review_required_edits":"State ordering; Define table columns and row identity"}}
+{"context_updates":{"claude_review_decision":"NOT READY","claude_review_confidence":"High","claude_review_blocking_gap_count":1,"claude_review_blocking_gaps":"ADR 0011 requires membership_id routing, but the plan routes membership writes by club_id","claude_review_required_edits":"Ask Matt to retain ADR 0011 or accept a successor ADR before revising the plan","claude_review_adrs_considered":"docs/adr/0011-use-caller-generated-uuid-aggregate-identities.md","claude_review_adr_conflict_count":1,"claude_review_adr_conflicts":"ADR 0011 membership identity and projection preflight contradict the proposed Club route and aggregate-state duplicate check","claude_review_adr_evidence":"ADR 0011: membership_id route and projection preflight; plan: club_id route and no projection preflight; result: CONFLICT","claude_review_report":"## Decision\nNOT READY\n\n## ADR conformance\nADR 0011 conflicts with the proposed routing and duplicate check."}}

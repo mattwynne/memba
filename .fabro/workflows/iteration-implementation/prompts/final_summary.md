@@ -1,6 +1,6 @@
 Prepare the final implementation summary for {{ inputs.plan_path }}.
 
-Use the implementation context, passing dev check output, plan conformance evidence, final artifact gate evidence, and publish-to-main output. Do not edit files.
+Use the implementation context, passing dev check output, ADR coherence evidence, plan conformance evidence, final artifact gate evidence, and publish-to-main output. Do not edit files.
 
 Critical requirements:
 
@@ -17,6 +17,8 @@ Return:
 - Plan path
 - Summary of delivered capability
 - Plan conformance summary
+- ADR conformance summary, including accepted ADRs considered and concrete evidence for each relevant decision
+- Any ADR deviations or human follow-ups (normally none, because unresolved conflicts must not reach publication)
 - Key files changed (must match final artifact gate evidence), grouped by area
 - Published commit on main
 - Commit trailer metadata present
