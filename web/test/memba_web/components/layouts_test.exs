@@ -378,12 +378,18 @@ defmodule MembaWeb.LayoutsTest do
 
       assert [
                ["show", %{"to" => ".phx-client-error #client-error"}],
-               ["remove_attr", %{"attr" => "hidden"}]
+               [
+                 "remove_attr",
+                 %{"attr" => "hidden", "to" => ".phx-client-error #client-error"}
+               ]
              ] = js_commands(html, "#client-error", "phx-disconnected")
 
       assert [
                ["show", %{"to" => ".phx-server-error #server-error"}],
-               ["remove_attr", %{"attr" => "hidden"}]
+               [
+                 "remove_attr",
+                 %{"attr" => "hidden", "to" => ".phx-server-error #server-error"}
+               ]
              ] = js_commands(html, "#server-error", "phx-disconnected")
     end
 
