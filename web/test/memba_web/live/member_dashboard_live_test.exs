@@ -523,9 +523,129 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-action-invite-member" <>
+             "#member-section-tabs-action.section-tabs__action " <>
+               "#member-section-action-invite-member" <>
                "[href='/members/invitations/new?group_id=#{trip_planning_group.group_id}']"
            )
+
+    refute has_element?(view, "#member-section-action-new-message")
+  end
+
+  test "Admin selected group members tab still uses the existing club invite permission", %{
+    conn: conn
+  } do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "Alpine Club"
+      )
+
+    grant_manage_members!(robin)
+
+    admin_group_id = SystemGroups.admin_group_id(robin.club_id)
+
+    admin_group =
+      Repo.insert!(%Group{
+        club_id: robin.club_id,
+        group_id: admin_group_id,
+        group_key: SystemGroups.admin_key(),
+        name: SystemGroups.admin_name()
+      })
+
+    add_group_member(admin_group, robin)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("robin@example.com", robin)
+      |> live(~p"/groups/#{admin_group_id}/members")
+
+    assert has_element?(view, "#member-group-name", "Admin")
+    refute has_element?(view, "#member-group-header .group-head__actions")
+    refute has_element?(view, "#member-section-action-new-message")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs-action.section-tabs__action " <>
+               "#member-section-action-invite-member" <>
+               "[data-section-action='members']" <>
+               "[href='/members/invitations/new?group_id=#{admin_group_id}']",
+             "Invite member"
+           )
+  end
+
+  test "selected group members tab has no contextual action for ordinary members", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/groups/#{trip_planning_group.group_id}/members")
+
+    assert has_element?(view, "#member-group-name", "Trip Planning")
+    assert has_element?(view, "#member-section-panel-conversations[hidden]")
+    refute has_element?(view, "#member-section-panel-members[hidden]")
+
+    assert has_element?(
+             view,
+             "#member-section-tab-conversations[href='/groups/#{trip_planning_group.group_id}']" <>
+               "[data-phx-link='patch']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-section-tab-members.section-tab.is-active" <>
+               "[href='/groups/#{trip_planning_group.group_id}/members']" <>
+               "[aria-selected='true'][tabindex='0']"
+           )
+
+    assert has_element?(view, "#member-section-tabs-action.section-tabs__action")
+    assert tab_action_link_count(render(view)) == 0
+    refute has_element?(view, "#member-section-action-invite-member")
+    refute has_element?(view, "#member-section-action-new-message")
+
+    view
+    |> element("#member-section-tab-conversations")
+    |> render_click()
+
+    assert_patch(view, ~p"/groups/#{trip_planning_group.group_id}")
+
+    assert has_element?(
+             view,
+             "#member-section-tabs-action.section-tabs__action " <>
+               "#member-section-action-new-message" <>
+               "[data-section-action='conversations']" <>
+               "[href='/messages/new?group_id=#{trip_planning_group.group_id}']",
+             "New message"
+           )
+
+    assert tab_action_link_count(render(view)) == 1
+    refute has_element?(view, "#member-section-action-invite-member")
   end
 
   test "canonical group routes return the ordinary not-found response to non-members", %{
@@ -633,7 +753,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     end
   end
 
-  test "dashboard renders the section tab spine with conversations selected by default", %{
+  test "dashboard renders group tabs with conversations action selected by default", %{
     conn: conn
   } do
     alice =
@@ -687,14 +807,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
                "[tabindex='0'][hidden]"
            )
 
+    refute has_element?(view, "#member-group-header .group-head__actions")
+    refute has_element?(view, "#member-group-header #member-section-action-new-message")
+
     assert has_element?(
              view,
-             "#member-group-header .group-head__actions " <>
+             "#member-section-tabs-action.section-tabs__action " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm" <>
                "[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
 
+    refute has_element?(view, "#member-section-action-invite-member")
     refute has_element?(view, "#member-section-action-new-message[hidden]")
     refute has_element?(view, "#member-section-action-new-message[data-section-action='members']")
     refute has_element?(view, "#member-dashboard-cta")
@@ -867,12 +991,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "Invite member"
            )
 
-    assert has_element?(
-             view,
-             "#member-group-header .group-head__actions " <>
-               "#member-section-action-new-message[href='/messages/new']",
-             "New message"
-           )
+    refute has_element?(view, "#member-group-header .group-head__actions")
+    refute has_element?(view, "#member-section-action-new-message")
   end
 
   test "dashboard renders conversations in the default visible section panel", %{
@@ -1291,9 +1411,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-dashboard-cta")
     refute has_element?(view, "#member-send-message-link")
 
+    refute has_element?(view, "#member-group-header .group-head__actions")
+
     assert has_element?(
              view,
-             "#member-group-header .group-head__actions " <>
+             "#member-section-tabs-action.section-tabs__action " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[data-section-action='conversations'][href='/messages/new']",
              "New message"
            )
@@ -1765,7 +1887,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(
              view,
-             "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
+             "#member-section-tabs-action.section-tabs__action " <>
+               "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
              "New message"
            )
 
@@ -1800,9 +1923,11 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-dashboard-cta")
     refute has_element?(view, "#member-send-message-link")
 
+    refute has_element?(view, "#member-group-header .group-head__actions")
+
     assert has_element?(
              view,
-             "#member-group-header .group-head__actions " <>
+             "#member-section-tabs-action.section-tabs__action " <>
                "#member-section-action-new-message.btn.btn-primary.btn-sm[href='/messages/new']",
              "New message"
            )
@@ -2350,6 +2475,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> LazyHTML.text()
       |> String.contains?("Invite member")
     end)
+  end
+
+  defp tab_action_link_count(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#member-section-tabs-action a")
+    |> Enum.count()
   end
 
   defp member_row_selector(member_id) do

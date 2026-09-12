@@ -9,6 +9,7 @@ defmodule MembaWeb.PageHTML do
   import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
 
   alias MembaWeb.ClubSite
+  alias MembaWeb.MemberDashboardGroupTabs
 
   embed_templates "page_html/*"
 
@@ -75,18 +76,6 @@ defmodule MembaWeb.PageHTML do
   end
 
   defp active_member_section?(active_section, section), do: active_section == section
-
-  defp member_section_tab_class(active_section, section) do
-    ["section-tab", active_member_section?(active_section, section) && "is-active"]
-  end
-
-  defp member_section_aria_selected(active_section, section) do
-    active_member_section?(active_section, section) |> to_string()
-  end
-
-  defp member_section_tab_index(active_section, section) do
-    if active_member_section?(active_section, section), do: "0", else: "-1"
-  end
 
   defp member_group_rail_item_class(group, selected_group) do
     ["group-rail__item", selected_group?(group, selected_group) && "is-active"]

@@ -75,80 +75,47 @@
                 </.link>
               </div>
             </div>
-            <div class="group-head__actions">
-              <.button
-                id="member-section-action-new-message"
-                href={
-                  member_compose_path(
-                    @selected_club,
-                    club_id_source,
-                    selected_group_route_id
-                  )
-                }
-                variant="primary"
-                size="sm"
-                data-section-action="conversations"
-              >
-                New message
-              </.button>
-            </div>
           </div>
         </header>
 
-        <div id="member-section-tabs" class="section-tabs">
-          <div
-            id="member-section-tabs-list"
-            class="section-tabs__list"
-            role="tablist"
-            aria-label="Club home sections"
-            aria-orientation="horizontal"
-            phx-hook=".SectionTabs"
-          >
-            <.link
-              id="member-section-tab-conversations"
-              patch={
-                member_section_path(
-                  "conversations",
-                  @selected_club,
-                  club_id_source,
-                  selected_group_route_id
-                )
-              }
-              class={member_section_tab_class(active_section, "conversations")}
-              data-tab="conversations"
-              role="tab"
-              aria-selected={member_section_aria_selected(active_section, "conversations")}
-              aria-controls="member-section-panel-conversations"
-              tabindex={member_section_tab_index(active_section, "conversations")}
-            >
-              Conversations
-            </.link>
-            <.link
-              id="member-section-tab-members"
-              patch={
-                member_section_path(
-                  "members",
-                  @selected_club,
-                  club_id_source,
-                  selected_group_route_id
-                )
-              }
-              class={member_section_tab_class(active_section, "members")}
-              data-tab="members"
-              role="tab"
-              aria-selected={member_section_aria_selected(active_section, "members")}
-              aria-controls="member-section-panel-members"
-              tabindex={member_section_tab_index(active_section, "members")}
-            >
-              Members
-            </.link>
-          </div>
-          <div id="member-section-tabs-action" class="section-tabs__action">
+        <MemberDashboardGroupTabs.group_tabs
+          active_tab={active_section}
+          conversations_path={
+            member_section_path(
+              "conversations",
+              @selected_club,
+              club_id_source,
+              selected_group_route_id
+            )
+          }
+          members_path={
+            member_section_path(
+              "members",
+              @selected_club,
+              club_id_source,
+              selected_group_route_id
+            )
+          }
+        >
+          <:conversations_action>
             <.button
-              :if={
-                active_member_section?(active_section, "members") and
-                  @current_member_can_manage_members?
+              id="member-section-action-new-message"
+              href={
+                member_compose_path(
+                  @selected_club,
+                  club_id_source,
+                  selected_group_route_id
+                )
               }
+              variant="primary"
+              size="sm"
+              data-section-action="conversations"
+            >
+              New message
+            </.button>
+          </:conversations_action>
+          <:members_action :if={@current_member_can_manage_members?}>
+            <.button
               id="member-section-action-invite-member"
               href={
                 member_invitation_path(
@@ -163,8 +130,8 @@
             >
               Invite member
             </.button>
-          </div>
-        </div>
+          </:members_action>
+        </MemberDashboardGroupTabs.group_tabs>
 
         <div
           id="member-section-panel-conversations"
@@ -226,47 +193,4 @@
     </div>
   </div>
 
-  <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionTabs">
-    export default {
-      mounted() {
-        this.handleKeydown = event => {
-          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-
-          const tabs = Array.from(this.el.querySelectorAll("[role='tab']"))
-          const currentIndex = tabs.indexOf(event.target)
-
-          if (currentIndex === -1) return
-
-          let nextIndex
-
-          switch (event.key) {
-            case "ArrowRight":
-              nextIndex = (currentIndex + 1) % tabs.length
-              break
-            case "ArrowLeft":
-              nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
-              break
-            case "Home":
-              nextIndex = 0
-              break
-            case "End":
-              nextIndex = tabs.length - 1
-              break
-            default:
-              return
-          }
-
-          event.preventDefault()
-          tabs[nextIndex].click()
-          tabs[nextIndex].focus()
-        }
-
-        this.el.addEventListener("keydown", this.handleKeydown)
-      },
-
-      destroyed() {
-        this.el.removeEventListener("keydown", this.handleKeydown)
-      }
-    }
-  </script>
 </Layouts.club_site>
