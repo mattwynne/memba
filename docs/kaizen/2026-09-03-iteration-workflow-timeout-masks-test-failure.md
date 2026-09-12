@@ -238,3 +238,161 @@ The first research result may have helped the implementation, so this evidence d
 As the first controlled improvement, `implement_next_task.md` now makes each bounded per-task node a single-owner stage: do not spawn subagents and do not commission an extra independent review. It also tells resumed agents to inspect existing implementation notes, reviews, recovery handoffs, and committed failed candidate checkpoints before repeating broad research. The existing focused-validation requirement, automatic checkpoint, independent `validate_task`, final `dev ci`, plan-conformance gate, and publish gate remain intact.
 
 A focused contract regression checks those invariants. The next resumed delivery run is the experiment: if it completes task 019 without child-agent waits, this intervention helped; if it fails elsewhere, investigate that evidence before adding another safeguard. Missing-PostgreSQL-socket classification and a timeout-specific terminal handoff remain separate candidate improvements, deliberately not bundled into this experiment.
+
+### Additional observation: 2026-09-12 — iteration 060 timed out while repeating the full gate inside the manual-browser task
+
+#### Observed facts
+
+Iteration 060, Calm LiveView reconnection feedback, was launched as implementation run `01M2AK7G61EBCXF2SVGK3T0QR7` for plan `docs/iterations/060-calm-liveview-reconnection-feedback/plan.md`.
+
+Evidence inspected for this note:
+
+- Fabro UI: `https://fabro.home.wynne.family/runs/01M2AK7G61EBCXF2SVGK3T0QR7`
+- `fabro inspect 01M2AK7G61EBCXF2SVGK3T0QR7 --json`
+- `fabro events 01M2AK7G61EBCXF2SVGK3T0QR7 --json`
+- `fabro logs 01M2AK7G61EBCXF2SVGK3T0QR7`
+- `fabro dump 01M2AK7G61EBCXF2SVGK3T0QR7 --output /tmp/fabro-dump-060`
+- `origin/fabro/run/01M2AK7G61EBCXF2SVGK3T0QR7`
+- `.fabro/workflows/iteration-implementation/workflow.fabro`
+- `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md`
+
+The run started at `2026-09-12T10:40:44Z` and failed at `2026-09-12T13:06:27Z` after about 2h25m. Its final preserved commit is `067e15d7255444b3211d406326500983e5bb3696` on `origin/fabro/run/01M2AK7G61EBCXF2SVGK3T0QR7`.
+
+The terminal message was:
+
+```text
+goal gate unsatisfied for node publish_to_main and no retry target
+```
+
+That message is downstream of the actual implementation-loop failure. The immediately preceding task failure was:
+
+```text
+implement_next_task|transient_infra|handler timed out after 2400000ms
+```
+
+The next `task_not_ready` node then failed with:
+
+```text
+Iteration implementation failed: task validation requires human input or exceeded retry budget.
+```
+
+The run had completed and independently validated tasks 001–008. The ninth `implement_next_task` visit selected task 009:
+
+```text
+009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+```
+
+The failed checkpoint for that same visit contains useful task-009 work:
+
+- `docs/iterations/060-calm-liveview-reconnection-feedback/manual-browser-validation.md`
+- the task-009 check-off in `docs/iterations/060-calm-liveview-reconnection-feedback/todo.md`
+- a selector-target fix in `web/lib/memba_web/components/layouts.ex`
+- matching component-test updates in `web/test/memba_web/components/layouts_test.exs`
+
+At the final checkpoint, 9 of 10 tasks were checked off. Task 010 remained unchecked:
+
+```text
+010 Run focused JavaScript/component/CSS tests, then run `dev check`.
+```
+
+The workflow therefore had not yet reached its deterministic `dev_check` node or publish path.
+
+#### Timing of the failed node
+
+`implement_next_task@9` started at `2026-09-12T12:26:15.535Z` with `timeout="2400s"` in `workflow.fabro`. It timed out at `2026-09-12T13:06:15.543Z`, almost exactly 40 minutes later.
+
+Inside that single prompt-node budget, the agent:
+
+1. Inspected the plan, todo list, prototype, LiveView code, acceptance lifecycle, and recent checkpoints.
+2. Created a temporary Playwright/Chromium harness in ignored `.fabro/tmp/manual_reconnect_check.cjs`.
+3. Ran that harness repeatedly. Several attempts exited after roughly 70–89 seconds while the agent debugged the harness/simulation and then a real overlap defect.
+4. Reported at `12:51:44Z` that the corrected browser matrix passed at desktop and mobile widths, including brief reconnect suppression, distinct client/server states, automatic dismissal, page retention, pointer transparency, and reduced-motion behaviour.
+5. Wrote the durable manual-browser evidence file and checked off task 009.
+6. Ran `PATH="$PWD/bin:$PATH" dev test test/memba_web/components/layouts_test.exs --trace`, which passed 22 tests.
+7. Started `PATH="$PWD/bin:$PATH" dev check` at `12:52:29Z`.
+
+The first `dev check` command was itself stopped by the Fabro shell layer after about 602 seconds:
+
+```text
+Termination: timed_out
+Exit code: none
+Duration: 602132ms
+```
+
+Its output shows meaningful progress rather than a test failure:
+
+- ExUnit/precommit had run earlier in the command.
+- Browser acceptance started its Phoenix lifecycle at `12:54:16Z`.
+- All browser scenarios passed: `134 scenarios (134 passed)`, `951 steps (951 passed)`, `7m25.462s`.
+- The acceptance `AfterAll` hooks closed the shared browser and stopped the Phoenix browser acceptance lifecycle at `13:01:41Z`.
+
+There is no captured failing assertion or failing scenario in that command output. The remaining unknown is why the shell command did not return a final exit status before Fabro killed it roughly 48 seconds after the acceptance lifecycle had stopped.
+
+After that command-level timeout, the agent tried to work around the apparent 10-minute command ceiling by launching a second full gate in the background:
+
+```sh
+nohup bash -c 'PATH="$PWD/bin:$PATH" dev check; status=$?; printf "%s\n" "$status" > /tmp/memba-iteration-060-dev-check.status' > /tmp/memba-iteration-060-dev-check.log 2>&1 &
+```
+
+That second `dev check` was still running when the outer prompt node hit its 40-minute deadline. Polling at `13:04:38Z` showed it in ExUnit/precommit output and still `RUNNING`. Polling at `13:05:33Z` showed it in browser acceptance, just starting `features/authentication.feature:52`, and still `RUNNING`. The next poll command was sleeping when Fabro deactivated the agent session at `13:06:15Z` and failed the node. The run then stopped the Docker sandbox at `13:06:27Z`; no status-file completion for the background `dev check` is recorded.
+
+The agent attempted a process check after the first timeout:
+
+```sh
+ps -eo pid,ppid,stat,etime,cmd | grep -E 'dev check|cucumber-js|mix test|phx.server' | grep -v grep || true
+```
+
+but the sandbox image did not include `ps`, so this produced only:
+
+```text
+/bin/bash: line 1: ps: command not found
+```
+
+That absence is an observability gap; it is not evidence that no child process was running.
+
+#### What the evidence supports
+
+- The run timed out because `implement_next_task@9` exhausted its fixed 40-minute handler budget before returning success.
+- The active work at timeout was validation/revalidation of task 009, not task 010. The final task remained unchecked.
+- The first full `dev check` reached the end of the browser acceptance suite with all scenarios passing, then hit Fabro's apparent 10-minute shell-command ceiling before a final command status was captured.
+- The second full `dev check` was making progress and was still in browser acceptance when the outer prompt-node timeout fired.
+- The final `task_not_ready` and `publish_to_main` messages are secondary classifications. They should not be treated as the established root cause.
+
+#### Hypotheses and unknowns not promoted to findings
+
+- The first `dev check` may have been stuck in process cleanup, npm/Cucumber exit handling, lock release, or Fabro command bookkeeping after acceptance `AfterAll`; the logs do not identify which.
+- The second `dev check` might have passed if allowed to finish, or might later have failed; no status file or final output was captured before sandbox stop.
+- There is no evidence in this run of the PostgreSQL-connection leak observed in iteration 059 browser-review timeouts. Do not assume the same cause without process/database evidence from this run.
+- The missing `ps` and `file` tools slowed diagnosis but are not established as the cause of the timeout.
+
+#### Five Whys
+
+| Why | Established answer | Status |
+| --- | --- | --- |
+| 1. Why did iteration 060 not reach publication? | The workflow never got past `implement_next_task@9`; Fabro cancelled that prompt node at its 2,400-second timeout before it could return success and proceed to validation/task 010/final `dev_check`. | Fact |
+| 2. Why did `implement_next_task@9` not return before 40 minutes? | It spent most of its budget completing and debugging the manual browser validation task, then ran full `dev check`; the first full gate hit the shell-command timeout, and the second full gate was still running when the outer node deadline arrived. | Fact |
+| 3. Why was full `dev check` being run inside task 009 when task 010 and the workflow both had final-gate responsibility? | The plan had a separate final validation todo, and the workflow has a `dev_check` node after all todos, but `implement_next_task.md` also tells browser-facing tasks to run full `dev check` during the per-task node. This allowed an expensive duplicate broad gate inside the manual-browser task. | Fact |
+| 4. Why did that duplication become a timeout instead of a controlled handoff? | The prompt node has one hard 40-minute budget for research, edits, harness debugging, focused checks, full gates, polling, and final summary. The workflow does not reserve enough time for a long command, fail fast when the remaining node budget is too small, or align the apparent 10-minute shell-command ceiling with the duration of `dev check`. | Fact plus one unknown: the exact source/configurability of the 10-minute command ceiling remains unconfirmed. |
+| 5. Why did the terminal report point at validation budget/human input/publish rather than this timing collision? | A prompt-node timeout takes the generic `implement_next_task -> task_not_ready` failure edge, and the run-level goal gate then reports that `publish_to_main` was unsatisfied. There is no timeout-specific branch or handoff artifact that preserves the selected task, last command, command timeout, remaining todos, and recovery branch in the terminal failure. | Root cause |
+
+#### Root-cause confidence
+
+High confidence in the immediate mechanism: the `implement_next_task@9` prompt-node wall clock expired while a second full `dev check` was still running, after a first full `dev check` had already hit the shell-command timeout.
+
+Medium confidence in the deeper cause: the workflow/prompt time-budget contract encouraged or allowed a full `dev check` inside a browser-facing task even though a separate final task and deterministic workflow gate existed. That duplicated an expensive validation boundary inside a node that had already spent much of its budget on legitimate manual-browser validation.
+
+Low confidence in any claim that product code, PostgreSQL leakage, provider outage, or a failing test caused the final timeout. The captured outputs show progress and passing browser scenarios, not a failing assertion or hung database evidence.
+
+#### Recovery and hazard notes
+
+- The useful checkpoint is already pushed: `origin/fabro/run/01M2AK7G61EBCXF2SVGK3T0QR7` at `067e15d7255444b3211d406326500983e5bb3696`.
+- That checkpoint includes task 009 checked off and task 010 still unchecked. A recovery should avoid redoing the manual browser matrix unless it intentionally wants to revalidate task 009.
+- The original Docker sandbox was stopped by the failed run. Any background `dev check` launched inside it should be treated as not having produced reliable final evidence; use the preserved branch/worktree state, not `/tmp/memba-iteration-060-dev-check.status`, as the recovery source of truth.
+
+#### Recommended preventive interventions
+
+- Make full `dev check` a single deterministic workflow-owned gate after all implementation todos, and remove the prompt instruction that browser-facing per-task nodes should run the full gate. Per-task nodes should provide focused component/JS/CSS/manual-browser evidence that proves their selected todo.
+- If a per-task node is allowed to run a broad gate, require a remaining-budget preflight before starting it: do not start a 10-minute-plus command when the prompt node has insufficient wall-clock reserve to capture output, summarize, and return.
+- Align Fabro shell-command ceilings with project quality-gate durations, or make the shell layer fail immediately when a command is known to require more time than the supported ceiling.
+- Add a timeout-specific `implement_next_task` failure branch that records selected todo, checked/unchecked task state, last command, last command termination, recent output tail, latest checkpoint SHA, and a concrete resume/recovery command.
+- Have `dev check` or the workflow emit phase-level status artifacts (`setup`, `precommit`, `acceptance started`, `acceptance completed`, final exit) so a command timeout after a passing acceptance summary is distinguishable from a test failure and from post-suite cleanup/bookkeeping.
