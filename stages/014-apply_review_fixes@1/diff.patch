@@ -1,0 +1,34 @@
+diff --git a/web/test/memba_web/live/member_invitation_live/send_test.exs b/web/test/memba_web/live/member_invitation_live/send_test.exs
+index 5b45a18..a5b2655 100644
+--- a/web/test/memba_web/live/member_invitation_live/send_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/send_test.exs
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+   alias Memba.Accounts.AuthEmail
+   alias Memba.Membership
+   alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.ClubInvitation
+   alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+@@ -213,8 +214,10 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+   end
+ 
+   defp club_host(conn, club) do
+-    club = Memba.Membership.get_club(club.club_id) || club
+-    %{host: host} = URI.parse(ClubSite.url(club))
++    club_id = club.club_id
++    assert %Club{club_id: ^club_id} = projected_club = Membership.get_club(club_id)
++
++    %{host: host} = URI.parse(ClubSite.url(projected_club))
+     Map.put(conn, :host, host)
+   end
+ 
+@@ -222,7 +225,7 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+     person_id = Memba.ID.generate(:person)
+ 
+-    unless Repo.get(Memba.Membership.Projections.Club, club_id) do
++    unless Repo.get(Club, club_id) do
+       assert :ok =
+                Membership.create_club(
+                  attrs
