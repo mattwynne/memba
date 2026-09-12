@@ -28,6 +28,7 @@ import RememberGroupSelection from "./remember_group_selection.mjs"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
+  disconnectedTimeout: 1500,
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
   hooks: {RememberGroupSelection, ...colocatedHooks},

@@ -480,29 +480,59 @@ defmodule MembaWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
-      <.flash
+      <.connection_status
         id="client-error"
-        kind={:error}
-        title={gettext("We can't find the internet")}
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
+        message={gettext("Connection paused — reconnecting…")}
+        phx-disconnected={
+          show(".phx-client-error #client-error")
+          |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
+        }
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
-      >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      />
 
-      <.flash
+      <.connection_status
         id="server-error"
-        kind={:error}
-        title={gettext("Something went wrong!")}
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
+        message={gettext("Memba is temporarily unavailable — retrying…")}
+        phx-disconnected={
+          show(".phx-server-error #server-error")
+          |> JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
+        }
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
+      />
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :message, :string, required: true
+  attr :rest, :global
+
+  defp connection_status(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "connection-status inline-flex max-w-[calc(100vw-2rem)] items-center gap-2",
+        "rounded-full border border-sage-300 bg-paper/95 py-2.5 pr-3.5 pl-3",
+        "text-[13px] font-semibold leading-[1.2] text-ink-2",
+        "shadow-lg shadow-ink/10 backdrop-blur-sm"
+      ]}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      {@rest}
+    >
+      <span
+        class={[
+          "connection-status__spinner size-3.5 shrink-0 rounded-full",
+          "border-2 border-sage-100 border-t-sage-500"
+        ]}
+        aria-hidden="true"
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
+      </span>
+      <span>{@message}</span>
     </div>
     """
   end
