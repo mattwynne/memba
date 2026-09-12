@@ -787,16 +787,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert html_has_selector?(
              first_member_html,
              "#active-members-list.member-list[data-active-member-count='1']" <>
-               "[data-active-members-state='first-member'] #active-members-empty-state",
-             "You’re the first member listed"
+               "[data-active-members-state='first-member']"
            )
 
-    assert html_has_selector?(
-             first_member_html,
-             "#active-members-empty-state",
-             "As members are added, you’ll see them here."
-           )
-
+    refute html_has_selector?(first_member_html, "#active-members-empty-state")
+    refute first_member_html =~ "You’re the first member listed"
+    refute first_member_html =~ "As members are added, you’ll see them here."
     refute html_has_selector?(first_member_html, "#active-members-list [data-member-name]")
 
     assert_rendered_member_row(first_member_html, alice_id,
@@ -817,11 +813,13 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute html_has_selector?(ordinary_member_html, "#member-section-action-invite-member")
     refute html_has_selector?(ordinary_member_html, "#club-members #member-invite-member-link")
 
-    assert html_has_selector?(
-             ordinary_member_html,
-             "#active-members-empty-state",
-             "You’re the first member listed"
-           )
+    refute html_has_selector?(ordinary_member_html, "#active-members-empty-state")
+
+    assert_rendered_member_row(ordinary_member_html, alice_id,
+      name: "Alice Adams",
+      initials: "AA",
+      current?: true
+    )
   end
 
   test "dashboard patching to members selects the members URL state", %{conn: conn} do
@@ -1470,7 +1468,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-members #member-invite-member-link")
   end
 
-  test "dashboard preserves the members empty state and invite actions for first-member admins",
+  test "dashboard renders the selected Admin group as a normal one-member list",
        %{conn: conn} do
     robin =
       create_active_member(
@@ -1481,10 +1479,24 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     grant_manage_members!(robin)
 
+    admin_group =
+      Repo.insert!(%Group{
+        club_id: robin.club_id,
+        group_id: SystemGroups.admin_group_id(robin.club_id),
+        group_key: SystemGroups.admin_key(),
+        email_slug: SystemGroups.admin_email_slug(),
+        name: SystemGroups.admin_name()
+      })
+
+    add_group_member(admin_group, robin)
+
+    robin
+    |> assign_role(create_role(club_id: robin.club_id, role_key: "admin", name: "Admin"))
+
     {:ok, view, _html} =
       conn
       |> signed_in_club_host("robin@example.com", robin)
-      |> live(~p"/members")
+      |> live(~p"/groups/#{admin_group.group_id}/members")
 
     refute has_element?(view, "#member-section-panel-members[hidden]")
 
@@ -1492,7 +1504,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-tabs .section-tabs__action " <>
                "#member-section-action-invite-member.btn.btn-primary.btn-sm" <>
-               "[data-section-action='members'][href='/members/invitations/new']",
+               "[data-section-action='members']" <>
+               "[href='/members/invitations/new?group_id=#{admin_group.group_id}']",
              "Invite member"
            )
 
@@ -1509,17 +1522,21 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-section-panel-members " <>
                "#active-members-list.member-list[data-active-member-count='1']" <>
-               "[data-active-members-state='first-member'] #active-members-empty-state",
-             "You’re the first member listed"
+               "[data-active-members-state='first-member']"
            )
 
-    assert has_element?(
-             view,
-             "#member-section-panel-members #active-members-list " <>
-               "#club-member-#{robin.person_id}.member-row[data-testid='club-member-row'] " <>
-               ".member-row__name",
-             "Robin Rivers"
-           )
+    refute has_element?(view, "#active-members-empty-state")
+    refute render(view) =~ "You’re the first member listed"
+    refute render(view) =~ "As members are added, you’ll see them here."
+
+    assert_live_member_row(view, robin.person_id,
+      scope: "#member-section-panel-members #active-members-list",
+      name: "Robin Rivers",
+      initials: "RR",
+      current?: true
+    )
+
+    assert has_element?(view, "#club-member-#{robin.person_id} .member-row__role", "Admin")
   end
 
   test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
@@ -1896,7 +1913,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "dashboard renders first-member active-member copy only when current member is alone",
+  test "dashboard renders the normal member row when the current member is alone",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -1915,13 +1932,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#active-members-list.member-list[data-active-member-count='1'][data-active-members-state='first-member']"
            )
 
-    assert has_element?(view, "#active-members-empty-state", "You’re the first member listed")
-
-    assert has_element?(
-             view,
-             "#active-members-empty-state",
-             "As members are added, you’ll see them here."
-           )
+    refute has_element?(view, "#active-members-empty-state")
+    refute render(view) =~ "You’re the first member listed"
+    refute render(view) =~ "As members are added, you’ll see them here."
 
     assert_live_member_row(view, alice.person_id,
       name: "Alice Adams",
@@ -2331,7 +2344,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   defp invite_member_action_count(html) do
     html
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("a[href='/members/invitations/new']")
+    |> LazyHTML.query("a[href^='/members/invitations/new']")
     |> Enum.count(fn action ->
       action
       |> LazyHTML.text()
