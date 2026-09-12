@@ -333,6 +333,15 @@ defmodule MembaWeb.LayoutsTest do
   end
 
   describe "flash_group/1 connection statuses" do
+    test "preserves ordinary error flash treatment and dismissal" do
+      html = render_component(&Layouts.flash_group/1, %{flash: %{"error" => "Something needs attention"}})
+
+      assert_selector(html, "#flash-error.toast.toast-top.toast-end[role='alert']")
+      assert_selector(html, "#flash-error .alert.alert-error")
+      assert_selector(html, "#flash-error button[type='button'][aria-label='close']")
+      assert_text(html, "#flash-error", "Something needs attention")
+    end
+
     test "renders stable client and server IDs hidden initially" do
       html = render_flash_group()
 

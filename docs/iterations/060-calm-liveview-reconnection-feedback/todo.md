@@ -9,4 +9,4 @@
 - [x] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
 - [x] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
 - [x] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
-- [ ] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
+- [x] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
