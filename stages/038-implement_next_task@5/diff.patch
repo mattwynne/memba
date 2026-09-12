@@ -1,0 +1,73 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index 53d992c..26a08dd 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
+ - [x] 003 Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
+ - [x] 004 Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+-- [ ] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
++- [x] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+ - [ ] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+ - [ ] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+ - [ ] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index c32f9ab..5c0177f 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -480,29 +480,41 @@ defmodule MembaWeb.Layouts do
+       <.flash kind={:info} flash={@flash} />
+       <.flash kind={:error} flash={@flash} />
+ 
+-      <.flash
++      <.connection_status
+         id="client-error"
+-        kind={:error}
+-        title={gettext("We can't find the internet")}
++        message={gettext("Connection paused — reconnecting…")}
+         phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
+         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
+         hidden
+-      >
+-        {gettext("Attempting to reconnect")}
+-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+-      </.flash>
++      />
+ 
+-      <.flash
++      <.connection_status
+         id="server-error"
+-        kind={:error}
+-        title={gettext("Something went wrong!")}
++        message={gettext("Memba is temporarily unavailable — retrying…")}
+         phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
+         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
+         hidden
+-      >
+-        {gettext("Attempting to reconnect")}
+-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+-      </.flash>
++      />
++    </div>
++    """
++  end
++
++  attr :id, :string, required: true
++  attr :message, :string, required: true
++  attr :rest, :global
++
++  defp connection_status(assigns) do
++    ~H"""
++    <div
++      id={@id}
++      class="connection-status"
++      role="status"
++      aria-live="polite"
++      aria-atomic="true"
++      {@rest}
++    >
++      <span class="connection-status__spinner" aria-hidden="true"></span>
++      <span>{@message}</span>
+     </div>
+     """
+   end
