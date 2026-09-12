@@ -108,6 +108,7 @@ ADRs are useful only if plans and implementations treat them as current constrai
 ## Resolution
 
 Date: 2026-09-11
+Status: closed
 
 Root cause: Plan validation never required an ADR-index/relevant-ADR comparison, while its routing schema could reduce the requested Markdown reviews to bare decision fields that synthesis explicitly accepted as sufficient evidence.
 
@@ -117,13 +118,16 @@ Fix applied:
 - `.fabro/workflows/plan-validation/prompts/{synthesize,recheck,apply_fixes}.md`: fail closed on missing substantive/ADR evidence, repeat the ADR comparison during synthesis/recheck, and route accepted-ADR conflicts to Matt rather than automatic repair.
 - `.fabro/workflows/plan-validation/test.sh` and `test/fixtures/accepted-adr-conflict/plan.md`: add a static ADR-contract check and a remote model regression whose internally complete plan directly contradicts ADR 0011 and must fail validation.
 
+Scope decision:
+
+- ADR awareness is intentionally limited to plan validation. The proposed pre-implementation gate, per-task ADR checks, final implementation ADR gate, and planning-skill changes were removed as duplicative. They can be reconsidered only if evidence shows the plan-review fix is insufficient.
+
 Validation:
 
 - `PLAN_VALIDATION_STATIC_ONLY=true bash .fabro/workflows/plan-validation/test.sh` — passed; workflow validation and ADR prompt/evidence contracts are present.
+- `bash .fabro/workflows/plan-validation/test.sh` — the structural checks passed, but the remote model eval could not start because `fabro.home.wynne.family` did not resolve. The committed suite retains the accepted-ADR-conflict regression for the next reachable run.
 - `dev check` — attempted repeatedly but did not pass reliably because of unrelated existing test instability: browser scenarios intermittently entered `send_failed`, and one run lost `Memba.Supervisor` during domain acceptance setup. No failing stack trace referenced the changed plan-validation prompt, fixture, or test-contract files.
 
 Remaining follow-up:
 
-- Run `bash .fabro/workflows/plan-validation/test.sh` from a pushed branch when the Fabro service is reachable. The full remote eval could not run during this repair because `fabro.home.wynne.family` did not resolve; the suite now includes the accepted-ADR-conflict fixture and expects it to finish NOT READY.
-- The implementation-workflow ADR ideas recorded above were deliberately not applied. ADR-aware plan validation is the chosen smallest prevention step for now.
-- Investigate the existing `dev check` instability separately; this repair deliberately did not change product/acceptance-test code to mask unrelated application lifecycle and message-send failures.
+- None for this kaizen. Remote Fabro availability and the unrelated application-test instability are separate operational concerns and do not expand this fix's scope.
