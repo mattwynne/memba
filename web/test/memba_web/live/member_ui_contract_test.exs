@@ -17,12 +17,10 @@ defmodule MembaWeb.MemberUIContractTest do
   @moduledoc """
   Cross-screen member UI contracts approved by the HEEx simplification review.
 
-  These tests intentionally exercise routed LiveViews and semantic IDs instead of
-  private components. They may be red on the original baseline until the related
-  UI implementation streams land.
+  These tests exercise routed LiveViews and semantic IDs to protect selected
+  audiences, tab actions, permissions, and member rows across component boundaries.
   """
 
-  @tag pending_dependency: :goal2_audience
   test "a selected group compose action opens a composer for that group audience", %{conn: conn} do
     %{alice: alice, bob: _bob, carol: _carol, group: trail_crew} =
       club_with_trail_crew(group_member_count: 2)
@@ -81,7 +79,6 @@ defmodule MembaWeb.MemberUIContractTest do
     refute has_element?(composer, "#member-compose-inbound-email", "club-wide")
   end
 
-  @tag pending_dependency: :goal1_tab_actions
   test "switching a manager to group members shows the invite action without the compose action", %{
     conn: conn
   } do
@@ -114,7 +111,6 @@ defmodule MembaWeb.MemberUIContractTest do
            )
   end
 
-  @tag pending_dependency: :goal1_tab_actions
   test "switching an ordinary member to group members leaves member actions hidden", %{conn: conn} do
     %{bob: bob, group: trail_crew} = club_with_trail_crew(group_member_count: 2)
 
@@ -132,7 +128,6 @@ defmodule MembaWeb.MemberUIContractTest do
     refute has_element?(view, "#member-section-action-invite-member")
   end
 
-  @tag pending_dependency: :remove_member_blank_slate
   test "a one-member group members screen keeps the member row without a promotional empty banner", %{
     conn: conn
   } do
