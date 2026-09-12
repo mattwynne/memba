@@ -330,6 +330,52 @@ defmodule MembaWeb.LayoutsTest do
 
       assert_selector_count(html, "#client-error button, #server-error button", 0)
     end
+
+    test "targets each interruption status from its distinct LiveView error state" do
+      html = render_flash_group()
+
+      assert [
+               ["show", %{"to" => ".phx-client-error #client-error"}],
+               ["remove_attr", %{"attr" => "hidden"}]
+             ] = js_commands(html, "#client-error", "phx-disconnected")
+
+      assert [
+               ["show", %{"to" => ".phx-server-error #server-error"}],
+               ["remove_attr", %{"attr" => "hidden"}]
+             ] = js_commands(html, "#server-error", "phx-disconnected")
+    end
+
+    test "dismisses and restores hidden state when LiveView reconnects" do
+      html = render_flash_group()
+
+      assert [
+               ["hide", %{"to" => "#client-error"}],
+               ["set_attr", %{"attr" => ["hidden", ""]}]
+             ] = js_commands(html, "#client-error", "phx-connected")
+
+      assert [
+               ["hide", %{"to" => "#server-error"}],
+               ["set_attr", %{"attr" => ["hidden", ""]}]
+             ] = js_commands(html, "#server-error", "phx-connected")
+    end
+
+    test "uses the shared connection-status presentation" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error.connection-status", 1)
+      assert_selector_count(html, "#server-error.connection-status", 1)
+    end
+
+    test "renders a decorative connection-status spinner for each state" do
+      html = render_flash_group()
+
+      assert_selector_count(
+        html,
+        "#client-error .connection-status__spinner[aria-hidden='true'], " <>
+          "#server-error .connection-status__spinner[aria-hidden='true']",
+        2
+      )
+    end
   end
 
   test "club-site layout gates the member identity dropdown when signed out" do
@@ -551,6 +597,12 @@ defmodule MembaWeb.LayoutsTest do
     attributes = attributes(html, selector, attribute)
     assert [value] = attributes
     value
+  end
+
+  defp js_commands(html, selector, attribute) do
+    html
+    |> only_attribute(selector, attribute)
+    |> Jason.decode!()
   end
 
   defp attributes(html, selector, attribute) do
