@@ -1,7 +1,7 @@
 # Calm LiveView reconnection feedback
 
 Date: 2026-09-12
-Status: validated
+Status: ready
 
 ## Goal
 
@@ -113,15 +113,16 @@ Confirmed decisions:
 
 ## Implementation Plan
 
-1. Add focused failing coverage for the shared connection-status markup in `web/test/memba_web/components/layouts_test.exs`: stable client/server IDs, exact copy, `role="status"`, polite live-region behaviour, hidden initial state, distinct `phx-disconnected` selectors, `phx-connected` dismissal, shared visual class, spinner decoration, and absence of close controls.
-2. Add proportionate coverage for the LiveSocket option so a regression from `1500` is detected without re-testing Phoenix LiveView's own timer implementation. Prefer extracting a small importable configuration value/module if that makes the JavaScript assertion direct; do not introduce broad asset refactoring solely for this test.
-3. Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
-4. Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a dedicated shared connection-status presentation. Preserve the existing `phx-disconnected` client/server class targeting and `phx-connected` hiding behaviour.
-5. Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
-6. Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
-7. Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
-8. Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
-9. Run focused JavaScript/component/CSS tests, then run `dev check`.
+1. Add focused failing layout coverage for stable client/server connection-status IDs, exact copy, `role="status"`, polite live-region behaviour, hidden initial state, and absence of close controls.
+2. Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
+3. Add proportionate coverage for the LiveSocket option so a regression from `1500` is detected without re-testing Phoenix LiveView's own timer implementation. Prefer extracting a small importable configuration value/module if that makes the JavaScript assertion direct; do not introduce broad asset refactoring solely for this test.
+4. Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+5. Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a dedicated shared connection-status presentation. Preserve the existing `phx-disconnected` client/server class targeting and `phx-connected` hiding behaviour.
+6. Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+7. Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+8. Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+9. Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+10. Run focused JavaScript/component/CSS tests, then run `dev check`.
 
 ## Open Technical Decisions
 
