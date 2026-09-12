@@ -95,7 +95,9 @@ defmodule MembaWeb.MySettingsLiveTest do
     assert has_element?(view, "#my-settings-panel-emails[hidden]")
   end
 
-  test "avatar disclosure contains Account settings, a visual divider, and Sign out", %{conn: conn} do
+  test "avatar disclosure contains Account settings, a visual divider, and Sign out", %{
+    conn: conn
+  } do
     club = insert_membership_club!(name: "Avatar Settings Club", slug: "avatar-settings")
     member = create_active_member(club, email: "avatar.settings@example.com", name: "Avatar Menu")
 
