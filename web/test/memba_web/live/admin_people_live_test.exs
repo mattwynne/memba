@@ -119,7 +119,11 @@ defmodule MembaWeb.AdminPeopleLiveTest do
       |> sign_in_staff()
       |> live(~p"/admin/clubs/#{club.club_id}/people/new")
 
-    assert has_element?(new_view, "#person-form[aria-label='Create person'][phx-submit='create_person']")
+    assert has_element?(
+             new_view,
+             "#person-form[aria-label='Create person'][phx-submit='create_person']"
+           )
+
     assert has_element?(new_view, "#create-person-button", "Create person")
     refute has_element?(new_view, "#person-name-input[readonly]")
 
@@ -128,7 +132,11 @@ defmodule MembaWeb.AdminPeopleLiveTest do
       |> sign_in_staff()
       |> live(~p"/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit")
 
-    assert has_element?(edit_view, "#person-form[aria-label='Edit person'][phx-submit='save_person']")
+    assert has_element?(
+             edit_view,
+             "#person-form[aria-label='Edit person'][phx-submit='save_person']"
+           )
+
     assert has_element?(edit_view, "#save-person-button", "Save person")
     assert has_element?(edit_view, "#person-name-input[readonly]")
   end

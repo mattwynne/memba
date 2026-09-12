@@ -100,7 +100,12 @@ defmodule MembaWeb.PageHTML do
       Map.put(
         row,
         :href,
-        member_message_path(row.message_id, selected_club, club_id_source, selected_group_route_id)
+        member_message_path(
+          row.message_id,
+          selected_club,
+          club_id_source,
+          selected_group_route_id
+        )
       )
     end)
   end

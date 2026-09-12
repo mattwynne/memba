@@ -194,7 +194,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute has_element?(view, "#member-compose-recipient-summary", "the current member")
   end
 
-  test "requested audience group drives compose copy, count, email, and club context", %{conn: conn} do
+  test "requested audience group drives compose copy, count, email, and club context", %{
+    conn: conn
+  } do
     alice =
       create_active_member(
         email: "alice@example.com",

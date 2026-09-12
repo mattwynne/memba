@@ -79,9 +79,10 @@ defmodule MembaWeb.MemberUIContractTest do
     refute has_element?(composer, "#member-compose-inbound-email", "club-wide")
   end
 
-  test "switching a manager to group members shows the invite action without the compose action", %{
-    conn: conn
-  } do
+  test "switching a manager to group members shows the invite action without the compose action",
+       %{
+         conn: conn
+       } do
     %{alice: alice, group: trail_crew} = club_with_trail_crew(group_member_count: 2)
     grant_manage_members!(alice)
 
@@ -128,9 +129,10 @@ defmodule MembaWeb.MemberUIContractTest do
     refute has_element?(view, "#member-section-action-invite-member")
   end
 
-  test "a one-member group members screen keeps the member row without a promotional empty banner", %{
-    conn: conn
-  } do
+  test "a one-member group members screen keeps the member row without a promotional empty banner",
+       %{
+         conn: conn
+       } do
     alice =
       create_active_member(
         email: "alice@example.com",

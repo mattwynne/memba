@@ -124,7 +124,9 @@ defmodule MembaWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download form name value type disabled)
+  attr :rest, :global,
+    include: ~w(href navigate patch method download form name value type disabled)
+
   attr :class, :any, default: nil
   attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: nil, values: [nil, "sm", "lg"]

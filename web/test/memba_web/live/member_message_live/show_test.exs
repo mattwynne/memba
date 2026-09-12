@@ -871,8 +871,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
                  "[aria-controls='member-conversation-entry-menu-#{entry_message.message_id}-content']"
              )
 
-      refute has_element?(view, "#member-conversation-entry-menu-#{entry_message.message_id} [role='menu']")
-      refute has_element?(view, "#member-conversation-entry-menu-#{entry_message.message_id} [role='menuitem']")
+      refute has_element?(
+               view,
+               "#member-conversation-entry-menu-#{entry_message.message_id} [role='menu']"
+             )
+
+      refute has_element?(
+               view,
+               "#member-conversation-entry-menu-#{entry_message.message_id} [role='menuitem']"
+             )
 
       assert has_element?(
                view,

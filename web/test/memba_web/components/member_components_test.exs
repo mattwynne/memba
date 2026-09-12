@@ -37,7 +37,13 @@ defmodule MembaWeb.MemberComponentsTest do
 
       assert_text(html, "#club-member-#{member_id} .member-row__name", "Alice Adams")
       assert_text(html, "#club-member-#{member_id} .member-row__avatar", "AA")
-      assert_text(html, "#club-member-#{member_id} [data-testid='club-member-current-indicator']", "You")
+
+      assert_text(
+        html,
+        "#club-member-#{member_id} [data-testid='club-member-current-indicator']",
+        "You"
+      )
+
       assert_text(html, "#club-member-#{member_id} .member-row__role", "Chair")
       assert_text(html, "#club-member-#{member_id} .member-row__role", "Treasurer")
       refute_selector(html, "#active-members-empty-state")
@@ -66,8 +72,17 @@ defmodule MembaWeb.MemberComponentsTest do
       assert_text(html, "#club-member-#{bob_id} .member-row__name", "Bob Builder")
       assert_selector(html, "#club-member-#{alice_id}[data-current-member='false']")
       assert_selector(html, "#club-member-#{bob_id}[data-current-member='false']")
-      refute_selector(html, "#club-member-#{alice_id} [data-testid='club-member-current-indicator']")
-      refute_selector(html, "#club-member-#{bob_id} [data-testid='club-member-current-indicator']")
+
+      refute_selector(
+        html,
+        "#club-member-#{alice_id} [data-testid='club-member-current-indicator']"
+      )
+
+      refute_selector(
+        html,
+        "#club-member-#{bob_id} [data-testid='club-member-current-indicator']"
+      )
+
       refute_selector(html, "#active-members-empty-state")
     end
   end
@@ -79,14 +94,15 @@ defmodule MembaWeb.MemberComponentsTest do
 
       html =
         render_component(&MemberComponents.conversation_row/1, %{
-          row: conversation_row(%{
-            message_id: message_id,
-            href: "/messages/#{message_id}?group_id=group-123",
-            originator_id: originator_id,
-            originator_name: "Bob Builder",
-            originator_initials: "BB",
-            subject: "Weekend conditions"
-          })
+          row:
+            conversation_row(%{
+              message_id: message_id,
+              href: "/messages/#{message_id}?group_id=group-123",
+              originator_id: originator_id,
+              originator_name: "Bob Builder",
+              originator_initials: "BB",
+              subject: "Weekend conditions"
+            })
         })
 
       assert_selector(
@@ -101,8 +117,17 @@ defmodule MembaWeb.MemberComponentsTest do
           "[href='/messages/#{message_id}?group_id=group-123']"
       )
 
-      assert_text(html, "#member-message-#{message_id} .conversation__subject", "Weekend conditions")
-      assert_text(html, "#member-message-#{message_id} [data-testid='message-originator-initials']", "BB")
+      assert_text(
+        html,
+        "#member-message-#{message_id} .conversation__subject",
+        "Weekend conditions"
+      )
+
+      assert_text(
+        html,
+        "#member-message-#{message_id} [data-testid='message-originator-initials']",
+        "BB"
+      )
 
       assert_selector(
         html,
@@ -110,7 +135,11 @@ defmodule MembaWeb.MemberComponentsTest do
           "[data-originator-id='#{originator_id}'][data-originator-name='Bob Builder']"
       )
 
-      assert_text(html, "#member-message-#{message_id} [data-testid='message-started-by']", "Started by Bob Builder")
+      assert_text(
+        html,
+        "#member-message-#{message_id} [data-testid='message-started-by']",
+        "Started by Bob Builder"
+      )
     end
   end
 
@@ -134,7 +163,12 @@ defmodule MembaWeb.MemberComponentsTest do
       )
 
       assert participant_names(html) == ["Carol Canoe", "Dana Downhill", "Elliot Explorer"]
-      assert_text(html, "[data-testid='message-participant-overflow'][aria-label='2 more participants']", "+2")
+
+      assert_text(
+        html,
+        "[data-testid='message-participant-overflow'][aria-label='2 more participants']",
+        "+2"
+      )
 
       empty_html =
         render_component(&MemberComponents.participant_avatar_stack/1, %{
@@ -163,7 +197,13 @@ defmodule MembaWeb.MemberComponentsTest do
 
       assert_selector(html, "#member-message-list")
       assert_text(html, "#member-message-list-empty", "No club messages yet")
-      assert_text(html, "#member-message-list-empty", "When a member sends a message, it will appear here.")
+
+      assert_text(
+        html,
+        "#member-message-list-empty",
+        "When a member sends a message, it will appear here."
+      )
+
       assert_selector(html, "#empty-send-link[href='/messages/new?group_id=group-123']")
       refute_selector(html, "[data-testid='club-message-row']")
     end
