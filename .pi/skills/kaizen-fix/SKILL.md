@@ -5,7 +5,7 @@ description: Investigate and resolve docs/kaizen problem observation notes. Use 
 
 # Kaizen Fix
 
-Use this skill to turn a `docs/kaizen/` observation note into an investigated improvement. The goal is to understand the root cause, identify safe repair options, apply an obvious fix when one exists, and update the original kaizen note with the outcome.
+Use this skill to turn a `docs/kaizen/` observation note into an investigated improvement. The goal is to understand the root cause, identify safe repair options, apply an obvious fix when one exists or collaborate with Matt to choose a resolution, and update the original kaizen note with the outcome. An evidence-backed investigation followed by a human decision is a valid outcome, not a failure to act autonomously.
 
 This skill is for delivery-machinery problems: Fabro workflows, Pi skills/prompts, planning/review/implementation handoffs, sandboxing, checkpoints, CI/dev scripts, model routing, observability, recovery, and related workflow/tooling friction. Do not use it for ordinary product bugs unless the kaizen note shows that the product bug exposed a workflow/tooling problem.
 
@@ -25,7 +25,7 @@ Matt may provide:
 2. If Matt does not specify a note, find unresolved recent notes:
    - List `docs/kaizen/*.md` newest first.
    - Treat a note as resolved when it has a heading named `## Resolution`, `## Resolution applied`, `## Resolution plan`, or another clear resolution heading with substantive content.
-   - Treat a note as unresolved when it lacks a substantive resolution heading.
+   - Treat a note as unresolved when it lacks a substantive resolution heading. Options or a plan awaiting a decision or implementation do not count as resolved, even if their heading contains “Resolution”.
    - Before presenting unresolved notes, check recent git history for each candidate. Some older notes are implementation plans or observations that were completed but never backfilled with a resolution.
    - When git history or repository state clearly shows a candidate was already fixed, do not present it as unresolved; append a concise `## Resolution` section with the evidence instead.
    - Ignore archive or non-markdown files.
@@ -63,10 +63,11 @@ Use [A3 problem-solving](a3-problem-solving.md) to frame the improvement from ob
    - Investigate both why the defect occurred and why it escaped detection. Distinguish correction, detection/containment, and prevention when choosing countermeasures.
    - State the smallest causal mechanism that explains the observation.
    - Identify whether the problem is in code, prompt instructions, workflow graph, handoff metadata, environment/sandbox setup, documentation, or operator procedure.
-5. **Choose the action**
-   - If there is an obvious, low-risk fix, apply it.
-   - If there are several plausible fixes, or the fix is risky/product-facing, do not apply one immediately. Present options with trade-offs and recommend one.
+5. **Choose the action, autonomously or collaboratively**
+   - If there is an obvious, low-risk fix within the authorised scope, apply it without an unnecessary approval round.
+   - If there are meaningful trade-offs, several plausible fixes, or a risky/product-facing change, consult Matt before implementing. Use the [resolution interview](#resolution-interview) to choose the best course together; do not force an autonomous fix just to close the note.
    - If the root cause is external or cannot be fixed in this repository, document the finding and propose next actions.
+   - If a decision is deferred, record the options, recommendation, and open decision. Report the investigation as complete but the resolution as pending.
 6. **Validate any applied fix**
    - Run the smallest relevant checks first.
    - If this repository has a `justfile`, finish by running the appropriate `just` command.
@@ -82,6 +83,16 @@ Use [A3 problem-solving](a3-problem-solving.md) to frame the improvement from ob
    - Do not include unrelated user work.
    - Use a concise message such as `kaizen: <short resolved problem>`.
    - Do not push unless Matt explicitly asks.
+
+## Resolution Interview
+
+After investigating, use a short interview when the best resolution depends on Matt's priorities or an acceptable trade-off. Do not assume he has read the logs, followed the investigation, or shares your working context.
+
+1. **Brief before asking.** Explain the observed problem and its impact, the causal mechanism, the key supporting evidence, and any remaining uncertainty. Describe how the relevant part of the system works in plain language; paths and logs support the explanation but do not replace it.
+2. **Frame the decision.** Present the viable options, what each changes, and the practical benefits, costs, risks, and maintenance consequences. Include deferring action or containment alone when reasonable. Recommend an option and explain why, including which priorities your recommendation assumes.
+3. **Interview, don't dump a menu.** Ask one focused question at a time about the priority or constraint that would change the choice. Use `question` for discrete choices, with enough context and meaningful option descriptions for Matt to decide without reconstructing the investigation. Invite alternatives rather than forcing a choice among your initial options.
+4. **Refine together.** Use the answer to narrow or revise the options. Investigate newly exposed factual unknowns yourself rather than asking Matt to guess. Before acting, summarise the agreed change and its scope; seek confirmation if those differ materially from what he selected.
+5. **Record the outcome.** Capture the decision and rationale in the kaizen note, including accepted trade-offs and follow-up. If no choice is made, preserve the investigation and mark the decision as pending; do not claim the problem is resolved.
 
 ## Resolution Section Template
 
