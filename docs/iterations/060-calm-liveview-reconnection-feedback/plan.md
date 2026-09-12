@@ -115,9 +115,9 @@ Confirmed decisions:
 
 1. Add focused failing layout coverage for stable client/server connection-status IDs, exact copy, `role="status"`, polite live-region behaviour, hidden initial state, and absence of close controls.
 2. Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
-3. Add proportionate coverage for the LiveSocket option so a regression from `1500` is detected without re-testing Phoenix LiveView's own timer implementation. Prefer extracting a small importable configuration value/module if that makes the JavaScript assertion direct; do not introduce broad asset refactoring solely for this test.
+3. Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
 4. Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
-5. Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a dedicated shared connection-status presentation. Preserve the existing `phx-disconnected` client/server class targeting and `phx-connected` hiding behaviour.
+5. Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
 6. Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
 7. Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
 8. Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
