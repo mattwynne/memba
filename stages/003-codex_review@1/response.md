@@ -1,0 +1,14 @@
+{
+  "preferred_next_label": "planning",
+  "outcome": "succeeded",
+  "failure_reason": "The required plan file could not be read at docs/iterationsATIONS/060-calm-liveview-reconnection-feedback/plan.md because that path does not exist. A similarly named plan exists under docs/iterations/, but the review instructions explicitly require the supplied path and require a fail-closed NOT READY decision when the complete plan cannot be read.",
+  "suggested_next_ids": [],
+  "report": "## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Blocking workflow-evidence gap:** `docs/iterationsATIONS/060-calm-liveview-reconnection-feedback/plan.md` does not exist, so the complete required plan could not be read and its readiness could not be validated. The repository contains `docs/iterations/060-calm-liveview-reconnection-feedback/plan.md`, but reviewing that different path would not satisfy the explicit source requirement.\n\n## Non-blocking improvements\n\n1. None assessed. A substantive review would risk treating unseen plan content as absent.\n\n## Smallest viable iteration\n\nCannot be determined reliably until the required plan is available at the specified path or the review request is corrected to authorize the existing path.\n\n## Required plan edits\n\n1. Correct the review request to point to `docs/iterations/060-calm-liveview-reconnection-feedback/plan.md`, or place the authoritative complete plan at the specified `docs/iterationsATIONS/...` path.\n2. Re-run independent validation against the complete authoritative plan before marking the iteration validated.\n\n## Validation plan\n\n1. Read the complete authoritative plan directly from the corrected path.\n2. Review goal clarity, scope boundaries, acceptance criteria, behaviour-facing classification and Gherkin decision, unresolved business and technical decisions, ordered implementation tasks, expected capability, proof of success, and stop condition.\n3. Mark the iteration validated only if that review returns READY.\n4. Do not begin implementation during validation.",
+  "context_updates": {
+    "codex_review_decision": "NOT READY",
+    "codex_review_confidence": "High",
+    "codex_review_blocking_gap_count": 1,
+    "codex_review_blocking_gaps": "Required plan file could not be read because docs/iterationsATIONS/060-calm-liveview-reconnection-feedback/plan.md does not exist",
+    "codex_review_required_edits": "Correct the requested plan path to docs/iterations/060-calm-liveview-reconnection-feedback/plan.md or restore the authoritative plan at the specified path; rerun validation"
+  }
+}
