@@ -108,27 +108,9 @@ defmodule MembaWeb.MemberDashboardLive do
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  @club_template_assigns [
-    :active_member_count,
-    :active_section,
-    :club_id_source,
-    :current_identity,
-    :current_member,
-    :current_member_can_manage_members?,
-    :flash,
-    :groups,
-    :members,
-    :message_rows,
-    :selected_club,
-    :selected_group,
-    :selected_group_route_id
-  ]
-
   @impl Phoenix.LiveView
   def render(%{selected_club: _selected_club} = assigns) do
-    assigns
-    |> Map.take(@club_template_assigns)
-    |> MembaWeb.PageHTML.club()
+    MembaWeb.PageHTML.club(assigns)
   end
 
   defp active_section(:members), do: "members"
