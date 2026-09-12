@@ -3,8 +3,6 @@ set -euo pipefail
 
 workflow_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 workflow_path=$workflow_dir/workflow.fabro
-preimplementation_adr_prompt=$workflow_dir/prompts/preimplementation_adr_gate.md
-adr_prompt=$workflow_dir/prompts/adr_coherence_gate.md
 
 assert_contains() {
   local expected=$1
@@ -34,54 +32,6 @@ assert_contains 'final_artifact_gate -> publish_to_main [condition="outcome=succ
 assert_contains 'final_artifact_gate -> final_artifact_failed'
 assert_contains 'final_artifact_failed -> exit'
 assert_not_contains 'final_artifact_gate -> publish_to_main;'
-
-# Accepted ADRs are an independent constraint: implementation must stop before
-# reserving WIP when the plan conflicts, plan conformance cannot replace the
-# final ADR gate, and publication must remain unreachable when either gate blocks.
-assert_contains 'preimplementation_adr_gate ['
-assert_contains 'prompt="@prompts/preimplementation_adr_gate.md"'
-assert_contains 'read_plan -> preimplementation_adr_gate [condition="outcome=succeeded"]'
-assert_contains 'preimplementation_adr_gate -> preimplementation_adr_decision'
-assert_contains 'preimplementation_adr_decision -> wip_gate [label="Coherent", condition="context.plan_adr_coherent=true"]'
-assert_contains 'preimplementation_adr_decision -> adr_not_ready [label="Plan conflicts with accepted ADR"]'
-assert_contains 'adr_coherence_gate ['
-assert_contains 'prompt="@prompts/adr_coherence_gate.md"'
-assert_contains 'adr_gate [shape=diamond, label="ADR coherent?"]'
-assert_contains 'collect_implementation_evidence -> adr_coherence_gate [condition="outcome=succeeded"]'
-assert_contains 'adr_coherence_gate -> adr_gate'
-assert_contains 'adr_gate -> plan_conformance_gate [label="Coherent", condition="context.adr_coherent=true"]'
-assert_contains 'adr_gate -> snapshot_before_adr_repair [label="ADR rework", condition="context.adr_rework_available=true"]'
-assert_contains 'adr_gate -> adr_not_ready [label="Needs human input"]'
-assert_contains 'verify_adr_repair -> dev_check [condition="outcome=succeeded"]'
-assert_contains 'adr_not_ready -> exit'
-
-for expected in \
-  'Return exactly one JSON object' \
-  'plan_adr_coherent' \
-  'plan_adrs_considered' \
-  'plan_adr_evidence' \
-  'plan_adr_conflicts' \
-  'plan_adr_report'; do
-  grep -Fq "$expected" "$preimplementation_adr_prompt" || {
-    echo "Expected pre-implementation ADR prompt to contain: $expected" >&2
-    exit 1
-  }
-done
-
-for expected in \
-  'Return exactly one JSON object' \
-  'adr_coherent' \
-  'adr_rework_available' \
-  'adr_adrs_considered' \
-  'adr_evidence' \
-  'adr_conflicts' \
-  'adr_repair_brief' \
-  'adr_report'; do
-  grep -Fq "$expected" "$adr_prompt" || {
-    echo "Expected final ADR prompt to contain: $expected" >&2
-    exit 1
-  }
-done
 
 python3 - "$workflow_path" <<'PY'
 from __future__ import annotations
@@ -186,7 +136,6 @@ def run_path(outcomes: dict[str, str], context: dict[str, str]) -> tuple[list[st
 base_success_outcomes = {
     "verify_source_head": "succeeded",
     "read_plan": "succeeded",
-    "preimplementation_adr_gate": "succeeded",
     "wip_gate": "succeeded",
     "preflight_sandbox": "succeeded",
     "resume_gate": "succeeded",
@@ -196,33 +145,16 @@ base_success_outcomes = {
     "all_tasks_done": "failed",
     "dev_check": "succeeded",
     "collect_implementation_evidence": "succeeded",
-    "adr_coherence_gate": "succeeded",
     "plan_conformance_gate": "succeeded",
     "final_artifact_gate": "succeeded",
     "publish_to_main": "succeeded",
     "final_summary": "succeeded",
 }
-base_success_context = {"plan_adr_coherent": "true", "adr_coherent": "true", "plan_conformant": "true"}
+base_success_context = {"plan_conformant": "true"}
 
 path, ok = run_path(base_success_outcomes, base_success_context)
 if not ok or path[-3:] != ["publish_to_main", "final_summary", "exit"]:
     raise SystemExit(f"expected valid success path through publish_to_main to satisfy gates, got ok={ok}, path={path}")
-
-plan_adr_blocked_context = {"plan_adr_coherent": "false"}
-path, ok = run_path(base_success_outcomes, plan_adr_blocked_context)
-if ok or "wip_gate" in path or "implement_next_task" in path or path[-3:] != ["preimplementation_adr_decision", "adr_not_ready", "exit"]:
-    raise SystemExit(
-        "expected a plan/ADR conflict to stop before reserving WIP or implementation, "
-        f"got ok={ok}, path={path}"
-    )
-
-adr_blocked_context = {"plan_adr_coherent": "true", "adr_coherent": "false", "adr_rework_available": "false"}
-path, ok = run_path(base_success_outcomes, adr_blocked_context)
-if ok or "plan_conformance_gate" in path or "publish_to_main" in path or path[-3:] != ["adr_gate", "adr_not_ready", "exit"]:
-    raise SystemExit(
-        "expected an accepted-ADR conflict to stop before plan conformance and publication, "
-        f"got ok={ok}, path={path}"
-    )
 
 artifact_failure_outcomes = dict(base_success_outcomes, final_artifact_gate="failed")
 path, ok = run_path(artifact_failure_outcomes, base_success_context)

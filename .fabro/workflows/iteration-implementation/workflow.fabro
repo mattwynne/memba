@@ -6,14 +6,11 @@ digraph IterationImplementation {
         model_stylesheet="
             * { provider: openai; model: gpt-5.6-sol; reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
-            #preimplementation_adr_gate { reasoning_effort: high; }
             #sync_task_list { reasoning_effort: high; }
             #resume_gate { reasoning_effort: low; }
             #implement_next_task { reasoning_effort: high; }
             #validate_task { reasoning_effort: high; }
             #fix_dev_check { reasoning_effort: high; }
-            #adr_coherence_gate { reasoning_effort: high; }
-            #fix_adr_coherence { reasoning_effort: high; }
             #plan_conformance_gate { reasoning_effort: high; }
             #fix_plan_conformance { reasoning_effort: high; }
             #resolve_publish_conflict { reasoning_effort: high; }
@@ -49,15 +46,6 @@ digraph IterationImplementation {
         shape=parallelogram,
         script="echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
     ]
-
-    preimplementation_adr_gate [
-        label="Check Plan Against Accepted ADRs",
-        shape=tab,
-        output_schema="routing",
-        prompt="@prompts/preimplementation_adr_gate.md"
-    ]
-
-    preimplementation_adr_decision [shape=diamond, label="Plan ADR coherent?"]
 
     wip_gate [
         label="Check Implementation WIP Slot",
@@ -182,35 +170,6 @@ digraph IterationImplementation {
         script="echo 'Iteration implementation failed before plan conformance: implementation evidence could not be collected.' >&2\nexit 1"
     ]
 
-    adr_coherence_gate [
-        label="ADR Coherence Gate",
-        shape=tab,
-        output_schema="routing",
-        prompt="@prompts/adr_coherence_gate.md"
-    ]
-    adr_gate [shape=diamond, label="ADR coherent?"]
-    snapshot_before_adr_repair [
-        label="Snapshot Before ADR Repair",
-        shape=parallelogram,
-        script="set -eu\nmkdir -p .fabro/tmp\nkind='adr'\ngit rev-parse HEAD > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\n' \"$kind\" \"$(cat .fabro/tmp/${kind}-repair-before-head.txt)\""
-    ]
-    fix_adr_coherence [
-        label="Fix ADR Coherence",
-        prompt="@prompts/fix_adr_coherence.md",
-        timeout="2400s",
-        max_visits=2
-    ]
-    verify_adr_repair [
-        label="Verify ADR Repair",
-        shape=parallelogram,
-        script="set -eu\nkind='adr'\nPLAN_PATH='{{ inputs.plan_path }}'\nbefore_head_file=\".fabro/tmp/${kind}-repair-before-head.txt\"\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\nif [ ! -f \"$before_head_file\" ]; then\n  echo \"Missing repair baseline HEAD file: $before_head_file\" >&2\n  exit 1\nfi\nbefore_head=$(cat \"$before_head_file\")\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\ncommitted_changes=$(git diff --name-only \"$before_head\"..HEAD || true)\nworking_changes=$(git diff --name-only || true)\nprintf 'Repair baseline (%s) captured at HEAD %s and patch %s\\n' \"$kind\" \"$before_head\" \"$before\"\nprintf 'Repair after    (%s) captured at HEAD %s and patch %s\\n' \"$kind\" \"$(git rev-parse HEAD)\" \"$after\"\nprintf 'Committed files changed after repair:\\n%s\\n' \"${committed_changes:-<none>}\"\nprintf 'Working-tree files changed after repair:\\n%s\\n' \"${working_changes:-<none>}\"\nif [ -z \"$committed_changes\" ] && cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no committed or working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\necho 'Checking repaired acceptance .feature changes against explicit plan permissions...'\npython3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py \"$PLAN_PATH\" \"$before_head\""
-    ]
-    adr_not_ready [
-        label="Fail: Needs Human ADR Review",
-        shape=parallelogram,
-        script="echo 'Iteration implementation failed: ADR coherence gate found violations that require human input or exceeded the automatic ADR repair budget.' >&2\nexit 1"
-    ]
-
     plan_conformance_gate [
         label="Plan Conformance Gate",
         shape=tab,
@@ -291,13 +250,9 @@ digraph IterationImplementation {
     verify_source_head -> source_head_failed
     source_head_failed -> exit
 
-    read_plan -> preimplementation_adr_gate [condition="outcome=succeeded"]
+    read_plan -> wip_gate [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit
-
-    preimplementation_adr_gate -> preimplementation_adr_decision
-    preimplementation_adr_decision -> wip_gate [label="Coherent", condition="context.plan_adr_coherent=true"]
-    preimplementation_adr_decision -> adr_not_ready [label="Plan conflicts with accepted ADR"]
 
     wip_gate -> preflight_sandbox [condition="outcome=succeeded"]
     wip_gate -> wip_blocked
@@ -332,19 +287,9 @@ digraph IterationImplementation {
     dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
-    collect_implementation_evidence -> adr_coherence_gate [condition="outcome=succeeded"]
+    collect_implementation_evidence -> plan_conformance_gate [condition="outcome=succeeded"]
     collect_implementation_evidence -> collect_evidence_failed
     collect_evidence_failed -> exit
-
-    adr_coherence_gate -> adr_gate
-    adr_gate -> plan_conformance_gate [label="Coherent", condition="context.adr_coherent=true"]
-    adr_gate -> snapshot_before_adr_repair [label="ADR rework", condition="context.adr_rework_available=true"]
-    adr_gate -> adr_not_ready [label="Needs human input"]
-    snapshot_before_adr_repair -> fix_adr_coherence
-    fix_adr_coherence -> verify_adr_repair
-    verify_adr_repair -> dev_check [condition="outcome=succeeded"]
-    verify_adr_repair -> adr_not_ready
-    adr_not_ready -> exit
 
     plan_conformance_gate -> plan_gate
     plan_gate -> final_artifact_gate [label="Conformant", condition="context.plan_conformant=true"]
