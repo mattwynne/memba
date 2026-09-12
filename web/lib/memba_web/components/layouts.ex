@@ -25,6 +25,32 @@ defmodule MembaWeb.Layouts do
   defp public_footer_suppressed?(_conn), do: false
 
   @doc """
+  Renders the shared hosting and source details with a surface-specific introduction.
+  """
+  attr :id, :string, required: true
+  attr :variant, :string, default: "club", values: ~w(club public)
+  slot :inner_block, required: true
+
+  def footer_details(assigns) do
+    ~H"""
+    <div id={@id} class={["footer-details", @variant == "public" && "footer-details--public"]}>
+      <ul role="list">
+        <li>{render_slot(@inner_block)}</li>
+        <li>
+          <.icon name="brand-canadian-maple-leaf" class="size-[15px] shrink-0" aria-hidden="true" />
+          <span>Proudly hosted in Canada.</span>
+        </li>
+        <li>
+          <a id={"#{@id}-source-link"} href="https://github.com/mattwynne/memba">
+            <.icon name="brand-github" class="size-[15px] shrink-0" aria-hidden="true" /> Open source
+          </a>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  @doc """
   Renders the shared public/visitor header.
 
   Matches the marketing nav from the design system: the wordmark and link
@@ -401,14 +427,15 @@ defmodule MembaWeb.Layouts do
         id="club-site-footer"
         class="app-foot"
       >
-        Powered by
-        <a
-          id="club-site-footer-memba-home-link"
-          href={ClubSite.root_url()}
-          aria-label="Visit Memba home"
-        >
-          Memba
-        </a>
+        <.footer_details id="club-site-footer-details">
+          <span>
+            Powered by <a
+              id="club-site-footer-memba-home-link"
+              href={ClubSite.root_url()}
+              aria-label="Visit Memba home"
+            >Memba</a>.
+          </span>
+        </.footer_details>
       </footer>
     </div>
 

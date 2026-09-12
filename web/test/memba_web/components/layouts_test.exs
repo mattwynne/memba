@@ -212,7 +212,8 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-identity-menu-button .app-bar__who")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_selector(html, "#club-site-footer.app-foot")
-    assert_text(html, "#club-site-footer", "Powered by Memba")
+    assert_text(html, "#club-site-footer", "Powered by Memba.")
+    assert_footer_details(html, "#club-site-footer-details")
 
     assert_selector(
       html,
@@ -334,7 +335,10 @@ defmodule MembaWeb.LayoutsTest do
 
   describe "flash_group/1 connection statuses" do
     test "preserves ordinary error flash treatment and dismissal" do
-      html = render_component(&Layouts.flash_group/1, %{flash: %{"error" => "Something needs attention"}})
+      html =
+        render_component(&Layouts.flash_group/1, %{
+          flash: %{"error" => "Something needs attention"}
+        })
 
       assert_selector(html, "#flash-error.toast.toast-top.toast-end[role='alert']")
       assert_selector(html, "#flash-error .alert.alert-error")
@@ -608,7 +612,12 @@ defmodule MembaWeb.LayoutsTest do
   test "root layout keeps the public footer for public pages by default", %{conn: conn} do
     html = rendered_to_string(Layouts.root(%{conn: conn, inner_content: "Public page content"}))
 
-    assert_text(html, "footer", "Matt Wynne")
+    assert_text(html, "footer", "© #{Date.utc_today().year} Matt Wynne")
+    assert_footer_details(html, "#public-footer-details")
+    assert_text(html, "#public-footer-details li:first-child", "Built with")
+    assert_text(html, "#public-footer-details li:first-child", "in Nelson, BC.")
+    assert_selector(html, "#public-footer-details [role='img'][aria-label='love']")
+    refute_text(html, "#public-footer-details", "Powered by")
     assert_selector(html, "footer a[href='https://mattwynne.net']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/about']")
     assert_selector(html, "footer nav[aria-label='Footer navigation'] a[href='/terms']")
@@ -638,6 +647,23 @@ defmodule MembaWeb.LayoutsTest do
 
   defp render_flash_group do
     render_component(&Layouts.flash_group/1, %{flash: %{}})
+  end
+
+  defp assert_footer_details(html, selector) do
+    assert_selector_count(html, "#{selector} > ul[role='list'] > li", 3)
+    assert_text(html, "#{selector} li:nth-child(2)", "Proudly hosted in Canada.")
+
+    assert_selector(
+      html,
+      "#{selector} li:nth-child(2) svg[aria-hidden='true'][fill='currentColor']"
+    )
+
+    assert_text(html, "#{selector} li:nth-child(3) a", "Open source")
+
+    assert_selector(
+      html,
+      "#{selector} li:nth-child(3) a[href='https://github.com/mattwynne/memba'] svg[aria-hidden='true'][fill='currentColor']"
+    )
   end
 
   defp assert_selector(html, selector) do
