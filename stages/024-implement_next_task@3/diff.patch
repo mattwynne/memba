@@ -1,0 +1,48 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index c3a63bc..2e0df77 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Add focused failing layout coverage for stable client/server connection-status IDs, exact copy, `role="status"`, polite live-region behaviour, hidden initial state, and absence of close controls.
+ - [x] 002 Extend that layout coverage to require distinct `phx-disconnected` selectors, `phx-connected` dismissal, a shared visual class, and spinner decoration.
+-- [ ] 003 Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
++- [x] 003 Add proportionate direct coverage for the LiveSocket `1500` option, extracting a small importable configuration value only if useful and avoiding broad asset refactoring or tests of LiveView's timer implementation.
+ - [ ] 004 Configure `disconnectedTimeout: 1500` in `web/assets/js/app.js` while retaining the existing CSRF params, hooks, and long-poll fallback.
+ - [ ] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+ - [ ] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+diff --git a/web/test/memba_web/app_js_test.exs b/web/test/memba_web/app_js_test.exs
+new file mode 100644
+index 0000000..88a6599
+--- /dev/null
++++ b/web/test/memba_web/app_js_test.exs
+@@ -0,0 +1,29 @@
++defmodule MembaWeb.AppJsTest do
++  use ExUnit.Case, async: true
++
++  @app_js_path Path.expand("../../assets/js/app.js", __DIR__)
++
++  test "LiveSocket delays disconnected presentation commands by exactly 1500ms" do
++    source = File.read!(@app_js_path)
++
++    assert [options] =
++             Regex.run(
++               ~r/new LiveSocket\("\/live", Socket, \{(?<options>.*?)^\}\)/ms,
++               source,
++               capture: ["options"]
++             ),
++           "Expected app.js to construct LiveSocket with an inline options object"
++
++    configured_timeouts =
++      Regex.scan(
++        ~r/^\s*disconnectedTimeout:\s*(\d+),?\s*$/m,
++        options,
++        capture: :all_but_first
++      )
++      |> List.flatten()
++
++    assert configured_timeouts == ["1500"],
++           "Expected the LiveSocket options to set disconnectedTimeout exactly once to 1500, " <>
++             "got: #{inspect(configured_timeouts)}"
++  end
++end
