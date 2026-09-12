@@ -143,4 +143,43 @@ defmodule MembaWeb.AppCssTest do
     assert css =~ ".deliv-tint-snd {"
     assert css =~ ".deliv-tint-bad {"
   end
+
+  test "connection status is globally positioned without blocking the page" do
+    css = File.read!(@app_css_path)
+    declarations = css_rule!(css, ".connection-status")
+
+    assert declarations =~ "position: fixed;"
+    assert declarations =~ "z-index: 50;"
+    assert declarations =~ "left: 50%;"
+    assert declarations =~ "bottom: max(18px, env(safe-area-inset-bottom));"
+    assert declarations =~ "transform: translateX(-50%);"
+    assert declarations =~ "pointer-events: none;"
+  end
+
+  test "connection status motion has a reduced-motion fallback" do
+    css = File.read!(@app_css_path)
+
+    assert css_rule!(css, ".connection-status__spinner") =~
+             "animation: connection-status-spin 850ms linear infinite;"
+
+    assert css =~
+             ~r/@keyframes connection-status-spin\s*\{\s*to\s*\{\s*transform: rotate\(360deg\);\s*\}\s*\}/
+
+    [_, reduced_motion_css] =
+      String.split(css, "@media (prefers-reduced-motion: reduce)", parts: 2)
+
+    assert css_rule!(reduced_motion_css, ".connection-status") =~ "transition: none;"
+
+    reduced_spinner = css_rule!(reduced_motion_css, ".connection-status__spinner")
+    assert reduced_spinner =~ "animation: none;"
+    assert reduced_spinner =~ "border-color: var(--color-sage-500);"
+  end
+
+  defp css_rule!(css, selector) do
+    pattern = ~r/#{Regex.escape(selector)}\s*\{(?<declarations>[^}]*)\}/
+
+    css
+    |> then(&Regex.named_captures(pattern, &1))
+    |> Map.fetch!("declarations")
+  end
 end
