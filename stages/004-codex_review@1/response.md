@@ -1,0 +1,14 @@
+{
+  "preferred_next_label": "validated",
+  "outcome": "succeeded",
+  "failure_reason": "",
+  "suggested_next_ids": [],
+  "review_report": "# Iteration Plan Readiness Review\n\n## Decision\n\nREADY\n\n## Confidence\n\nHigh\n\nThe complete 158-line plan was read directly from `docs/iterations/060-calm-liveview-reconnection-feedback/plan.md`. The plan defines a clear user-facing outcome: routine short reconnections remain silent, while longer client or server interruptions receive calm, accurate feedback across all LiveView surfaces. The timing, copy, visual direction, accessibility behaviour, boundaries, and deferred follow-ups are decided.\n\n## Blocking gaps\n\n1. None.\n\n## Non-blocking improvements\n\n1. Name `web/test/memba_web/components/layouts_test.exs` and `web/assets/css/app.css` explicitly in the implementation steps. The intended test and styling locations are already readily inferable, so this is not an implementation blocker.\n2. Record the exact manual procedure and representative public, member, and Staff routes used to simulate client and server interruptions. This would make the browser-validation evidence more repeatable, but the existing validation plan is sufficient to begin.\n\n## Smallest viable iteration\n\nKeep the proposed slice intact: configure the 1.5-second presentation delay, replace both generated client and server reconnect toasts in the shared flash group, preserve ordinary flash behaviour, include accessibility and reduced-motion treatment, and validate brief and prolonged interruption states. Removing either interruption type or omitting the delay would leave the global reconnect experience inconsistent and would not fully deliver the stated outcome.\n\n## Required plan edits\n\n1. None. The plan is ready for implementation as written.\n\n## Validation plan\n\nSuccess is proven when focused layout coverage verifies both initially hidden indicators, stable IDs and selectors, exact copy, status/live-region semantics, automatic dismissal, shared styling, spinner decoration, and absence of close controls; configuration coverage verifies `disconnectedTimeout: 1500` while preserving existing LiveSocket options; existing flash tests remain green; and browser checks demonstrate that sub-1.5-second reconnects remain silent while longer client and server interruptions show only the appropriate pill and dismiss it after reconnection. Browser checks should also cover representative public, member, and Staff LiveViews, desktop and narrow viewports, safe-area placement, pointer interaction, focus behaviour, and reduced-motion mode. The stop condition is that all acceptance criteria are demonstrated and `dev check` passes on the delivery candidate.",
+  "context_updates": {
+    "codex_review_decision": "READY",
+    "codex_review_confidence": "High",
+    "codex_review_blocking_gap_count": 0,
+    "codex_review_blocking_gaps": "None",
+    "codex_review_required_edits": "None"
+  }
+}
