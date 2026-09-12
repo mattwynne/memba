@@ -290,6 +290,48 @@ defmodule MembaWeb.LayoutsTest do
     assert_text(html, "#flash-info", "Club settings saved")
   end
 
+  describe "flash_group/1 connection statuses" do
+    test "renders stable client and server IDs hidden initially" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error[hidden]", 1)
+      assert_selector_count(html, "#server-error[hidden]", 1)
+    end
+
+    test "renders the exact client interruption copy" do
+      html = render_flash_group()
+
+      assert_exact_text(html, "#client-error", "Connection paused — reconnecting…")
+    end
+
+    test "renders the exact server interruption copy" do
+      html = render_flash_group()
+
+      assert_exact_text(
+        html,
+        "#server-error",
+        "Memba is temporarily unavailable — retrying…"
+      )
+    end
+
+    test "uses polite status semantics for both interruption states" do
+      html = render_flash_group()
+
+      assert_selector_count(
+        html,
+        "[role='status'][aria-live='polite']#client-error, " <>
+          "[role='status'][aria-live='polite']#server-error",
+        2
+      )
+    end
+
+    test "does not render close controls for either interruption state" do
+      html = render_flash_group()
+
+      assert_selector_count(html, "#client-error button, #server-error button", 0)
+    end
+  end
+
   test "club-site layout gates the member identity dropdown when signed out" do
     assigns = %{flash: %{}}
 
@@ -450,6 +492,10 @@ defmodule MembaWeb.LayoutsTest do
     assert_text(html, "footer a", "abcdef0")
   end
 
+  defp render_flash_group do
+    render_component(&Layouts.flash_group/1, %{flash: %{}})
+  end
+
   defp assert_selector(html, selector) do
     assert html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
            "Expected rendered layout to include selector #{inspect(selector)}"
@@ -475,6 +521,13 @@ defmodule MembaWeb.LayoutsTest do
     text = html |> selected_text(selector) |> normalize_whitespace()
 
     assert text =~ expected_text
+  end
+
+  defp assert_exact_text(html, selector, expected_text) do
+    text = html |> selected_text(selector) |> normalize_whitespace()
+
+    assert text == expected_text,
+           "Expected #{inspect(selector)} to contain exactly #{inspect(expected_text)}, got: #{inspect(text)}"
   end
 
   defp refute_text(html, selector, text) do
