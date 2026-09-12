@@ -174,14 +174,120 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
              "#member-message-compose[data-club-id='#{alice.club_id}']" <>
                "[data-current-member-id='#{alice.person_id}']" <>
                "[data-audience-group-id='#{everyone_group_id}']" <>
+               "[data-audience-group-name='Everyone']" <>
                "[data-active-member-count='1']"
+           )
+
+    assert has_element?(view, "h1", "New message to Everyone")
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary" <>
+               "[data-active-member-count='1']" <>
+               "[data-audience-group-id='#{everyone_group_id}']" <>
+               "[data-audience-group-name='Everyone']",
+             "1 member"
+           )
+
+    assert has_element?(view, "#member-compose-recipient-summary", "Everyone")
+    refute has_element?(view, "#member-compose-recipient-summary", "the current member")
+  end
+
+  test "requested audience group drives compose copy, count, email, and club context", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        slug: "kmc"
+      )
+
+    _carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        slug: "kmc"
+      )
+
+    trip_planning_group =
+      create_group(
+        club_id: alice.club_id,
+        group_key: "trip_planning",
+        name: "Trip Planning",
+        email_slug: "trip-planning"
+      )
+
+    add_group_member(trip_planning_group, alice)
+    add_group_member(trip_planning_group, bob)
+
+    {:ok, view, _html} =
+      conn
+      |> signed_in_club_host("alice@example.com", alice)
+      |> live(~p"/messages/new?#{[group_id: trip_planning_group.group_id]}")
+
+    assert has_element?(
+             view,
+             "#member-message-compose" <>
+               "[data-club-id='#{alice.club_id}']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-audience-group-name='Trip Planning']" <>
+               "[data-active-member-count='2']"
+           )
+
+    assert has_element?(view, "h1", "New message to Trip Planning")
+
+    assert has_element?(
+             view,
+             "#member-compose-selected-club[data-club-id='#{alice.club_id}']",
+             "In Kootenay Mountaineering Club"
            )
 
     assert has_element?(
              view,
-             "#member-compose-recipient-summary[data-active-member-count='1']",
-             "the current member"
+             "#member-compose-recipient-summary" <>
+               "[data-active-member-count='2']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-audience-group-name='Trip Planning']",
+             "2 members"
            )
+
+    assert has_element?(view, "#member-compose-recipient-summary", "Trip Planning")
+    refute has_element?(view, "#member-compose-recipient-summary", "all current members")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email" <>
+               "[data-inbound-address='trip-planning@kmc.clubs.memba.io']" <>
+               "[data-audience-group-id='#{trip_planning_group.group_id}']" <>
+               "[data-audience-group-name='Trip Planning']",
+             "Send a message to Trip Planning at"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email-link[href='mailto:trip-planning@kmc.clubs.memba.io']",
+             "trip-planning@kmc.clubs.memba.io"
+           )
+
+    assert has_element?(
+             view,
+             "button#member-message-send-button.btn.btn-primary.btn-lg[type='submit']",
+             "Send message"
+           )
+
+    refute render(view) =~ "club-wide"
+    refute render(view) =~ "Send to all current members"
   end
 
   test "routed compose screen renders the focused member message form affordances", %{
@@ -218,14 +324,12 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(
              view,
              "#member-compose-recipient-summary[data-active-member-count='2']",
-             "all 2 current members"
+             "2 members"
            )
 
-    assert has_element?(
-             view,
-             "#member-compose-recipient-summary",
-             "There is no list to pick"
-           )
+    assert has_element?(view, "#member-compose-recipient-summary", "Everyone")
+
+    refute has_element?(view, "#member-compose-recipient-summary", "There is no list to pick")
 
     assert has_element?(
              view,
@@ -252,7 +356,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(
              view,
              "button#member-message-send-button.btn.btn-primary.btn-lg[type='submit']",
-             "Send to all current members"
+             "Send message"
            )
 
     assert has_element?(
@@ -291,8 +395,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(
              view,
              "#member-compose-inbound-email",
-             "You can also send a club-wide message to"
+             "Send a message to Everyone at"
            )
+
+    refute has_element?(view, "#member-compose-inbound-email", "club-wide")
 
     assert has_element?(
              view,
@@ -457,6 +563,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         club_id: club_id,
         group_id: group_id,
         group_key: SystemGroups.everyone_key(),
+        email_slug: SystemGroups.everyone_email_slug(),
         name: SystemGroups.everyone_name()
       },
       on_conflict: :nothing
@@ -475,6 +582,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     Repo.insert!(%Group{
       club_id: Keyword.fetch!(attrs, :club_id),
       group_id: Memba.ID.generate(:group),
+      email_slug: Keyword.get(attrs, :email_slug),
       group_key: Keyword.fetch!(attrs, :group_key),
       name: Keyword.fetch!(attrs, :name)
     })

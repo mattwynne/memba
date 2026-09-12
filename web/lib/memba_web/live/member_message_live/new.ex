@@ -11,7 +11,6 @@ defmodule MembaWeb.MemberMessageLive.New do
   require Logger
 
   alias Memba.Accounts
-  alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
   alias Memba.Membership.SystemGroups
   alias Memba.Messaging
@@ -112,7 +111,6 @@ defmodule MembaWeb.MemberMessageLive.New do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <% inbound_email_address = club_inbound_email_address(@selected_club) %>
     <Layouts.club_site
       flash={@flash}
       club_name={selected_club_name(@selected_club)}
@@ -124,6 +122,7 @@ defmodule MembaWeb.MemberMessageLive.New do
         data-live-view="member-message-compose"
         data-club-id={selected_club_id(@selected_club, @route_params)}
         data-audience-group-id={audience_group_id(@audience_group)}
+        data-audience-group-name={@message_audience.group_name}
         data-current-member-id={current_member_id(@current_member)}
         data-active-member-count={@active_member_count}
         data-compose-state={@compose_state}
@@ -152,7 +151,7 @@ defmodule MembaWeb.MemberMessageLive.New do
             data-active-member-count={@active_member_count}
             class="mx-auto mt-4 max-w-xl text-base leading-7 text-ink-2"
           >
-            Memba is sending your message to {active_member_count_summary(@active_member_count)}. You can check delivery on the message page.
+            Memba is sending your message to {@message_audience.recipient_count_summary} of {@message_audience.group_name}. You can check delivery on the message page.
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -248,7 +247,7 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-base-content">
-            Send a message to all current members
+            New message to {@message_audience.group_name}
           </h1>
 
           <p
@@ -256,46 +255,10 @@ defmodule MembaWeb.MemberMessageLive.New do
             data-club-id={selected_club_id(@selected_club, @route_params)}
             class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-primary"
           >
-            {selected_club_name(@selected_club)}
+            In {@message_audience.club_name}
           </p>
 
-          <div
-            id="member-compose-recipient-summary"
-            data-active-member-count={@active_member_count}
-            class="mt-6 flex gap-3 rounded-2xl border border-info/20 bg-info-soft px-4 py-3 text-sm leading-6 text-base-content"
-          >
-            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-info ring-1 ring-info/20">
-              <.icon name="hero-users" class="size-4" />
-            </span>
-            <p>
-              Before you send: this message will be emailed to
-              <strong class="font-semibold text-base-content">
-                {active_member_count_summary(@active_member_count)}
-              </strong>
-              of {selected_club_name(@selected_club)}. There is no list to pick.
-            </p>
-          </div>
-
-          <div
-            :if={inbound_email_address}
-            id="member-compose-inbound-email"
-            data-inbound-address={inbound_email_address}
-            class="mt-4 flex gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-sm leading-6 text-ink-2"
-          >
-            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-primary ring-1 ring-base-300">
-              <.icon name="hero-envelope" class="size-4" />
-            </span>
-            <p>
-              Prefer email? You can also send a club-wide message to
-              <a
-                id="member-compose-inbound-email-link"
-                href={"mailto:#{inbound_email_address}"}
-                class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
-              >
-                {inbound_email_address}
-              </a>
-            </p>
-          </div>
+          <.message_audience_summary audience={@message_audience} />
 
           <div :if={@current_member} class="mt-6">
             <p class="mb-2 text-sm font-semibold text-base-content">From</p>
@@ -359,7 +322,7 @@ defmodule MembaWeb.MemberMessageLive.New do
                 variant="primary"
                 size="lg"
               >
-                <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
+                <.icon name="hero-paper-airplane" class="size-4" /> Send message
               </.button>
               <.button
                 id="member-message-cancel-link"
@@ -456,14 +419,15 @@ defmodule MembaWeb.MemberMessageLive.New do
         {:error, :not_found}
 
       audience_group ->
-        members = Membership.list_active_members_of_group(audience_group.group_id)
+        active_member_count = audience_group.active_member_count
 
         {:ok,
          %{
            selected_club: selected_club,
            current_member: current_member,
            audience_group: audience_group,
-           active_member_count: Enum.count(members)
+           active_member_count: active_member_count,
+           message_audience: message_audience(selected_club, audience_group, active_member_count)
          }}
     end
   end
@@ -486,6 +450,7 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> assign(:current_member, nil)
     |> assign(:audience_group, nil)
     |> assign(:active_member_count, nil)
+    |> assign(:message_audience, message_audience(nil, nil, nil))
     |> assign_initial_send_state()
     |> assign(:message_form, message_form())
   end
@@ -534,8 +499,6 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp selected_club_name(nil), do: "Club"
   defp selected_club_name(selected_club), do: selected_club.name
-
-  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
   defp selected_club_id(nil, route_params), do: Map.get(route_params, "club_id")
   defp selected_club_id(selected_club, _route_params), do: selected_club.club_id
@@ -605,9 +568,82 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp with_group_context(path, _group_id), do: path
 
-  defp active_member_count_summary(nil), do: "all current members"
-  defp active_member_count_summary(1), do: "the current member"
-  defp active_member_count_summary(count), do: "all #{count} current members"
+  attr :audience, :map, required: true
+
+  defp message_audience_summary(assigns) do
+    ~H"""
+    <div
+      id="member-compose-recipient-summary"
+      data-active-member-count={@audience.active_member_count}
+      data-audience-group-id={@audience.group_id}
+      data-audience-group-name={@audience.group_name}
+      class="mt-6 flex gap-3 rounded-2xl border border-info/20 bg-info-soft px-4 py-3 text-sm leading-6 text-base-content"
+    >
+      <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-info ring-1 ring-info/20">
+        <.icon name="hero-users" class="size-4" />
+      </span>
+      <p>
+        Before you send: this message will be emailed to
+        <strong class="font-semibold text-base-content">
+          {@audience.recipient_count_summary}
+        </strong>
+        of <strong class="font-semibold text-base-content">{@audience.group_name}</strong>.
+      </p>
+    </div>
+
+    <div
+      :if={@audience.inbound_email_address}
+      id="member-compose-inbound-email"
+      data-inbound-address={@audience.inbound_email_address}
+      data-audience-group-id={@audience.group_id}
+      data-audience-group-name={@audience.group_name}
+      class="mt-4 flex gap-3 rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-sm leading-6 text-ink-2"
+    >
+      <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-base-100 text-primary ring-1 ring-base-300">
+        <.icon name="hero-envelope" class="size-4" />
+      </span>
+      <p>
+        Prefer email? Send a message to
+        <strong class="font-semibold text-base-content">{@audience.group_name}</strong>
+        at
+        <a
+          id="member-compose-inbound-email-link"
+          href={"mailto:#{@audience.inbound_email_address}"}
+          class="font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition duration-200 hover:decoration-primary"
+        >
+          {@audience.inbound_email_address}
+        </a>
+      </p>
+    </div>
+    """
+  end
+
+  defp message_audience(selected_club, audience_group, active_member_count) do
+    %{
+      club_name: selected_club_name(selected_club),
+      group_id: audience_group_id(audience_group),
+      group_name: audience_group_name(audience_group),
+      active_member_count: active_member_count,
+      recipient_count_summary: audience_recipient_count_summary(active_member_count),
+      inbound_email_address: audience_group_email_address(audience_group)
+    }
+  end
+
+  defp audience_group_name(nil), do: "this audience"
+
+  defp audience_group_name(%{name: name}) when is_binary(name) and name != "", do: name
+
+  defp audience_group_name(_audience_group), do: "this audience"
+
+  defp audience_group_email_address(%{email_address: email_address})
+       when is_binary(email_address) and email_address != "",
+       do: email_address
+
+  defp audience_group_email_address(_audience_group), do: nil
+
+  defp audience_recipient_count_summary(nil), do: "members"
+  defp audience_recipient_count_summary(1), do: "1 member"
+  defp audience_recipient_count_summary(count) when is_integer(count), do: "#{count} members"
 
   defp member_initials(nil), do: "ME"
 
