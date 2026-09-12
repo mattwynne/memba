@@ -197,6 +197,30 @@ defmodule MembaWeb.CoreComponentsTest do
       refute_selector(html, "button")
     end
 
+    test "preserves enabled link method handling" do
+      html = render_button(rest: %{href: "/members/1", method: "delete"})
+
+      assert_selector(html, "a[href='/members/1'][data-method='delete'][data-to='/members/1']")
+      refute_selector(html, "button")
+    end
+
+    test "renders disabled href, navigate, and patch actions as non-interactive text" do
+      for rest <- [
+            %{id: "disabled-href", href: "/clubs"},
+            %{id: "disabled-navigate", navigate: "/clubs"},
+            %{id: "disabled-patch", patch: "/clubs?page=2"}
+          ] do
+        html = render_button(disabled: true, rest: rest)
+        id = Map.fetch!(rest, :id)
+
+        assert_selector(html, "span##{id}.btn[aria-disabled='true']")
+        refute_selector(html, "a")
+        refute_selector(html, "button")
+        refute_selector(html, "[href]")
+        refute_selector(html, "[data-phx-link]")
+      end
+    end
+
     test "renders disabled link-styled actions as non-interactive text" do
       html =
         render_button(
@@ -208,7 +232,9 @@ defmodule MembaWeb.CoreComponentsTest do
             download: "members.csv",
             "data-testid": "export-action",
             "aria-label": "Export members",
-            "phx-click": "export"
+            "phx-click": "export",
+            "data-method": "delete",
+            "data-to": "/exports/members.csv"
           }
         )
 
@@ -223,6 +249,8 @@ defmodule MembaWeb.CoreComponentsTest do
       refute_selector(html, "[method]")
       refute_selector(html, "[download]")
       refute_selector(html, "[phx-click]")
+      refute_selector(html, "[data-method]")
+      refute_selector(html, "[data-to]")
     end
   end
 

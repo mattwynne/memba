@@ -215,7 +215,7 @@ defmodule MembaWeb.CoreComponents do
   end
 
   defp link_action?(rest) do
-    rest_attribute(rest, "href") || rest_attribute(rest, "navigate") || rest_attribute(rest, "patch")
+    Enum.any?(~w(href navigate patch), fn name -> not is_nil(rest_attribute(rest, name)) end)
   end
 
   defp disabled_link_action_rest(rest) do
@@ -227,7 +227,7 @@ defmodule MembaWeb.CoreComponents do
   defp disabled_link_action_attribute?(key) do
     key = to_string(key)
 
-    key in ~w(href navigate patch method download form type name value disabled role tabindex target rel aria-disabled) or
+    key in ~w(href navigate patch method download form type name value disabled role tabindex target rel aria-disabled data-method data-to data-csrf) or
       String.starts_with?(key, "phx-")
   end
 
@@ -461,6 +461,7 @@ defmodule MembaWeb.CoreComponents do
       |> Enum.reject(&is_nil/1)
 
     assigns
+    |> assign_new(:value, fn -> nil end)
     |> assign(:rest, drop_rest_attributes(rest, ["aria-describedby", "aria-invalid"]))
     |> assign(:errors, errors)
     |> assign(:errors_with_ids, errors_with_ids)
