@@ -366,6 +366,47 @@ defmodule MembaWeb.LayoutsTest do
       assert_selector_count(html, "#server-error.connection-status", 1)
     end
 
+    test "uses the approved compact responsive pill treatment for both states" do
+      html = render_flash_group()
+
+      expected_status_classes = ~w"""
+        connection-status
+        inline-flex
+        max-w-[calc(100vw-2rem)]
+        items-center
+        gap-2
+        rounded-full
+        border
+        border-sage-300
+        bg-paper/95
+        py-2.5
+        pr-3.5
+        pl-3
+        text-[13px]
+        font-semibold
+        leading-[1.2]
+        text-ink-2
+        shadow-lg
+        shadow-ink/10
+        backdrop-blur-sm
+      """
+
+      expected_spinner_classes = ~w"""
+        connection-status__spinner
+        size-3.5
+        shrink-0
+        rounded-full
+        border-2
+        border-sage-100
+        border-t-sage-500
+      """
+
+      for id <- ~w(client-error server-error) do
+        assert classes(html, "##{id}") == expected_status_classes
+        assert classes(html, "##{id} .connection-status__spinner") == expected_spinner_classes
+      end
+    end
+
     test "renders a decorative connection-status spinner for each state" do
       html = render_flash_group()
 
@@ -610,6 +651,13 @@ defmodule MembaWeb.LayoutsTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> LazyHTML.attribute(attribute)
+  end
+
+  defp classes(html, selector) do
+    html
+    |> attributes(selector, "class")
+    |> List.first("")
+    |> String.split()
   end
 
   defp restore_system_env(key, nil), do: System.delete_env(key)

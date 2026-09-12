@@ -507,13 +507,25 @@ defmodule MembaWeb.Layouts do
     ~H"""
     <div
       id={@id}
-      class="connection-status"
+      class={[
+        "connection-status inline-flex max-w-[calc(100vw-2rem)] items-center gap-2",
+        "rounded-full border border-sage-300 bg-paper/95 py-2.5 pr-3.5 pl-3",
+        "text-[13px] font-semibold leading-[1.2] text-ink-2",
+        "shadow-lg shadow-ink/10 backdrop-blur-sm"
+      ]}
       role="status"
       aria-live="polite"
       aria-atomic="true"
       {@rest}
     >
-      <span class="connection-status__spinner" aria-hidden="true"></span>
+      <span
+        class={[
+          "connection-status__spinner size-3.5 shrink-0 rounded-full",
+          "border-2 border-sage-100 border-t-sage-500"
+        ]}
+        aria-hidden="true"
+      >
+      </span>
       <span>{@message}</span>
     </div>
     """
