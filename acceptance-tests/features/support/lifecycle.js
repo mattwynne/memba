@@ -314,10 +314,19 @@ function startManagedProcess(spec, { label, logBuffer, shutdownTimeoutMs }) {
 
       killProcessGroup(child, "SIGTERM");
 
-      const stopped = await Promise.race([
-        exited.then(() => true),
-        new Promise((resolve) => setTimeout(() => resolve(false), shutdownTimeoutMs))
-      ]);
+      let shutdownTimer = null;
+      let stopped = false;
+
+      try {
+        stopped = await Promise.race([
+          exited.then(() => true),
+          new Promise((resolve) => {
+            shutdownTimer = setTimeout(() => resolve(false), shutdownTimeoutMs);
+          })
+        ]);
+      } finally {
+        clearTimeout(shutdownTimer);
+      }
 
       if (!stopped) {
         killProcessGroup(child, "SIGKILL");
@@ -529,5 +538,6 @@ module.exports = {
   buildPostgresReadinessCommand,
   createBrowserAcceptanceLifecycle,
   databaseSetupSteps,
-  findFreePort
+  findFreePort,
+  startManagedProcess
 };

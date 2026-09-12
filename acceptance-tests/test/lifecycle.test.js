@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { spawn } = require("node:child_process");
 const path = require("node:path");
 const test = require("node:test");
 
@@ -9,7 +10,9 @@ const {
   buildPhoenixCommand,
   buildPostgresReadinessCommand,
   createBrowserAcceptanceLifecycle,
-  databaseSetupSteps
+  databaseSetupSteps,
+  LogBuffer,
+  startManagedProcess
 } = require("../features/support/lifecycle");
 
 function testEnv(overrides = {}) {
@@ -20,6 +23,201 @@ function testEnv(overrides = {}) {
     ...overrides
   };
 }
+
+function killProcessGroupForTest(child, signal) {
+  if (!child.pid) {
+    return;
+  }
+
+  try {
+    if (process.platform === "win32") {
+      child.kill(signal);
+    } else {
+      process.kill(-child.pid, signal);
+    }
+  } catch (_error) {
+    // The process may already have exited.
+  }
+}
+
+function runNodeScript(script, { timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["-e", script], {
+      cwd: path.resolve(__dirname, ".."),
+      env: process.env,
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      killProcessGroupForTest(child, "SIGKILL");
+      reject(
+        new Error(
+          `node script did not exit within ${timeoutMs}ms.\nstdout:\n${stdout}\nstderr:\n${stderr}`
+        )
+      );
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+
+    child.once("error", (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.once("close", (code, signal) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+
+      reject(
+        new Error(
+          `node script exited with code ${code}${signal ? ` and signal ${signal}` : ""}.\n` +
+            `stdout:\n${stdout}\nstderr:\n${stderr}`
+        )
+      );
+    });
+  });
+}
+
+async function waitForManagedLog(logBuffer, text, managedProcess, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (!logBuffer.tail().includes(text)) {
+    const exitStatus = managedProcess.exitStatus();
+
+    if (exitStatus) {
+      throw new Error(
+        `managed process exited before logging ${text}: ${JSON.stringify(exitStatus)}`
+      );
+    }
+
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for managed process to log ${text}`);
+    }
+
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+test(
+  "managed process stop clears graceful shutdown timeout after the child exits",
+  { timeout: 7000 },
+  async () => {
+    const lifecyclePath = path.resolve(__dirname, "../features/support/lifecycle");
+    const managedChildScript = `
+process.once("SIGTERM", () => process.exit(0));
+process.stdout.write("ready\\n");
+setInterval(() => {}, 1000);
+setTimeout(() => process.exit(42), 30000);
+`;
+    const script = `
+const { LogBuffer, startManagedProcess } = require(${JSON.stringify(lifecyclePath)});
+const logBuffer = new LogBuffer();
+const managed = startManagedProcess({
+  command: process.execPath,
+  args: ["-e", ${JSON.stringify(managedChildScript)}],
+  cwd: process.cwd(),
+  env: process.env
+}, { label: "graceful-child", logBuffer, shutdownTimeoutMs: 60000 });
+
+async function waitUntilReady() {
+  const deadline = Date.now() + 1000;
+
+  while (!logBuffer.tail().includes("ready")) {
+    const exitStatus = managed.exitStatus();
+
+    if (exitStatus) {
+      throw new Error("managed child exited before readiness: " + JSON.stringify(exitStatus));
+    }
+
+    if (Date.now() > deadline) {
+      throw new Error("timed out waiting for managed child readiness");
+    }
+
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+(async () => {
+  await waitUntilReady();
+  await managed.stop();
+  process.stdout.write("managed stopped\\n");
+})().catch((error) => {
+  console.error(error.stack || error.message);
+  process.exit(1);
+});
+`;
+
+    const result = await runNodeScript(script, { timeoutMs: 5000 });
+
+    assert.match(result.stdout, /managed stopped/);
+  }
+);
+
+test(
+  "managed process stop escalates to SIGKILL after the configured shutdown timeout",
+  { timeout: 5000 },
+  async () => {
+    const logBuffer = new LogBuffer();
+    const managed = startManagedProcess(
+      {
+        command: process.execPath,
+        args: [
+          "-e",
+          `
+process.once("SIGTERM", () => process.stdout.write("term\\n"));
+process.stdout.write("ready\\n");
+setInterval(() => {}, 1000);
+`
+        ],
+        cwd: path.resolve(__dirname, ".."),
+        env: process.env
+      },
+      { label: "sigkill-child", logBuffer, shutdownTimeoutMs: 100 }
+    );
+
+    try {
+      await waitForManagedLog(logBuffer, "ready", managed);
+      const startedAt = Date.now();
+
+      await managed.stop();
+
+      assert.ok(Date.now() - startedAt >= 100);
+      assert.deepEqual(managed.exitStatus(), { code: null, signal: "SIGKILL" });
+    } finally {
+      if (!managed.exitStatus()) {
+        await managed.stop();
+      }
+    }
+  }
+);
 
 test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in a dev shell", async () => {
   const calls = [];

@@ -18,6 +18,7 @@ Accept the task only if all are true:
 - The work stays within the approved plan and preserves plan-required scope.
 - Any todo changes split/add/reorder only to satisfy the plan; no plan-required work was deleted, weakened, or silently deferred.
 - Relevant automated tests were added/updated and focused tests were run, or a justified blocker was reported.
+- Ordinary browser-facing tasks have focused browser/component/JS/CSS evidence appropriate to the change; do not require a duplicate full `dev check` solely because the task changes UI, routing, or acceptance support. The deterministic final gate still must pass before publication. If this selected task explicitly requires a full final-validation run, require its successful exit evidence before accepting the check-off; passing scenario counts without a final exit status do not prove that gate passed.
 - Accepted ADR constraints relevant to this task are respected.
 - Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change; any permitted edit stays within that explicit permission and preserves/validates the coverage promised by the plan.
 - The task is small enough to stand independently with a useful Fabro checkpoint evidence trail.

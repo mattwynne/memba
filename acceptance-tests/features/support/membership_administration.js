@@ -5,7 +5,8 @@ const {
   clubSlugFor,
   emailFor,
   ensureState,
-  projectionTimeoutMs
+  projectionTimeoutMs,
+  waitForLiveViewConnected
 } = require("./member_message");
 const serverCommands = require("./server_commands");
 
@@ -238,9 +239,12 @@ async function removeMemberAsStaff(world, personName, clubName) {
   assert.ok(member.membershipId, `Expected ${personName} to be an active member of ${clubName}`);
 
   await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${member.clubId}`));
+  const timeoutMs = projectionTimeoutMs(world);
+
   await playwrightExpect(world.page.locator("#club-show")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
+    timeout: timeoutMs
   });
+  await waitForLiveViewConnected(world, { timeoutMs });
   await world.page.locator(`#remove-member-button-${member.membershipId}`).click();
 
   world.lastMemberRemovalAttempt = { clubName, personName };

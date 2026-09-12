@@ -396,3 +396,79 @@ Low confidence in any claim that product code, PostgreSQL leakage, provider outa
 - Align Fabro shell-command ceilings with project quality-gate durations, or make the shell layer fail immediately when a command is known to require more time than the supported ceiling.
 - Add a timeout-specific `implement_next_task` failure branch that records selected todo, checked/unchecked task state, last command, last command termination, recent output tail, latest checkpoint SHA, and a concrete resume/recovery command.
 - Have `dev check` or the workflow emit phase-level status artifacts (`setup`, `precommit`, `acceptance started`, `acceptance completed`, final exit) so a command timeout after a passing acceptance summary is distinguishable from a test failure and from post-suite cleanup/bookkeeping.
+
+## Partial resolution: focused validation in ordinary task nodes
+
+Date: 2026-09-12
+
+Root cause addressed: the browser-facing exception in the implementation prompt allowed full-suite validation inside task 009 after its manual-browser work. That extra gate consumed the remaining prompt-node budget and led to a detached second attempt without a final result. This intervention removes that exception, not the final quality requirement.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/prompts/implement_next_task.md`: ordinary tasks use focused checks, including targeted browser scenarios or a browser harness when relevant. Full `dev check`/`dev ci` is not required merely because a task changes UI, routing, or acceptance support. The prompt requires time-budget awareness and forbids detached full-suite retries to evade a command timeout.
+- `.fabro/workflows/iteration-implementation/prompts/validate_task.md`: independent validation accepts appropriate focused evidence without reinstating the browser exception. Explicit full-validation tasks still require a successful command exit; a passing scenario summary followed by a timeout is insufficient.
+- `.fabro/workflows/README.md`: documents the boundary and the remaining explicit-final-task duplication.
+- `.fabro/workflows/iteration-implementation/scripts/test_task_execution_contract.sh`: adds regression checks for focused browser validation, preserved final-task scope, timeout handling, and unchanged final-gate/repair routing.
+
+The workflow graph, final `dev ci` gate, independent validation, plan conformance, artifact policy, and publication gate are unchanged. There is no increase to timeouts, removal of tests, or production-code change.
+
+Additional verified evidence: `docs/tools/fabro/public/agents/tools.mdx`, under “Timeouts”, documents `max_command_timeout_ms = 600000` as the agent-shell hard cap even when a command requests longer. The approximately ten-minute limit is therefore documented behaviour, not merely an inferred timestamp pattern. Whether this project's deployed Fabro configuration can override it remains a separate question.
+
+Validation:
+
+- The new prompt-contract checks failed before the prompt changes, naming the missing focused-browser, full-gate, and detached-retry rules; they pass afterwards (22 checks).
+- All seven `iteration-implementation/scripts/test_*.sh` suites pass, including routing, final artifact, publication, source checkout, task generation, and acceptance feature guards.
+- Full gate command for the staged candidate: `MEMBA_POSTGRES_PORT=15439 ACCEPTANCE_SERVER_NODE=memba_acceptance_server@localhost ./bin/dev check`. Its final exit/result is recorded in the fix commit message; local output is retained at `/tmp/memba-kaizen-060-dev-check.log`. A successful final exit is required before committing the fix.
+- Prompt-contract tests prove the instructions and graph guarantees are present; they cannot prove agent adherence. A future delivery run is the operational experiment.
+
+Remaining follow-up — this note is not fully resolved:
+
+- Existing plans may explicitly require a final full-validation task (iteration 060 task 010 did). That obligation is preserved, not silently deleted or checked off. Moving it into the deterministic gate needs an explicit ownership/completion handoff; this fix does not yet eliminate that duplication or its command-timeout risk.
+- Investigate suite runtime separately: browser acceptance took 7m25s in the failed run, before adding setup and ExUnit costs. Profile setup, per-scenario work, and teardown rather than assuming all that time is unavoidable or cutting coverage.
+- The post-teardown timer mechanism is now covered by the red/green regression below. Remaining runtime work concerns active suite cost and resource pressure, not that cleared timer.
+- Add a timeout-specific deterministic handoff/terminal diagnostic if subsequent runs still require log archaeology. The prompt now asks for useful evidence when it can stop deliberately, but a hard cancellation can still prevent that response.
+
+### Further runtime evidence: post-teardown wait
+
+The same run provides successful standalone browser commands for comparison. `/tmp/fabro-dump-060/events.jsonl` records:
+
+| Event sequence | Stage | Command duration | AfterAll stopped | Command returned | Residual wait |
+| --- | --- | --- | --- | --- | --- |
+| 1549 | `implement_next_task@5` | 507.579s | 11:24:40.110Z | 11:25:40.329Z | 60.219s |
+| 1897 | `implement_next_task@6` | 508.358s | 11:50:13.035Z | 11:51:13.174Z | 60.139s |
+| 2288 | `implement_next_task@7` | 508.256s | 12:16:10.235Z | 12:17:10.384Z | 60.149s |
+| 3273 | `implement_next_task@9` | 602.132s (timeout) | 13:01:41.564Z | 13:02:31.714Z (killed) | 50.150s |
+
+`bin/dev` runs setup, precommit, then acceptance, with no subsequent typecheck or contract-test phase to explain the residual wait. In event 3273 ExUnit reports 98.7s, while browser setup/scenario/teardown activity accounts for about 445s. There is useful work to profile within that active browser time, but the repeated post-teardown minute is a more specific first target than broadly rewriting slow scenarios.
+
+Code inspection found `startManagedProcess().stop()` in `acceptance-tests/features/support/lifecycle.js` races process exit against the configured shutdown timeout (60 seconds by default). When process exit wins, the losing timer is not cancelled. A referenced Node timer can keep the caller alive even though the shutdown promise has resolved. This is a concrete resource-lifetime defect and a strong explanation of the repeated minute; it should be proved with a regression before calling the original full gate recovered.
+
+### Local validation anomaly while applying this fix
+
+The first local full gate, on workflow-only changes, exited 2 after 731s: ExUnit took 602.8s and reported 1,210 tests with one failure in `system_groups_replay_parity_test.exs:43` (Club projection checkpoint 24 versus required 33). Logs contain SQL sandbox connection-queue timeouts. Browser acceptance did not run. Evidence: `/tmp/memba-kaizen-060-dev-check.log` before the final retry (preserved as `/tmp/memba-kaizen-060-dev-check-first.log`).
+
+The named test passed unchanged with the same seed (`348183`) in 3.9s using `MEMBA_POSTGRES_PORT=15439 ./bin/dev test test/memba/membership/system_groups_replay_parity_test.exs --seed 348183 --trace`; output is in `/tmp/memba-kaizen-060-replay-test.log`. A subsequent host snapshot showed load averages 41.20 / 60.96 / 53.77. That supports investigating resource pressure but does not establish the cause of the test failure. No test assertion, timeout, or application code was weakened to make it pass.
+
+### Confirmed code-path fix: managed-process shutdown timer
+
+Focused lifecycle regression now proves the post-teardown timer mechanism. `acceptance-tests/features/support/lifecycle.js` exports `startManagedProcess` for direct process tests. `acceptance-tests/test/lifecycle.test.js` starts a real managed Node subprocess, waits for its readiness log, calls `stop()` with the production 60s shutdown timeout, and wraps the parent script in a 5s external timeout. Before the fix, the child exited and `stop()` resolved (`managed stopped` was printed), but the parent Node process stayed alive until the losing 60s timer; the regression failed after 5s. After the fix, the same test exits in under a second.
+
+The implementation keeps the existing shutdown semantics: send SIGTERM, wait the configured shutdown timeout, escalate to SIGKILL only if the timeout wins, then await actual exit. The only ownership change is to store the shutdown timer and `clearTimeout` it in a `finally` around the `Promise.race`, matching the existing `runCommand` timeout-cleanup pattern. A companion real-process test verifies a SIGTERM-ignoring child is still SIGKILLed after the configured wait.
+
+Validation evidence:
+
+- Red before code fix: `node --test test/lifecycle.test.js` failed `managed process stop clears graceful shutdown timeout after the child exits` after 5,000ms while stdout already contained `managed stopped`; 8/9 lifecycle tests passed.
+- Green after code fix: `node --test test/lifecycle.test.js` passed 9/9.
+- Broader fast Node config suite: `npm run test:config` passed 61/61.
+
+The next full gate exited 1 after 1,165s. ExUnit passed all 1,210 tests (194.5s); browser acceptance passed 133/134 scenarios (948 passed steps, one failed, two skipped). The failure was the last-Admin removal UI scenario expecting `#flash-error`, not shutdown. Evidence is preserved in `/tmp/memba-kaizen-060-dev-check-second.log` and `.status`.
+
+Even on that failed run, the lifecycle fix's integration effect was visible: `AfterAll` stopped at `19:19:35.113Z`, the log finished at `19:19:35.215Z`, and the wrapper wrote its final exit status at `19:19:36.406Z`. The formerly consistent 60-second post-teardown wait was absent. This does not make the failing suite green or prove that the suite now fits Fabro's ten-minute agent-shell ceiling.
+
+### Supporting acceptance-helper repair: wait before Remove
+
+The failed browser scenario was `Pat cannot remove Robin while Robin is the only Admin` (`club_membership_administration.feature:56`). The Remove click returned but `#flash-error` was absent. `removeMemberAsStaff` in `acceptance-tests/features/support/membership_administration.js` waited only for the visible server-rendered `#club-show` before clicking a `phx-click` button. Visibility does not establish that LiveView's client connection is ready.
+
+A focused Node regression in `acceptance-tests/test/membership_administration.test.js` models the page as initially disconnected and rejects a click before the connection wait. It failed before the change, then passed after the helper began calling the existing `waitForLiveViewConnected` before Remove. This proves the missing synchronization in the helper; the original run did not capture connection state, so it is not proof of that run's precise socket timing.
+
+The named browser scenario then passed (one scenario, seven steps) with the same database/node settings. No application code, Gherkin, business assertion, or timeout was changed. This bounded helper repair follows the existing LiveView-readiness convention rather than rerunning a known unsynchronized click or extending assertion timeouts.
