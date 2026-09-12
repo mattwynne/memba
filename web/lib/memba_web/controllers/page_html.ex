@@ -6,6 +6,8 @@ defmodule MembaWeb.PageHTML do
   """
   use MembaWeb, :html
 
+  import MembaWeb.MemberComponents, only: [conversation_list: 1, member_list: 1]
+
   alias MembaWeb.ClubSite
 
   embed_templates "page_html/*"
@@ -104,11 +106,15 @@ defmodule MembaWeb.PageHTML do
     "#{member_count} members"
   end
 
-  defp current_dashboard_member?(%{id: member_id}, %{id: current_member_id}) do
-    member_id == current_member_id
+  defp dashboard_conversation_rows(rows, selected_club, club_id_source, selected_group_route_id) do
+    Enum.map(rows, fn row ->
+      Map.put(
+        row,
+        :href,
+        member_message_path(row.message_id, selected_club, club_id_source, selected_group_route_id)
+      )
+    end)
   end
-
-  defp current_dashboard_member?(_member, _current_member), do: false
 
   defp split_conversation_entries(entries) when is_list(entries) do
     Enum.split_with(entries, &(&1.kind == :original))
