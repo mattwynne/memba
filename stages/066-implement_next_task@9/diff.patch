@@ -1,0 +1,129 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/manual-browser-validation.md b/docs/iterations/060-calm-liveview-reconnection-feedback/manual-browser-validation.md
+new file mode 100644
+index 0000000..21ecdea
+--- /dev/null
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/manual-browser-validation.md
+@@ -0,0 +1,59 @@
++# Manual browser validation
++
++Date: 2026-09-12
++
++The connection states were exercised in Chromium against a locally running
++Phoenix test server and compared with `reconnect-indicator-prototype.html`.
++Checks ran at desktop (`1280 × 800`) and narrow mobile (`360 × 640`) viewport
++sizes. The mobile run also emulated `prefers-reduced-motion: reduce`.
++
++## Simulations
++
++- A client transport interruption recovered after 675 ms. A mutation observer
++  recorded no visible client or server status before or after recovery.
++- A prolonged client transport interruption displayed only
++  `Connection paused — reconnecting…`. Restoring the transport automatically
++  hid the status.
++- A server error was simulated through LiveView's channel error path while the
++  socket remained connected and channel rejoin was paused. It displayed only
++  `Memba is temporarily unavailable — retrying…`. Resuming channel rejoin
++  automatically hid the status.
++
++Both visible states retained the current page, did not receive focus, contained
++no button, and had `pointer-events: none`. Each status was fixed, horizontally
++centred, and 18 px above the viewport bottom. The mobile statuses remained
++within the required 16 px side margins.
++
++With reduced motion enabled, the spinner's computed animation was `none` and
++the status transition duration was `0s`.
++
++## Prototype comparison
++
++The production and prototype client pills shared the exact copy, fixed
++bottom-centre placement, pointer transparency, 13 px type, sage border, ink
++text, paper background, fully rounded shape, and compact dimensions:
++
++| Viewport | Production | Prototype |
++| --- | --- | --- |
++| Desktop | 253 × 37.6 px | 270 × 35.6 px |
++| Mobile | 180 × 53.2 px | 180 × 51.2 px |
++
++## Defect found and corrected
++
++The first prolonged-client simulation displayed both statuses. The
++`remove_attribute("hidden")` operations were acting on their source elements
++rather than inheriting the preceding `show` selectors. The operations now
++carry the same state-specific selectors explicitly, with component-test
++coverage for the serialized commands. The full browser matrix passed after
++that correction.
++
++## Command
++
++```console
++ACCEPTANCE_LOG_PROGRESS=0 devenv shell -- node .fabro/tmp/manual_reconnect_check.cjs
++```
++
++The temporary harness started and stopped the isolated acceptance lifecycle,
++built the browser assets, ran all simulations and assertions, and captured
++desktop/mobile production and prototype screenshots under a temporary
++directory. It exited successfully with `"result": "passed"`.
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index 759084c..4c8f0b7 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -8,5 +8,5 @@
+ - [x] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+ - [x] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+ - [x] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+-- [ ] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
++- [x] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+ - [ ] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 8dca4cb..5b50e4f 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -483,7 +483,10 @@ defmodule MembaWeb.Layouts do
+       <.connection_status
+         id="client-error"
+         message={gettext("Connection paused — reconnecting…")}
+-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
++        phx-disconnected={
++          show(".phx-client-error #client-error")
++          |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
++        }
+         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
+         hidden
+       />
+@@ -491,7 +494,10 @@ defmodule MembaWeb.Layouts do
+       <.connection_status
+         id="server-error"
+         message={gettext("Memba is temporarily unavailable — retrying…")}
+-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
++        phx-disconnected={
++          show(".phx-server-error #server-error")
++          |> JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
++        }
+         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
+         hidden
+       />
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 257bb7c..37d6086 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -378,12 +378,18 @@ defmodule MembaWeb.LayoutsTest do
+ 
+       assert [
+                ["show", %{"to" => ".phx-client-error #client-error"}],
+-               ["remove_attr", %{"attr" => "hidden"}]
++               [
++                 "remove_attr",
++                 %{"attr" => "hidden", "to" => ".phx-client-error #client-error"}
++               ]
+              ] = js_commands(html, "#client-error", "phx-disconnected")
+ 
+       assert [
+                ["show", %{"to" => ".phx-server-error #server-error"}],
+-               ["remove_attr", %{"attr" => "hidden"}]
++               [
++                 "remove_attr",
++                 %{"attr" => "hidden", "to" => ".phx-server-error #server-error"}
++               ]
+              ] = js_commands(html, "#server-error", "phx-disconnected")
+     end
+ 
