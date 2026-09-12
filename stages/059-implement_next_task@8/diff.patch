@@ -1,0 +1,65 @@
+diff --git a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+index 53ba7e5..759084c 100644
+--- a/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
++++ b/docs/iterations/060-calm-liveview-reconnection-feedback/todo.md
+@@ -7,6 +7,6 @@
+ - [x] 005 Replace only the client/server reconnect uses of `<.flash>` in `MembaWeb.Layouts.flash_group/1` with a shared connection-status presentation that preserves the existing targeted `phx-disconnected` classes and `phx-connected` hiding.
+ - [x] 006 Implement the approved responsive bottom-centre pill with existing Memba design tokens. Keep state-specific markup minimal and avoid altering the generic `<.flash>` component used by ordinary messages.
+ - [x] 007 Add only the CSS needed for global fixed positioning, safe-area handling, and reduced-motion behaviour that is clearer as a named connection-status concept than as an opaque HEEx utility list.
+-- [ ] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
++- [x] 008 Exercise public, member, and Staff layout rendering to confirm each includes the shared flash group and connection states without duplicating them.
+ - [ ] 009 Manually simulate brief, longer client, and server interruptions in a real browser; compare the result with the approved raw HTML prototype at desktop and narrow mobile widths.
+ - [ ] 010 Run focused JavaScript/component/CSS tests, then run `dev check`.
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 52901d2..257bb7c 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -115,6 +115,48 @@ defmodule MembaWeb.LayoutsTest do
+     refute_selector(html, "#club-site-layout")
+   end
+ 
++  test "public, member, and Staff layouts each render one shared connection-state group" do
++    assigns = %{flash: %{}}
++
++    public_html =
++      rendered_to_string(~H"""
++      <Layouts.app flash={@flash}>
++        <section id="public-connection-status-layout-slot">Public page content</section>
++      </Layouts.app>
++      """)
++
++    member_html =
++      rendered_to_string(~H"""
++      <Layouts.club_site flash={@flash}>
++        <section id="member-connection-status-layout-slot">Member page content</section>
++      </Layouts.club_site>
++      """)
++
++    staff_html =
++      rendered_to_string(~H"""
++      <Layouts.admin flash={@flash}>
++        <section id="staff-connection-status-layout-slot">Staff page content</section>
++      </Layouts.admin>
++      """)
++
++    for {html, slot_selector} <- [
++          {public_html, "#public-connection-status-layout-slot"},
++          {member_html, "#member-connection-status-layout-slot"},
++          {staff_html, "#staff-connection-status-layout-slot"}
++        ] do
++      assert_selector_count(html, slot_selector, 1)
++      assert_selector_count(html, "#flash-group", 1)
++      assert_selector_count(html, "#flash-group > #client-error.connection-status", 1)
++      assert_selector_count(html, "#flash-group > #server-error.connection-status", 1)
++
++      assert_selector_count(
++        html,
++        "#client-error.connection-status, #server-error.connection-status",
++        2
++      )
++    end
++  end
++
+   test "club-site layout uses canonical Memba theme without white-label custom properties" do
+     assigns = %{
+       flash: %{},
