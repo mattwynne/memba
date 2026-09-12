@@ -1,7 +1,7 @@
 # Calm LiveView reconnection feedback
 
 Date: 2026-09-12
-Status: validated
+Status: implementing
 
 ## Goal
 
