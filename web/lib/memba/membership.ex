@@ -28,6 +28,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.EmailAddressVerificationToken
   alias Memba.Membership.EmailAddresses
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
   alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.SystemGroups
   alias Memba.Membership.Projections.Club
@@ -428,11 +429,12 @@ defmodule Memba.Membership do
   resolves those routing fields from the membership projection before the Club
   aggregate validates them and decides the Admin and member floors. A successful
   decision also ends every active custom-group membership held by that club
-  membership.
+  membership. The call completes only after system-group membership and
+  custom-group conversation follows have been cleared.
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
-      dispatch_system_group_membership_command(command, dispatch_opts)
+      dispatch_member_departure_command(command, dispatch_opts)
     end
   end
 
@@ -2339,6 +2341,19 @@ defmodule Memba.Membership do
     dispatch(command, system_group_membership_consistency(dispatch_opts))
   end
 
+  defp dispatch_member_departure_command(command, dispatch_opts) do
+    dispatch(command, member_departure_consistency(dispatch_opts))
+  end
+
+  defp member_departure_consistency(dispatch_opts) do
+    dispatch_opts
+    |> system_group_membership_consistency()
+    |> Keyword.update!(
+      :consistency,
+      &include_removed_group_member_follows_consistency/1
+    )
+  end
+
   defp system_group_membership_consistency(dispatch_opts) do
     Keyword.update(
       dispatch_opts,
@@ -2368,6 +2383,26 @@ defmodule Memba.Membership do
   end
 
   defp system_group_membership_handler?(_handler), do: false
+
+  defp include_removed_group_member_follows_consistency(:strong), do: :strong
+
+  defp include_removed_group_member_follows_consistency(handlers) when is_list(handlers) do
+    if Enum.any?(handlers, &removed_group_member_follows_handler?/1) do
+      handlers
+    else
+      [ClearRemovedGroupMemberFollows | handlers]
+    end
+  end
+
+  defp include_removed_group_member_follows_consistency(consistency), do: consistency
+
+  defp removed_group_member_follows_handler?(ClearRemovedGroupMemberFollows), do: true
+
+  defp removed_group_member_follows_handler?(handler) when is_binary(handler) do
+    handler == inspect(ClearRemovedGroupMemberFollows)
+  end
+
+  defp removed_group_member_follows_handler?(_handler), do: false
 
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

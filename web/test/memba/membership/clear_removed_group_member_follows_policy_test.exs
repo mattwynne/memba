@@ -2,7 +2,12 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   use Memba.EventSourcedCase, async: false
 
   alias Commanded.EventStore
+  alias Commanded.Event.Handler
+  alias Commanded.Registration
+  alias Commanded.Subscriptions
+  alias Memba.Membership
   alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Club
   alias Memba.Membership.Commands.AddClubMember
   alias Memba.Membership.Commands.AddGroupMember
   alias Memba.Membership.Commands.AssignClubRoleToMember
@@ -11,7 +16,9 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
   alias Memba.Membership.Commands.RemoveClubMember
   alias Memba.Membership.Events.GroupMemberRemoved
   alias Memba.Membership.Policies.ClearRemovedGroupMemberFollows
+  alias Memba.Membership.Policies.SystemGroupMembership
   alias Memba.Membership.Roles
+  alias Memba.Membership.SystemGroups
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
@@ -67,6 +74,73 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
 
     refute Messaging.following_conversation?(conversation_id, departing_person_id)
     assert count_unfollow_events(conversation_id, departing_person_id) == 1
+  end
+
+  test "club departure completes follow clearing before a rapid re-add" do
+    club_id = Memba.ID.generate(:club)
+    departing_membership_id = Memba.ID.generate(:membership)
+    departing_person_id = Memba.ID.generate(:person)
+    replacement_membership_id = Memba.ID.generate(:membership)
+    replacement_person_id = Memba.ID.generate(:person)
+    rejoined_membership_id = Memba.ID.generate(:membership)
+    custom_group_id = Memba.ID.generate(:group)
+    conversation_id = Memba.ID.generate(:message)
+
+    create_club(club_id)
+    add_member(club_id, departing_membership_id, departing_person_id)
+    add_member(club_id, replacement_membership_id, replacement_person_id)
+    assign_admin(club_id, replacement_membership_id, replacement_person_id)
+    create_custom_group(club_id, custom_group_id)
+    add_group_member(club_id, custom_group_id, departing_membership_id, departing_person_id)
+    create_followed_conversation(club_id, custom_group_id, conversation_id, departing_person_id)
+
+    clear_follows_handler = clear_follows_handler_pid()
+    removal_target_version = latest_club_stream_version(club_id) + 2
+    :ok = :sys.suspend(clear_follows_handler)
+
+    removal =
+      Task.async(fn ->
+        Membership.remove_member(%{
+          club_id: club_id,
+          membership_id: departing_membership_id,
+          person_id: departing_person_id
+        })
+      end)
+
+    try do
+      assert :ok =
+               Subscriptions.wait_for(
+                 MembershipApp,
+                 club_id,
+                 removal_target_version,
+                 [consistency: [SystemGroupMembership]],
+                 1_000
+               )
+
+      assert Task.yield(removal, 100) == nil
+    after
+      :ok = :sys.resume(clear_follows_handler)
+    end
+
+    assert :ok = Task.await(removal)
+
+    assert :ok =
+             Membership.add_member(%{
+               club_id: club_id,
+               membership_id: rejoined_membership_id,
+               person_id: departing_person_id
+             })
+
+    refute Messaging.following_conversation?(conversation_id, departing_person_id)
+
+    everyone_group_id = SystemGroups.everyone_group_id(club_id)
+
+    assert %Club{
+             group_memberships: %{
+               {^custom_group_id, ^departing_membership_id} => %{active: false},
+               {^everyone_group_id, ^rejoined_membership_id} => %{active: true}
+             }
+           } = MembershipApp.aggregate_state(Club, club_id)
   end
 
   test "handling the same custom-group removal repeatedly is idempotent" do
@@ -194,5 +268,24 @@ defmodule Memba.Membership.ClearRemovedGroupMemberFollowsPolicyTest do
     |> Enum.count(fn recorded_event ->
       match?(%ConversationUnfollowed{member_id: ^person_id}, recorded_event.data)
     end)
+  end
+
+  defp clear_follows_handler_pid do
+    handler_name =
+      Handler.name(
+        MembershipApp,
+        inspect(ClearRemovedGroupMemberFollows)
+      )
+
+    assert pid = Registration.whereis_name(MembershipApp, handler_name)
+    pid
+  end
+
+  defp latest_club_stream_version(club_id) do
+    MembershipApp
+    |> EventStore.stream_forward(club_id)
+    |> Enum.to_list()
+    |> List.last()
+    |> Map.fetch!(:stream_version)
   end
 end
