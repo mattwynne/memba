@@ -843,6 +843,24 @@ defmodule Memba.Membership.ClubTest do
                })
     end
 
+    test "rejects a normalized duplicate name from trusted group creation" do
+      club_id = Memba.ID.generate(:club)
+
+      club =
+        club_id
+        |> created_club()
+        |> create_group(Memba.ID.generate(:group), "trip_planners", "Trip Planners")
+
+      assert {:error, :group_name_already_defined} =
+               Club.execute(club, %CreateGroup{
+                 club_id: club_id,
+                 group_id: Memba.ID.generate(:group),
+                 email_slug: "other-trip-planners",
+                 group_key: "other_trip_planners",
+                 name: " TRIP PLANNERS "
+               })
+    end
+
     test "rejects a new group before creation when its email slug is already defined" do
       club_id = Memba.ID.generate(:club)
       first_group_id = Memba.ID.generate(:group)

@@ -129,6 +129,31 @@ defmodule Memba.Membership.GroupProjectionTest do
     end
   end
 
+  test "the read model permits a normalized name in different clubs but enforces club uniqueness" do
+    first_club_id = Memba.ID.generate(:club)
+    second_club_id = Memba.ID.generate(:club)
+
+    Repo.insert!(%GroupProjection{
+      club_id: first_club_id,
+      group_id: Memba.ID.generate(:group),
+      name: "Board"
+    })
+
+    Repo.insert!(%GroupProjection{
+      club_id: second_club_id,
+      group_id: Memba.ID.generate(:group),
+      name: " BOARD "
+    })
+
+    assert_raise Ecto.ConstraintError, fn ->
+      Repo.insert!(%GroupProjection{
+        club_id: first_club_id,
+        group_id: Memba.ID.generate(:group),
+        name: " bOaRd "
+      })
+    end
+  end
+
   test "AddGroupMember projects an active group membership row" do
     club_id = Memba.ID.generate(:club)
     group_id = SystemGroups.everyone_group_id(club_id)

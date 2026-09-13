@@ -91,8 +91,10 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
                       }
                     ]}
 
-    assert %{name: "Board", email_slug: "board"} =
-             App.aggregate_state(Club, club_id).groups[group_id]
+    club = App.aggregate_state(Club, club_id)
+
+    assert %{name: "Board", email_slug: "board"} = club.groups[group_id]
+    assert club.group_name_keys["board"] == group_id
 
     assert %GroupProjection{
              club_id: ^club_id,
@@ -307,6 +309,25 @@ defmodule Memba.Membership.CreateCustomGroupDispatchTest do
              membership_id: ^actor_membership_id,
              person_id: ^actor_person_id
            } = Repo.get_by(GroupMembership, group_id: original_group_id)
+  end
+
+  test "aggregate name uniqueness remains authoritative when its projection is missing" do
+    club_id = Memba.ID.generate(:club)
+    {_actor_membership_id, actor_person_id} = create_club_with_admin!(club_id)
+    original_group_id = Memba.ID.generate(:group)
+    duplicate_group_id = Memba.ID.generate(:group)
+
+    assert :ok = create_custom_group(club_id, original_group_id, actor_person_id, "Board")
+
+    assert {1, nil} =
+             Repo.delete_all(
+               from group in GroupProjection, where: group.group_id == ^original_group_id
+             )
+
+    assert {:error, :group_name_already_defined} =
+             create_custom_group(club_id, duplicate_group_id, actor_person_id, " BOARD ")
+
+    refute_partial_group(club_id, duplicate_group_id)
   end
 
   test "create_custom_group/2 protects Everyone and Admin names case-insensitively" do

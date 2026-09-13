@@ -35,6 +35,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.MemberRemoved, as: LegacyMemberRemoved
   alias Memba.Membership.Events.MemberRoleAssigned, as: LegacyMemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved, as: LegacyMemberRoleRemoved
+  alias Memba.Membership.GroupName
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
@@ -51,6 +52,7 @@ defmodule Memba.Membership.Club do
     groups: %{},
     group_email_slugs: %{},
     group_keys: %{},
+    group_name_keys: %{},
     group_memberships: %{},
     native_membership_ids: MapSet.new(),
     roles: %{},
@@ -116,7 +118,7 @@ defmodule Memba.Membership.Club do
          {:ok, name} <- normalize_name(command.name),
          {:ok, creator_membership_id} <-
            active_admin_membership_id(club, command.actor_person_id),
-         :ok <- ensure_custom_group_name_available(club, command.group_id, name) do
+         :ok <- ensure_group_name_available(club, command.group_id, name) do
       email_slug =
         CustomGroupSlug.allocate(
           name,
@@ -370,7 +372,13 @@ defmodule Memba.Membership.Club do
     %__MODULE__{
       club
       | groups: Map.put(club.groups, event.group_id, group),
-        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id)
+        group_keys: put_group_key(club.group_keys, event.group_key, event.group_id),
+        group_name_keys:
+          Map.put(
+            club.group_name_keys,
+            GroupName.uniqueness_key(event.name),
+            event.group_id
+          )
     }
   end
 
@@ -731,7 +739,9 @@ defmodule Memba.Membership.Club do
         {:error, :group_already_defined}
 
       :error ->
+        # Keep the established structural-key error ahead of display-name collisions.
         with :ok <- ensure_group_key_available(club, group_key),
+             :ok <- ensure_group_name_available(club, command.group_id, name),
              :ok <- require_new_group_email_slug(email_slug),
              :ok <- ensure_optional_group_email_slug_available(club, email_slug) do
           group_created_event = %GroupCreated{
@@ -813,29 +823,12 @@ defmodule Memba.Membership.Club do
     end
   end
 
-  defp ensure_custom_group_name_available(%__MODULE__{} = club, group_id, name) do
-    uniqueness_key = custom_group_name_uniqueness_key(name)
-
-    name_already_defined? =
-      Enum.any?(club.groups, fn
-        {^group_id, _group} ->
-          false
-
-        {_other_group_id, %{name: existing_name}} ->
-          custom_group_name_uniqueness_key(existing_name) == uniqueness_key
-      end)
-
-    if name_already_defined? do
-      {:error, :group_name_already_defined}
-    else
-      :ok
+  defp ensure_group_name_available(%__MODULE__{} = club, group_id, name) do
+    case Map.fetch(club.group_name_keys, GroupName.uniqueness_key(name)) do
+      :error -> :ok
+      {:ok, ^group_id} -> :ok
+      {:ok, _other_group_id} -> {:error, :group_name_already_defined}
     end
-  end
-
-  defp custom_group_name_uniqueness_key(name) do
-    name
-    |> String.trim()
-    |> String.downcase()
   end
 
   defp occupied_group_email_slugs(%__MODULE__{} = club, group_id) do
