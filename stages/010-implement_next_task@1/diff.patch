@@ -1,0 +1,304 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index f6b4ebd..f17c140 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Commands.AddPersonEmailAddress
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateCustomGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.InviteClubMember
+   alias Memba.Membership.Commands.MakePersonEmailAddressPrimary
+@@ -57,6 +58,21 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Create a custom conversation group as an authenticated club member.
++
++  The caller supplies the Club aggregate identity, a caller-generated group
++  identity, and the authenticated actor's person identity. This application
++  service only translates the use case into an actor-bearing command; the Club
++  aggregate owns the authoritative creation decision.
++  """
++  def create_custom_group(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- create_custom_group_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Update a club's staff-managed display name and public slug.
+ 
+@@ -1543,6 +1559,21 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp create_custom_group_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, group_id} <- fetch_required(attrs, :group_id),
++         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
++         {:ok, name} <- fetch_required(attrs, :name) do
++      {:ok,
++       %CreateCustomGroup{
++         club_id: club_id,
++         group_id: group_id,
++         actor_person_id: actor_person_id,
++         name: name
++       }}
++    end
++  end
++
+   defp update_club_command(attrs) do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, club_id} <- cast_club_id(club_id),
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index 72afb2b..6eaba4f 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.Club do
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateCustomGroup
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.DefineClubRole
+   alias Memba.Membership.Commands.GrantClubRolePermission
+@@ -105,6 +106,17 @@ defmodule Memba.Membership.Club do
+ 
+   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+ 
++  def execute(%__MODULE__{club_id: nil}, %CreateCustomGroup{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %CreateCustomGroup{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         :ok <- validate_id(:group, command.group_id, :invalid_group_id),
++         :ok <- validate_id(:person, command.actor_person_id, :invalid_actor_person_id),
++         {:ok, name} <- normalize_name(command.name) do
++      create_custom_group_decision(club, command, name)
++    end
++  end
++
+   def execute(%__MODULE__{club_id: nil}, %AddClubMember{}), do: {:error, :not_created}
+ 
+   def execute(%__MODULE__{} = club, %AddClubMember{} = command) do
+@@ -718,6 +730,28 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp create_custom_group_decision(
++         %__MODULE__{} = club,
++         %CreateCustomGroup{} = command,
++         name
++       ) do
++    case Map.fetch(club.groups, command.group_id) do
++      {:ok, %{group_key: nil, name: ^name}} ->
++        []
++
++      {:ok, %{}} ->
++        {:error, :group_already_defined}
++
++      :error ->
++        %GroupCreated{
++          club_id: command.club_id,
++          group_id: command.group_id,
++          group_key: nil,
++          name: name
++        }
++    end
++  end
++
+   defp normalize_optional_group_email_slug(nil), do: {:ok, nil}
+   defp normalize_optional_group_email_slug(email_slug), do: Slug.normalize_for_lookup(email_slug)
+ 
+diff --git a/web/lib/memba/membership/commands/create_custom_group.ex b/web/lib/memba/membership/commands/create_custom_group.ex
+new file mode 100644
+index 0000000..00674d8
+--- /dev/null
++++ b/web/lib/memba/membership/commands/create_custom_group.ex
+@@ -0,0 +1,12 @@
++defmodule Memba.Membership.Commands.CreateCustomGroup do
++  @moduledoc """
++  Command for a club member actor to create a custom conversation group.
++
++  The command is routed to the Club aggregate by `club_id`, where actor
++  authority and club-scoped creation rules are decided from authoritative
++  aggregate state.
++  """
++
++  @enforce_keys [:club_id, :group_id, :actor_person_id, :name]
++  defstruct [:club_id, :group_id, :actor_person_id, :name]
++end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index c417db5..4d3b0f5 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -18,6 +18,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateCustomGroup
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+@@ -44,6 +45,7 @@ defmodule Memba.Membership.Router do
+   dispatch(AssignGroupEmailSlug, to: Club)
+   dispatch(AssignClubRoleToMember, to: Club)
+   dispatch(CreateClub, to: Club)
++  dispatch(CreateCustomGroup, to: Club)
+   dispatch(CreateGroup, to: Club)
+   dispatch(CreatePerson, to: Person)
+   dispatch(DefineClubRole, to: Club)
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 803d12f..ee552b0 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -11,6 +11,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.AssignGroupEmailSlug
+   alias Memba.Membership.Commands.AssignClubRoleToMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreateCustomGroup
+   alias Memba.Membership.Commands.CreateGroup
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.DefineClubRole
+@@ -101,6 +102,7 @@ defmodule Memba.Membership.AppTest do
+         AssignGroupEmailSlug,
+         AssignClubRoleToMember,
+         CreateClub,
++        CreateCustomGroup,
+         CreateGroup,
+         CreatePerson,
+         DefineClubRole,
+diff --git a/web/test/memba/membership/create_custom_group_dispatch_test.exs b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+new file mode 100644
+index 0000000..95bda20
+--- /dev/null
++++ b/web/test/memba/membership/create_custom_group_dispatch_test.exs
+@@ -0,0 +1,85 @@
++defmodule Memba.Membership.CreateCustomGroupDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Club
++  alias Memba.Membership.Commands.CreateCustomGroup
++  alias Memba.Membership.Events.GroupCreated
++
++  test "create_custom_group/2 carries the authenticated actor into a command routed to Club" do
++    club_id = Memba.ID.generate(:club)
++    group_id = Memba.ID.generate(:group)
++    actor_person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++
++    assert %CreateCustomGroup{
++             club_id: ^club_id,
++             group_id: ^group_id,
++             actor_person_id: ^actor_person_id,
++             name: " Board "
++           } =
++             struct!(CreateCustomGroup, %{
++               club_id: club_id,
++               group_id: group_id,
++               actor_person_id: actor_person_id,
++               name: " Board "
++             })
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %GroupCreated{
++                  club_id: ^club_id,
++                  group_id: ^group_id,
++                  group_key: nil,
++                  name: "Board"
++                }
++              ]
++            }} =
++             Membership.create_custom_group(
++               %{
++                 club_id: club_id,
++                 group_id: group_id,
++                 actor_person_id: actor_person_id,
++                 name: " Board "
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %{name: "Board"} = App.aggregate_state(Club, club_id).groups[group_id]
++  end
++
++  test "create_custom_group/2 requires an authenticated actor identity" do
++    club_id = Memba.ID.generate(:club)
++
++    create_club!(club_id)
++
++    assert {:error, {:missing_required_attribute, :actor_person_id}} =
++             Membership.create_custom_group(%{
++               club_id: club_id,
++               group_id: Memba.ID.generate(:group),
++               name: "Board"
++             })
++
++    assert {:error, :invalid_actor_person_id} =
++             Membership.create_custom_group(%{
++               club_id: club_id,
++               group_id: Memba.ID.generate(:group),
++               actor_person_id: "not-a-person-id",
++               name: "Board"
++             })
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
++               consistency: :strong
++             )
++  end
++end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 5db939f..ef0ce7d 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     source = read_source!("lib/memba/membership.ex")
+ 
+     assert source =~ "def create_club("
++    assert source =~ "def create_custom_group("
+     assert source =~ "def update_club("
+     assert source =~ "def create_person("
+     assert source =~ "def add_member("
+@@ -61,7 +62,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+       |> Regex.scan(source, capture: :all_but_first)
+       |> List.flatten()
+ 
+-    assert create_functions == ["create_club", "create_person"]
++    assert create_functions == ["create_club", "create_custom_group", "create_person"]
+ 
+     update_functions =
+       ~r/\bdef\s+(update_[a-zA-Z0-9_]+)\b/
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 183d46c..a7cf46f 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -36,11 +36,11 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Roles
+   alias Memba.Membership.SystemGroups
+ 
+-  test "public Membership API does not expose custom group mutation functions in this slice" do
++  test "public Membership API exposes custom creation but not later group membership mutations" do
+     refute function_exported?(Membership, :create_group, 1)
+     refute function_exported?(Membership, :create_group, 2)
+-    refute function_exported?(Membership, :create_custom_group, 1)
+-    refute function_exported?(Membership, :create_custom_group, 2)
++    assert function_exported?(Membership, :create_custom_group, 1)
++    assert function_exported?(Membership, :create_custom_group, 2)
+ 
+     refute function_exported?(Membership, :add_group_member, 1)
+     refute function_exported?(Membership, :add_group_member, 2)
