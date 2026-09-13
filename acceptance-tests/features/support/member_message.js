@@ -319,15 +319,29 @@ async function browserInteraction(description, action) {
   }
 }
 
+function currentLiveViewRootIsReady() {
+  const liveSocket = window.liveSocket;
+
+  if (!liveSocket || typeof liveSocket.isConnected !== "function" || !liveSocket.isConnected()) {
+    return false;
+  }
+
+  const currentRoots = Array.from(document.querySelectorAll("[data-phx-main]"))
+    .filter((root) => root && root.isConnected !== false && root.classList);
+
+  if (currentRoots.length === 0) {
+    return false;
+  }
+
+  return currentRoots.some((root) => root.classList.contains("phx-connected")) &&
+    currentRoots.every((root) => !root.classList.contains("phx-loading"));
+}
+
 async function waitForLiveViewConnected(
   world,
   { timeoutMs = projectionTimeoutMs(world) } = {}
 ) {
-  await world.page.waitForFunction(
-    () => Boolean(window.liveSocket && window.liveSocket.isConnected()),
-    null,
-    { timeout: timeoutMs }
-  );
+  await world.page.waitForFunction(currentLiveViewRootIsReady, null, { timeout: timeoutMs });
 }
 
 function assertFinalBrowserState(description, assertion) {
@@ -904,6 +918,7 @@ async function createPersonOnCurrentClubPage(
     `new person heading for ${clubName}`,
     { expect, timeoutMs }
   );
+  await waitForLiveViewConnected(world, { timeoutMs });
 
   await browserInteraction(`submit person creation form for ${name}`, async () => {
     await world.page.getByLabel("Person name").fill(name);
@@ -4190,6 +4205,7 @@ module.exports = {
   createPeople,
   createPerson,
   cssString,
+  currentLiveViewRootIsReady,
   deliveryForRecipient,
   emailFor,
   ensureClubSlugMatchesInboundAddress,

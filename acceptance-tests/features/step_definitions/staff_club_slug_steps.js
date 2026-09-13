@@ -46,6 +46,7 @@ When(/^Pat tries to change (.+)'s slug to "([^"]+)"$/, async function (clubName,
 
   await this.page.goto(appUrl(this.baseUrl, `/admin/clubs/${encodeURIComponent(club.clubId)}`));
   await playwrightExpect(this.page.locator("#club-show")).toBeVisible();
+  await waitForLiveViewConnected(this);
   await this.page.locator("#edit-club-slug-input").fill(slug);
   await this.page.locator("#edit-club-slug-input").blur();
 });

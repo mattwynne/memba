@@ -66,5 +66,5 @@ Validation:
 
 Remaining follow-up:
 
-- Fix the known acceptance test-harness readiness race separately after explicit approval; do not fold that product/test-harness change into this checkout-boundary tooling fix.
+- The known acceptance test-harness readiness race is tracked and repaired separately in `docs/kaizen/2026-09-12-acceptance-inputs-race-liveview-join.md`; do not fold that product/test-harness change into this checkout-boundary tooling fix.
 - Watch future worktree quality gates for the new startup diagnostic; if it appears repeatedly in valid shells, tighten the shell-entry contract rather than weakening the root check.
