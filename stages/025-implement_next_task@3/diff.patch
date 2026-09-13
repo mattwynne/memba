@@ -1,0 +1,127 @@
+diff --git a/web/lib/memba/membership/commands/add_group_member.ex b/web/lib/memba/membership/commands/add_group_member.ex
+index 97d2614..bedd0cb 100644
+--- a/web/lib/memba/membership/commands/add_group_member.ex
++++ b/web/lib/memba/membership/commands/add_group_member.ex
+@@ -5,10 +5,9 @@ defmodule Memba.Membership.Commands.AddGroupMember do
+   The caller supplies the club aggregate identity as `club_id` and identifies
+   both the group and member being joined.
+ 
+-  This command is registered for system-group policy/backfill work and the
+-  event-sourced group foundation. It is not a public custom-group API in this
+-  slice; external callers use `Memba.Membership`, which intentionally exposes no
+-  custom-group mutation functions yet.
++  This is a trusted internal command registered for system-group policy/backfill
++  work and event-sourced fixture setup. It is not the public, actor-authorized
++  path for changing custom-group membership.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+diff --git a/web/lib/memba/membership/commands/create_group.ex b/web/lib/memba/membership/commands/create_group.ex
+index 0df6710..8997d53 100644
+--- a/web/lib/memba/membership/commands/create_group.ex
++++ b/web/lib/memba/membership/commands/create_group.ex
+@@ -8,10 +8,13 @@ defmodule Memba.Membership.Commands.CreateGroup do
+   matching historic group appends that missing fact without replacing its
+   original creation event.
+ 
+-  This command is registered for system-group policy/backfill work and the
+-  event-sourced group foundation. It is not a public custom-group API in this
+-  slice; external callers use `Memba.Membership`, which intentionally exposes no
+-  custom-group mutation functions yet.
++  This is a trusted internal command registered for system-group policy/backfill
++  work and event-sourced fixture setup. It deliberately remains actor-free so
++  those existing producers can replay and repair historical group definitions.
++
++  User-facing custom-group creation must instead use
++  `Memba.Membership.create_custom_group/2`, whose actor-bearing command is
++  authorized by the Club aggregate.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :name]
+diff --git a/web/lib/memba/membership/commands/remove_group_member.ex b/web/lib/memba/membership/commands/remove_group_member.ex
+index 6f85353..b83c93b 100644
+--- a/web/lib/memba/membership/commands/remove_group_member.ex
++++ b/web/lib/memba/membership/commands/remove_group_member.ex
+@@ -5,10 +5,9 @@ defmodule Memba.Membership.Commands.RemoveGroupMember do
+   The caller supplies the club aggregate identity as `club_id` and identifies
+   both the group and member being removed.
+ 
+-  This command is registered for system-group policy/backfill work and the
+-  event-sourced group foundation. It is not a public custom-group API in this
+-  slice; external callers use `Memba.Membership`, which intentionally exposes no
+-  custom-group mutation functions yet.
++  This is a trusted internal command registered for system-group policy work and
++  event-sourced fixture setup. It is not the public, actor-authorized path for
++  changing custom-group membership.
+   """
+ 
+   @enforce_keys [:club_id, :group_id, :membership_id, :person_id]
+diff --git a/web/lib/memba/membership/events/group_created.ex b/web/lib/memba/membership/events/group_created.ex
+index 613229c..dff800c 100644
+--- a/web/lib/memba/membership/events/group_created.ex
++++ b/web/lib/memba/membership/events/group_created.ex
+@@ -1,6 +1,10 @@
+ defmodule Memba.Membership.Events.GroupCreated do
+   @moduledoc """
+   Event raised when a club-scoped conversation group has been created.
++
++  Its historical shape is retained for replay compatibility. Email identity and
++  creator membership remain separate `GroupEmailSlugAssigned` and
++  `GroupMemberAdded` facts.
+   """
+ 
+   @derive Jason.Encoder
+diff --git a/web/test/memba/membership/group_command_event_modules_test.exs b/web/test/memba/membership/group_command_event_modules_test.exs
+index 87be373..634295e 100644
+--- a/web/test/memba/membership/group_command_event_modules_test.exs
++++ b/web/test/memba/membership/group_command_event_modules_test.exs
+@@ -48,6 +48,8 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+                name: "Everyone"
+              })
+ 
++    refute Map.has_key?(CreateGroup.__struct__(), :actor_person_id)
++
+     assert %AssignGroupEmailSlug{
+              club_id: ids.club_id,
+              group_id: ids.group_id,
+@@ -66,12 +68,16 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+              person_id: ids.person_id
+            } == struct!(AddGroupMember, ids)
+ 
++    refute Map.has_key?(AddGroupMember.__struct__(), :actor_person_id)
++
+     assert %RemoveGroupMember{
+              club_id: ids.club_id,
+              group_id: ids.group_id,
+              membership_id: ids.membership_id,
+              person_id: ids.person_id
+            } == struct!(RemoveGroupMember, ids)
++
++    refute Map.has_key?(RemoveGroupMember.__struct__(), :actor_person_id)
+   end
+ 
+   test "group events carry the same identities and are JSON encodable" do
+@@ -85,6 +91,7 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+     })
+ 
+     refute Map.has_key?(GroupCreated.__struct__(), :email_slug)
++    refute Map.has_key?(GroupCreated.__struct__(), :membership_id)
+ 
+     assert_json_encodable(%GroupEmailSlugAssigned{
+       club_id: ids.club_id,
+@@ -94,6 +101,15 @@ defmodule Memba.Membership.GroupCommandEventModulesTest do
+ 
+     assert_json_encodable(struct!(GroupMemberAdded, ids))
+     assert_json_encodable(struct!(GroupMemberRemoved, ids))
++
++    for event_module <- [
++          GroupCreated,
++          GroupEmailSlugAssigned,
++          GroupMemberAdded,
++          GroupMemberRemoved
++        ] do
++      refute Map.has_key?(event_module.__struct__(), :actor_person_id)
++    end
+   end
+ 
+   defp group_membership_ids do
