@@ -6,7 +6,7 @@
 - [x] 004 Use a retry-stable group ID so retry does not silently become a second creation or change its address.
 - [x] 005 Emit the existing group-created, slug-assigned and creator-added facts as one successful decision.
 - [x] 006 Extend aggregate state/projection constraints only as necessary for normalized name uniqueness; keep projections as projections.
-- [ ] 007 Make new user-facing operations distinguish custom groups structurally, not by arbitrary display-name checks.
+- [x] 007 Make new user-facing operations distinguish custom groups structurally, not by arbitrary display-name checks.
 - [ ] 008 Close the custom-membership departure gap now.
 - [ ] 009 Native `RemoveClubMember` currently emits only `ClubMemberRemoved`, and `SystemGroupMembership` removes only Everyone/Admin.
 - [ ] 010 Extend the Club-owned lifecycle to emit custom removals for the departing membership and keep legacy/replay handling safe.
