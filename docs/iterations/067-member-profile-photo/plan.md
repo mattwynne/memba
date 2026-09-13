@@ -1,9 +1,7 @@
 # Members set their own profile photo
 
 Date: 2026-08-13
-Status: deferred
-
-Previously validated; deferred by Matt while prioritising iterations 061–065 for custom club groups. Retain this plan and its number for later delivery.
+Status: validated
 
 ## Goal
 
@@ -18,8 +16,8 @@ member rows, conversation avatar-stacks, message authors, and the design system'
 `allow_upload/3`, no blob storage, no object-store dependency, no image library.
 
 That makes this iteration the first upload pipeline in the codebase, which is why it is a separate
-slice from iteration 098's name editing rather than bundled with it (see
-[098](../098-member-name-editing/plan.md)). Iteration 098 should ship first; this iteration assumes
+slice from iteration 066's name editing rather than bundled with it (see
+[066](../066-member-name-editing/plan.md)). Iteration 066 should ship first; this iteration assumes
 the Profile tab already has its editable-field structure.
 
 Initials are not replaced as a pattern. They remain the fallback for every member without a photo,
@@ -92,7 +90,7 @@ stakeholder-readable terms.
 
 Scenarios go in
 [`acceptance-tests/features/member_profile.feature`](../../../acceptance-tests/features/member_profile.feature),
-shared with iteration 098, tagged `@iteration-099 @todo-domain @todo-ui`:
+shared with iteration 066, tagged `@iteration-067 @todo-domain @todo-ui`:
 
 Rule: A member's photo stands in for their initials
 
@@ -120,9 +118,9 @@ so the build stays green before implementation.
 ## Allowed acceptance feature changes
 
 - `acceptance-tests/features/member_profile.feature`: implementation may remove or narrow the
-  temporary `@todo-domain` / `@todo-ui` tags on the seven `@iteration-099` scenarios and add the step
+  temporary `@todo-domain` / `@todo-ui` tags on the seven `@iteration-067` scenarios and add the step
   definitions they need. Reason: they are written ahead of implementation as this slice's acceptance
-  criteria. `@iteration-099` tags must be preserved, and the `@iteration-098` scenarios in the same
+  criteria. `@iteration-067` tags must be preserved, and the `@iteration-066` scenarios in the same
   file must be left untouched. Implementation must not weaken or delete a scenario to make it pass —
   in particular, the signed-out-visitor scenario is a privacy constraint, not a nice-to-have.
 
@@ -133,8 +131,16 @@ Designed and pushed:
 → cloud `templates/account-settings/account-settings.html`. Render-verified headlessly at 1320px
 (no console/network errors, no horizontal overflow, all states present) before pushing.
 
-The template covers the final Profile tab across iterations 098 and 099. This iteration builds the
-photo half. States, from the "Profile tab · photo" rows:
+The template covers the final Profile tab across iterations 066 and 067. This iteration builds the
+photo half.
+
+Prototype review clarification: the avatar menu, its global-bar placement, and the Account settings
+entry already exist. The prototype's explanation of those changes is historical context, not work
+for this iteration. The new requirement is to show the member's photo in the existing avatar, with
+initials as the fallback; do not rebuild or relocate the menu. Name-form layout belongs to iteration
+066, whose design notes explain the wrapping in the narrow preview cards.
+
+States, from the "Profile tab · photo" rows:
 
 - **Photo — none set:** 72px initials circle, `Add a photo`, hint
   `Until you add one, your clubs see your initials.`
@@ -220,7 +226,7 @@ Decided during planning:
 
 ## Implementation Plan
 
-1. Inspect `MySettingsLive` after iteration 098, the Person aggregate/projection, the avatar rendering
+1. Inspect `MySettingsLive` after iteration 066, the Person aggregate/projection, the avatar rendering
    points (`core_components.ex`, `layouts.ex`, `member_dashboard_presentation.ex`,
    `club.html.heex`, `admin_components.ex`), and the shared avatar CSS in `styles.css` before changing
    anything.
@@ -253,7 +259,7 @@ Decided during planning:
     a photo, and ETag/conditional-request behaviour.
 13. Add LiveView tests for the empty, set, uploading, rejected, failed, and removed states, plus live
     refresh.
-14. Implement the `@iteration-099` acceptance scenarios and remove their `@todo-domain @todo-ui` tags.
+14. Implement the `@iteration-067` acceptance scenarios and remove their `@todo-domain @todo-ui` tags.
 15. Run `dev check` and fix all issues.
 
 ## Open Technical Decisions
@@ -302,7 +308,7 @@ the precedent that matters most.
   - remove restores initials;
   - an open settings page refreshes after a change elsewhere.
 - Acceptance tests:
-  - the seven `@iteration-099` scenarios in `member_profile.feature`, with the temporary
+  - the seven `@iteration-067` scenarios in `member_profile.feature`, with the temporary
     `@todo-domain @todo-ui` tags removed.
 - Manual demo:
   1. Sign in as a club member with no photo; confirm initials in the global bar and member list.

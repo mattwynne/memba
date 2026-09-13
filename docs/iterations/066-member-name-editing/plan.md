@@ -1,9 +1,7 @@
 # Members change their own name
 
 Date: 2026-08-13
-Status: deferred
-
-Previously validated; deferred by Matt while prioritising iterations 061–065 for custom club groups. Retain this plan and its number for later delivery.
+Status: validated
 
 ## Goal
 
@@ -38,7 +36,7 @@ profile update". `Membership` already owns Person identity.
   workflow; this iteration must not become a workaround for it.
 
 No captured problem note describes "members cannot change their own name" — it surfaced while
-planning self-service profile editing, alongside iteration 099.
+planning self-service profile editing, alongside iteration 067.
 
 ## Scope
 
@@ -57,7 +55,7 @@ planning self-service profile editing, alongside iteration 099.
 
 ### Out of scope
 
-- The profile **photo** — that is iteration 099. The Profile tab's photo field is designed and
+- The profile **photo** — that is iteration 067. The Profile tab's photo field is designed and
   will be built there; this iteration leaves the existing initials avatar untouched.
 - Per-club display names. One Person has one name across every club they belong to.
 - Any other profile field (pronouns, phone, date of birth, emergency contact, club-specific fields).
@@ -86,7 +84,7 @@ explicit example. Three "default to Gherkin" signals apply.
 
 New feature file
 [`acceptance-tests/features/member_profile.feature`](../../../acceptance-tests/features/member_profile.feature),
-shared with iteration 099. This iteration's scenarios are tagged `@iteration-098 @todo-domain @todo-ui`:
+shared with iteration 067. This iteration's scenarios are tagged `@iteration-066 @todo-domain @todo-ui`:
 
 Rule: A member can change their own name
 
@@ -107,11 +105,11 @@ the build red before implementation.
 ## Allowed acceptance feature changes
 
 - `acceptance-tests/features/member_profile.feature`: implementation may remove or narrow the
-  temporary `@todo-domain` / `@todo-ui` tags on the four `@iteration-098` scenarios as domain and
+  temporary `@todo-domain` / `@todo-ui` tags on the four `@iteration-066` scenarios as domain and
   browser step support is delivered, and add the step definitions those scenarios need. Reason: the
   scenarios are written ahead of implementation as the acceptance criteria for this slice. The
-  `@iteration-098` tags must be preserved. Implementation must not weaken, rename, or delete a
-  scenario to make it pass; the `@iteration-099` scenarios in the same file belong to the next
+  `@iteration-066` tags must be preserved. Implementation must not weaken, rename, or delete a
+  scenario to make it pass; the `@iteration-067` scenarios in the same file belong to the next
   iteration and must be left alone.
 
 ## Designs
@@ -121,8 +119,19 @@ The Profile tab's name field is designed and pushed:
 → cloud `templates/account-settings/account-settings.html`. Render-verified headlessly at 1320px
 (no console/network errors, no horizontal overflow) before pushing.
 
-The template covers the **final** state of the Profile tab across both iterations 098 and 099.
-This iteration builds only the name half; the photo field ships in 099.
+The template covers the **final** state of the Profile tab across both iterations 066 and 067.
+This iteration builds only the name half; the photo field ships in 067.
+
+Prototype review clarification:
+
+- The avatar menu and its Account settings entry already exist. The prototype's explanation of
+  moving the menu to the global bar is historical context, not work for this iteration. Only the
+  displayed name and derived initials need to reflect a rename.
+- The side-by-side preview cards are narrower than the real settings panel, so Save/Cancel wrap
+  below the name input. That wrap is not a desktop layout requirement: keep the input and actions
+  on one line when space allows, and stack them on narrow screens.
+- The over-length-name error uses the same inline field-error treatment as the blank-name error,
+  with `That name is too long.`; it does not need a separate interaction pattern.
 
 Relevant surfaces, from the template's "Profile tab · name" row:
 
@@ -202,7 +211,7 @@ Decided during planning:
 9. Add domain tests for the aggregate rules and the projector.
 10. Add LiveView tests for display → edit → save, cancel, blank rejection, over-length rejection, and
     live refresh.
-11. Implement the `@iteration-098` acceptance scenarios and remove their `@todo-domain @todo-ui` tags.
+11. Implement the `@iteration-066` acceptance scenarios and remove their `@todo-domain @todo-ui` tags.
 12. Run `dev check` and fix all issues.
 
 ## Open Technical Decisions
@@ -238,7 +247,7 @@ staff or admin involvement. The domain gains an explicit `PersonRenamed` fact, w
   - blank input renders `Enter the name your clubs should see.` and keeps the form open;
   - an open settings page refreshes after a rename elsewhere.
 - Acceptance tests:
-  - the four `@iteration-098` scenarios in `member_profile.feature`, with the temporary
+  - the four `@iteration-066` scenarios in `member_profile.feature`, with the temporary
     `@todo-domain @todo-ui` tags removed.
 - Manual demo:
   1. Sign in as an existing club member with a wrong name.
@@ -259,4 +268,4 @@ staff or admin involvement. The domain gains an explicit `PersonRenamed` fact, w
 - Renaming is not merging duplicate people
   ([`2026-06-06-staff-merge-people.md`](../../problems/2026-06-06-staff-merge-people.md)) and should
   not be treated as a substitute for it.
-- The Profile tab remains half-editable until iteration 099 adds the photo field.
+- The Profile tab remains half-editable until iteration 067 adds the photo field.

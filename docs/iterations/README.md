@@ -65,8 +65,6 @@ green than before.
 | 053 | 2026-07-11 | merged | My settings email-address management | [plan](053-my-settings-email-addresses/plan.md) |
 | 056 | 2026-09-02 | merged | Group audience foundation: Everyone and Admin | [plan](056-group-audience-foundation/plan.md) |
 | 057 | 2026-09-03 | merged | Admin group email conversations | [plan](057-admin-group-email-conversations/plan.md) — `member_message_deliverability.feature`, `club_message_replies.feature` |
-| 098 | 2026-08-13 | deferred | Members change their own name | [plan](098-member-name-editing/plan.md) |
-| 099 | 2026-08-13 | deferred | Members set their own profile photo | [plan](099-member-profile-photo/plan.md) |
 | 058 | 2026-09-06 | merged | Generic group-scoped club home | [plan](058-generic-group-scoped-club-home/plan.md) — `group_conversations.feature` |
 | 059 | 2026-09-08 | merged | Populated clubs always have an Admin | [plan](059-populated-clubs-always-have-an-admin/plan.md) — `club_membership_administration.feature` |
 | 060 | 2026-09-12 | merged | Calm LiveView reconnection feedback | [plan](060-calm-liveview-reconnection-feedback/plan.md) — no acceptance feature changes |
@@ -75,8 +73,10 @@ green than before.
 | 063 | 2026-09-13 | ready | Add active club members to custom groups | [plan](063-add-custom-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 064 | 2026-09-13 | ready | Leave custom groups and remove their members | [plan](064-leave-and-remove-group-members/plan.md) — `custom_group_membership.feature`, `custom_group_lifecycle.feature` |
 | 065 | 2026-09-13 | ready | Request custom-group access through an Admin message | [plan](065-request-group-access/plan.md) — `custom_group_access_requests.feature`, `group_conversations.feature` |
+| 066 | 2026-08-13 | validated | Members change their own name | [plan](066-member-name-editing/plan.md) — `member_profile.feature` |
+| 067 | 2026-08-13 | validated | Members set their own profile photo | [plan](067-member-profile-photo/plan.md) — `member_profile.feature` |
 
-Matt reviewed the group rules and HTML prototype during planning; Fabro plan validation is pending. These five slices take priority over deferred 098/099. The 061–064 placeholder intentionally provides the Admin email address before 065 adds Request access.
+Matt reviewed the group rules and HTML prototype during planning; Fabro plan validation is pending. These five slices take priority over later profile-editing work. The 061–064 placeholder intentionally provides the Admin email address before 065 adds Request access.
 
 Status notes:
 
@@ -108,5 +108,5 @@ Shared acceptance feature files used across these iterations:
 - [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)
 - [`club_message_replies.feature`](../../acceptance-tests/features/club_message_replies.feature) (iterations 039 and 040 implement conversation replies and follower-only reply notifications; iteration 041 plans header-routed reply-by-email scenarios using standard `Message-ID` / `In-Reply-To` / `References` matching while preserving bare club-address new-message behaviour; iteration 042 moves the visible reply destination to `everyone@<club>.clubs.memba.io`)
 - [`list_members.feature`](../../acceptance-tests/features/list_members.feature) (`@iteration-049 @todo-domain @todo-ui` planning scenarios for member-list role badges and removed-member exclusion until implementation adds domain/browser step support and makes them executable)
-- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (new in iteration 098; self-service profile editing from `/my/settings`. Iteration 098 adds `@iteration-098 @todo-domain @todo-ui` scenarios for changing your own name; iteration 099 adds `@iteration-099 @todo-domain @todo-ui` scenarios for adding, replacing, and removing a profile photo, including upload rejection, upload failure, and signed-in-only photo visibility. Both sets stay excluded from the domain and browser runners until their iteration implements the steps)
+- [`member_profile.feature`](../../acceptance-tests/features/member_profile.feature) (new in iteration 066; self-service profile editing from `/my/settings`. Iteration 066 adds `@iteration-066 @todo-domain @todo-ui` scenarios for changing your own name; iteration 067 adds `@iteration-067 @todo-domain @todo-ui` scenarios for adding, replacing, and removing a profile photo, including upload rejection, upload failure, and signed-in-only photo visibility. Both sets stay excluded from the domain and browser runners until their iteration implements the steps)
 - [`group_conversations.feature`](../../acceptance-tests/features/group_conversations.feature) (058 preserves selected-group scope, composition and remembered selection; 061 replaces hidden-group/not-found expectations with visible names and restricted surfaces; 065 adds the request affordance. New/changed scenarios retain `@iteration-058`, add their 061/065 tags and carry `@todo-domain @todo-ui` or browser-only `@not-domain @todo-ui` while unimplemented)
